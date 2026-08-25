@@ -1,9 +1,13 @@
+<div align="center">
+
 # 综合管廊数字孪生运维实体样品
 
 [![Version](https://img.shields.io/badge/version-V2.0-2E74B5)](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.0.docx)
 ![Status](https://img.shields.io/badge/status-%E8%A7%84%E5%88%92%E4%B8%8E%E5%AE%9E%E6%96%BD%E5%87%86%E5%A4%87%E9%98%B6%E6%AE%B5-F0AD4E)
 ![Visibility](https://img.shields.io/badge/visibility-private-6C757D)
 ![Safety](https://img.shields.io/badge/safety-low--voltage-success)
+
+</div>
 
 面向教室桌面展示的综合管廊数字孪生运维样品，通过真实传感、STM32 现场控制、MQTT 数据链路和 Web 三维可视化，形成“监测—报警—联动—工单—处置—复核—归档”的完整运维闭环。
 
