@@ -2,7 +2,7 @@
 
 # 综合管廊数字孪生运维实体样品
 
-[![Version](https://img.shields.io/badge/version-V2.1-2E74B5)](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.1.docx)
+[![Version](https://img.shields.io/badge/version-V2.2-2E74B5)](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.2.docx)
 ![Status](https://img.shields.io/badge/status-%E8%A7%84%E5%88%92%E4%B8%8E%E5%AE%9E%E6%96%BD%E5%87%86%E5%A4%87%E9%98%B6%E6%AE%B5-F0AD4E)
 ![Visibility](https://img.shields.io/badge/visibility-private-6C757D)
 ![Safety](https://img.shields.io/badge/safety-low--voltage-success)
@@ -12,7 +12,7 @@
 面向教室桌面展示的综合管廊数字孪生运维样品，通过真实传感、STM32 现场控制、MQTT 数据链路和 Web 三维可视化，形成“监测—报警—联动—工单—处置—复核—归档”的完整运维闭环。
 
 > [!IMPORTANT]
-> 当前仓库处于需求基线与实施准备阶段，尚不包含可直接运行的固件、后端或前端系统。本文档描述的是 V2.1 规划基线，不代表所有功能均已实现。
+> 当前仓库处于需求基线与实施准备阶段，尚不包含可直接运行的固件、后端或前端系统。本文档描述的是 V2.2 规划基线，不代表所有功能均已实现。
 
 ## 目录
 
@@ -37,7 +37,7 @@
 | 项目属性 | 内容 |
 | --- | --- |
 | 项目名称 | 综合管廊数字孪生运维实体样品 |
-| 规划版本 | V2.1（硬件台账更新版） |
+| 规划版本 | V2.2（硬件型号确认版） |
 | 计划周期 | 2026-08-25 至 2026-09-30 |
 | 阶段目标 | 2026-09-10 前完成 MVP；2026-09-30 前完成全部交付 |
 | 现场主控 | STM32F103RCT6 |
@@ -189,7 +189,7 @@ flowchart TB
 - 单位：`degC`、`%RH`、`ppm`、`L/min`、`rpm`、`A` 等固定枚举。
 - QoS 1 消息：使用 `eventId` 或 `cmdId` 去重。
 
-详细 JSON 报文、I/O 分配和数据库设计以 [V2.1 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.1.docx)为准。
+详细 JSON 报文、I/O 分配和数据库设计以 [V2.2 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.2.docx)为准。
 
 ## 项目结构
 
@@ -231,7 +231,7 @@ cd utility-tunnel-digital-twin
 
 克隆后首先阅读：
 
-1. [V2.1 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.1.docx)
+1. [V2.2 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.2.docx)
 2. [硬件现状与接入设计](docs/%E7%A1%AC%E4%BB%B6%E7%8E%B0%E7%8A%B6%E4%B8%8E%E6%8E%A5%E5%85%A5%E8%AE%BE%E8%AE%A1.md) 与 [项目实施日志](docs/%E9%A1%B9%E7%9B%AE%E5%AE%9E%E6%96%BD%E6%97%A5%E5%BF%97.md)
 3. 本 README 中的范围、安全要求和协作规范
 4. `tools/` 下的文档生成脚本
@@ -252,7 +252,7 @@ cd utility-tunnel-digital-twin
 | M7-M8 交付候选 | 2026-09-28 | 缺陷收敛，文档、部署包、视频和汇报材料完成 |
 | 最终验收 | 2026-09-30 | 完整演示、清单会签、备份、标签和交付完成 |
 
-日期来自 V2.1 基线。范围或节点变化必须通过变更记录评估后更新 README 和项目计划书。
+日期来自 V2.2 基线。范围或节点变化必须通过变更记录评估后更新 README 和项目计划书。
 
 ## 质量与验收
 
@@ -313,7 +313,7 @@ chore(deploy): add mosquitto local configuration
 
 | 文档 | 说明 |
 | --- | --- |
-| [V2.1 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.1.docx) | 当前需求、架构、计划、预算、风险、验收与已到货硬件台账 |
+| [V2.2 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.2.docx) | 当前需求、架构、计划、预算、风险、验收与已到货硬件台账 |
 | [硬件现状与接入设计](docs/%E7%A1%AC%E4%BB%B6%E7%8E%B0%E7%8A%B6%E4%B8%8E%E6%8E%A5%E5%85%A5%E8%AE%BE%E8%AE%A1.md) | 实物照片索引、用途、接入边界、待核验项和采购缺口 |
 | [项目实施日志](docs/%E9%A1%B9%E7%9B%AE%E5%AE%9E%E6%96%BD%E6%97%A5%E5%BF%97.md) | 每日任务、实际完成、证据、风险、变更和周度汇总 |
 | [V1.3 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V1.3.docx) | 历史版本，仅用于追溯 |
@@ -326,4 +326,4 @@ chore(deploy): add mosquitto local configuration
 
 ---
 
-**文档基线：** V2.1 · **最后更新：** 2026-08-25 · **维护方：** 综合管廊数字孪生项目组
+**文档基线：** V2.2 · **最后更新：** 2026-08-25 · **维护方：** 综合管廊数字孪生项目组
