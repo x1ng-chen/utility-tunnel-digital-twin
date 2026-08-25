@@ -1,0 +1,36 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+secrets.*
+private.*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Node.js
+node_modules/
+dist/
+.vite/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs, databases and runtime data
+*.log
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# Document render and temporary artifacts
+_qa*/
+*.pdf
+page-*.png
+~$*.docx
+*.tmp
