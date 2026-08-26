@@ -12,7 +12,10 @@
 面向教室桌面展示的综合管廊数字孪生运维样品，通过真实传感、STM32 现场控制、MQTT 数据链路和 Web 三维可视化，形成“监测—报警—联动—工单—处置—复核—归档”的完整运维闭环。
 
 > [!IMPORTANT]
-> 当前仓库处于需求基线与实施准备阶段，尚不包含可直接运行的固件、后端或前端系统。本文档描述的是 V2.5 规划基线，不代表所有功能均已实现。
+> 当前软件平台已进入可演示实现阶段：`apps/web` 提供浏览器本地持久化的运维闭环，`services/api` 提供 PostgreSQL 正式后端基础。硬件接入仍是后续工作，本仓库的软件演示无需硬件。
+
+> [!NOTE]
+> 软件平台的实际功能、运行方式、质量门禁和后续 PostgreSQL 接入说明见 [软件平台说明](docs/software-platform.md)。本文其余内容保留为 V2.5 总体规划基线。
 
 ## 目录
 
@@ -198,8 +201,10 @@ flowchart TB
 
 ```text
 utility-tunnel-digital-twin/
-├── docs/                  # 项目计划书与设计文档
-├── tools/                 # 文档生成和项目辅助脚本
+├── apps/web/              # 可操作的数字孪生运维前端
+├── services/api/          # Fastify + PostgreSQL 业务 API 与迁移
+├── .github/workflows/     # Web/API 自动质量检查
+├── docs/                  # 项目计划书、设计与软件使用说明
 ├── .gitignore
 └── README.md
 ```
@@ -223,22 +228,23 @@ utility-tunnel-digital-twin/
 
 ## 快速开始
 
-### 当前阶段：阅读项目基线
+### 软件演示（无需硬件）
 
 ```bash
 git clone https://github.com/x1ng-chen/utility-tunnel-digital-twin.git
 cd utility-tunnel-digital-twin
+cd apps/web
+npm ci
+npm run dev
 ```
 
-克隆后首先阅读：
+浏览器打开终端提示的本地地址即可体验告警确认、工单闭环、设备筛选、数字孪生定位、角色权限、审计和 CSV/JSON 导出。数据仅保存在当前浏览器；清除浏览器站点数据或点击左下角重置即可恢复演示初始值。
 
-1. [V2.5 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.5.docx)
-2. [硬件现状与接入设计](docs/%E7%A1%AC%E4%BB%B6%E7%8E%B0%E7%8A%B6%E4%B8%8E%E6%8E%A5%E5%85%A5%E8%AE%BE%E8%AE%A1.md) 与 [项目实施日志](docs/%E9%A1%B9%E7%9B%AE%E5%AE%9E%E6%96%BD%E6%97%A5%E5%BF%97.md)
+克隆后建议阅读：
+
+1. [软件平台说明](docs/software-platform.md)
+2. [V2.5 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.5.docx)
 3. 本 README 中的范围、安全要求和协作规范
-4. `tools/` 下的文档生成脚本
-
-> [!NOTE]
-> 固件、后端和前端尚未提交，因此当前没有有效的一键安装或启动命令。各模块落库后，应在对应目录补充环境要求、配置模板、构建、启动、测试和故障排查说明。
 
 ## 实施计划
 
@@ -317,6 +323,7 @@ chore(deploy): add mosquitto local configuration
 | [V2.5 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.5.docx) | 当前需求、架构、计划、预算、风险、验收与已到货硬件台账 |
 | [硬件现状与接入设计](docs/%E7%A1%AC%E4%BB%B6%E7%8E%B0%E7%8A%B6%E4%B8%8E%E6%8E%A5%E5%85%A5%E8%AE%BE%E8%AE%A1.md) | 实物照片索引、用途、接入边界、待核验项和采购缺口 |
 | [项目实施日志](docs/%E9%A1%B9%E7%9B%AE%E5%AE%9E%E6%96%BD%E6%97%A5%E5%BF%97.md) | 每日任务、实际完成、证据、风险、变更和周度汇总 |
+| [软件平台说明](docs/software-platform.md) | 当前前端、模拟数据、权限、导出、质量门禁和 PostgreSQL 接入说明 |
 | [V1.3 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V1.3.docx) | 历史版本，仅用于追溯 |
 
 接口、部署、测试和使用手册应在对应模块实施时补充，并与代码版本同步维护。

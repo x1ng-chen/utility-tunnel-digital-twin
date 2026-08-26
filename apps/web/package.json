@@ -9,7 +9,9 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "test": "node --test app/lib/operations.test.ts",
+    "check": "npm run lint && tsc --noEmit && npm test && npm run build"
   },
   "dependencies": {
     "next": "16.2.6",
