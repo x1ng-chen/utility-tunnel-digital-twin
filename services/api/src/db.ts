@@ -6,7 +6,9 @@ export const db = new Pool({
   max: 10,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
-  ssl: config.NODE_ENV === 'development' ? undefined : { rejectUnauthorized: true },
+  // CI and local development use an internal PostgreSQL service without TLS;
+  // managed production databases must present a valid certificate.
+  ssl: config.NODE_ENV === 'production' ? { rejectUnauthorized: true } : false,
 });
 
 export async function query<Row extends QueryResultRow>(text: string, values: unknown[] = []) {
