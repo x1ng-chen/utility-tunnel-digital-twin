@@ -12,6 +12,11 @@ const pageQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
+const assetListQuery = pageQuery.extend({
+  q: z.string().trim().min(1).max(160).optional(),
+  zone: z.string().trim().min(1).max(32).optional(),
+  status: z.enum(['normal', 'warning', 'alarm', 'offline', 'unknown']).optional(),
+});
 const noteBody = z.object({ note: z.string().trim().min(1).max(2_000) });
 const workOrderBody = z.object({
   title: z.string().trim().min(3).max(240).optional(),
@@ -19,10 +24,25 @@ const workOrderBody = z.object({
   priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
   dueAt: z.string().datetime({ offset: true }).optional(),
 });
+const manualWorkOrderBody = workOrderBody.extend({
+  assetId: z.string().uuid(),
+  title: z.string().trim().min(3).max(240),
+});
 const workOrderTransitionBody = z.object({
   to: z.enum(['open', 'assigned', 'in_progress', 'pending_review', 'completed', 'cancelled']),
   note: z.string().trim().min(1).max(2_000),
 });
+const thresholdKeyParams = z.object({ key: z.string().regex(/^[a-z][a-z0-9_]*$/).max(64) });
+const thresholdValueBody = z.object({
+  label: z.string().trim().min(1).max(96),
+  unit: z.string().trim().min(1).max(32),
+  warning: z.number().finite().min(0),
+  alarm: z.number().finite().positive(),
+}).refine((value) => value.warning < value.alarm, {
+  message: 'warning must be lower than alarm',
+  path: ['alarm'],
+});
+const reportExportBody = z.object({ report: z.enum(['alerts', 'workOrders', 'assets', 'daily']) });
 
 type AuthenticatedRequest = FastifyRequest & { user: { id: string; permissions: string[] } };
 
@@ -57,10 +77,19 @@ async function findAlertForUpdate(client: PoolClient, id: string) {
   return result.rows[0] ?? null;
 }
 
+function formatExportFileName(report: z.infer<typeof reportExportBody>['report']): string {
+  const date = new Date().toISOString().slice(0, 10);
+  return `utility-tunnel-${report}-${date}.json`;
+}
+
 export async function registerOperationsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/health', async () => {
+    return { status: 'ok', service: 'utility-tunnel-api', kind: 'liveness' };
+  });
+
+  app.get('/v1/ready', async () => {
     await query('SELECT 1');
-    return { status: 'ok', service: 'utility-tunnel-api' };
+    return { status: 'ok', service: 'utility-tunnel-api', kind: 'readiness' };
   });
 
   app.get('/v1/dashboard/overview', { preHandler: [authenticate, requirePermission('dashboard.read')] }, async () => {
@@ -69,15 +98,18 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
         `SELECT
            count(*) FILTER (WHERE operational_status IN ('normal', 'warning', 'alarm')) AS online_assets,
            count(*) AS total_assets,
-           (SELECT count(*) FROM alert WHERE status IN ('open', 'acknowledged', 'resolved')) AS open_alerts,
+           (SELECT count(*) FROM alert WHERE status IN ('open', 'acknowledged')) AS open_alerts,
            (SELECT count(*) FROM work_order WHERE status NOT IN ('completed', 'cancelled')) AS open_work_orders
          FROM asset`,
       ),
       query('SELECT id, code, severity, status, title, opened_at FROM alert WHERE status <> $1 ORDER BY opened_at DESC LIMIT 5', ['closed']),
       query(
-        `SELECT DISTINCT ON (asset_id, metric_code) asset_id, metric_code, numeric_value, text_value, unit, quality, recorded_at
-         FROM telemetry_reading
-         ORDER BY asset_id, metric_code, recorded_at DESC
+        `SELECT DISTINCT ON (reading.asset_id, reading.metric_code)
+                reading.id, asset.code AS asset_code, reading.metric_code, reading.numeric_value,
+                reading.text_value, reading.unit, reading.quality, reading.recorded_at
+         FROM telemetry_reading reading
+         JOIN asset ON asset.id = reading.asset_id
+         ORDER BY reading.asset_id, reading.metric_code, reading.recorded_at DESC
          LIMIT 20`,
       ),
     ]);
@@ -85,19 +117,37 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
   });
 
   app.get('/v1/assets', { preHandler: [authenticate, requirePermission('asset.read')] }, async (request, reply) => {
-    const pagination = requestPagination(request, reply);
-    if (!pagination) return;
+    const parsed = assetListQuery.safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_query', message: 'Invalid asset filter.' });
+    const pagination = { ...parsed.data, offset: (parsed.data.page - 1) * parsed.data.pageSize };
+    const where: string[] = [];
+    const parameters: unknown[] = [];
+    if (pagination.q) {
+      parameters.push(`%${pagination.q}%`);
+      where.push(`(a.code ILIKE $${parameters.length} OR a.name ILIKE $${parameters.length} OR z.code ILIKE $${parameters.length} OR z.name ILIKE $${parameters.length})`);
+    }
+    if (pagination.zone) {
+      parameters.push(pagination.zone);
+      where.push(`z.code = $${parameters.length}`);
+    }
+    if (pagination.status) {
+      parameters.push(pagination.status);
+      where.push(`a.operational_status = $${parameters.length}`);
+    }
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const dataParameters = [...parameters, pagination.pageSize, pagination.offset];
     const [assets, total] = await Promise.all([
       query(
         `SELECT a.id, a.code, a.name, a.asset_type, a.lifecycle_status, a.operational_status,
                 a.model_mesh_code, a.location_x, a.location_y, a.location_z, a.metadata,
                 z.code AS zone_code, z.name AS zone_name, a.updated_at
          FROM asset a JOIN zone z ON z.id = a.zone_id
+         ${whereClause}
          ORDER BY z.sequence, a.code
-         LIMIT $1 OFFSET $2`,
-        [pagination.pageSize, pagination.offset],
+         LIMIT $${dataParameters.length - 1} OFFSET $${dataParameters.length}`,
+        dataParameters,
       ),
-      query<{ count: string }>('SELECT count(*) FROM asset'),
+      query<{ count: string }>(`SELECT count(*) FROM asset a JOIN zone z ON z.id = a.zone_id ${whereClause}`, parameters),
     ]);
     return reply.send({ items: assets.rows, page: pagination.page, pageSize: pagination.pageSize, total: Number(total.rows[0]?.count ?? 0) });
   });
@@ -108,10 +158,12 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
     const [alerts, total] = await Promise.all([
       query(
         `SELECT al.id, al.code, al.severity, al.category, al.status, al.title, al.detail, al.opened_at,
-                al.acknowledged_at, asset.code AS asset_code, asset.name AS asset_name, zone.code AS zone_code
+                al.acknowledged_at, acknowledger.display_name AS acknowledged_by,
+                asset.code AS asset_code, asset.name AS asset_name, zone.code AS zone_code
          FROM alert al
          JOIN asset ON asset.id = al.asset_id
          JOIN zone ON zone.id = asset.zone_id
+         LEFT JOIN app_user acknowledger ON acknowledger.id = al.acknowledged_by
          ORDER BY al.opened_at DESC
          LIMIT $1 OFFSET $2`,
         [pagination.pageSize, pagination.offset],
@@ -214,12 +266,54 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
     return reply.code(201).send(created);
   });
 
+  app.post('/v1/work-orders', { preHandler: [authenticate, requirePermission('work_order.write')] }, async (request, reply) => {
+    const body = manualWorkOrderBody.safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: 'invalid_request', message: 'A valid asset and work order title are required.' });
+    const actor = request as AuthenticatedRequest;
+
+    const created = await inTransaction(async (client) => {
+      const assetResult = await client.query<{ id: string; code: string; operational_status: string }>(
+        'SELECT id, code, operational_status FROM asset WHERE id = $1 FOR UPDATE',
+        [body.data.assetId],
+      );
+      const asset = assetResult.rows[0];
+      if (!asset) return null;
+      const priority = body.data.priority ?? (asset.operational_status === 'alarm' ? 'urgent' : asset.operational_status === 'warning' ? 'high' : 'normal');
+      const result = await client.query(
+        `INSERT INTO work_order (code, asset_id, title, description, priority, status, created_by, due_at)
+         VALUES ($1, $2, $3, $4, $5, 'open', $6, $7)
+         RETURNING id, code, status, priority, title, created_at, updated_at`,
+        [code('WO'), asset.id, body.data.title, body.data.description ?? null, priority, actor.user.id, body.data.dueAt ?? null],
+      );
+      const workOrder = result.rows[0];
+      await client.query(
+        `INSERT INTO work_order_event (work_order_id, event_type, to_status, note, actor_id)
+         VALUES ($1, 'created_manual', 'open', $2, $3)`,
+        [workOrder.id, `手工创建，资产：${asset.code}`, actor.user.id],
+      );
+      await writeAudit(client, {
+        actorId: actor.user.id,
+        action: 'work_order.create_manual',
+        resourceType: 'work_order',
+        resourceId: workOrder.id,
+        requestId: request.id,
+        afterValue: workOrder,
+        detail: { assetId: asset.id, assetCode: asset.code },
+      });
+      return workOrder;
+    });
+
+    if (created === null) return reply.code(404).send({ error: 'not_found', message: 'Asset not found.' });
+    return reply.code(201).send(created);
+  });
+
   app.get('/v1/work-orders', { preHandler: [authenticate, requirePermission('work_order.read')] }, async (request, reply) => {
     const pagination = requestPagination(request, reply);
     if (!pagination) return;
     const [orders, total] = await Promise.all([
       query(
-        `SELECT wo.id, wo.code, wo.title, wo.priority, wo.status, wo.due_at, wo.created_at,
+        `SELECT wo.id, wo.code, wo.source_alert_id, wo.title, wo.description, wo.priority, wo.status,
+                wo.due_at, wo.created_at, wo.updated_at,
                 a.code AS asset_code, al.code AS source_alert_code,
                 assignee.display_name AS assignee_name
          FROM work_order wo
@@ -331,6 +425,81 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
     if (updated === null) return reply.code(404).send({ error: 'not_found', message: 'Work order not found.' });
     if (updated === undefined) return reply.code(409).send({ error: 'invalid_transition', message: 'Invalid work order transition.' });
     return reply.send(updated);
+  });
+
+  app.get('/v1/thresholds', { preHandler: [authenticate, requirePermission('setting.read')] }, async (_request, reply) => {
+    const settings = await query<{ setting_key: string; value: unknown; version: number; updated_at: string }>(
+      `SELECT setting_key, value, version, updated_at
+       FROM system_setting
+       WHERE setting_key LIKE 'threshold.%'
+       ORDER BY setting_key`,
+    );
+    const items = settings.rows.flatMap((setting) => {
+      const parsed = thresholdValueBody.safeParse(setting.value);
+      if (!parsed.success) return [];
+      return [{ key: setting.setting_key.slice('threshold.'.length), ...parsed.data, version: setting.version, updatedAt: setting.updated_at }];
+    });
+    return reply.send({ items });
+  });
+
+  app.put('/v1/thresholds/:key', { preHandler: [authenticate, requirePermission('setting.write')] }, async (request, reply) => {
+    const key = thresholdKeyParams.safeParse(request.params);
+    const body = thresholdValueBody.safeParse(request.body);
+    if (!key.success || !body.success) return reply.code(400).send({ error: 'invalid_request', message: 'A valid threshold key and values are required.' });
+    const actor = request as AuthenticatedRequest;
+    const settingKey = `threshold.${key.data.key}`;
+    const updated = await inTransaction(async (client) => {
+      const existing = await client.query<{ value: unknown; version: number }>('SELECT value, version FROM system_setting WHERE setting_key = $1 FOR UPDATE', [settingKey]);
+      const result = await client.query<{ setting_key: string; value: unknown; version: number; updated_at: string }>(
+        `INSERT INTO system_setting (setting_key, value, version, updated_by)
+         VALUES ($1, $2::jsonb, 1, $3)
+         ON CONFLICT (setting_key) DO UPDATE
+           SET value = EXCLUDED.value, version = system_setting.version + 1, updated_by = EXCLUDED.updated_by
+         RETURNING setting_key, value, version, updated_at`,
+        [settingKey, JSON.stringify(body.data), actor.user.id],
+      );
+      const setting = result.rows[0];
+      if (!setting) throw new Error('Threshold update did not return a setting.');
+      await writeAudit(client, {
+        actorId: actor.user.id,
+        action: 'setting.threshold.update',
+        resourceType: 'system_setting',
+        resourceId: undefined,
+        requestId: request.id,
+        beforeValue: existing.rows[0]?.value,
+        afterValue: setting.value,
+        detail: { settingKey, fromVersion: existing.rows[0]?.version ?? null, toVersion: setting.version },
+      });
+      return setting;
+    });
+    return reply.send({ key: key.data.key, ...body.data, version: updated.version, updatedAt: updated.updated_at });
+  });
+
+  app.post('/v1/report-exports', { preHandler: [authenticate, requirePermission('dashboard.read')] }, async (request, reply) => {
+    const body = reportExportBody.safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: 'invalid_request', message: 'A valid report type is required.' });
+    const actor = request as AuthenticatedRequest;
+    const exportRecord = await inTransaction(async (client) => {
+      const result = await client.query<{ id: string; report_type: string; status: string; file_name: string; created_at: string; completed_at: string }>(
+        `INSERT INTO report_export (report_type, requested_by, parameters, status, file_name, completed_at)
+         VALUES ($1, $2, $3::jsonb, 'completed', $4, now())
+         RETURNING id, report_type, status, file_name, created_at, completed_at`,
+        [body.data.report, actor.user.id, JSON.stringify({ generatedBy: 'browser-client' }), formatExportFileName(body.data.report)],
+      );
+      const record = result.rows[0];
+      if (!record) throw new Error('Report export did not return a record.');
+      await writeAudit(client, {
+        actorId: actor.user.id,
+        action: 'report.export',
+        resourceType: 'report_export',
+        resourceId: record.id,
+        requestId: request.id,
+        afterValue: record,
+        detail: { report: body.data.report, delivery: 'browser_download' },
+      });
+      return record;
+    });
+    return reply.code(201).send(exportRecord);
   });
 
   app.get('/v1/audit', { preHandler: [authenticate, requirePermission('audit.read')] }, async (request, reply) => {

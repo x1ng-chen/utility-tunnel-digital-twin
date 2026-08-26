@@ -9,8 +9,9 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "test": "node --test app/lib/operations.test.ts",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vinext --ignore-pattern .wrangler --ignore-pattern outputs --ignore-pattern coverage",
+    "test": "node --test app/lib/operations.test.ts app/lib/operations-api.test.ts app/lib/twin-config.test.ts",
+    "test:coverage": "node --test --experimental-test-coverage app/lib/operations.test.ts app/lib/operations-api.test.ts app/lib/twin-config.test.ts",
     "check": "npm run lint && tsc --noEmit && npm test && npm run build"
   },
   "dependencies": {

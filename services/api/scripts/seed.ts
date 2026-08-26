@@ -67,6 +67,15 @@ try {
     );
 
     await client.query(
+      `INSERT INTO system_setting (setting_key, value)
+       VALUES
+         ('threshold.temperature', '{"label":"环境温度","unit":"°C","warning":28,"alarm":32}'::jsonb),
+         ('threshold.humidity', '{"label":"环境湿度","unit":"%RH","warning":75,"alarm":85}'::jsonb),
+         ('threshold.water', '{"label":"水浸趋势","unit":"秒","warning":20,"alarm":45}'::jsonb)
+       ON CONFLICT (setting_key) DO NOTHING`,
+    );
+
+    await client.query(
       `INSERT INTO alert (code, asset_id, severity, category, status, title, detail)
        SELECT 'ALM-260826-003', asset.id, 'warning', 'water_ingress', 'open', '水浸趋势异常', '渗水趋势上升，等待值班员确认。'
        FROM asset

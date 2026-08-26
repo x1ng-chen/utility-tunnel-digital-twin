@@ -12,7 +12,9 @@
     "start": "node dist/server.js",
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test src/**/*.test.ts",
+    "migration:check": "node scripts/check-migrations.mjs",
+    "test:coverage": "tsx --test --experimental-test-coverage src/**/*.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",

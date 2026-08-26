@@ -1,6 +1,6 @@
-export type AssetStatus = 'normal' | 'warning' | 'alarm' | 'offline';
+export type AssetStatus = 'normal' | 'warning' | 'alarm' | 'offline' | 'unknown';
 export type AlertStatus = 'open' | 'acknowledged' | 'resolved' | 'closed';
-export type WorkOrderStatus = 'open' | 'assigned' | 'in_progress' | 'pending_review' | 'completed' | 'cancelled';
+export type WorkOrderStatus = 'draft' | 'open' | 'assigned' | 'in_progress' | 'pending_review' | 'completed' | 'cancelled';
 export type UserRole = 'administrator' | 'operator' | 'viewer';
 export type ReportKind = 'alerts' | 'workOrders' | 'assets' | 'daily';
 
@@ -10,6 +10,7 @@ export type Session = {
 };
 
 export type Asset = {
+  id?: string;
   code: string;
   name: string;
   zone: string;
@@ -17,13 +18,14 @@ export type Asset = {
   status: AssetStatus;
   mesh: string;
   lastSeenAt: string;
+  position?: { x: number; y: number; z: number };
 };
 
 export type Alert = {
   id: string;
   code: string;
   assetCode: string;
-  severity: 'warning' | 'critical';
+  severity: 'info' | 'warning' | 'critical';
   category: string;
   status: AlertStatus;
   title: string;
@@ -39,7 +41,7 @@ export type WorkOrder = {
   sourceAlertId?: string;
   assetCode: string;
   title: string;
-  priority: 'normal' | 'high' | 'urgent';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
   status: WorkOrderStatus;
   assignee?: string;
   dueAt: string;
@@ -62,7 +64,7 @@ export type Telemetry = {
   metric: string;
   value: number;
   unit: string;
-  quality: 'good' | 'suspect';
+  quality: 'good' | 'suspect' | 'bad' | 'missing';
   recordedAt: string;
 };
 
@@ -112,6 +114,7 @@ const actor = '王露帆';
 const initialDemoTimestamp = '2026-08-26T00:00:00.000Z';
 
 const workOrderTransitions: Record<WorkOrderStatus, WorkOrderStatus[]> = {
+  draft: ['open', 'cancelled'],
   open: ['assigned', 'cancelled'],
   assigned: ['in_progress', 'cancelled'],
   in_progress: ['pending_review', 'cancelled'],
@@ -165,11 +168,11 @@ function isPersistedOperationsState(value: unknown): value is OperationsState {
   if (!Array.isArray(value.assets) || !Array.isArray(value.alerts) || !Array.isArray(value.workOrders) || !Array.isArray(value.audit) || !Array.isArray(value.telemetry) || !Array.isArray(value.thresholds) || !isRecord(value.session)) return false;
   if (!hasString(value.session, 'name') || !['administrator', 'operator', 'viewer'].includes(value.session.role as string)) return false;
 
-  return value.assets.every((item) => isRecord(item) && ['code', 'name', 'zone', 'type', 'mesh', 'lastSeenAt'].every((key) => hasString(item, key)) && hasAllowedString(item, 'status', ['normal', 'warning', 'alarm', 'offline']))
-    && value.alerts.every((item) => isRecord(item) && ['id', 'code', 'assetCode', 'category', 'title', 'detail', 'openedAt'].every((key) => hasString(item, key)) && hasAllowedString(item, 'severity', ['warning', 'critical']) && hasAllowedString(item, 'status', ['open', 'acknowledged', 'resolved', 'closed']))
-    && value.workOrders.every((item) => isRecord(item) && ['id', 'code', 'assetCode', 'title', 'dueAt', 'createdAt', 'updatedAt'].every((key) => hasString(item, key)) && hasAllowedString(item, 'priority', ['normal', 'high', 'urgent']) && hasAllowedString(item, 'status', ['open', 'assigned', 'in_progress', 'pending_review', 'completed', 'cancelled']))
+  return value.assets.every((item) => isRecord(item) && ['code', 'name', 'zone', 'type', 'mesh', 'lastSeenAt'].every((key) => hasString(item, key)) && hasAllowedString(item, 'status', ['normal', 'warning', 'alarm', 'offline', 'unknown']))
+    && value.alerts.every((item) => isRecord(item) && ['id', 'code', 'assetCode', 'category', 'title', 'detail', 'openedAt'].every((key) => hasString(item, key)) && hasAllowedString(item, 'severity', ['info', 'warning', 'critical']) && hasAllowedString(item, 'status', ['open', 'acknowledged', 'resolved', 'closed']))
+    && value.workOrders.every((item) => isRecord(item) && ['id', 'code', 'assetCode', 'title', 'dueAt', 'createdAt', 'updatedAt'].every((key) => hasString(item, key)) && hasAllowedString(item, 'priority', ['low', 'normal', 'high', 'urgent']) && hasAllowedString(item, 'status', ['draft', 'open', 'assigned', 'in_progress', 'pending_review', 'completed', 'cancelled']))
     && value.audit.every((item) => isRecord(item) && ['id', 'occurredAt', 'actor', 'action', 'resource', 'detail'].every((key) => hasString(item, key)))
-    && value.telemetry.every((item) => isRecord(item) && ['id', 'assetCode', 'metric', 'unit', 'recordedAt'].every((key) => hasString(item, key)) && hasAllowedString(item, 'quality', ['good', 'suspect']) && typeof item.value === 'number' && Number.isFinite(item.value))
+    && value.telemetry.every((item) => isRecord(item) && ['id', 'assetCode', 'metric', 'unit', 'recordedAt'].every((key) => hasString(item, key)) && hasAllowedString(item, 'quality', ['good', 'suspect', 'bad', 'missing']) && typeof item.value === 'number' && Number.isFinite(item.value))
     && value.thresholds.every((item) => isRecord(item) && ['key', 'label', 'unit'].every((key) => hasString(item, key)) && typeof item.warning === 'number' && Number.isFinite(item.warning) && item.warning >= 0 && typeof item.alarm === 'number' && Number.isFinite(item.alarm) && item.alarm > item.warning && typeof item.version === 'number' && Number.isInteger(item.version) && item.version > 0);
 }
 

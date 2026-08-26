@@ -8,6 +8,7 @@ const environment = z.object({
   HOST: z.string().default('127.0.0.1'),
   WEB_ORIGIN: z.string().url(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });
 
 const parsed = environment.safeParse(process.env);

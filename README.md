@@ -12,7 +12,7 @@
 面向教室桌面展示的综合管廊数字孪生运维样品，通过真实传感、STM32 现场控制、MQTT 数据链路和 Web 三维可视化，形成“监测—报警—联动—工单—处置—复核—归档”的完整运维闭环。
 
 > [!IMPORTANT]
-> 当前软件平台已进入可演示实现阶段；STM32 台架固件已接入 TFT、DHT11、水位 ADC 和 SW-420 中断。积水阈值校准、震动实体触发、执行器联动和通信链路仍待完成。本仓库的软件演示无需硬件。
+> 当前软件平台已完成 P0–P3 软件交付：`apps/web` 提供浏览器本地演示与 PostgreSQL API 数据源切换，`services/api` 提供登录、RBAC、资产、告警、工单、阈值、导出登记、审计与运维健康检查 API。真实托管数据库连接信息仍需部署时配置。STM32 台架固件已接入 TFT、DHT11、水位 ADC 和 SW-420 中断；积水阈值校准、震动实体触发、执行器联动和通信链路仍待完成。本仓库的软件演示无需硬件。
 
 > [!NOTE]
 > 软件平台的实际功能、运行方式、质量门禁和后续 PostgreSQL 接入说明见 [软件平台说明](docs/software-platform.md)。本文其余内容保留为 V2.5 总体规划基线。
@@ -46,7 +46,7 @@
 | 现场主控 | STM32F103RCT6 |
 | 部署方式 | 展示电脑本地服务 + 局域网热点或路由器 |
 | 运行原则 | 核心功能不依赖公网，断网时现场保护与局域网业务仍可运行 |
-| 当前状态 | 软件平台与 STM32 台架并行实施；首个固件基线已落库 |
+| 当前状态 | 软件 P0–P3 已完成并可本地或 API 模式演示；STM32 台架与托管数据库按部署条件继续接入 |
 
 项目的成功标准包括：实体与三维对象编码一致、真实采集与真实控制、异常事件全流程留痕、局域网连续稳定运行，以及代码、硬件、模型、部署和测试资料可复现。
 
@@ -166,9 +166,9 @@ flowchart TB
 | 主控制器 | STM32F103RCT6 + STM32CubeF1 HAL | 负责实时采集、控制、保护和现场联动 |
 | 通信模块 | ESP8266 ESP-AT | 通过 UART 连接 STM32，原型阶段承担 MQTT 通信 |
 | 消息协议 | MQTT 3.1.1 / Eclipse Mosquitto | 遥测使用 QoS 0；命令、报警与状态使用 QoS 1 |
-| 后端 | Node.js + Express + MQTT.js + WebSocket | 接入设备、处理业务并向前端实时推送 |
-| 数据库 | SQLite（WAL 模式） | 适用于单机演示；后续可迁移 PostgreSQL |
-| 前端 | Vue 3 + TypeScript + Vite | 构建运维界面和三维容器 |
+| 后端 | Node.js + Fastify + PostgreSQL | 提供 JWT、RBAC、业务状态机、审计和 API |
+| 数据库 | PostgreSQL 18 | 资产、分区遥测、告警、工单、配置与审计的唯一主数据库 |
+| 前端 | React + TypeScript + Vinext | 本地演示与 API 数据源切换的运维界面和孪生容器 |
 | 三维 | Three.js + GLB/glTF + Blender | 完成模型加载、拾取、状态映射和相机定位 |
 
 ## 数据与接口约定
@@ -239,7 +239,7 @@ npm ci
 npm run dev
 ```
 
-浏览器打开终端提示的本地地址即可体验告警确认、工单闭环、设备筛选、数字孪生定位、角色权限、审计和 CSV/JSON 导出。数据仅保存在当前浏览器；清除浏览器站点数据或点击左下角重置即可恢复演示初始值。
+浏览器打开终端提示的本地地址即可体验告警确认、工单闭环、设备筛选、数字孪生定位、角色权限、审计和 CSV/JSON 导出。默认数据仅保存在当前浏览器；清除浏览器站点数据或点击左下角重置即可恢复演示初始值。若已部署 `services/api`，可在顶部切换到 API 模式登录 PostgreSQL 数据源，详细配置见 [软件平台说明](docs/software-platform.md) 与 [API 契约](docs/api-contract.md)。
 
 ### STM32 台架固件
 
@@ -330,6 +330,12 @@ chore(deploy): add mosquitto local configuration
 | [硬件现状与接入设计](docs/%E7%A1%AC%E4%BB%B6%E7%8E%B0%E7%8A%B6%E4%B8%8E%E6%8E%A5%E5%85%A5%E8%AE%BE%E8%AE%A1.md) | 实物照片索引、用途、接入边界、待核验项和采购缺口 |
 | [项目实施日志](docs/%E9%A1%B9%E7%9B%AE%E5%AE%9E%E6%96%BD%E6%97%A5%E5%BF%97.md) | 每日任务、实际完成、证据、风险、变更和周度汇总 |
 | [软件平台说明](docs/software-platform.md) | 当前前端、模拟数据、权限、导出、质量门禁和 PostgreSQL 接入说明 |
+| [API 契约](docs/api-contract.md) | P1 前后端接口、RBAC 与状态机约束 |
+| [软件验收清单](docs/software-acceptance-checklist.md) | P0–P3 软件交付范围与可验证证据 |
+| [部署与恢复手册](docs/deployment-runbook.md) | 托管 PostgreSQL、最小权限、备份恢复与发布步骤 |
+| [软件使用手册](docs/%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md) | 本地模式与 API 模式操作说明 |
+| [答辩演示脚本](docs/%E7%AD%94%E8%BE%A9%E6%BC%94%E7%A4%BA%E8%84%9A%E6%9C%AC.md) | 六分钟演示流程与备用方案 |
+| [测试报告](docs/%E6%B5%8B%E8%AF%95%E6%8A%A5%E5%91%8A.md) | 自动化与浏览器验证范围 |
 | [V1.3 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V1.3.docx) | 历史版本，仅用于追溯 |
 
 接口、部署、测试和使用手册应在对应模块实施时补充，并与代码版本同步维护。

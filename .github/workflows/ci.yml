@@ -25,6 +25,7 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
       - run: npm run check
+      - run: npm run test:coverage
 
   api:
     name: API and database quality
@@ -61,8 +62,9 @@ jobs:
           cache: npm
           cache-dependency-path: services/api/package-lock.json
       - run: npm ci
+      - run: npm run migration:check
       - run: npm run build
-      - run: npm test
+      - run: npm run test:coverage
       - run: npm run migrate
       - run: npm run seed
       - run: npm run start > api.log 2>&1 &
