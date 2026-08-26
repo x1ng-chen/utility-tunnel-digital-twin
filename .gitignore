@@ -34,3 +34,7 @@ _qa*/
 page-*.png
 ~$*.docx
 *.tmp
+
+# Local repair and deployment artifacts
+Git-2.55.0.5-64-bit.exe
+ut-ops-site.tar.gz
