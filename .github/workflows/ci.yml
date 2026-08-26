@@ -73,4 +73,5 @@ jobs:
           done
           cat api.log
           exit 1
-      - run: node scripts/smoke.mjs
+      - name: Run API smoke test
+        run: node scripts/smoke.mjs || { cat api.log; exit 1; }
