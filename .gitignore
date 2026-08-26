@@ -15,6 +15,7 @@ node_modules/
 dist/
 .vite/
 *.tsbuildinfo
+.firecrawl/
 
 # Editors and operating systems
 .idea/
