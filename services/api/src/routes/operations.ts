@@ -33,11 +33,18 @@ const workOrderTransitionBody = z.object({
   note: z.string().trim().min(1).max(2_000),
 });
 const thresholdKeyParams = z.object({ key: z.string().regex(/^[a-z][a-z0-9_]*$/).max(64) });
-const thresholdValueBody = z.object({
+const thresholdValue = z.object({
   label: z.string().trim().min(1).max(96),
   unit: z.string().trim().min(1).max(32),
   warning: z.number().finite().min(0),
   alarm: z.number().finite().positive(),
+});
+const thresholdValueBody = thresholdValue.refine((value) => value.warning < value.alarm, {
+  message: 'warning must be lower than alarm',
+  path: ['alarm'],
+});
+const thresholdUpdateBody = thresholdValue.extend({
+  version: z.number().int().positive(),
 }).refine((value) => value.warning < value.alarm, {
   message: 'warning must be lower than alarm',
   path: ['alarm'],
@@ -444,34 +451,38 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
 
   app.put('/v1/thresholds/:key', { preHandler: [authenticate, requirePermission('setting.write')] }, async (request, reply) => {
     const key = thresholdKeyParams.safeParse(request.params);
-    const body = thresholdValueBody.safeParse(request.body);
+    const body = thresholdUpdateBody.safeParse(request.body);
     if (!key.success || !body.success) return reply.code(400).send({ error: 'invalid_request', message: 'A valid threshold key and values are required.' });
     const actor = request as AuthenticatedRequest;
     const settingKey = `threshold.${key.data.key}`;
     const updated = await inTransaction(async (client) => {
       const existing = await client.query<{ value: unknown; version: number }>('SELECT value, version FROM system_setting WHERE setting_key = $1 FOR UPDATE', [settingKey]);
+      const current = existing.rows[0];
+      if (!current) return null;
+      if (current.version !== body.data.version) return undefined;
       const result = await client.query<{ setting_key: string; value: unknown; version: number; updated_at: string }>(
-        `INSERT INTO system_setting (setting_key, value, version, updated_by)
-         VALUES ($1, $2::jsonb, 1, $3)
-         ON CONFLICT (setting_key) DO UPDATE
-           SET value = EXCLUDED.value, version = system_setting.version + 1, updated_by = EXCLUDED.updated_by
+        `UPDATE system_setting
+         SET value = $2::jsonb, version = version + 1, updated_by = $4
+         WHERE setting_key = $1 AND version = $3
          RETURNING setting_key, value, version, updated_at`,
-        [settingKey, JSON.stringify(body.data), actor.user.id],
+        [settingKey, JSON.stringify({ label: body.data.label, unit: body.data.unit, warning: body.data.warning, alarm: body.data.alarm }), current.version, actor.user.id],
       );
       const setting = result.rows[0];
-      if (!setting) throw new Error('Threshold update did not return a setting.');
+      if (!setting) return undefined;
       await writeAudit(client, {
         actorId: actor.user.id,
         action: 'setting.threshold.update',
         resourceType: 'system_setting',
         resourceId: undefined,
         requestId: request.id,
-        beforeValue: existing.rows[0]?.value,
+        beforeValue: current.value,
         afterValue: setting.value,
-        detail: { settingKey, fromVersion: existing.rows[0]?.version ?? null, toVersion: setting.version },
+        detail: { settingKey, fromVersion: current.version, toVersion: setting.version },
       });
       return setting;
     });
+    if (updated === null) return reply.code(404).send({ error: 'not_found', message: 'Threshold not found.' });
+    if (updated === undefined) return reply.code(409).send({ error: 'version_conflict', message: 'Threshold was changed by another request. Refresh and retry.' });
     return reply.send({ key: key.data.key, ...body.data, version: updated.version, updatedAt: updated.updated_at });
   });
 

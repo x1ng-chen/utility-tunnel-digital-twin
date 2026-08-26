@@ -77,3 +77,20 @@ jobs:
           exit 1
       - name: Run API smoke test
         run: node scripts/smoke.mjs || { cat api.log; exit 1; }
+
+  firmware:
+    name: Firmware build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install ARM build toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake gcc-arm-none-eabi
+      - name: Configure firmware
+        run: >-
+          cmake -S firmware/stm32f103rct6 -B build/firmware
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_TOOLCHAIN_FILE=firmware/stm32f103rct6/cmake/gcc-arm-none-eabi.cmake
+      - name: Build firmware
+        run: cmake --build build/firmware --parallel 2

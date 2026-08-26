@@ -46,6 +46,13 @@ if (updatedThreshold.version !== temperatureThreshold.version + 1 || updatedThre
   throw new Error('Expected threshold update and version increment.');
 }
 
+const staleThreshold = await fetch(`${baseUrl}/v1/thresholds/temperature`, {
+  method: 'PUT',
+  headers,
+  body: JSON.stringify({ ...temperatureThreshold, warning: 26, alarm: 30 }),
+});
+if (staleThreshold.status !== 409) throw new Error(`Expected a stale threshold update to be rejected with 409, received ${staleThreshold.status}.`);
+
 const manualOrder = await request('/v1/work-orders', {
   method: 'POST',
   headers,

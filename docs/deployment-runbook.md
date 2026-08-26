@@ -5,8 +5,7 @@
 ## 1. 托管 PostgreSQL
 
 1. 创建 PostgreSQL 18 实例和数据库 `utility_tunnel`，启用 TLS、每日自动备份与至少 7 天保留。
-2. 以数据库所有者身份在平台 SQL 控制台执行 [`deploy/postgres/provision.sql`](../deploy/postgres/provision.sql)，为 API 创建 `ut_runtime` 最小权限账号。
-3. 使用迁移身份（数据库所有者或专用发布账号）运行：
+2. 使用迁移身份（数据库所有者或专用发布账号）运行：
 
 ```bash
 cd services/api
@@ -16,7 +15,8 @@ npm run migrate
 npm run seed
 ```
 
-4. 将 API 的 `DATABASE_URL` 配置为 `ut_runtime` 的 TLS 连接串。运行时账号不应拥有 `CREATE`、`DROP`、数据库管理员或角色管理权限。
+3. 迁移完成后，以数据库所有者身份在平台 SQL 控制台执行 [`deploy/postgres/provision.sql`](../deploy/postgres/provision.sql)，为 API 创建 `ut_runtime` 最小权限账号。脚本会撤销通用表写入权限，仅授予 API 当前 SQL 路径所需的列级权限。
+4. 将 API 的 `DATABASE_URL` 配置为 `ut_runtime` 的 TLS 连接串。运行时账号不应拥有 `CREATE`、`DROP`、数据库管理员或角色管理权限；后续新增表或写入列时，必须随发布 SQL 显式审查并补充授权。
 
 ## 2. API 环境
 

@@ -10,7 +10,10 @@ const session = {
 
 test('normalizes an API base URL and rejects unsupported schemes', () => {
   assert.equal(normalizeApiBaseUrl('https://api.example.com///'), 'https://api.example.com');
+  assert.equal(normalizeApiBaseUrl('https://api.example.com/gateway/'), 'https://api.example.com/gateway');
   assert.throws(() => normalizeApiBaseUrl('ftp://api.example.com'), ApiError);
+  assert.throws(() => normalizeApiBaseUrl('https://user:password@api.example.com'), ApiError);
+  assert.throws(() => normalizeApiBaseUrl('https://api.example.com?token=not-allowed'), ApiError);
 });
 
 test('maps PostgreSQL API payloads into the shared operations model', () => {

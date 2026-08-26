@@ -100,7 +100,9 @@ export function normalizeApiBaseUrl(value: string): string {
     throw new ApiError('请输入有效的 API 地址，例如 http://127.0.0.1:8080。');
   }
   if (!['http:', 'https:'].includes(parsed.protocol)) throw new ApiError('API 地址仅支持 HTTP 或 HTTPS。');
-  return trimmed;
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) throw new ApiError('API 地址不能包含账号、查询参数或锚点。');
+  const path = parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/+$/, '');
+  return `${parsed.origin}${path}`;
 }
 
 function mapAssets(items: unknown[]): Asset[] {
@@ -292,7 +294,7 @@ export class OperationsApiClient {
       if (!threshold) throw new ApiError('未找到需要更新的阈值。');
       await this.request(`/v1/thresholds/${action.key}`, token, {
         method: 'PUT',
-        body: { label: threshold.label, unit: threshold.unit, warning: action.warning, alarm: action.alarm },
+        body: { label: threshold.label, unit: threshold.unit, warning: action.warning, alarm: action.alarm, version: threshold.version },
       });
       return;
     }
@@ -319,7 +321,8 @@ export class OperationsApiClient {
       if (items.length === 0) break;
       page += 1;
     }
-    return all;
+    if (all.length < total) throw new ApiError('列表数据超过客户端安全读取上限，请缩小查询范围。');
+    return all.slice(0, total);
   }
 
   private async request<T>(path: string, token?: string, options?: { method?: string; body?: unknown }): Promise<T> {
