@@ -25,7 +25,9 @@ const moduleHeadings: Record<string, [string, string, string]> = {
 type ExportFormat = 'csv' | 'json';
 
 function formatTime(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return '--:--:--';
+  return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date);
 }
 
 function statusLabel(status: string): string {
@@ -82,7 +84,15 @@ function ModuleView({ active, state, dispatch, go, notify, exportReport }: Modul
   const moveOrder = (order: WorkOrder) => {
     const next = nextOrderAction(order.status);
     if (!next || !allowed('workOrder.transition')) return;
-    dispatch({ type: 'workOrder.transition', workOrderId: order.id, to: next.to, actor });
+    if (next.to === 'completed' && state.session.role !== 'administrator') {
+      notify('完成工单需要管理员复核权限');
+      return;
+    }
+    const updated = dispatch({ type: 'workOrder.transition', workOrderId: order.id, to: next.to, actor });
+    if (updated === state) {
+      notify(`${order.code} 状态未改变，请刷新后重试`);
+      return;
+    }
     notify(`${order.code} 已${next.label}${next.to === 'completed' ? '，来源告警已自动闭环' : ''}`);
   };
 
@@ -101,7 +111,7 @@ function ModuleView({ active, state, dispatch, go, notify, exportReport }: Modul
   }
 
   if (active === 'orders') {
-    const unlinkedAlert = state.alerts.find((alert) => !linkedOrders.has(alert.id) && alert.status !== 'closed');
+    const unlinkedAlert = state.alerts.find((alert) => !linkedOrders.has(alert.id) && ['open', 'acknowledged'].includes(alert.status));
     const columns: Array<{ name: string; statuses: WorkOrderStatus[] }> = [{ name: '待派发', statuses: ['open', 'assigned'] }, { name: '处理中', statuses: ['in_progress'] }, { name: '待复核', statuses: ['pending_review'] }];
     const createManual = () => { if (!manualTitle.trim()) { notify('请填写工单标题'); return; } dispatch({ type: 'workOrder.createManual', assetCode: manualAsset, title: manualTitle, actor }); notify('手工工单已创建并写入审计'); };
     return <section className="module-page"><ModuleHeader meta={meta} action="从告警创建工单" disabled={!allowed('workOrder.create')} onAction={() => { if (!unlinkedAlert) { notify('没有可创建的未关联告警'); return; } dispatch({ type: 'workOrder.create', alertId: unlinkedAlert.id, actor }); notify(`已从 ${unlinkedAlert.code} 创建工单`); }} /><PermissionNotice role={state.session.role} /><section className="card create-order"><div><small>MANUAL WORK ORDER</small><h2>新建手工工单</h2><p>适用于未由告警触发的计划巡检；告警来源工单仍在告警中心创建。</p></div><select value={manualAsset} disabled={!allowed('workOrder.createManual')} onChange={(event) => setManualAsset(event.target.value)} aria-label="选择工单资产">{state.assets.map((asset) => <option key={asset.code} value={asset.code}>{asset.code} · {asset.name}</option>)}</select><input value={manualTitle} disabled={!allowed('workOrder.createManual')} onChange={(event) => setManualTitle(event.target.value)} aria-label="工单标题" /><button className="primary" disabled={!allowed('workOrder.createManual')} onClick={createManual}>新建工单</button></section><p className="module-note">工单状态必须按“派发 → 处置 → 复核 → 完成”顺序流转；完成来源工单会自动闭环其告警并刷新设备状态。</p><div className="kanban">{columns.map((column) => <article className="order-column" key={column.name}><div className="kanban-head"><span>{column.name}</span><b>{state.workOrders.filter((order) => column.statuses.includes(order.status)).length.toString().padStart(2, '0')}</b></div>{state.workOrders.filter((order) => column.statuses.includes(order.status)).map((order) => <WorkOrderTicket key={order.id} order={order} disabled={!allowed('workOrder.transition')} onMove={() => moveOrder(order)} />)}</article>)}<article><div className="kanban-done"><span>今日闭环</span><b>{state.workOrders.filter((order) => order.status === 'completed').length.toString().padStart(2, '0')}</b><p>处置链路<br /><strong>审计留痕</strong></p><button onClick={() => exportReport('workOrders', 'csv')}>导出清单 →</button></div></article></div></section>;

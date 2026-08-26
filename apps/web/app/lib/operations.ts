@@ -109,6 +109,7 @@ export function canPerform(role: UserRole, action: OperationsAction['type']): bo
 
 const storageKey = 'ut-ops.operations.v1';
 const actor = '王露帆';
+const initialDemoTimestamp = '2026-08-26T00:00:00.000Z';
 
 const workOrderTransitions: Record<WorkOrderStatus, WorkOrderStatus[]> = {
   open: ['assigned', 'cancelled'],
@@ -147,8 +148,33 @@ function nextWorkOrderCode(state: OperationsState): string {
   return `WO-${new Date().toISOString().slice(2, 10).replaceAll('-', '')}-${String(state.workOrders.length + 1).padStart(2, '0')}`;
 }
 
-export function createInitialOperationsState(): OperationsState {
-  const now = timestamp();
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function hasString(value: Record<string, unknown>, key: string): boolean {
+  return typeof value[key] === 'string';
+}
+
+function hasAllowedString(value: Record<string, unknown>, key: string, allowed: readonly string[]): boolean {
+  return hasString(value, key) && allowed.includes(value[key] as string);
+}
+
+function isPersistedOperationsState(value: unknown): value is OperationsState {
+  if (!isRecord(value) || value.schemaVersion !== 2 || typeof value.revision !== 'number' || !Number.isFinite(value.revision)) return false;
+  if (!Array.isArray(value.assets) || !Array.isArray(value.alerts) || !Array.isArray(value.workOrders) || !Array.isArray(value.audit) || !Array.isArray(value.telemetry) || !Array.isArray(value.thresholds) || !isRecord(value.session)) return false;
+  if (!hasString(value.session, 'name') || !['administrator', 'operator', 'viewer'].includes(value.session.role as string)) return false;
+
+  return value.assets.every((item) => isRecord(item) && ['code', 'name', 'zone', 'type', 'mesh', 'lastSeenAt'].every((key) => hasString(item, key)) && hasAllowedString(item, 'status', ['normal', 'warning', 'alarm', 'offline']))
+    && value.alerts.every((item) => isRecord(item) && ['id', 'code', 'assetCode', 'category', 'title', 'detail', 'openedAt'].every((key) => hasString(item, key)) && hasAllowedString(item, 'severity', ['warning', 'critical']) && hasAllowedString(item, 'status', ['open', 'acknowledged', 'resolved', 'closed']))
+    && value.workOrders.every((item) => isRecord(item) && ['id', 'code', 'assetCode', 'title', 'dueAt', 'createdAt', 'updatedAt'].every((key) => hasString(item, key)) && hasAllowedString(item, 'priority', ['normal', 'high', 'urgent']) && hasAllowedString(item, 'status', ['open', 'assigned', 'in_progress', 'pending_review', 'completed', 'cancelled']))
+    && value.audit.every((item) => isRecord(item) && ['id', 'occurredAt', 'actor', 'action', 'resource', 'detail'].every((key) => hasString(item, key)))
+    && value.telemetry.every((item) => isRecord(item) && ['id', 'assetCode', 'metric', 'unit', 'recordedAt'].every((key) => hasString(item, key)) && hasAllowedString(item, 'quality', ['good', 'suspect']) && typeof item.value === 'number' && Number.isFinite(item.value))
+    && value.thresholds.every((item) => isRecord(item) && ['key', 'label', 'unit'].every((key) => hasString(item, key)) && typeof item.warning === 'number' && Number.isFinite(item.warning) && item.warning >= 0 && typeof item.alarm === 'number' && Number.isFinite(item.alarm) && item.alarm > item.warning && typeof item.version === 'number' && Number.isInteger(item.version) && item.version > 0);
+}
+
+export function createInitialOperationsState(initialTimestamp = initialDemoTimestamp): OperationsState {
+  const now = initialTimestamp;
   return {
     schemaVersion: 2,
     revision: 0,
@@ -219,7 +245,7 @@ export function reduceOperations(state: OperationsState, action: OperationsActio
 
   if (action.type === 'workOrder.create') {
     const alert = state.alerts.find((item) => item.id === action.alertId);
-    if (!alert || state.workOrders.some((item) => item.sourceAlertId === alert.id)) return state;
+    if (!alert || !['open', 'acknowledged'].includes(alert.status) || state.workOrders.some((item) => item.sourceAlertId === alert.id)) return state;
     const now = timestamp();
     const created: WorkOrder = {
       id: `wo-${state.revision + 1}`, code: nextWorkOrderCode(state),
@@ -243,7 +269,7 @@ export function reduceOperations(state: OperationsState, action: OperationsActio
 
   if (action.type === 'workOrder.transition') {
     const order = state.workOrders.find((item) => item.id === action.workOrderId);
-    if (!order || !workOrderTransitions[order.status].includes(action.to)) return state;
+    if (!order || !workOrderTransitions[order.status].includes(action.to) || (action.to === 'completed' && state.session.role !== 'administrator')) return state;
     const updated = { ...order, status: action.to, assignee: action.to === 'assigned' ? action.actor : order.assignee, updatedAt: timestamp() };
     const patch: Partial<OperationsState> = { workOrders: state.workOrders.map((item) => item.id === order.id ? updated : item) };
     let detail = `${order.status} → ${action.to}`;
@@ -262,7 +288,7 @@ export function reduceOperations(state: OperationsState, action: OperationsActio
 
   if (action.type === 'threshold.update') {
     const threshold = state.thresholds.find((item) => item.key === action.key);
-    if (!threshold || action.warning >= action.alarm || action.warning < 0) return state;
+    if (!threshold || !Number.isFinite(action.warning) || !Number.isFinite(action.alarm) || action.warning >= action.alarm || action.warning < 0 || action.alarm < 0) return state;
     const updated = { ...threshold, warning: action.warning, alarm: action.alarm, version: threshold.version + 1 };
     return nextState(state, { thresholds: state.thresholds.map((item) => item.key === action.key ? updated : item) }, auditEntry(state, 'setting.threshold_updated', threshold.key, `预警 ${action.warning}${threshold.unit}，报警 ${action.alarm}${threshold.unit}`, action.actor));
   }
@@ -302,8 +328,9 @@ export class OperationsRepository {
     const raw = window.localStorage.getItem(storageKey);
     if (!raw) return;
     try {
-      const parsed = JSON.parse(raw) as OperationsState;
-      if (parsed.schemaVersion === 2 && parsed.session && Array.isArray(parsed.assets) && Array.isArray(parsed.alerts)) this.state = parsed;
+      const parsed: unknown = JSON.parse(raw);
+      if (isPersistedOperationsState(parsed)) this.state = parsed;
+      else window.localStorage.removeItem(storageKey);
     } catch {
       window.localStorage.removeItem(storageKey);
     }
@@ -320,7 +347,7 @@ export class OperationsRepository {
   }
 
   reset(): void {
-    this.state = createInitialOperationsState();
+    this.state = createInitialOperationsState(timestamp());
     if (typeof window !== 'undefined') window.localStorage.removeItem(storageKey);
     this.emit();
   }

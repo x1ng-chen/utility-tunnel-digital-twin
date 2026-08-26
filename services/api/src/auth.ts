@@ -17,6 +17,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     await request.jwtVerify();
   } catch {
     await reply.code(401).send({ error: 'unauthorized', message: 'Authentication is required.' });
+    return;
   }
 }
 
@@ -24,6 +25,7 @@ export function requirePermission(permission: string): preHandlerHookHandler {
   return async (request, reply) => {
     if (!request.user.permissions.includes(permission)) {
       await reply.code(403).send({ error: 'forbidden', message: 'Insufficient permission.' });
+      return;
     }
   };
 }

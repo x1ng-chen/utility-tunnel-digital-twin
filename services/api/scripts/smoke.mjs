@@ -44,6 +44,13 @@ const workOrder = await request(`/v1/alerts/${openAlert.id}/work-orders`, {
   body: JSON.stringify({ title: 'Automated verification work order', priority: 'normal' }),
 });
 
+const duplicate = await fetch(`${baseUrl}/v1/alerts/${openAlert.id}/work-orders`, {
+  method: 'POST',
+  headers,
+  body: JSON.stringify({ title: 'Duplicate work order', priority: 'normal' }),
+});
+if (duplicate.status !== 409) throw new Error(`Expected duplicate work order to be rejected with 409, received ${duplicate.status}.`);
+
 for (const to of ['assigned', 'in_progress', 'pending_review', 'completed']) {
   await request(`/v1/work-orders/${workOrder.id}/transition`, {
     method: 'POST',
@@ -55,6 +62,20 @@ for (const to of ['assigned', 'in_progress', 'pending_review', 'completed']) {
 const finalAudit = await request('/v1/audit?pageSize=100', { headers });
 if (!finalAudit.items.some((entry) => entry.action === 'work_order.transition')) {
   throw new Error('Expected work order transition in the audit trail.');
+}
+if (!finalAudit.items.some((entry) => entry.action === 'alert.resolve_from_work_order')) {
+  throw new Error('Expected linked alert resolution in the audit trail.');
+}
+
+const finalAlerts = await request('/v1/alerts?pageSize=100', { headers });
+if (finalAlerts.items.find((alert) => alert.id === openAlert.id)?.status !== 'resolved') {
+  throw new Error('Expected the completed work order to resolve its source alert.');
+}
+
+const finalAssets = await request('/v1/assets?pageSize=100', { headers });
+const sourceAsset = finalAssets.items.find((asset) => asset.code === openAlert.asset_code);
+if (sourceAsset?.operational_status !== 'normal') {
+  throw new Error('Expected the source asset to return to normal after the final active alert was resolved.');
 }
 
 console.log('API smoke test passed: database migration, authentication, alert-to-work-order closure and audit trail.');

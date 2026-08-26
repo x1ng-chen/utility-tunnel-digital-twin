@@ -15,9 +15,9 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Pt, RGBColor
 
 
-ROOT = Path(r"D:\实习")
+ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "_plan_v2_assets"
-OUTPUT = ROOT / "综合管廊数字孪生运维实体样品项目计划书_V2.5_燃气管道泄漏与渗水监测版.docx"
+OUTPUT = ROOT / "docs" / "综合管廊数字孪生运维实体样品项目计划书_V2.5_燃气管道泄漏与渗水监测版.docx"
 ASSET_DIR.mkdir(parents=True, exist_ok=True)
 
 

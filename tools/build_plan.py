@@ -7,7 +7,8 @@ from docx.oxml.ns import qn
 from docx.enum.section import WD_SECTION
 from pathlib import Path
 
-OUT = Path(r"D:\实习\综合管廊数字孪生实体样品项目计划书_V1.3_正式项目版.docx")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+OUT = PROJECT_ROOT / "docs" / "综合管廊数字孪生实体样品项目计划书_V1.3_正式项目版.docx"
 
 BLUE = "2E74B5"; DARK = "1F4D78"; NAVY = "0B2545"; LIGHT = "E8EEF5"; GRAY = "F2F4F7"
 

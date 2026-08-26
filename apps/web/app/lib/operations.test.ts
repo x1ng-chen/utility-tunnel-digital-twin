@@ -23,7 +23,10 @@ test('work order completion requires the review state', () => {
   const rejected = reduceOperations(state, { type: 'workOrder.transition', workOrderId: 'wo-fan-001', to: 'completed', actor: '测试运维员' });
   assert.equal(rejected, state);
   const review = reduceOperations(state, { type: 'workOrder.transition', workOrderId: 'wo-fan-001', to: 'pending_review', actor: '测试运维员' });
-  const completed = reduceOperations(review, { type: 'workOrder.transition', workOrderId: 'wo-fan-001', to: 'completed', actor: '测试管理员' });
+  const operatorRejected = reduceOperations(review, { type: 'workOrder.transition', workOrderId: 'wo-fan-001', to: 'completed', actor: '测试运维员' });
+  assert.equal(operatorRejected, review);
+  const administrator = reduceOperations(review, { type: 'session.switchRole', role: 'administrator' });
+  const completed = reduceOperations(administrator, { type: 'workOrder.transition', workOrderId: 'wo-fan-001', to: 'completed', actor: '测试管理员' });
   assert.equal(completed.workOrders.find((item) => item.id === 'wo-fan-001')?.status, 'completed');
   assert.equal(completed.alerts.find((item) => item.id === 'alert-fan-001')?.status, 'resolved');
   assert.equal(completed.assets.find((item) => item.code === 'FAN-01')?.status, 'normal');
@@ -35,6 +38,15 @@ test('viewer permissions are enforced by the reducer, not only the interface', (
   assert.equal(canPerform('viewer', 'threshold.update'), false);
   assert.equal(rejected, state);
   assert.equal(canPerform('viewer', 'report.export'), true);
+});
+
+test('invalid thresholds and resolved alerts cannot mutate the shared state', () => {
+  const state = createInitialOperationsState();
+  const invalidThreshold = reduceOperations(state, { type: 'threshold.update', key: 'temperature', warning: Number.NaN, alarm: 30, actor: '测试运维员' });
+  assert.equal(invalidThreshold, state);
+  const resolved = { ...state, alerts: state.alerts.map((item) => item.id === 'alert-ctrl-001' ? { ...item, status: 'resolved' as const } : item) };
+  const rejected = reduceOperations(resolved, { type: 'workOrder.create', alertId: 'alert-ctrl-001', actor: '测试运维员' });
+  assert.equal(rejected, resolved);
 });
 
 test('manual work orders and export payloads use the shared operations state', () => {
@@ -54,7 +66,8 @@ test('the complete alert-to-work-order-to-asset recovery path stays linked', () 
   const assigned = reduceOperations(created, { type: 'workOrder.transition', workOrderId: orderId, to: 'assigned', actor: '测试运维员' });
   const processing = reduceOperations(assigned, { type: 'workOrder.transition', workOrderId: orderId, to: 'in_progress', actor: '测试运维员' });
   const reviewing = reduceOperations(processing, { type: 'workOrder.transition', workOrderId: orderId, to: 'pending_review', actor: '测试运维员' });
-  const completed = reduceOperations(reviewing, { type: 'workOrder.transition', workOrderId: orderId, to: 'completed', actor: '测试管理员' });
+  const administrator = reduceOperations(reviewing, { type: 'session.switchRole', role: 'administrator' });
+  const completed = reduceOperations(administrator, { type: 'workOrder.transition', workOrderId: orderId, to: 'completed', actor: '测试管理员' });
   assert.equal(completed.alerts.find((item) => item.id === 'alert-ctrl-001')?.status, 'resolved');
   assert.equal(completed.audit[0]?.action, 'work_order.completed');
 });

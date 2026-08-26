@@ -172,6 +172,9 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
     const created = await inTransaction(async (client) => {
       const alert = await findAlertForUpdate(client, alertId);
       if (!alert) return null;
+      if (!['open', 'acknowledged'].includes(alert.status)) return undefined;
+      const existingOrder = await client.query<{ id: string }>('SELECT id FROM work_order WHERE source_alert_id = $1 LIMIT 1', [alert.id]);
+      if (existingOrder.rowCount) return undefined;
       const priority = body.data.priority ?? (alert.severity === 'critical' ? 'urgent' : alert.severity === 'warning' ? 'high' : 'normal');
       const result = await client.query(
         `INSERT INTO work_order (code, source_alert_id, asset_id, title, description, priority, status, created_by, due_at)
@@ -206,7 +209,8 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
       return workOrder;
     });
 
-    if (!created) return reply.code(404).send({ error: 'not_found', message: 'Alert not found.' });
+    if (created === null) return reply.code(404).send({ error: 'not_found', message: 'Alert not found.' });
+    if (created === undefined) return reply.code(409).send({ error: 'conflict', message: 'This alert is closed or already has a work order.' });
     return reply.code(201).send(created);
   });
 
@@ -241,13 +245,14 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
     }
 
     const updated = await inTransaction(async (client) => {
-      const existing = await client.query<{ id: string; status: string }>('SELECT id, status FROM work_order WHERE id = $1 FOR UPDATE', [workOrderId]);
+      const existing = await client.query<{ id: string; status: string; source_alert_id: string | null; asset_id: string | null }>('SELECT id, status, source_alert_id, asset_id FROM work_order WHERE id = $1 FOR UPDATE', [workOrderId]);
       const workOrder = existing.rows[0];
       if (!workOrder) return null;
       assertTransition(workOrderTransitions, workOrder.status, body.data.to);
       const result = await client.query(
         `UPDATE work_order
          SET status = $2::varchar,
+             assigned_to = CASE WHEN $2::varchar = 'assigned' THEN $3 ELSE assigned_to END,
              completed_at = CASE WHEN $2::varchar = 'completed' THEN now() ELSE completed_at END,
              reviewed_at = CASE WHEN $2::varchar = 'completed' THEN now() ELSE reviewed_at END,
              reviewed_by = CASE WHEN $2::varchar = 'completed' THEN $3 ELSE reviewed_by END,
@@ -261,6 +266,52 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
          VALUES ($1, 'status_changed', $2, $3, $4, $5)`,
         [workOrderId, workOrder.status, body.data.to, body.data.note, actor.user.id],
       );
+      let resolvedAlert: { id: string; code: string; status: string } | null = null;
+      if (body.data.to === 'completed' && workOrder.source_alert_id) {
+        const sourceAlert = await client.query<{ id: string; code: string; status: string }>(
+          'SELECT id, code, status FROM alert WHERE id = $1 FOR UPDATE',
+          [workOrder.source_alert_id],
+        );
+        const alert = sourceAlert.rows[0];
+        if (alert && ['open', 'acknowledged'].includes(alert.status)) {
+          const resolution = await client.query<{ id: string; code: string; status: string }>(
+            `UPDATE alert
+             SET status = 'resolved', resolved_at = now(), version = version + 1
+             WHERE id = $1
+             RETURNING id, code, status`,
+            [alert.id],
+          );
+          resolvedAlert = resolution.rows[0] ?? null;
+          await client.query(
+            `INSERT INTO alert_event (alert_id, event_type, from_status, to_status, note, actor_id)
+             VALUES ($1, 'resolved_from_work_order', $2, 'resolved', $3, $4)`,
+            [alert.id, alert.status, `工单 ${result.rows[0]?.code ?? workOrderId} 已完成：${body.data.note}`, actor.user.id],
+          );
+          if (workOrder.asset_id) {
+            await client.query(
+              `UPDATE asset
+               SET operational_status = 'normal'
+               WHERE id = $1
+                 AND operational_status IN ('warning', 'alarm')
+                 AND NOT EXISTS (
+                   SELECT 1 FROM alert
+                   WHERE asset_id = $1 AND status IN ('open', 'acknowledged')
+                 )`,
+              [workOrder.asset_id],
+            );
+          }
+          await writeAudit(client, {
+            actorId: actor.user.id,
+            action: 'alert.resolve_from_work_order',
+            resourceType: 'alert',
+            resourceId: alert.id,
+            requestId: request.id,
+            beforeValue: { status: alert.status },
+            afterValue: resolvedAlert,
+            detail: { workOrderId },
+          });
+        }
+      }
       await writeAudit(client, {
         actorId: actor.user.id,
         action: 'work_order.transition',
@@ -269,7 +320,7 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
         requestId: request.id,
         beforeValue: { status: workOrder.status },
         afterValue: result.rows[0],
-        detail: { note: body.data.note },
+        detail: { note: body.data.note, resolvedAlertId: resolvedAlert?.id ?? null },
       });
       return result.rows[0];
     }).catch((error: Error) => {
