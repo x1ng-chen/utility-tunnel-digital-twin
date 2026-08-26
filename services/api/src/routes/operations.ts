@@ -247,10 +247,10 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
       assertTransition(workOrderTransitions, workOrder.status, body.data.to);
       const result = await client.query(
         `UPDATE work_order
-         SET status = $2,
-             completed_at = CASE WHEN $2 = 'completed' THEN now() ELSE completed_at END,
-             reviewed_at = CASE WHEN $2 = 'completed' THEN now() ELSE reviewed_at END,
-             reviewed_by = CASE WHEN $2 = 'completed' THEN $3 ELSE reviewed_by END,
+         SET status = $2::varchar,
+             completed_at = CASE WHEN $2::varchar = 'completed' THEN now() ELSE completed_at END,
+             reviewed_at = CASE WHEN $2::varchar = 'completed' THEN now() ELSE reviewed_at END,
+             reviewed_by = CASE WHEN $2::varchar = 'completed' THEN $3 ELSE reviewed_by END,
              version = version + 1
          WHERE id = $1
          RETURNING id, code, status, version, completed_at, reviewed_at`,
