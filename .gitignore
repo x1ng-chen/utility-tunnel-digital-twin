@@ -40,3 +40,11 @@ page-*.png
 # Local repair and deployment artifacts
 Git-2.55.0.5-64-bit.exe
 ut-ops-site.tar.gz
+
+# STM32/CMake generated artifacts
+firmware/**/build/
+firmware/**/*.elf
+firmware/**/*.bin
+firmware/**/*.hex
+firmware/**/*.map
+firmware/**/compile_commands.json

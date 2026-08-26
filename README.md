@@ -3,7 +3,7 @@
 # 综合管廊数字孪生运维实体样品
 
 [![Version](https://img.shields.io/badge/version-V2.5-2E74B5)](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.5.docx)
-![Status](https://img.shields.io/badge/status-%E8%A7%84%E5%88%92%E4%B8%8E%E5%AE%9E%E6%96%BD%E5%87%86%E5%A4%87%E9%98%B6%E6%AE%B5-F0AD4E)
+![Status](https://img.shields.io/badge/status-%E5%8F%B0%E6%9E%B6%E5%AE%9E%E6%96%BD%E9%98%B6%E6%AE%B5-F0AD4E)
 ![Visibility](https://img.shields.io/badge/visibility-private-6C757D)
 ![Safety](https://img.shields.io/badge/safety-low--voltage-success)
 
@@ -12,7 +12,7 @@
 面向教室桌面展示的综合管廊数字孪生运维样品，通过真实传感、STM32 现场控制、MQTT 数据链路和 Web 三维可视化，形成“监测—报警—联动—工单—处置—复核—归档”的完整运维闭环。
 
 > [!IMPORTANT]
-> 当前软件平台已进入可演示实现阶段：`apps/web` 提供浏览器本地持久化的运维闭环，`services/api` 提供 PostgreSQL 正式后端基础。硬件接入仍是后续工作，本仓库的软件演示无需硬件。
+> 当前软件平台已进入可演示实现阶段；STM32 台架固件已接入 TFT、DHT11、水位 ADC 和 SW-420 中断。积水阈值校准、震动实体触发、执行器联动和通信链路仍待完成。本仓库的软件演示无需硬件。
 
 > [!NOTE]
 > 软件平台的实际功能、运行方式、质量门禁和后续 PostgreSQL 接入说明见 [软件平台说明](docs/software-platform.md)。本文其余内容保留为 V2.5 总体规划基线。
@@ -46,7 +46,7 @@
 | 现场主控 | STM32F103RCT6 |
 | 部署方式 | 展示电脑本地服务 + 局域网热点或路由器 |
 | 运行原则 | 核心功能不依赖公网，断网时现场保护与局域网业务仍可运行 |
-| 当前状态 | 需求基线已确认，待进入工程实施 |
+| 当前状态 | 软件平台与 STM32 台架并行实施；首个固件基线已落库 |
 
 项目的成功标准包括：实体与三维对象编码一致、真实采集与真实控制、异常事件全流程留痕、局域网连续稳定运行，以及代码、硬件、模型、部署和测试资料可复现。
 
@@ -203,6 +203,7 @@ flowchart TB
 utility-tunnel-digital-twin/
 ├── apps/web/              # 可操作的数字孪生运维前端
 ├── services/api/          # Fastify + PostgreSQL 业务 API 与迁移
+├── firmware/stm32f103rct6/ # STM32CubeMX/CMake 台架固件
 ├── .github/workflows/     # Web/API 自动质量检查
 ├── docs/                  # 项目计划书、设计与软件使用说明
 ├── .gitignore
@@ -240,11 +241,16 @@ npm run dev
 
 浏览器打开终端提示的本地地址即可体验告警确认、工单闭环、设备筛选、数字孪生定位、角色权限、审计和 CSV/JSON 导出。数据仅保存在当前浏览器；清除浏览器站点数据或点击左下角重置即可恢复演示初始值。
 
+### STM32 台架固件
+
+固件接线、环境、编译、烧录和当前验证边界见 [firmware/stm32f103rct6/README.md](firmware/stm32f103rct6/README.md)。
+
 克隆后建议阅读：
 
 1. [软件平台说明](docs/software-platform.md)
 2. [V2.5 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.5.docx)
-3. 本 README 中的范围、安全要求和协作规范
+3. [STM32F103RCT6 台架固件说明](firmware/stm32f103rct6/README.md)
+4. 本 README 中的范围、安全要求和协作规范
 
 ## 实施计划
 
