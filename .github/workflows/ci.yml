@@ -17,8 +17,8 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -54,8 +54,8 @@ jobs:
       SEED_ADMIN_EMAIL: admin@example.invalid
       SEED_ADMIN_PASSWORD: ci-only-development-password
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
