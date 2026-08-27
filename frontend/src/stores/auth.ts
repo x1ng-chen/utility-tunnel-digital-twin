@@ -29,6 +29,8 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = '';
     try {
       if (mode === 'demo') {
+        // A demo session must never inherit an API bearer token from an older session.
+        storage?.removeItem('ut-django-token');
         persist({ id: 0, email: email || `${role}@demo.local`, displayName: demoRoles[role], role });
         return;
       }

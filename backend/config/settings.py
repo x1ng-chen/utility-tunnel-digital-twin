@@ -1,6 +1,6 @@
 from pathlib import Path
 import os
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 from dotenv import load_dotenv
 from corsheaders.defaults import default_headers
 
@@ -62,19 +62,25 @@ ASGI_APPLICATION = 'config.asgi.application'
 def database_config() -> dict:
     database_url = os.getenv('DATABASE_URL', '').strip()
     if not database_url:
+        if IS_PRODUCTION:
+            raise RuntimeError('DATABASE_URL is required in production; SQLite fallback is development-only.')
         return {'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'db.sqlite3'}
     parsed = urlparse(database_url)
     if parsed.scheme not in {'postgres', 'postgresql'}:
         raise ValueError('DATABASE_URL must use postgresql:// or postgres://')
+    query = parse_qs(parsed.query)
+    sslmode = os.getenv('DB_SSLMODE', '').strip() or query.get('sslmode', ['prefer'])[-1]
+    if IS_PRODUCTION and sslmode not in {'require', 'verify-ca', 'verify-full'}:
+        raise RuntimeError('Production DATABASE_URL must use sslmode=require, verify-ca, or verify-full.')
     return {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': parsed.path.lstrip('/'),
-        'USER': parsed.username or '',
-        'PASSWORD': parsed.password or '',
+        'NAME': unquote(parsed.path.lstrip('/')),
+        'USER': unquote(parsed.username or ''),
+        'PASSWORD': unquote(parsed.password or ''),
         'HOST': parsed.hostname or '127.0.0.1',
         'PORT': str(parsed.port or 5432),
         'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
-        'OPTIONS': {'sslmode': os.getenv('DB_SSLMODE', 'prefer')},
+        'OPTIONS': {'sslmode': sslmode},
     }
 
 

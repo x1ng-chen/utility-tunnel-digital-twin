@@ -34,6 +34,11 @@ export const api = {
 export function setApiBaseUrl(baseUrl: string): void {
   const normalized = baseUrl.trim().replace(/\/$/, '');
   if (!/^https?:\/\//i.test(normalized)) throw new Error('API 地址必须使用 HTTP 或 HTTPS。');
+  const parsed = new URL(normalized);
+  if (parsed.username || parsed.password) throw new Error('API 地址不得包含账号或密码。');
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && parsed.protocol !== 'https:') {
+    throw new Error('HTTPS 页面只能连接 HTTPS API。');
+  }
   client.defaults.baseURL = normalized;
   localStorageRef?.setItem('vue-api-url', normalized);
 }
