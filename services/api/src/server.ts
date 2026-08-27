@@ -7,6 +7,7 @@ import { db } from './db.js';
 import { FixedWindowRateLimiter } from './rate-limit.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerOperationsRoutes } from './routes/operations.js';
+import { MqttTelemetryAdapter } from './mqtt-telemetry.js';
 
 const app = Fastify({
   logger: {
@@ -65,10 +66,12 @@ app.setNotFoundHandler((request, reply) => {
 
 await registerAuthRoutes(app);
 await registerOperationsRoutes(app);
+const mqttTelemetry = new MqttTelemetryAdapter();
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'shutting down');
   await app.close();
+  await mqttTelemetry.stop();
   await db.end();
   process.exit(0);
 };
@@ -78,6 +81,7 @@ process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
 try {
   await app.listen({ port: config.PORT, host: config.HOST });
+  mqttTelemetry.start();
 } catch (error) {
   app.log.error(error);
   await db.end();

@@ -146,6 +146,23 @@ export function useOperations() {
     return () => window.clearInterval(timer);
   }, [apiClient, apiSession, dataSource, disconnect, refresh]);
 
+  useEffect(() => {
+    if (dataSource !== 'api' || !apiClient || !apiSession) return;
+    return apiClient.streamTelemetry(apiSession, (readings) => {
+      setApiState((previous) => {
+        if (!previous) return previous;
+        const merged = new Map(previous.telemetry.map((reading) => [`${reading.assetCode}:${reading.metric}`, reading]));
+        for (const reading of readings) merged.set(`${reading.assetCode}:${reading.metric}`, reading);
+        const next = { ...previous, telemetry: [...merged.values()], revision: previous.revision + 1 };
+        stateRef.current = next;
+        return next;
+      });
+      setApiError('');
+    }, (error) => {
+      if (error instanceof ApiError && error.status === 401) disconnect('登录状态已过期，请重新连接 API。');
+    });
+  }, [apiClient, apiSession, dataSource, disconnect]);
+
   return {
     state: currentState,
     dispatch,
