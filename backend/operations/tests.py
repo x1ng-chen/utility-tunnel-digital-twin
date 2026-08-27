@@ -54,6 +54,11 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.json()['checks']['database'], 'ok')
         self.assertGreaterEqual(response.json()['latencyMs'], 0)
 
+    def test_preflight_command_runs_database_probe_in_ci_mode(self):
+        output = io.StringIO()
+        call_command('production_preflight', '--allow-non-production', '--skip-migrations', stdout=output)
+        self.assertIn('Production preflight passed', output.getvalue())
+
     def test_login_returns_token(self):
         response = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'demo-password'}, format='json')
         self.assertEqual(response.status_code, 200)

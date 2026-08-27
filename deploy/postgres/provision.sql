@@ -31,11 +31,14 @@ GRANT USAGE ON SCHEMA public TO ut_runtime;
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM ut_runtime;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM ut_runtime;
 
--- Authentication and RBAC reads; the API can only record the last login time.
-GRANT SELECT ON auth_user TO ut_runtime;
-GRANT UPDATE (last_login) ON auth_user TO ut_runtime;
+-- Authentication and RBAC reads; the API may only mutate the user lifecycle
+-- fields exposed by /api/admin/users/.
+GRANT SELECT, INSERT ON auth_user TO ut_runtime;
+GRANT UPDATE (last_login, is_active, password) ON auth_user TO ut_runtime;
+GRANT SELECT ON django_migrations TO ut_runtime;
 GRANT SELECT ON operations_profile TO ut_runtime;
 GRANT INSERT (display_name, role, user_id) ON operations_profile TO ut_runtime;
+GRANT UPDATE (display_name, role) ON operations_profile TO ut_runtime;
 GRANT SELECT, INSERT, DELETE ON authtoken_token TO ut_runtime;
 
 -- Operational reads and the exact columns written by the Django API routes.
@@ -56,6 +59,7 @@ GRANT INSERT ON operations_auditlog, operations_reportexport TO ut_runtime;
 GRANT USAGE, SELECT ON SEQUENCE operations_profile_id_seq,
   operations_workorder_id_seq, operations_auditlog_id_seq,
   operations_reportexport_id_seq TO ut_runtime;
+GRANT USAGE, SELECT ON SEQUENCE auth_user_id_seq, authtoken_token_id_seq TO ut_runtime;
 
 -- New tables must receive an explicit, reviewed grant in their release SQL.
 -- Do not use ALTER DEFAULT PRIVILEGES here: it would silently widen API access.

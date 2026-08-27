@@ -27,6 +27,7 @@ python manage.py seed_demo
 - `DJANGO_SECRET_KEY`：每个环境独立、至少 32 个随机字符；
 - `DJANGO_ENV=production`、`DJANGO_ALLOWED_HOSTS` 和 `CORS_ALLOWED_ORIGINS`；
 - `DJANGO_CSRF_TRUSTED_ORIGINS`：与前端 HTTPS Origin 精确匹配；生产环境不得使用开发机 Origin；
+- `DJANGO_SECURE_SSL_REDIRECT=true`、`DJANGO_ENABLE_HSTS=true` 与 `DJANGO_TRUST_PROXY_SSL=true`：本项目的 Nginx TLS 终止架构必须信任 `X-Forwarded-Proto`，避免 HTTPS 重定向循环；
 - `DATABASE_URL`：`ut_runtime` 的 PostgreSQL TLS 连接串；
 - `API_TOKEN_TTL_SECONDS` 与 `LOGIN_RATE_LIMIT`：按安全策略设置；
 - `DJANGO_MAX_REQUEST_BYTES` 与 `DJANGO_MAX_REQUEST_FIELDS`：限制单次请求体大小和字段数量，防止异常请求耗尽内存；
@@ -40,6 +41,15 @@ GET /api/health/   # 进程存活
 GET /api/ready/    # 数据库可用
 POST /api/auth/login/
 ```
+
+上线前在 ECS 应用目录执行一次生产预检（该命令不修改业务数据）：
+
+```bash
+cd backend
+python manage.py production_preflight
+```
+
+预检会拒绝非生产配置、非 PostgreSQL/TLS 连接、未启用 HTTPS/HSTS、进程内缓存和未执行迁移，并执行一次 `SELECT 1` 数据库探针。CI 会先执行迁移再运行预检；本地仅做数据库连通性探针时可显式使用 `--allow-non-production --skip-migrations`，生产环境不允许跳过迁移检查。
 
 ## 3. 前端
 

@@ -10,7 +10,13 @@
 node tools/quality-scan.mjs
 ```
 
-该扫描检查所有 Git 跟踪的文本文件，拒绝提交真实 `.env`、私钥和常见云平台令牌；大体积二进制和依赖目录不会被读取。GitHub Actions 会在 Vue/Django 工作流中自动执行。
+该扫描检查所有 Git 跟踪及未忽略的工作区文本文件，拒绝提交真实 `.env`、私钥和常见云平台令牌；大体积二进制和依赖目录不会被读取。GitHub Actions 会在 Vue/Django 工作流中自动执行。
+
+```powershell
+node tools/check-postgres-policy.mjs
+```
+
+该检查验证 PostgreSQL `ut_runtime` 账号的最小权限、管理员用户生命周期字段、Token/用户序列权限和占位符保护，防止正式环境授权脚本与 Django API 实际写入路径不一致。
 
 ```powershell
 cd frontend
@@ -34,7 +40,7 @@ Django 运行日志为依赖无关的 JSON 结构，包含请求耗时和关联 
 
 ## 浏览器端回归
 
-使用当前环境已有的 Playwright CLI（通过 `npx --yes --package @playwright/cli playwright-cli` 调用，不写入项目依赖）执行以下验收路径：
+浏览器 E2E 尚未纳入当前仓库依赖；待 CI 提供浏览器运行器后执行以下验收路径（不将未执行结果标记为通过）：
 
 1. 打开前端登录页，使用演示工作区进入运行总览。
 2. 进入设备台账，确认四个空间节点渲染；点击 `SEEP-W01`，详情面板应显示 `关注`、坐标 `70, 68`、1 条待处置告警和 1 个关联工单。
