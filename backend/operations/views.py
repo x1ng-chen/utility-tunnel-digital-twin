@@ -1,4 +1,5 @@
 from datetime import timedelta
+from math import isfinite
 from uuid import uuid4
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
@@ -267,7 +268,7 @@ class ThresholdDetailView(APIView):
             alarm = float(request.data.get('alarm'))
         except (Threshold.DoesNotExist, TypeError, ValueError):
             return Response({'error': 'invalid_request', 'message': 'A valid threshold key and values are required.'}, status=400)
-        if warning < 0 or alarm <= warning:
+        if not isfinite(warning) or not isfinite(alarm) or warning < 0 or alarm <= warning:
             return Response({'error': 'invalid_request', 'message': 'Alarm must be greater than warning.'}, status=400)
         if request.data.get('version') is not None:
             try:

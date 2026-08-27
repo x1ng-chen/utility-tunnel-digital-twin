@@ -25,14 +25,14 @@ class Command(BaseCommand):
 
         now = timezone.now()
         assets = [
-            ('CTRL-01', '现场控制器', 'UT-ZA', '控制器', Asset.Status.NORMAL, 'MESH_CTRL_01'),
-            ('FAN-01', '送风机 #01', 'UT-ZB', '执行器', Asset.Status.NORMAL, 'MESH_FAN_01'),
-            ('SEEP-W01', '渗水监测点', 'UT-ZB', '测点', Asset.Status.WARNING, 'MESH_SEEP_W01'),
-            ('GAS-01', '甲烷监测节点', 'UT-ZC', '测点', Asset.Status.NORMAL, 'MESH_GAS_01'),
+            ('CTRL-01', '现场控制器', 'UT-ZA', '控制器', Asset.Status.NORMAL, 'MESH_CTRL_01', {'x': 20, 'y': 50, 'z': 0}),
+            ('FAN-01', '送风机 #01', 'UT-ZB', '执行器', Asset.Status.NORMAL, 'MESH_FAN_01', {'x': 52, 'y': 38, 'z': 0}),
+            ('SEEP-W01', '渗水监测点', 'UT-ZB', '测点', Asset.Status.WARNING, 'MESH_SEEP_W01', {'x': 70, 'y': 68, 'z': 0}),
+            ('GAS-01', '甲烷监测节点', 'UT-ZC', '测点', Asset.Status.NORMAL, 'MESH_GAS_01', {'x': 84, 'y': 44, 'z': 0}),
         ]
         asset_by_code = {}
-        for code, name, zone, asset_type, status, mesh in assets:
-            asset, _ = Asset.objects.update_or_create(code=code, defaults={'name': name, 'zone': zone, 'asset_type': asset_type, 'status': status, 'mesh': mesh, 'last_seen_at': now, 'position': {'x': 50, 'y': 50, 'z': 0}})
+        for code, name, zone, asset_type, status, mesh, position in assets:
+            asset, _ = Asset.objects.update_or_create(code=code, defaults={'name': name, 'zone': zone, 'asset_type': asset_type, 'status': status, 'mesh': mesh, 'last_seen_at': now, 'position': position})
             asset_by_code[code] = asset
 
         alert_specs = [

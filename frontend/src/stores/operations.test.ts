@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
+import { useAuthStore } from './auth';
 import { useOperationsStore } from './operations';
 
 describe('operations store', () => {
@@ -16,9 +17,27 @@ describe('operations store', () => {
     const store = useOperationsStore();
     const threshold = store.thresholds[0];
     await expect(store.updateThreshold(threshold, 40, 30)).rejects.toThrow('报警阈值必须大于预警阈值');
+    await expect(store.updateThreshold(threshold, Number.NaN, 40)).rejects.toThrow('报警阈值必须大于预警阈值');
     await store.updateThreshold(threshold, 30, 36);
     expect(threshold.warning).toBe(30);
     expect(threshold.alarm).toBe(36);
     expect(threshold.version).toBe(2);
+  });
+
+  it('keeps the demo alert, work-order and audit models in sync', async () => {
+    const auth = useAuthStore();
+    await auth.login('', '', 'administrator', 'demo');
+    const store = useOperationsStore();
+    const alert = store.alerts.find((item) => item.id === 3)!;
+    await store.acknowledge(alert);
+    const order = await store.createAlertOrder(alert);
+    expect(order).toBeDefined();
+    await store.transition(order!, 'assigned');
+    await store.transition(order!, 'in_progress');
+    await store.transition(order!, 'pending_review');
+    await store.transition(order!, 'completed');
+    expect(alert.status).toBe('resolved');
+    expect(store.assets.find((item) => item.code === alert.assetCode)?.status).toBe('normal');
+    expect(store.audit.map((entry) => entry.action)).toEqual(expect.arrayContaining(['alert.acknowledged', 'work_order.created_from_alert', 'work_order.transitioned']));
   });
 });

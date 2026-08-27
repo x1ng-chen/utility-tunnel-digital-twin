@@ -1,10 +1,11 @@
 import axios from 'axios';
 
-const storage = typeof window !== 'undefined' ? window.localStorage : null;
-const defaultBaseUrl = storage?.getItem('vue-api-url') || import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+const localStorageRef = typeof window !== 'undefined' ? window.localStorage : null;
+const sessionStorageRef = typeof window !== 'undefined' ? window.sessionStorage : null;
+const defaultBaseUrl = localStorageRef?.getItem('vue-api-url') || import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 const client = axios.create({ baseURL: defaultBaseUrl, timeout: 8000, headers: { 'Content-Type': 'application/json' } });
 client.interceptors.request.use((config) => {
-  const token = storage?.getItem('ut-django-token');
+  const token = sessionStorageRef?.getItem('ut-django-token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   const requestId = typeof globalThis.crypto?.randomUUID === 'function' ? globalThis.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   config.headers['X-Request-Id'] = requestId;
@@ -34,5 +35,5 @@ export function setApiBaseUrl(baseUrl: string): void {
   const normalized = baseUrl.trim().replace(/\/$/, '');
   if (!/^https?:\/\//i.test(normalized)) throw new Error('API 地址必须使用 HTTP 或 HTTPS。');
   client.defaults.baseURL = normalized;
-  storage?.setItem('vue-api-url', normalized);
+  localStorageRef?.setItem('vue-api-url', normalized);
 }

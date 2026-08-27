@@ -5,7 +5,9 @@ import type { Role, User } from '../types';
 
 const userStorageKey = 'ut-vue-user';
 const demoRoles: Record<Role, string> = { administrator: '管理员', operator: '运维员', viewer: '查看者' };
-const storage = typeof window !== 'undefined' ? window.localStorage : null;
+// Keep identity and bearer credentials in the current browser session only.
+// The API base URL is non-sensitive and remains managed by services/api.ts.
+const storage = typeof window !== 'undefined' ? window.sessionStorage : null;
 
 export const useAuthStore = defineStore('auth', () => {
   const stored = storage?.getItem(userStorageKey);

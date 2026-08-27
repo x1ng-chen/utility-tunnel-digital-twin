@@ -5,8 +5,8 @@ export type WorkOrderStatus = 'draft' | 'open' | 'assigned' | 'in_progress' | 'p
 
 export interface User { id: number; email: string; displayName: string; role: Role; }
 export interface Asset { id: number; code: string; name: string; zone: string; type: string; status: Status; mesh: string; position: Record<string, number>; lastSeenAt: string | null; }
-export interface Alert { id: number; code: string; assetCode: string | null; severity: 'info' | 'warning' | 'critical'; category: string; status: AlertStatus; title: string; detail: string; openedAt: string; acknowledgedAt?: string | null; acknowledgedBy?: string | null; }
-export interface WorkOrder { id: number; code: string; sourceAlertId?: number | null; assetCode: string; title: string; description?: string; priority: 'low' | 'normal' | 'high' | 'urgent'; status: WorkOrderStatus; assigneeName?: string | null; dueAt?: string | null; createdAt: string; updatedAt: string; version: number; }
+export interface Alert { id: number; code: string; assetCode: string | null; severity: 'info' | 'warning' | 'critical'; category: string; status: AlertStatus; title: string; detail: string; openedAt: string; acknowledgedAt?: string | null; acknowledgedBy?: string | null; resolvedAt?: string | null; }
+export interface WorkOrder { id: number; code: string; sourceAlertId?: number | null; assetCode: string; title: string; description?: string; priority: 'low' | 'normal' | 'high' | 'urgent'; status: WorkOrderStatus; assigneeName?: string | null; dueAt?: string | null; completedAt?: string | null; createdAt: string; updatedAt: string; version: number; }
 export interface Telemetry { id: number; assetCode: string; metric: string; value: number; unit: string; quality: 'good' | 'suspect' | 'bad' | 'missing'; recordedAt: string; }
 export interface Threshold { key: string; label: string; warning: number; alarm: number; unit: string; version: number; }
 export interface AuditEntry { id: number; actorName: string; action: string; resourceType: string; resourceId: string; detail: Record<string, unknown>; requestId: string; occurredAt: string; }

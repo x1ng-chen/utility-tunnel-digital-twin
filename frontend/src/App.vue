@@ -6,7 +6,13 @@ import { useAuthStore } from './stores/auth';
 const operations = useOperationsStore();
 const auth = useAuthStore();
 let timer: number | undefined;
-onMounted(() => { if (auth.isAuthenticated) operations.refresh(window.localStorage.getItem('ut-django-token') ? 'api' : 'demo'); timer = window.setInterval(() => operations.tick(), 5000); });
+onMounted(() => {
+  if (auth.isAuthenticated) operations.refresh(window.sessionStorage.getItem('ut-django-token') ? 'api' : 'demo');
+  timer = window.setInterval(() => {
+    // API data is server-owned; only the local demo model advances on a timer.
+    if (operations.source === 'demo') operations.tick();
+  }, 5000);
+});
 onUnmounted(() => { if (timer) window.clearInterval(timer); });
 </script>
 

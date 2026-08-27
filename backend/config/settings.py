@@ -1,12 +1,21 @@
 from pathlib import Path
 import os
 from urllib.parse import urlparse
+from dotenv import load_dotenv
 from corsheaders.defaults import default_headers
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'local-development-only-change-me')
-DEBUG = os.getenv('DJANGO_DEBUG', 'true').lower() in {'1', 'true', 'yes'}
+load_dotenv(BASE_DIR / '.env')
+DJANGO_ENV = os.getenv('DJANGO_ENV', 'development').lower()
+# Fail closed for deployments that do not explicitly provide a debug flag.
+# Local development can opt in through backend/.env.example.
+DEBUG = DJANGO_ENV != 'production' and os.getenv('DJANGO_DEBUG', 'false').lower() in {'1', 'true', 'yes'}
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', '')
+if DJANGO_ENV == 'production' and len(SECRET_KEY) < 32:
+    raise RuntimeError('DJANGO_SECRET_KEY must contain at least 32 characters in production.')
+if not SECRET_KEY:
+    SECRET_KEY = 'local-development-only-change-me'
 ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if host.strip()]
 
 INSTALLED_APPS = [

@@ -1,4 +1,7 @@
+import io
+
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.test import TestCase
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
@@ -57,3 +60,16 @@ class OperationsApiTests(TestCase):
         self.auth(self.admin)
         response = self.client.put(f'/api/thresholds/{threshold.key}/', {'warning': 29, 'alarm': 33, 'version': 'not-a-number'}, format='json')
         self.assertEqual(response.status_code, 400)
+
+    def test_threshold_rejects_non_finite_values(self):
+        threshold = Threshold.objects.create(key='temperature', label='温度', warning=28, alarm=32, unit='°C')
+        self.auth(self.admin)
+        for warning, alarm in [('NaN', 33), (29, 'Infinity')]:
+            response = self.client.put(f'/api/thresholds/{threshold.key}/', {'warning': warning, 'alarm': alarm, 'version': threshold.version}, format='json')
+            self.assertEqual(response.status_code, 400)
+
+    def test_seed_demo_assigns_distinct_twin_positions(self):
+        call_command('seed_demo', stdout=io.StringIO())
+        positions = list(Asset.objects.values_list('code', 'position'))
+        self.assertEqual(len(positions), 4)
+        self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 4)
