@@ -14,6 +14,10 @@ def move_after(anchor, element):
     anchor._p.addnext(element)
 
 
+def move_before(anchor, element):
+    anchor._p.addprevious(element)
+
+
 def add_cell_row(table, values):
     cells = table.add_row().cells
     for cell, value in zip(cells, values):
@@ -64,7 +68,7 @@ def main():
         [
             "[17]",
             "华为云 ECS 安全组与 IoTDA 设备接入官方文档",
-            "https://support.huaweicloud.com/intl/en-us/usermanual-ecs/en-us_topic_0140323157.html；https://support.huaweicloud.com/intl/en-us/devg-iothub/iot_02_0170.html",
+            "见 docs/华为云部署方案.md（含官方地址与接入约束）",
         ],
     )
 
@@ -77,8 +81,20 @@ def main():
             )
             break
 
+    for paragraph in document.paragraphs:
+        if paragraph.text.startswith("资料使用原则："):
+            paragraph.text = paragraph.text.replace("访问日期均为2026年8月25日。", "访问日期为2026年8月25日至8月27日。")
+            break
+
+    for section in document.sections:
+        for paragraph in section.header.paragraphs:
+            if "V2.5" in paragraph.text:
+                for run in paragraph.runs:
+                    if "V2.5" in run.text:
+                        run.text = run.text.replace("V2.5", "V2.6")
+
     # Insert a local cloud section after section 5.2, preserving the existing plan structure.
-    anchor = next(p for p in document.paragraphs if p.text == "5.2 成熟项目与GitHub复用结论")
+    anchor = next(p for p in document.paragraphs if p.text == "6 实体样品设计")
     heading = document.add_paragraph("5.3 华为云部署与设备接入基线（2026-08-27增补）", style="Heading 2")
     intro = document.add_paragraph(
         "正式云端目标为华为云。云端用于承载Web/API、正式业务数据和设备接入；"
@@ -104,8 +120,8 @@ def main():
         "完成HTTPS、备份恢复和API健康检查后，最后在IoTDA注册CTRL-01并执行MQTTS联调。"
     )
     elements = [heading._p, intro._p, cloud_table._tbl, principles._p, sequence._p]
-    for element in reversed(elements):
-        move_after(anchor, element)
+    for element in elements:
+        move_before(anchor, element)
 
     document.core_properties.subject = "综合管廊数字孪生运维实体样品项目计划书 V2.6"
     document.core_properties.comments = "华为云部署与设备接入基线已同步。"
