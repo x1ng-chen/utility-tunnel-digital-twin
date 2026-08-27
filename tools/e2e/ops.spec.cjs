@@ -63,3 +63,31 @@ test('Django API 模式可登录、读取数据并写入审计', async ({ page }
   await expect(page.getByText('auth.login', { exact: true })).toBeVisible();
   expect(consoleErrors).toEqual([]);
 });
+
+test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }) => {
+  const consoleErrors = trackConsoleErrors(page);
+  await page.goto(webUrl);
+  await page.getByRole('button', { name: 'Django API' }).click();
+  await page.getByLabel('API 地址').fill('http://127.0.0.1:8000/api');
+  await page.getByLabel('工作邮箱').fill('admin@example.com');
+  await page.getByLabel('密码').fill('demo-password-2026');
+  await page.getByRole('button', { name: '连接 Django 并登录' }).click();
+  await page.getByRole('button', { name: '资产主数据' }).click();
+  await expect(page.getByRole('heading', { name: '资产主数据' })).toBeVisible();
+  await page.getByRole('button', { name: '新建资产' }).click();
+  await page.getByLabel('资产编码').fill('ENV-E2E');
+  await page.getByLabel('资产名称').fill('端到端环境节点');
+  await page.getByLabel('所属区域').fill('UT-ZA');
+  await page.getByLabel('资产类型').fill('环境测点');
+  await page.getByLabel('位置来源').selectOption('configured');
+  await page.getByLabel('纬度').fill('31.230800');
+  await page.getByLabel('经度').fill('121.474500');
+  await page.getByRole('button', { name: '创建资产' }).click();
+  await expect(page.getByText('ENV-E2E 已创建。')).toBeVisible();
+  await expect(page.getByText('乐观锁 v1')).toBeVisible();
+  await page.getByLabel('资产名称').fill('端到端环境节点（已校核）');
+  await page.getByRole('button', { name: '保存变更' }).click();
+  await expect(page.getByText('ENV-E2E 已保存，当前版本 v2。')).toBeVisible();
+  await expect(page.getByText('乐观锁 v2')).toBeVisible();
+  expect(consoleErrors).toEqual([]);
+});

@@ -120,6 +120,7 @@ class OperationsApiTests(TestCase):
         self.assertEqual(self.client.get('/api/assets/?status=broken').status_code, 400)
         self.assertEqual(self.client.get('/api/assets/?integrationStatus=broken').status_code, 400)
         self.assertEqual(self.client.get('/api/assets/?hasLocation=maybe').status_code, 400)
+        self.assertEqual(self.client.get('/api/assets/?isActive=maybe').status_code, 400)
         self.assertEqual(self.client.get('/api/alerts/?severity=blocker').status_code, 400)
         self.assertEqual(self.client.get('/api/alerts/?openedFrom=not-a-date').status_code, 400)
         self.assertEqual(self.client.get('/api/alerts/?openedFrom=2026-08-27T00:00:00Z&openedTo=2026-08-26T00:00:00Z').status_code, 400)
@@ -358,6 +359,80 @@ class OperationsApiTests(TestCase):
         self.assertEqual(item['hardwareCode'], 'H-10')
         self.assertEqual(item['latitude'], 31.23063)
         self.assertEqual(item['capabilities'], ['启停控制'])
+        self.assertTrue(item['isActive'])
+        self.assertEqual(item['version'], 1)
+
+    def test_admin_can_create_and_version_asset_master_data(self):
+        self.auth(self.admin)
+        payload = {
+            'code': 'TEMP-01',
+            'hardwareCode': 'H-30',
+            'name': '临时温度模块',
+            'zone': 'UT-ZA',
+            'type': '环境测点',
+            'status': Asset.Status.NORMAL,
+            'integrationStatus': Asset.IntegrationStatus.PENDING_VERIFICATION,
+            'interface': 'PA2',
+            'capabilities': ['温度采集'],
+            'mesh': 'MESH_TEMP_01',
+            'position': {'x': 42, 'y': 48, 'z': 0},
+            'latitude': 31.2307,
+            'longitude': 121.4743,
+            'locationSource': Asset.LocationSource.CONFIGURED,
+            'installationNote': '待接入。',
+        }
+
+        created = self.client.post('/api/assets/', payload, format='json')
+
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.json()['version'], 1)
+        asset_id = created.json()['id']
+        updated = self.client.patch(f'/api/assets/{asset_id}/', {'name': '温度模块 A', 'version': 1}, format='json')
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json()['name'], '温度模块 A')
+        self.assertEqual(updated.json()['version'], 2)
+        self.assertEqual(self.client.patch(f'/api/assets/{asset_id}/', {'name': '过期写入', 'version': 1}, format='json').status_code, 409)
+        self.assertEqual(AuditLog.objects.filter(resource_type='asset', resource_id=str(asset_id)).count(), 2)
+
+    def test_asset_mutations_validate_coordinates_position_and_uniqueness(self):
+        self.auth(self.admin)
+        base = {'code': 'TEMP-01', 'name': '温度模块', 'zone': 'UT-ZA', 'type': '环境测点', 'integrationStatus': Asset.IntegrationStatus.PENDING_VERIFICATION, 'locationSource': Asset.LocationSource.UNASSIGNED}
+        self.assertEqual(self.client.post('/api/assets/', {**base, 'latitude': 31.2}, format='json').status_code, 400)
+        self.assertEqual(self.client.post('/api/assets/', {**base, 'position': {'x': 101}}, format='json').status_code, 400)
+        self.assertEqual(self.client.post('/api/assets/', {**base, 'capabilities': ['温度', '温度']}, format='json').status_code, 400)
+        first = self.client.post('/api/assets/', base, format='json')
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(self.client.post('/api/assets/', base, format='json').status_code, 409)
+        self.assertEqual(self.client.patch(f"/api/assets/{first.json()['id']}/", {'version': 1}, format='json').status_code, 400)
+
+    def test_asset_deactivation_requires_clear_operations_and_admin_role(self):
+        self.auth(self.operator)
+        self.assertEqual(self.client.patch(f'/api/assets/{self.asset.pk}/', {'isActive': False, 'version': 1}, format='json').status_code, 403)
+        self.assertEqual(self.client.post('/api/assets/', {'code': 'NOPE-01'}, format='json').status_code, 403)
+        self.assertEqual(self.client.get('/api/assets/?isActive=all').status_code, 403)
+
+        self.auth(self.admin)
+        blocked = self.client.patch(f'/api/assets/{self.asset.pk}/', {'isActive': False, 'version': 1}, format='json')
+        self.assertEqual(blocked.status_code, 409)
+        self.assertEqual(blocked.json()['error'], 'asset_in_use')
+        self.alert.status = Alert.Status.RESOLVED
+        self.alert.resolved_at = timezone.now()
+        self.alert.save(update_fields=['status', 'resolved_at'])
+        deactivated = self.client.patch(f'/api/assets/{self.asset.pk}/', {'isActive': False, 'version': 1}, format='json')
+        self.assertEqual(deactivated.status_code, 200)
+        self.assertFalse(deactivated.json()['isActive'])
+        self.assertEqual(self.client.get('/api/assets/').json()['total'], 0)
+        self.assertEqual(self.client.get('/api/assets/?isActive=all').json()['total'], 1)
+
+    def test_dashboard_excludes_inactive_asset_master_data(self):
+        self.asset.is_active = False
+        self.asset.status = Asset.Status.ALARM
+        self.asset.save(update_fields=['is_active', 'status'])
+        self.auth(self.operator)
+        response = self.client.get('/api/dashboard/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['assets'], {'total': 0, 'online': 0})
+        self.assertEqual(response.json()['health']['value'], 100)
 
     def test_database_rejects_partial_or_out_of_range_gis_coordinates(self):
         with self.assertRaises(IntegrityError):

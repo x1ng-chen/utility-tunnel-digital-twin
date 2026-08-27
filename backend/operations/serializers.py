@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from math import isfinite
 from django.contrib.auth import get_user_model
 from .models import Alert, Asset, AuditLog, Profile, ReportExport, Telemetry, Threshold, WorkOrder
 
@@ -12,16 +13,90 @@ class AssetSerializer(serializers.ModelSerializer):
     longitude = serializers.SerializerMethodField()
     locationSource = serializers.CharField(source='location_source', read_only=True)
     installationNote = serializers.CharField(source='installation_note', read_only=True)
+    isActive = serializers.BooleanField(source='is_active', read_only=True)
 
     class Meta:
         model = Asset
-        fields = ['id', 'code', 'name', 'zone', 'type', 'status', 'hardwareCode', 'integrationStatus', 'interface', 'capabilities', 'mesh', 'position', 'latitude', 'longitude', 'locationSource', 'installationNote', 'lastSeenAt']
+        fields = ['id', 'code', 'name', 'zone', 'type', 'status', 'hardwareCode', 'integrationStatus', 'interface', 'capabilities', 'mesh', 'position', 'latitude', 'longitude', 'locationSource', 'installationNote', 'isActive', 'version', 'lastSeenAt']
 
     def get_latitude(self, obj):
         return float(obj.latitude) if obj.latitude is not None else None
 
     def get_longitude(self, obj):
         return float(obj.longitude) if obj.longitude is not None else None
+
+
+class AssetMutationSerializer(serializers.ModelSerializer):
+    code = serializers.RegexField(r'^[A-Z0-9][A-Z0-9_-]{1,39}$', max_length=40)
+    type = serializers.CharField(source='asset_type', max_length=60)
+    hardwareCode = serializers.RegexField(r'^H-[0-9]{2,4}$', source='hardware_code', max_length=20, allow_null=True, allow_blank=True, required=False)
+    integrationStatus = serializers.ChoiceField(source='integration_status', choices=Asset.IntegrationStatus.choices)
+    locationSource = serializers.ChoiceField(source='location_source', choices=Asset.LocationSource.choices)
+    installationNote = serializers.CharField(source='installation_note', allow_blank=True, max_length=1000, required=False)
+    isActive = serializers.BooleanField(source='is_active', required=False)
+    capabilities = serializers.ListField(child=serializers.CharField(max_length=80), max_length=20, required=False)
+    position = serializers.JSONField(required=False)
+
+    class Meta:
+        model = Asset
+        fields = ['code', 'name', 'zone', 'type', 'status', 'hardwareCode', 'integrationStatus', 'interface', 'capabilities', 'mesh', 'position', 'latitude', 'longitude', 'locationSource', 'installationNote', 'isActive']
+        extra_kwargs = {
+            'name': {'max_length': 120},
+            'zone': {'max_length': 40},
+            'status': {'required': False},
+            'interface': {'allow_blank': True, 'max_length': 80, 'required': False},
+            'mesh': {'allow_blank': True, 'max_length': 80, 'required': False},
+            'latitude': {'allow_null': True, 'required': False},
+            'longitude': {'allow_null': True, 'required': False},
+        }
+
+    def validate_hardwareCode(self, value):
+        return value or None
+
+    def validate_capabilities(self, value):
+        normalized = [item.strip() for item in value if item.strip()]
+        if len(normalized) != len(set(normalized)):
+            raise serializers.ValidationError('Capabilities must not contain duplicates.')
+        return normalized
+
+    def validate_position(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('Position must be an object.')
+        unknown = set(value) - {'x', 'y', 'z'}
+        if unknown:
+            raise serializers.ValidationError('Position supports only x, y and z.')
+        normalized = {}
+        for key in ('x', 'y', 'z'):
+            if key not in value:
+                continue
+            coordinate = value[key]
+            if isinstance(coordinate, bool) or not isinstance(coordinate, (int, float)):
+                raise serializers.ValidationError(f'Position {key} must be a number.')
+            if not isfinite(coordinate):
+                raise serializers.ValidationError(f'Position {key} must be finite.')
+            if key in {'x', 'y'} and not 0 <= coordinate <= 100:
+                raise serializers.ValidationError(f'Position {key} must be between 0 and 100.')
+            if key == 'z' and not -1000 <= coordinate <= 1000:
+                raise serializers.ValidationError('Position z is out of range.')
+            normalized[key] = coordinate
+        return normalized
+
+    def validate(self, attrs):
+        instance = self.instance
+        latitude = attrs.get('latitude', instance.latitude if instance else None)
+        longitude = attrs.get('longitude', instance.longitude if instance else None)
+        source = attrs.get('location_source', instance.location_source if instance else Asset.LocationSource.UNASSIGNED)
+        if (latitude is None) != (longitude is None):
+            raise serializers.ValidationError({'coordinates': 'Latitude and longitude must be supplied together.'})
+        if latitude is None and source != Asset.LocationSource.UNASSIGNED:
+            raise serializers.ValidationError({'locationSource': 'Assets without coordinates must use unassigned.'})
+        if latitude is not None and source == Asset.LocationSource.UNASSIGNED:
+            raise serializers.ValidationError({'locationSource': 'Located assets must declare a coordinate source.'})
+        if latitude is not None and not -90 <= latitude <= 90:
+            raise serializers.ValidationError({'latitude': 'Latitude must be between -90 and 90.'})
+        if longitude is not None and not -180 <= longitude <= 180:
+            raise serializers.ValidationError({'longitude': 'Longitude must be between -180 and 180.'})
+        return attrs
 
 
 class AlertSerializer(serializers.ModelSerializer):

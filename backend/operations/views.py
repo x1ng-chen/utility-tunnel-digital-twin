@@ -22,7 +22,7 @@ from rest_framework.views import APIView
 
 from .models import Alert, Asset, AuditLog, Profile, ReportExport, Telemetry, Threshold, WorkOrder
 from .permissions import AuthenticatedRead
-from .serializers import AdminUserSerializer, AlertSerializer, AssetSerializer, AuditSerializer, ReportExportSerializer, TelemetrySerializer, ThresholdSerializer, WorkOrderSerializer
+from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, ReportExportSerializer, TelemetrySerializer, ThresholdSerializer, WorkOrderSerializer
 from .services import actor_name, audit
 from .throttling import LoginRateThrottle
 
@@ -36,8 +36,8 @@ def object_payload(request):
     return request.data if isinstance(request.data, Mapping) else None
 
 
-def error_response(code: str, message: str, status_code: int):
-    return Response({'error': code, 'message': message, 'details': {}}, status=status_code)
+def error_response(code: str, message: str, status_code: int, details=None):
+    return Response({'error': code, 'message': message, 'details': details or {}}, status=status_code)
 
 
 def paginated(queryset, serializer_class, request):
@@ -299,8 +299,8 @@ class DashboardView(APIView):
     def get(self, request):
         latest_telemetry = Telemetry.objects.select_related('asset').order_by('-recorded_at', '-id').first()
         return Response({
-            'assets': {'total': Asset.objects.count(), 'online': Asset.objects.filter(status__in=[Asset.Status.NORMAL, Asset.Status.WARNING, Asset.Status.ALARM]).count()},
-            'health': {'value': 100 if not Asset.objects.filter(status=Asset.Status.ALARM).exists() else 72},
+            'assets': {'total': Asset.objects.filter(is_active=True).count(), 'online': Asset.objects.filter(is_active=True, status__in=[Asset.Status.NORMAL, Asset.Status.WARNING, Asset.Status.ALARM]).count()},
+            'health': {'value': 100 if not Asset.objects.filter(is_active=True, status=Asset.Status.ALARM).exists() else 72},
             'openAlerts': Alert.objects.filter(status=Alert.Status.OPEN).count(),
             'activeWorkOrders': WorkOrder.objects.exclude(status__in=[WorkOrder.Status.COMPLETED, WorkOrder.Status.CANCELLED]).count(),
             'telemetry': TelemetrySerializer(latest_telemetry).data if latest_telemetry else None,
@@ -314,7 +314,7 @@ class AssetListView(APIView):
         queryset = Asset.objects.all()
         search = request.query_params.get('search', '').strip()
         if search:
-            queryset = queryset.filter(Q(code__icontains=search) | Q(name__icontains=search) | Q(zone__icontains=search))
+            queryset = queryset.filter(Q(code__icontains=search) | Q(hardware_code__icontains=search) | Q(name__icontains=search) | Q(zone__icontains=search) | Q(interface__icontains=search))
         if request.query_params.get('status'):
             asset_status = request.query_params['status']
             if asset_status not in Asset.Status.values:
@@ -334,7 +334,76 @@ class AssetListView(APIView):
             if has_location not in {'true', 'false'}:
                 return error_response('invalid_request', 'hasLocation must be true or false.', 400)
             queryset = queryset.filter(latitude__isnull=has_location == 'false', longitude__isnull=has_location == 'false')
+        active_filter = request.query_params.get('isActive', 'true').lower()
+        if active_filter not in {'true', 'false', 'all'}:
+            return error_response('invalid_request', 'isActive must be true, false or all.', 400)
+        if active_filter == 'all' and not is_admin(request):
+            return error_response('forbidden', 'Administrator permission is required to list all asset lifecycle states.', 403)
+        if active_filter != 'all':
+            queryset = queryset.filter(is_active=active_filter == 'true')
         return paginated(queryset, AssetSerializer, request)
+
+    def post(self, request):
+        if not is_admin(request):
+            return error_response('forbidden', 'Administrator asset permission is required.', 403)
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        serializer = AssetMutationSerializer(data=payload)
+        if not serializer.is_valid():
+            return error_response('validation_error', 'Asset data is invalid.', 400, serializer.errors)
+        try:
+            with transaction.atomic():
+                asset = serializer.save(version=1)
+                audit(request.user, 'asset.created', 'asset', asset.pk, {'code': asset.code, 'hardwareCode': asset.hardware_code}, request_id(request))
+        except IntegrityError:
+            return error_response('conflict', 'Asset code or hardware code already exists.', 409)
+        return Response(AssetSerializer(asset).data, status=201)
+
+
+class AssetDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not is_admin(request):
+            return error_response('forbidden', 'Administrator asset permission is required.', 403)
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        payload = payload.copy()
+        requested_version = payload.pop('version', None)
+        if isinstance(requested_version, bool):
+            return error_response('invalid_request', 'version must be a positive number.', 400)
+        try:
+            requested_version = int(requested_version)
+        except (TypeError, ValueError):
+            return error_response('invalid_request', 'version is required and must be a positive number.', 400)
+        if requested_version < 1:
+            return error_response('invalid_request', 'version must be a positive number.', 400)
+        if not payload:
+            return error_response('invalid_request', 'At least one asset field must be supplied.', 400)
+        try:
+            with transaction.atomic():
+                asset = Asset.objects.select_for_update().filter(pk=pk).first()
+                if not asset:
+                    return error_response('not_found', 'Asset not found.', 404)
+                if requested_version != asset.version:
+                    return error_response('version_conflict', 'Asset was changed by another request.', 409)
+                serializer = AssetMutationSerializer(asset, data=payload, partial=True)
+                if not serializer.is_valid():
+                    return error_response('validation_error', 'Asset data is invalid.', 400, serializer.errors)
+                deactivating = asset.is_active and serializer.validated_data.get('is_active') is False
+                if deactivating and (
+                    asset.alerts.filter(status__in=[Alert.Status.OPEN, Alert.Status.ACKNOWLEDGED]).exists()
+                    or asset.work_orders.exclude(status__in=[WorkOrder.Status.COMPLETED, WorkOrder.Status.CANCELLED]).exists()
+                ):
+                    return error_response('asset_in_use', 'Resolve active alerts and work orders before deactivating this asset.', 409)
+                changed_fields = sorted(payload.keys())
+                asset = serializer.save(version=asset.version + 1)
+                audit(request.user, 'asset.updated', 'asset', asset.pk, {'code': asset.code, 'fields': changed_fields, 'version': asset.version}, request_id(request))
+        except IntegrityError:
+            return error_response('conflict', 'Asset code or hardware code already exists.', 409)
+        return Response(AssetSerializer(asset).data)
 
 
 class AlertListView(APIView):

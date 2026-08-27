@@ -100,7 +100,9 @@
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
 | `GET` | `/dashboard/` | 登录 | 资产、健康度、告警、工单和最新遥测汇总 |
-| `GET` | `/assets/` | 登录 | `search`、`status`、`zone`、`integrationStatus`、`hardwareCode`、`hasLocation=true\|false`、`page`、`pageSize`；返回硬件接入信息、WGS84 坐标和坐标来源 |
+| `GET` | `/assets/` | 登录 | `search`、`status`、`zone`、`integrationStatus`、`hardwareCode`、`hasLocation=true\|false`、`isActive=true\|false`、`page`、`pageSize`；管理员可用 `isActive=all` 查询全部生命周期；返回硬件接入信息、WGS84 坐标、坐标来源和版本 |
+| `POST` | `/assets/` | 管理员 | 新建资产主数据；校验编码、硬件编号、能力去重、二维孪生坐标和成对 WGS84 坐标，成功后写入审计 |
+| `PATCH` | `/assets/{id}/` | 管理员 | 更新资产主数据，必须提交当前 `version`；并发过期返回 `409`，停用存在活动告警或工单的资产返回 `409` |
 | `GET` | `/alerts/` | 登录 | `status`、`severity`、`openedFrom`、`openedTo`、`page`、`pageSize` |
 | `POST` | `/alerts/{id}/acknowledge/` | 管理员/运维员 | 确认待处理告警 |
 | `POST` | `/alerts/{id}/work-order/` | 管理员/运维员 | 从告警创建关联工单 |
@@ -123,6 +125,7 @@
 | 新建/流转工单 | ✓ | ✓ | — |
 | 完成工单复核 | ✓ | — | — |
 | 修改阈值 | ✓ | — | — |
+| 新建/修改/停用资产主数据 | ✓ | — | — |
 | 导出报表 | ✓ | ✓ | ✓ |
 
 任何未列出的写操作默认拒绝，后端权限校验是最终边界，前端按钮隐藏仅用于改善使用体验。

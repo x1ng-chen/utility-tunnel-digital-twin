@@ -54,6 +54,8 @@ class Asset(models.Model):
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     location_source = models.CharField(max_length=20, choices=LocationSource.choices, default=LocationSource.UNASSIGNED)
     installation_note = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    version = models.PositiveIntegerField(default=1)
     last_seen_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

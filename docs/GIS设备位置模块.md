@@ -2,7 +2,7 @@
 
 ## 职责边界
 
-GIS 总览使用 WGS84 经纬度显示开发板实物模块的地理位置与接入状态；“设备台账”继续负责管廊内部二维相对坐标、资产详情、遥测、告警和工单关联。两个模块共享同一 `Asset` 数据，不重复维护业务状态。
+GIS 总览使用 WGS84 经纬度显示开发板实物模块的地理位置与接入状态；“设备台账”负责运行检索和导出，“资产主数据”负责管理员维护设备身份、内部二维坐标与 WGS84 坐标。三个模块共享同一 `Asset` 数据，不重复维护业务状态。
 
 ## 当前实物口径
 
@@ -48,4 +48,6 @@ VITE_GIS_ATTRIBUTION=Map data attribution required by provider
 
 ## 数据模型与筛选
 
-`Asset` 新增 `hardwareCode`、`integrationStatus`、`interface`、`capabilities`、`latitude`、`longitude`、`locationSource` 和 `installationNote`。`GET /api/assets/` 支持 `integrationStatus`、`hardwareCode` 与 `hasLocation=true|false`，并保留原有搜索、状态、区域与分页参数。
+`Asset` 包含 `hardwareCode`、`integrationStatus`、`interface`、`capabilities`、`latitude`、`longitude`、`locationSource`、`installationNote`、`isActive` 和 `version`。`GET /api/assets/` 支持 `integrationStatus`、`hardwareCode`、`hasLocation=true|false` 与生命周期筛选，并保留原有搜索、状态、区域与分页参数。
+
+管理员通过独立的“资产主数据”页面修改位置。服务端强制经纬度成对、WGS84 范围、坐标来源一致性以及平面 `x/y` 的 `0–100` 范围；更新必须携带版本号。已有活动告警或未结束工单时禁止停用资产，避免 GIS 标记消失后留下无法处置的业务记录。

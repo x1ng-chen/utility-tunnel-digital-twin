@@ -92,4 +92,33 @@ describe('operations store', () => {
     expect(store.offline).toBe(true);
     expect(store.syncError).toBe('登录状态已过期，请重新登录。');
   });
+
+  it('creates and version-updates asset master data only through the API', async () => {
+    const auth = useAuthStore();
+    await auth.login('', '', 'administrator', 'demo');
+    const store = useOperationsStore();
+    store.source = 'api';
+    const payload = { code: 'ENV-02', name: '备用温湿度节点', zone: 'UT-ZA', type: '环境测点', status: 'unknown' as const, hardwareCode: 'H-12', integrationStatus: 'pending_verification' as const, interface: 'PA2', capabilities: ['环境温度'], mesh: 'MESH_ENV_02', position: { x: 44, y: 50, z: 0 }, latitude: 31.23, longitude: 121.47, locationSource: 'configured' as const, installationNote: '备用节点', isActive: true };
+    vi.spyOn(api, 'createAsset').mockResolvedValue({ data: { id: 13, ...payload, lastSeenAt: null, version: 1 } } as never);
+    vi.spyOn(api, 'updateAsset').mockResolvedValue({ data: { id: 13, ...payload, name: '备用环境节点', lastSeenAt: null, version: 2 } } as never);
+    vi.spyOn(api, 'audit').mockResolvedValue({ data: { items: [] } } as never);
+
+    const created = await store.createAsset(payload);
+    expect(created.version).toBe(1);
+    expect(store.assets[0].code).toBe('ENV-02');
+    const updated = await store.updateAsset(created, { name: '备用环境节点' });
+    expect(api.updateAsset).toHaveBeenCalledWith(13, { name: '备用环境节点', version: 1 });
+    expect(updated.version).toBe(2);
+    expect(store.assets[0].name).toBe('备用环境节点');
+  });
+
+  it('rejects asset master-data writes outside administrator API mode', async () => {
+    const auth = useAuthStore();
+    await auth.login('', '', 'operator', 'demo');
+    const store = useOperationsStore();
+    const asset = store.assets[0];
+    await expect(store.updateAsset(asset, { name: '越权修改' })).rejects.toThrow('只有管理员');
+    await auth.login('', '', 'administrator', 'demo');
+    await expect(store.updateAsset(asset, { name: '演示写入' })).rejects.toThrow('仅允许写入 Django API');
+  });
 });

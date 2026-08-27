@@ -44,7 +44,7 @@ class Command(BaseCommand):
         for spec in assets:
             code = spec['code']
             defaults = {key: value for key, value in spec.items() if key != 'code'}
-            defaults.update({'location_source': Asset.LocationSource.DEMO_ANCHOR, 'last_seen_at': now if spec['integration_status'] in {Asset.IntegrationStatus.VERIFIED, Asset.IntegrationStatus.FIRMWARE_CONNECTED, Asset.IntegrationStatus.CALIBRATION_REQUIRED} else None})
+            defaults.update({'location_source': Asset.LocationSource.DEMO_ANCHOR, 'last_seen_at': now if spec['integration_status'] in {Asset.IntegrationStatus.VERIFIED, Asset.IntegrationStatus.FIRMWARE_CONNECTED, Asset.IntegrationStatus.CALIBRATION_REQUIRED} else None, 'is_active': True, 'version': 1})
             asset, _ = Asset.objects.update_or_create(code=code, defaults=defaults)
             asset_by_code[code] = asset
 

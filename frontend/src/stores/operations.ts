@@ -2,7 +2,7 @@ import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import { api } from '../services/api';
 import { useAuthStore } from './auth';
-import type { Alert, Asset, AuditEntry, Dashboard, Telemetry, Threshold, WorkOrder } from '../types';
+import type { Alert, Asset, AssetMutation, AuditEntry, Dashboard, Telemetry, Threshold, WorkOrder } from '../types';
 
 type ReportKind = 'alerts' | 'workOrders' | 'assets' | 'daily';
 const demoTransitions: Record<WorkOrder['status'], WorkOrder['status'][]> = {
@@ -194,6 +194,42 @@ export const useOperationsStore = defineStore('operations', () => {
     return next;
   }
 
+  async function createAsset(input: AssetMutation) {
+    assertAssetWriteAllowed();
+    const response = await runApiMutation(() => api.createAsset(input as unknown as Record<string, unknown>));
+    const created = response.data as Asset;
+    assets.value.unshift(created);
+    recalculateAssetSummary();
+    await syncAudit();
+    notice.value = `${created.code} 已创建`;
+    return created;
+  }
+
+  async function updateAsset(asset: Asset, input: Partial<AssetMutation>) {
+    assertAssetWriteAllowed();
+    const response = await runApiMutation(() => api.updateAsset(asset.id, { ...input, version: asset.version }));
+    const updated = response.data as Asset;
+    const currentIndex = assets.value.findIndex((item) => item.id === updated.id);
+    if (!updated.isActive && currentIndex >= 0) assets.value.splice(currentIndex, 1);
+    else if (currentIndex >= 0) Object.assign(assets.value[currentIndex], updated);
+    else if (updated.isActive) assets.value.unshift(updated);
+    recalculateAssetSummary();
+    await syncAudit();
+    notice.value = `${updated.code} 已更新`;
+    return updated;
+  }
+
+  function assertAssetWriteAllowed() {
+    if (auth.user?.role !== 'administrator') throw new Error('只有管理员可以维护资产主数据。');
+    if (source.value !== 'api') throw new Error('资产主数据仅允许写入 Django API。');
+    if (offline.value) throw new Error('Django API 当前离线，离线快照为只读状态。');
+  }
+
+  function recalculateAssetSummary() {
+    const active = assets.value.filter((item) => item.isActive);
+    dashboard.value = { ...dashboard.value, assets: { total: active.length, online: active.filter((item) => ['normal', 'warning', 'alarm'].includes(item.status)).length } };
+  }
+
   async function createReport(report: ReportKind) {
     if (source.value === 'api') await runApiMutation(() => api.report(report, requestKey('report')));
     downloadReport(report);
@@ -224,7 +260,7 @@ export const useOperationsStore = defineStore('operations', () => {
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
-  return { dashboard, assets, alerts, workOrders, thresholds, telemetry, audit, loading, source, offline, syncError, lastSyncedAt, notice, openAlerts, activeOrders, refresh, tick, acknowledge, createAlertOrder, createWorkOrder, transition, updateThreshold, createReport };
+  return { dashboard, assets, alerts, workOrders, thresholds, telemetry, audit, loading, source, offline, syncError, lastSyncedAt, notice, openAlerts, activeOrders, refresh, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, transition, updateThreshold, createReport };
 });
 
 function apiErrorMessage(cause: unknown): string {
@@ -251,7 +287,7 @@ function seedAssets(): Asset[] {
     { id: 10, code: 'FAN-01', hardwareCode: 'H-10', name: '小风扇与 IN-A/IN-B 驱动', zone: 'UT-ZC', type: '通风执行器', status: 'unknown', integrationStatus: 'pending_verification', interface: '双路 GPIO（待分配）', capabilities: ['启停控制', '通风联动'], mesh: 'MESH_FAN_01', position: { x: 84, y: 34, z: 0 }, latitude: 31.23063, longitude: 121.474125, locationSource: 'demo_anchor', installationNote: '电气和反馈链路待验证，当前固件未接入。', lastSeenAt: null },
     { id: 11, code: 'BT-01', hardwareCode: 'H-11', name: 'HC-05 蓝牙模块', zone: 'CTRL', type: '可选通信模块', status: 'unknown', integrationStatus: 'optional', interface: 'UART（待分配）', capabilities: ['近场调试通信'], mesh: 'MESH_BT_01', position: { x: 36, y: 56, z: 0 }, latitude: 31.23046, longitude: 121.47376, locationSource: 'demo_anchor', installationNote: '可选模块，不属于核心数据链路，当前固件未接入。', lastSeenAt: null },
     { id: 12, code: 'PCB-01', hardwareCode: 'H-25', name: '洞洞板', zone: 'CTRL', type: '施工辅材', status: 'unknown', integrationStatus: 'non_operational', interface: '无', capabilities: ['转接与固定'], mesh: 'MESH_PCB_01', position: { x: 41, y: 63, z: 0 }, latitude: 31.230475, longitude: 121.473775, locationSource: 'demo_anchor', installationNote: '非运行资产，仅用于电气转接和实体安装。', lastSeenAt: null },
-  ];
+  ].map((asset) => ({ ...asset, isActive: true, version: 1 })) as Asset[];
 }
 function seedAlerts(): Alert[] { return [{ id: 1, code: 'ALM-260826-003', assetCode: 'SEEP-W01', severity: 'warning', category: '水浸趋势', status: 'open', title: '水浸趋势异常', detail: '渗水趋势上升，需确认现场情况并安排巡检。', openedAt: '2026-08-26T00:00:00Z' }, { id: 2, code: 'ALM-260826-002', assetCode: 'FAN-01', severity: 'critical', category: '设备反馈', status: 'acknowledged', title: '风机反馈丢失', detail: '执行反馈暂未返回，正在等待工单复核。', openedAt: '2026-08-26T00:00:00Z', acknowledgedBy: '运维员' }, { id: 3, code: 'ALM-260826-001', assetCode: 'CTRL-01', severity: 'warning', category: '通信质量', status: 'open', title: '控制器通信质量波动', detail: '控制器出现短时延迟抖动，建议建立巡检工单并观察后续遥测。', openedAt: '2026-08-26T00:00:00Z' }]; }
 function seedOrders(): WorkOrder[] { return [{ id: 1, code: 'WO-260826-08', sourceAlertId: 1, assetCode: 'SEEP-W01', title: '检查 UT-ZB 接水盘与水位探针', priority: 'high', status: 'open', createdAt: '2026-08-26T00:00:00Z', updatedAt: '2026-08-26T00:00:00Z', version: 1 }, { id: 2, code: 'WO-260826-06', sourceAlertId: 2, assetCode: 'FAN-01', title: '复核风机反馈与现场状态', priority: 'urgent', status: 'in_progress', assigneeName: '运维组 A', createdAt: '2026-08-26T00:00:00Z', updatedAt: '2026-08-26T00:00:00Z', version: 1 }]; }
