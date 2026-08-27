@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { setApiBaseUrl } from './api';
+import { csvCell } from '../stores/operations';
 
 describe('API base URL validation', () => {
   it('rejects credentials embedded in a connection URL', () => {
@@ -12,5 +13,11 @@ describe('API base URL validation', () => {
 
   it('normalizes a trailing slash without persisting credentials', () => {
     expect(() => setApiBaseUrl('https://api.example.com/')).not.toThrow();
+  });
+
+  it('rejects query strings and neutralizes spreadsheet formulas in exports', () => {
+    expect(() => setApiBaseUrl('https://api.example.com/api?tenant=demo')).toThrow('查询参数');
+    expect(csvCell('=SUM(A1:A2)')).toBe("'=SUM(A1:A2)");
+    expect(csvCell(-12)).toBe('-12');
   });
 });

@@ -27,7 +27,8 @@ python manage.py runserver 127.0.0.1:8000
 
 - Bearer Token 默认有效期 15 分钟（`API_TOKEN_TTL_SECONDS`），过期令牌会被拒绝并在下一次登录时轮换；生产环境建议使用 5–15 分钟并配合网关刷新策略。
 - 登录接口按客户端地址限流（`LOGIN_RATE_LIMIT`，默认每分钟 10 次），默认只使用 TCP 对端地址；仅在反向代理已覆盖并可信时设置 `DJANGO_TRUST_PROXY_HEADERS=true` 以读取 `X-Forwarded-For`。多实例部署时应把 Django 缓存切换到共享 DatabaseCache、Redis 或 Memcached，并在网关再设置一层限流。
-- `DJANGO_ENV=production` 会强制关闭调试、拒绝 SQLite 回退，并要求 PostgreSQL `sslmode=require`/`verify-ca`/`verify-full`，同时启用 HTTPS 重定向、HSTS 与安全 Cookie；`CORS_ALLOWED_ORIGINS` 和 `DJANGO_CSRF_TRUSTED_ORIGINS` 必须精确填写正式 HTTPS 前端 Origin，`DJANGO_ALLOWED_HOSTS` 与共享缓存也必须显式配置。
+- `DJANGO_ENV` 只接受 `development`、`test` 或 `production`；生产环境会强制关闭调试、拒绝 SQLite 回退，并要求 PostgreSQL `sslmode=require`/`verify-ca`/`verify-full`，同时启用 HTTPS 重定向、HSTS 与安全 Cookie。生产环境的 `CORS_ALLOWED_ORIGINS`、`DJANGO_CSRF_TRUSTED_ORIGINS` 必须精确填写正式 HTTPS 前端 Origin，`DJANGO_ALLOWED_HOSTS` 不得使用通配符且共享缓存必须显式配置。
+- `DATABASE_URL` 必须包含 PostgreSQL 主机、用户名和数据库名；`DB_CONN_MAX_AGE` 必须为非负整数。配置不完整或格式错误时 Django 会在启动阶段 fail fast。
 - `GET /api/health/` 只表示进程存活；`GET /api/ready/` 会执行数据库探针，返回 503 时禁止流量切入。
 - 所有响应包含 `X-Request-Id`，该值会写入操作审计，便于跨前端、网关和 API 排障。
 - Django 请求日志使用标准库输出 JSON（时间、级别、路径、状态码、耗时和 request ID），可直接接入华为云日志服务；不在日志中记录密码、Bearer Token 或数据库连接串。
@@ -40,7 +41,7 @@ npm install
 npm run dev
 ```
 
-复制 `.env.example` 为 `.env.local` 后可设置 `VITE_API_BASE_URL=http://127.0.0.1:8000/api`。登录页可切换“演示工作区”和“Django API”；API 模式的令牌只用于当前本地会话存储，所有写操作仍由服务端 RBAC 再次校验。
+复制 `.env.example` 为 `.env.local` 后可设置 `VITE_API_BASE_URL=http://127.0.0.1:8000/api`。登录页可切换“演示工作区”和“Django API”；API 模式的令牌只用于当前本地会话存储，所有写操作仍由服务端 RBAC 再次校验。API 地址禁止内嵌账号密码、查询参数或片段；CSV 导出会中和公式前缀，避免电子表格公式注入。
 
 ## 质量门禁
 

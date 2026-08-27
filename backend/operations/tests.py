@@ -9,6 +9,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
+from config.settings import parse_origins
 from .models import Alert, Asset, AuditLog, Profile, ReportExport, Threshold, WorkOrder
 
 
@@ -52,6 +53,17 @@ class OperationsApiTests(TestCase):
         response = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'demo-password'}, format='json')
         self.assertEqual(response.status_code, 200)
         self.assertIn('accessToken', response.json())
+
+    def test_duplicate_active_emails_are_rejected(self):
+        User.objects.create_user(username='duplicate@example.com', email=self.operator.email, password='demo-password')
+        response = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'demo-password'}, format='json')
+        self.assertEqual(response.status_code, 401)
+
+    def test_origin_validation_rejects_credentials_and_paths(self):
+        with self.assertRaises(ValueError):
+            parse_origins('https://user:secret@example.com', '', 'CORS_ALLOWED_ORIGINS')
+        with self.assertRaises(ValueError):
+            parse_origins('https://example.com/api', '', 'CORS_ALLOWED_ORIGINS')
 
     def test_expired_token_is_rejected_and_rotated_on_login(self):
         token = Token.objects.create(user=self.operator)
@@ -195,3 +207,27 @@ class OperationsApiTests(TestCase):
         positions = list(Asset.objects.values_list('code', 'position'))
         self.assertEqual(len(positions), 4)
         self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 4)
+
+    def test_seed_demo_resets_lifecycle_timestamps(self):
+        call_command('seed_demo', stdout=io.StringIO())
+        alert = Alert.objects.get(code='ALM-260826-003')
+        alert.status = Alert.Status.RESOLVED
+        alert.resolved_at = timezone.now()
+        alert.save(update_fields=['status', 'resolved_at'])
+        order = WorkOrder.objects.get(code='WO-260826-08')
+        order.status = WorkOrder.Status.COMPLETED
+        order.completed_at = timezone.now()
+        order.reviewed_by = self.admin
+        order.version = 8
+        order.save(update_fields=['status', 'completed_at', 'reviewed_by', 'version'])
+
+        call_command('seed_demo', stdout=io.StringIO())
+
+        alert.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(alert.status, Alert.Status.OPEN)
+        self.assertIsNone(alert.resolved_at)
+        self.assertEqual(order.status, WorkOrder.Status.OPEN)
+        self.assertIsNone(order.completed_at)
+        self.assertIsNone(order.reviewed_by)
+        self.assertEqual(order.version, 1)

@@ -7,10 +7,11 @@ const fallbackBaseUrl = typeof window !== 'undefined' && window.location.protoco
   : 'http://127.0.0.1:8000/api';
 
 function normalizeApiBaseUrl(baseUrl: string): string {
-  const normalized = baseUrl.trim().replace(/\/$/, '');
+  const normalized = baseUrl.trim().replace(/\/+$/, '');
   if (!/^https?:\/\//i.test(normalized)) throw new Error('API 地址必须使用 HTTP 或 HTTPS。');
   const parsed = new URL(normalized);
   if (parsed.username || parsed.password) throw new Error('API 地址不得包含账号或密码。');
+  if (parsed.search || parsed.hash || !parsed.hostname) throw new Error('API 地址不得包含查询参数或片段。');
   if (typeof window !== 'undefined' && window.location.protocol === 'https:' && parsed.protocol !== 'https:') {
     throw new Error('HTTPS 页面只能连接 HTTPS API。');
   }

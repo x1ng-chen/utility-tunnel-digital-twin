@@ -363,7 +363,13 @@ export class OperationsRepository {
 export const operationsRepository = new OperationsRepository();
 
 export function toCsv(state: OperationsState, report: ReportKind): string {
-  const escape = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+  const escape = (value: unknown) => {
+    const text = String(value ?? '');
+    // Prefix formula-like strings so spreadsheet applications cannot execute
+    // exported user-controlled values as formulas (CSV injection defense).
+    const safeText = typeof value === 'string' && /^[=+\-@]/.test(text) ? `'${text}` : text;
+    return `"${safeText.replaceAll('"', '""')}"`;
+  };
   const rows = report === 'alerts'
     ? [['编码', '资产', '级别', '状态', '标题', '触发时间'], ...state.alerts.map((item) => [item.code, item.assetCode, item.severity, item.status, item.title, item.openedAt])]
     : report === 'workOrders'

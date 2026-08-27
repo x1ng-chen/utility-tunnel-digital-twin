@@ -112,19 +112,22 @@ class LoginView(APIView):
         password = password_value
         if not email or not password:
             return error_response('invalid_request', 'Email and password are required.', 400)
-        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        matching_users = User.objects.filter(email__iexact=email, is_active=True)
+        if matching_users.count() != 1:
+            return error_response('invalid_credentials', 'Invalid email or password.', 401)
+        user = matching_users.first()
         authenticated = authenticate(username=user.username if user else email, password=password)
         if not authenticated:
             return error_response('invalid_credentials', 'Invalid email or password.', 401)
-        token = Token.objects.filter(user=authenticated).first()
-        if token and token.created + timedelta(seconds=settings.API_TOKEN_TTL_SECONDS) <= timezone.now():
-            token.delete()
-            token = None
-        token = token or Token.objects.create(user=authenticated)
-        profile, _ = Profile.objects.get_or_create(user=authenticated, defaults={'display_name': authenticated.get_full_name() or authenticated.email})
-        authenticated.last_login = timezone.now()
-        authenticated.save(update_fields=['last_login'])
-        audit(authenticated, 'auth.login', 'app_user', authenticated.pk, {'email': authenticated.email}, request_id(request))
+        with transaction.atomic():
+            token, created = Token.objects.select_for_update().get_or_create(user=authenticated)
+            if not created and token.created + timedelta(seconds=settings.API_TOKEN_TTL_SECONDS) <= timezone.now():
+                token.delete()
+                token = Token.objects.create(user=authenticated)
+            profile, _ = Profile.objects.get_or_create(user=authenticated, defaults={'display_name': authenticated.get_full_name() or authenticated.email})
+            authenticated.last_login = timezone.now()
+            authenticated.save(update_fields=['last_login'])
+            audit(authenticated, 'auth.login', 'app_user', authenticated.pk, {'email': authenticated.email}, request_id(request))
         return Response({'accessToken': token.key, 'tokenType': 'Bearer', 'user': {'id': authenticated.pk, 'email': authenticated.email, 'displayName': profile.display_name or authenticated.email, 'role': profile.role}})
 
 

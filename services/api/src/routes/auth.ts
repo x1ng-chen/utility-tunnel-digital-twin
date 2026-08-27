@@ -37,7 +37,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
          GROUP BY u.id`,
         [body.data.email],
       );
-      return result.rows[0] ?? null;
+      // An email is an account identifier. Refuse ambiguous data instead of
+      // authenticating whichever duplicate row PostgreSQL happens to return.
+      return result.rowCount === 1 ? result.rows[0] : null;
     });
 
     if (!accountResult || !(await verifyPassword(body.data.password, accountResult.password_hash))) {

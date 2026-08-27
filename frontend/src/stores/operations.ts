@@ -231,7 +231,10 @@ function seedAlerts(): Alert[] { return [{ id: 1, code: 'ALM-260826-003', assetC
 function seedOrders(): WorkOrder[] { return [{ id: 1, code: 'WO-260826-08', sourceAlertId: 1, assetCode: 'SEEP-W01', title: '检查 UT-ZB 接水盘与水位探针', priority: 'high', status: 'open', createdAt: '2026-08-26T00:00:00Z', updatedAt: '2026-08-26T00:00:00Z', version: 1 }, { id: 2, code: 'WO-260826-06', sourceAlertId: 2, assetCode: 'FAN-01', title: '复核风机反馈与现场状态', priority: 'urgent', status: 'in_progress', assigneeName: '运维组 A', createdAt: '2026-08-26T00:00:00Z', updatedAt: '2026-08-26T00:00:00Z', version: 1 }]; }
 function seedThresholds(): Threshold[] { return [{ key: 'temperature', label: '环境温度', warning: 28, alarm: 32, unit: '°C', version: 1 }, { key: 'humidity', label: '环境湿度', warning: 75, alarm: 85, unit: '%RH', version: 1 }, { key: 'water', label: '水浸趋势', warning: 20, alarm: 45, unit: '秒', version: 1 }]; }
 
-function csvCell(value: unknown): string {
+export function csvCell(value: unknown): string {
   const text = value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
-  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  // Prefix formula-like strings so spreadsheet applications cannot execute
+  // exported user-controlled values as formulas (CSV injection defense).
+  const safeText = typeof value === 'string' && /^[=+\-@]/.test(text) ? `'${text}` : text;
+  return /[",\r\n]/.test(safeText) ? `"${safeText.replaceAll('"', '""')}"` : safeText;
 }

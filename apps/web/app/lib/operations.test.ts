@@ -57,6 +57,12 @@ test('manual work orders and export payloads use the shared operations state', (
   assert.match(toJson(manual, 'assets'), /CTRL-01/);
 });
 
+test('CSV export neutralizes spreadsheet formulas', () => {
+  const state = createInitialOperationsState();
+  const unsafe = { ...state, workOrders: state.workOrders.map((item, index) => index === 0 ? { ...item, title: '=HYPERLINK("https://example.com")' } : item) };
+  assert.match(toCsv(unsafe, 'workOrders'), /'=HYPERLINK/);
+});
+
 test('the complete alert-to-work-order-to-asset recovery path stays linked', () => {
   const initial = createInitialOperationsState();
   const acknowledged = reduceOperations(initial, { type: 'alert.acknowledge', alertId: 'alert-ctrl-001', actor: '测试运维员' });

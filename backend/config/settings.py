@@ -8,6 +8,8 @@ from corsheaders.defaults import default_headers
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
 DJANGO_ENV = os.getenv('DJANGO_ENV', 'development').strip().lower()
+if DJANGO_ENV not in {'development', 'test', 'production'}:
+    raise ValueError('DJANGO_ENV must be development, test, or production.')
 IS_PRODUCTION = DJANGO_ENV == 'production'
 # Fail closed for deployments that do not explicitly provide a debug flag.
 # Local development can opt in through backend/.env.example.
@@ -21,6 +23,8 @@ raw_allowed_hosts = os.getenv('DJANGO_ALLOWED_HOSTS', '').strip()
 if IS_PRODUCTION and not raw_allowed_hosts:
     raise RuntimeError('DJANGO_ALLOWED_HOSTS is required in production.')
 ALLOWED_HOSTS = [host.strip() for host in (raw_allowed_hosts or '127.0.0.1,localhost').split(',') if host.strip()]
+if IS_PRODUCTION and '*' in ALLOWED_HOSTS:
+    raise RuntimeError('DJANGO_ALLOWED_HOSTS must not contain a wildcard in production.')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -71,18 +75,33 @@ def database_config() -> dict:
     parsed = urlparse(database_url)
     if parsed.scheme not in {'postgres', 'postgresql'}:
         raise ValueError('DATABASE_URL must use postgresql:// or postgres://')
+    try:
+        hostname = parsed.hostname
+        port = parsed.port or 5432
+    except ValueError as exc:
+        raise ValueError('DATABASE_URL contains an invalid host or port.') from exc
+    database_name = unquote(parsed.path.lstrip('/')).strip()
+    username = unquote(parsed.username or '').strip()
+    if not hostname or not username or not database_name:
+        raise ValueError('DATABASE_URL must include a database name, username, and host.')
     query = parse_qs(parsed.query)
     sslmode = os.getenv('DB_SSLMODE', '').strip() or query.get('sslmode', ['prefer'])[-1]
     if IS_PRODUCTION and sslmode not in {'require', 'verify-ca', 'verify-full'}:
         raise RuntimeError('Production DATABASE_URL must use sslmode=require, verify-ca, or verify-full.')
+    try:
+        conn_max_age = int(os.getenv('DB_CONN_MAX_AGE', '60'))
+    except ValueError as exc:
+        raise ValueError('DB_CONN_MAX_AGE must be a non-negative integer.') from exc
+    if conn_max_age < 0:
+        raise ValueError('DB_CONN_MAX_AGE must be a non-negative integer.')
     return {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': unquote(parsed.path.lstrip('/')),
-        'USER': unquote(parsed.username or ''),
+        'NAME': database_name,
+        'USER': username,
         'PASSWORD': unquote(parsed.password or ''),
-        'HOST': parsed.hostname or '127.0.0.1',
-        'PORT': str(parsed.port or 5432),
-        'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
+        'HOST': hostname,
+        'PORT': str(port),
+        'CONN_MAX_AGE': conn_max_age,
         'OPTIONS': {'sslmode': sslmode},
     }
 
@@ -94,7 +113,11 @@ def parse_origins(raw: str, default: str, setting_name: str) -> list[str]:
     origins = [origin.strip() for origin in (raw or default).split(',') if origin.strip()]
     for origin in origins:
         parsed = urlparse(origin)
-        if parsed.scheme not in {'http', 'https'} or not parsed.netloc or parsed.path or parsed.params or parsed.query or parsed.fragment:
+        try:
+            parsed.port
+        except ValueError as exc:
+            raise ValueError(f'{setting_name} contains an invalid port.') from exc
+        if parsed.scheme not in {'http', 'https'} or not parsed.hostname or not parsed.netloc or parsed.username or parsed.password or parsed.path or parsed.params or parsed.query or parsed.fragment:
             raise ValueError(f'{setting_name} must contain origins such as https://ops.example.com without a path.')
     return origins
 

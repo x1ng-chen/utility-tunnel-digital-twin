@@ -107,6 +107,13 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
+      'X-Request-Id': request.id,
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'no-referrer',
+      'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
     });
     realtimeHub.add(reply.raw);
     request.raw.once('close', () => realtimeHub.remove(reply.raw));
