@@ -17,6 +17,9 @@
 > [!NOTE]
 > 软件平台的实际功能、运行方式、质量门禁和后续 PostgreSQL 接入说明见 [软件平台说明](docs/software-platform.md)。本文其余内容保留为 V2.6 总体规划基线。
 
+> [!TIP]
+> 当前新增的标准工程栈位于 `frontend/`（Vue 3）和 `backend/`（Django + DRF），可独立启动并连接 PostgreSQL；原有 `apps/web` 与 `services/api` 保持不动，迁移说明和运行命令见 [Vue 3 + Django 标准软件栈](docs/vue-django-stack.md)。
+
 ## 目录
 
 - [项目概览](#项目概览)
