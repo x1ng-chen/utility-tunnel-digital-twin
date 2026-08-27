@@ -30,6 +30,15 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.json()['status'], 'ok')
         self.assertTrue(response.headers.get('X-Request-Id'))
 
+    def test_api_errors_use_a_stable_envelope(self):
+        self.auth(self.operator)
+        response = self.client.get('/api/assets/?page=invalid')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(set(response.json()), {'error', 'message', 'details'})
+        missing = self.client.get('/api/does-not-exist/')
+        self.assertEqual(missing.status_code, 404)
+        self.assertEqual(set(missing.json()), {'error', 'message', 'details'})
+
     def test_ready_checks_database_and_is_public(self):
         response = self.client.get('/api/ready/')
         self.assertEqual(response.status_code, 200)
@@ -61,6 +70,27 @@ class OperationsApiTests(TestCase):
         self.assertEqual(report.json()['reportType'], 'daily')
         self.assertEqual(self.client.get('/api/report-exports/').status_code, 200)
         self.assertEqual(self.client.get('/api/assets/?pageSize=not-a-number').status_code, 400)
+        self.assertEqual(self.client.get('/api/assets/?status=broken').status_code, 400)
+        self.assertEqual(self.client.get('/api/alerts/?severity=blocker').status_code, 400)
+        page = self.client.get('/api/assets/?page=1&pageSize=1').json()
+        self.assertEqual(page['pageCount'], 1)
+        self.assertFalse(page['hasNext'])
+
+    def test_malformed_object_payloads_return_400_instead_of_500(self):
+        self.auth(self.operator)
+        self.assertEqual(self.client.post('/api/work-orders/', ['not', 'an', 'object'], format='json').status_code, 400)
+        self.assertEqual(self.client.post('/api/work-orders/', {'assetCode': ['FAN-01'], 'title': '异常'}, format='json').status_code, 400)
+        self.assertEqual(self.client.post('/api/work-orders/999/transition/', ['in_progress'], format='json').status_code, 400)
+        self.assertEqual(self.client.post('/api/report-exports/', ['daily'], format='json').status_code, 400)
+        self.auth(self.admin)
+        Threshold.objects.create(key='temperature', label='温度', warning=28, alarm=32, unit='°C')
+        self.assertEqual(self.client.put('/api/thresholds/temperature/', ['bad'], format='json').status_code, 400)
+
+    def test_unknown_transition_type_returns_400_instead_of_500(self):
+        order = WorkOrder.objects.create(code='WO-2', asset=self.asset, title='测试工单', status=WorkOrder.Status.OPEN, created_by=self.operator)
+        self.auth(self.operator)
+        response = self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': ['assigned']}, format='json')
+        self.assertEqual(response.status_code, 400)
 
     def test_viewer_cannot_write(self):
         viewer = User.objects.create_user(username='viewer@example.com', email='viewer@example.com', password='demo-password')

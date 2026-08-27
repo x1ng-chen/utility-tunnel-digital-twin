@@ -19,7 +19,7 @@ let signalTimer: number | undefined;
 onMounted(() => { signalTimer = window.setInterval(() => { signal.value = Math.round(58 + Math.random() * 36); }, 2500); });
 onUnmounted(() => { if (signalTimer) window.clearInterval(signalTimer); });
 
-async function submit() { auth.clearError(); try { if (mode.value === 'api') setApiBaseUrl(apiUrl.value); await auth.login(email.value, password.value, role.value, mode.value); if (mode.value === 'api') await operations.refresh('api'); router.push('/dashboard'); } catch (cause) { if (!auth.error) auth.error = cause instanceof Error ? cause.message : '登录失败，请检查输入。'; } }
+async function submit() { auth.clearError(); try { if (mode.value === 'api') setApiBaseUrl(apiUrl.value); await auth.login(email.value, password.value, role.value, mode.value); await operations.refresh(mode.value); router.push('/dashboard'); } catch (cause) { if (!auth.error) auth.error = cause instanceof Error ? cause.message : '登录失败，请检查输入。'; } }
 </script>
 
 <template>

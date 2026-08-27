@@ -1,4 +1,5 @@
 from datetime import timedelta
+from collections.abc import Mapping
 from math import isfinite
 from uuid import uuid4
 from django.conf import settings
@@ -25,15 +26,33 @@ def request_id(request) -> str:
     return getattr(request, 'request_id', request.headers.get('X-Request-Id', ''))
 
 
+def object_payload(request):
+    """Return an object payload or ``None`` for malformed JSON bodies."""
+    return request.data if isinstance(request.data, Mapping) else None
+
+
+def error_response(code: str, message: str, status_code: int):
+    return Response({'error': code, 'message': message, 'details': {}}, status=status_code)
+
+
 def paginated(queryset, serializer_class, request):
     try:
         page = max(1, int(request.query_params.get('page', '1')))
         page_size = min(100, max(1, int(request.query_params.get('pageSize', '20'))))
     except ValueError:
-        return Response({'error': 'invalid_request', 'message': 'page and pageSize must be numbers.'}, status=400)
+        return error_response('invalid_request', 'page and pageSize must be numbers.', 400)
     total = queryset.count()
     items = queryset[(page - 1) * page_size:page * page_size]
-    return Response({'items': serializer_class(items, many=True).data, 'page': page, 'pageSize': page_size, 'total': total})
+    page_count = (total + page_size - 1) // page_size if total else 0
+    return Response({
+        'items': serializer_class(items, many=True).data,
+        'page': page,
+        'pageSize': page_size,
+        'total': total,
+        'pageCount': page_count,
+        'hasNext': page < page_count,
+        'hasPrevious': page > 1 and page_count > 0,
+    })
 
 
 def role(request) -> str:
@@ -69,7 +88,7 @@ class ReadyView(APIView):
                 cursor.execute('SELECT 1')
                 cursor.fetchone()
         except Exception:
-            return Response({'status': 'not_ready', 'service': 'utility-tunnel-django'}, status=503)
+            return error_response('not_ready', 'Database is not ready.', 503)
         return Response({'status': 'ready', 'service': 'utility-tunnel-django', 'time': timezone.now()})
 
 
@@ -79,14 +98,21 @@ class LoginView(APIView):
     throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
-        email = str(request.data.get('email', '')).strip().lower()
-        password = str(request.data.get('password', ''))
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        email_value = payload.get('email', '')
+        password_value = payload.get('password', '')
+        if not isinstance(email_value, str) or not isinstance(password_value, str):
+            return error_response('invalid_request', 'Email and password must be strings.', 400)
+        email = email_value.strip().lower()
+        password = password_value
         if not email or not password:
-            return Response({'error': 'invalid_request', 'message': 'Email and password are required.'}, status=400)
+            return error_response('invalid_request', 'Email and password are required.', 400)
         user = User.objects.filter(email__iexact=email, is_active=True).first()
         authenticated = authenticate(username=user.username if user else email, password=password)
         if not authenticated:
-            return Response({'error': 'invalid_credentials', 'message': 'Invalid email or password.'}, status=401)
+            return error_response('invalid_credentials', 'Invalid email or password.', 401)
         token = Token.objects.filter(user=authenticated).first()
         if token and token.created + timedelta(seconds=settings.API_TOKEN_TTL_SECONDS) <= timezone.now():
             token.delete()
@@ -138,7 +164,10 @@ class AssetListView(APIView):
         if search:
             queryset = queryset.filter(Q(code__icontains=search) | Q(name__icontains=search) | Q(zone__icontains=search))
         if request.query_params.get('status'):
-            queryset = queryset.filter(status=request.query_params['status'])
+            asset_status = request.query_params['status']
+            if asset_status not in Asset.Status.values:
+                return error_response('invalid_request', 'status is not a valid asset status.', 400)
+            queryset = queryset.filter(status=asset_status)
         if request.query_params.get('zone'):
             queryset = queryset.filter(zone=request.query_params['zone'])
         return paginated(queryset, AssetSerializer, request)
@@ -150,9 +179,15 @@ class AlertListView(APIView):
     def get(self, request):
         queryset = Alert.objects.select_related('asset', 'acknowledged_by')
         if request.query_params.get('status'):
-            queryset = queryset.filter(status=request.query_params['status'])
+            alert_status = request.query_params['status']
+            if alert_status not in Alert.Status.values:
+                return error_response('invalid_request', 'status is not a valid alert status.', 400)
+            queryset = queryset.filter(status=alert_status)
         if request.query_params.get('severity'):
-            queryset = queryset.filter(severity=request.query_params['severity'])
+            severity = request.query_params['severity']
+            if severity not in Alert.Severity.values:
+                return error_response('invalid_request', 'severity is not a valid alert severity.', 400)
+            queryset = queryset.filter(severity=severity)
         return paginated(queryset, AlertSerializer, request)
 
 
@@ -161,13 +196,13 @@ class AlertAcknowledgeView(APIView):
 
     def post(self, request, pk):
         if not can_write(request):
-            return Response({'error': 'forbidden', 'message': 'Alert acknowledgement permission is required.'}, status=403)
+            return error_response('forbidden', 'Alert acknowledgement permission is required.', 403)
         with transaction.atomic():
             alert = Alert.objects.select_for_update().filter(pk=pk).first()
             if not alert:
-                return Response({'error': 'not_found', 'message': 'Alert not found.'}, status=404)
+                return error_response('not_found', 'Alert not found.', 404)
             if alert.status != Alert.Status.OPEN:
-                return Response({'error': 'invalid_state', 'message': 'Only open alerts can be acknowledged.'}, status=409)
+                return error_response('invalid_state', 'Only open alerts can be acknowledged.', 409)
             alert.status = Alert.Status.ACKNOWLEDGED
             alert.acknowledged_at = timezone.now()
             alert.acknowledged_by = request.user
@@ -181,13 +216,13 @@ class AlertWorkOrderView(APIView):
 
     def post(self, request, pk):
         if not can_write(request):
-            return Response({'error': 'forbidden', 'message': 'Work order permission is required.'}, status=403)
+            return error_response('forbidden', 'Work order permission is required.', 403)
         with transaction.atomic():
             alert = Alert.objects.select_for_update().select_related('asset').filter(pk=pk).first()
             if not alert or not alert.asset or alert.status not in {Alert.Status.OPEN, Alert.Status.ACKNOWLEDGED}:
-                return Response({'error': 'invalid_state', 'message': 'Alert is not eligible for a work order.'}, status=409)
+                return error_response('invalid_state', 'Alert is not eligible for a work order.', 409)
             if WorkOrder.objects.filter(source_alert=alert).exists():
-                return Response({'error': 'conflict', 'message': 'A linked work order already exists.'}, status=409)
+                return error_response('conflict', 'A linked work order already exists.', 409)
             order = WorkOrder.objects.create(code=work_order_code(), source_alert=alert, asset=alert.asset, title=f'处置 {alert.code}：{alert.title}', priority=WorkOrder.Priority.URGENT if alert.severity == Alert.Severity.CRITICAL else WorkOrder.Priority.HIGH, created_by=request.user, due_at=timezone.now() + timedelta(hours=8))
             audit(request.user, 'work_order.created_from_alert', 'work_order', order.pk, {'alertCode': alert.code}, request_id(request))
         return Response(WorkOrderSerializer(order).data, status=201)
@@ -199,7 +234,10 @@ class WorkOrderListView(APIView):
     def get(self, request):
         queryset = WorkOrder.objects.select_related('asset', 'source_alert', 'assignee')
         if request.query_params.get('status'):
-            queryset = queryset.filter(status=request.query_params['status'])
+            work_order_status = request.query_params['status']
+            if work_order_status not in WorkOrder.Status.values:
+                return error_response('invalid_request', 'status is not a valid work order status.', 400)
+            queryset = queryset.filter(status=work_order_status)
         if request.query_params.get('search'):
             search = request.query_params['search'].strip()
             queryset = queryset.filter(Q(code__icontains=search) | Q(title__icontains=search) | Q(asset__code__icontains=search))
@@ -207,13 +245,20 @@ class WorkOrderListView(APIView):
 
     def post(self, request):
         if not can_write(request):
-            return Response({'error': 'forbidden', 'message': 'Work order permission is required.'}, status=403)
-        asset = Asset.objects.filter(code=request.data.get('assetCode')).first()
-        title = str(request.data.get('title', '')).strip()
-        priority = request.data.get('priority', WorkOrder.Priority.NORMAL)
-        if not asset or not title or priority not in WorkOrder.Priority.values:
-            return Response({'error': 'invalid_request', 'message': 'A valid assetCode and title are required.'}, status=400)
-        order = WorkOrder.objects.create(code=work_order_code(), asset=asset, title=title, description=str(request.data.get('description', '')), priority=priority, created_by=request.user)
+            return error_response('forbidden', 'Work order permission is required.', 403)
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        asset_code = payload.get('assetCode')
+        title_value = payload.get('title', '')
+        if not isinstance(asset_code, str) or not isinstance(title_value, str):
+            return error_response('invalid_request', 'assetCode and title must be strings.', 400)
+        asset = Asset.objects.filter(code=asset_code.strip()).first()
+        title = title_value.strip()
+        priority = payload.get('priority', WorkOrder.Priority.NORMAL)
+        if not asset or not title or not isinstance(priority, str) or priority not in WorkOrder.Priority.values:
+            return error_response('invalid_request', 'A valid assetCode and title are required.', 400)
+        order = WorkOrder.objects.create(code=work_order_code(), asset=asset, title=title, description=str(payload.get('description', '')), priority=priority, created_by=request.user)
         audit(request.user, 'work_order.created_manual', 'work_order', order.pk, {'assetCode': asset.code}, request_id(request))
         return Response(WorkOrderSerializer(order).data, status=201)
 
@@ -234,16 +279,21 @@ class WorkOrderTransitionView(APIView):
 
     def post(self, request, pk):
         if not can_write(request):
-            return Response({'error': 'forbidden', 'message': 'Work order permission is required.'}, status=403)
-        target = request.data.get('to')
+            return error_response('forbidden', 'Work order permission is required.', 403)
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        target = payload.get('to')
+        if not isinstance(target, str):
+            return error_response('invalid_request', 'to must be a work order status string.', 400)
         with transaction.atomic():
             order = WorkOrder.objects.select_for_update().select_related('source_alert', 'asset').filter(pk=pk).first()
             if not order:
-                return Response({'error': 'not_found', 'message': 'Work order not found.'}, status=404)
+                return error_response('not_found', 'Work order not found.', 404)
             if target not in TRANSITIONS.get(order.status, set()):
-                return Response({'error': 'invalid_transition', 'message': 'Invalid work order transition.'}, status=409)
+                return error_response('invalid_transition', 'Invalid work order transition.', 409)
             if target == WorkOrder.Status.COMPLETED and role(request) != Profile.Role.ADMINISTRATOR:
-                return Response({'error': 'forbidden', 'message': 'Administrator review permission is required.'}, status=403)
+                return error_response('forbidden', 'Administrator review permission is required.', 403)
             previous = order.status
             order.status = target
             if target == WorkOrder.Status.ASSIGNED:
@@ -286,22 +336,25 @@ class ThresholdDetailView(APIView):
 
     def put(self, request, key):
         if role(request) != Profile.Role.ADMINISTRATOR:
-            return Response({'error': 'forbidden', 'message': 'Threshold write permission is required.'}, status=403)
+            return error_response('forbidden', 'Threshold write permission is required.', 403)
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
         try:
             threshold = Threshold.objects.get(key=key)
-            warning = float(request.data.get('warning'))
-            alarm = float(request.data.get('alarm'))
+            warning = float(payload.get('warning'))
+            alarm = float(payload.get('alarm'))
         except (Threshold.DoesNotExist, TypeError, ValueError):
-            return Response({'error': 'invalid_request', 'message': 'A valid threshold key and values are required.'}, status=400)
+            return error_response('invalid_request', 'A valid threshold key and values are required.', 400)
         if not isfinite(warning) or not isfinite(alarm) or warning < 0 or alarm <= warning:
-            return Response({'error': 'invalid_request', 'message': 'Alarm must be greater than warning.'}, status=400)
-        if request.data.get('version') is not None:
+            return error_response('invalid_request', 'Alarm must be greater than warning.', 400)
+        if payload.get('version') is not None:
             try:
-                version = int(request.data['version'])
+                version = int(payload['version'])
             except (TypeError, ValueError):
-                return Response({'error': 'invalid_request', 'message': 'version must be a number.'}, status=400)
+                return error_response('invalid_request', 'version must be a number.', 400)
             if version != threshold.version:
-                return Response({'error': 'version_conflict', 'message': 'Threshold was changed by another request.'}, status=409)
+                return error_response('version_conflict', 'Threshold was changed by another request.', 409)
         threshold.warning, threshold.alarm, threshold.version = warning, alarm, threshold.version + 1
         threshold.save(update_fields=['warning', 'alarm', 'version', 'updated_at'])
         audit(request.user, 'setting.threshold.update', 'threshold', threshold.key, {'version': threshold.version}, request_id(request))
@@ -325,9 +378,12 @@ class ReportExportView(APIView):
         return paginated(ReportExport.objects.all(), ReportExportSerializer, request)
 
     def post(self, request):
-        report_type = str(request.data.get('report', '')).strip()
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        report_type = str(payload.get('report', '')).strip()
         if report_type not in {'alerts', 'workOrders', 'assets', 'daily'}:
-            return Response({'error': 'invalid_request', 'message': 'A valid report type is required.'}, status=400)
+            return error_response('invalid_request', 'A valid report type is required.', 400)
         record = ReportExport.objects.create(report_type=report_type, file_name=f'utility-tunnel-{report_type}-{timezone.now():%Y%m%d%H%M%S}.csv', requested_by=request.user, completed_at=timezone.now())
         audit(request.user, 'report.export', 'report_export', record.pk, {'report': report_type}, request_id(request))
         return Response(ReportExportSerializer(record).data, status=201)

@@ -40,4 +40,21 @@ describe('operations store', () => {
     expect(store.assets.find((item) => item.code === alert.assetCode)?.status).toBe('normal');
     expect(store.audit.map((entry) => entry.action)).toEqual(expect.arrayContaining(['alert.acknowledged', 'work_order.created_from_alert', 'work_order.transitioned']));
   });
+
+  it('creates a manual work order and records its linked asset', async () => {
+    const auth = useAuthStore();
+    await auth.login('', '', 'operator', 'demo');
+    const store = useOperationsStore();
+    const order = await store.createWorkOrder({ assetCode: 'GAS-01', title: '复核甲烷监测节点', description: '检查最近一次遥测质量。', priority: 'high' });
+    expect(order.status).toBe('open');
+    expect(order.assetCode).toBe('GAS-01');
+    expect(store.workOrders[0].code).toBe(order.code);
+    expect(store.audit[0].action).toBe('work_order.created_manual');
+  });
+
+  it('keeps a failed API snapshot read-only until the user reconnects', async () => {
+    const store = useOperationsStore();
+    store.offline = true;
+    await expect(store.createWorkOrder({ assetCode: 'GAS-01', title: '不应写入', priority: 'normal' })).rejects.toThrow('只读状态');
+  });
 });
