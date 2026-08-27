@@ -28,6 +28,11 @@ function nextLocalId(): number {
   return Date.now() * 1000 + localSequence;
 }
 
+function requestKey(prefix: string): string {
+  const suffix = typeof globalThis.crypto?.randomUUID === 'function' ? globalThis.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}-${suffix}`.slice(0, 80);
+}
+
 export const useOperationsStore = defineStore('operations', () => {
   const auth = useAuthStore();
   const dashboard = ref<Dashboard>({ assets: { total: 4, online: 4 }, health: { value: 100 }, openAlerts: 2, activeWorkOrders: 2, telemetry: { id: 1, assetCode: 'FAN-01', metric: '风机转速', value: 1248, unit: 'rpm', quality: 'good', recordedAt: new Date().toISOString() } });
@@ -127,7 +132,7 @@ export const useOperationsStore = defineStore('operations', () => {
     if (source.value === 'demo' && !demoTransitions[order.status].includes(to)) throw new Error('无效的工单状态流转');
     if (source.value === 'demo' && to === 'completed' && auth.user?.role !== 'administrator') throw new Error('只有管理员可以完成工单');
     const previous = order.status;
-    const response = source.value === 'api' ? await runApiMutation(() => api.transitionWorkOrder(order.id, to)) : null;
+    const response = source.value === 'api' ? await runApiMutation(() => api.transitionWorkOrder(order.id, to, order.version)) : null;
     Object.assign(order, response?.data ?? { status: to, assigneeName: to === 'assigned' ? (auth.user?.displayName || '演示运维员') : order.assigneeName, updatedAt: new Date().toISOString(), completedAt: to === 'completed' ? new Date().toISOString() : order.completedAt, version: order.version + 1 });
     if (source.value === 'demo' && to === 'completed') {
       const linkedAlert = order.sourceAlertId ? alerts.value.find((item) => item.id === order.sourceAlertId) : undefined;
@@ -147,8 +152,12 @@ export const useOperationsStore = defineStore('operations', () => {
   async function updateThreshold(threshold: Threshold, warning: number, alarm: number) {
     if (offline.value) throw new Error('Django API 当前离线，离线快照为只读状态。');
     if (!Number.isFinite(warning) || !Number.isFinite(alarm) || warning < 0 || alarm <= warning) throw new Error('报警阈值必须大于预警阈值');
-    if (source.value === 'api') await runApiMutation(() => api.updateThreshold(threshold.key, { warning, alarm, version: threshold.version }));
-    threshold.warning = warning; threshold.alarm = alarm; threshold.version += 1;
+    const response = source.value === 'api' ? await runApiMutation(() => api.updateThreshold(threshold.key, { warning, alarm, version: threshold.version })) : null;
+    if (response?.data) {
+      Object.assign(threshold, response.data);
+    } else {
+      threshold.warning = warning; threshold.alarm = alarm; threshold.version += 1;
+    }
     if (source.value === 'demo') appendAudit('setting.threshold.update', 'threshold', threshold.key, { warning, alarm, version: threshold.version });
     else await syncAudit();
     notice.value = `${threshold.label} 阈值已保存`;
@@ -160,7 +169,7 @@ export const useOperationsStore = defineStore('operations', () => {
     if (!title) throw new Error('工单标题不能为空');
     const asset = assets.value.find((item) => item.code === input.assetCode);
     if (!asset) throw new Error('请选择有效的关联资产');
-    const response = source.value === 'api' ? await runApiMutation(() => api.createWorkOrder({ ...input, title })) : null;
+    const response = source.value === 'api' ? await runApiMutation(() => api.createWorkOrder({ ...input, title }, requestKey('work-order'))) : null;
     const now = new Date().toISOString();
     const next: WorkOrder = response?.data ?? {
       id: nextLocalId(),
@@ -186,7 +195,7 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function createReport(report: ReportKind) {
-    if (source.value === 'api') await runApiMutation(() => api.report(report));
+    if (source.value === 'api') await runApiMutation(() => api.report(report, requestKey('report')));
     downloadReport(report);
     if (source.value === 'demo') appendAudit('report.export', 'report_export', report, { report, format: 'csv' });
     else await syncAudit();

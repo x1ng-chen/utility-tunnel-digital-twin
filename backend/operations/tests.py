@@ -5,6 +5,7 @@ from unittest.mock import patch
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management import call_command
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
@@ -33,6 +34,8 @@ class OperationsApiTests(TestCase):
         self.assertTrue(response.headers.get('X-Request-Id'))
         self.assertEqual(response.headers.get('Cache-Control'), 'no-store')
         self.assertIn('geolocation=()', response.headers.get('Permissions-Policy', ''))
+        self.assertIn('version', response.json())
+        self.assertIn('commit', response.json())
 
     def test_api_errors_use_a_stable_envelope(self):
         self.auth(self.operator)
@@ -48,6 +51,8 @@ class OperationsApiTests(TestCase):
         response = self.client.get('/api/ready/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'ready')
+        self.assertEqual(response.json()['checks']['database'], 'ok')
+        self.assertGreaterEqual(response.json()['latencyMs'], 0)
 
     def test_login_returns_token(self):
         response = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'demo-password'}, format='json')
@@ -88,6 +93,9 @@ class OperationsApiTests(TestCase):
         self.assertEqual(self.client.get('/api/assets/?pageSize=not-a-number').status_code, 400)
         self.assertEqual(self.client.get('/api/assets/?status=broken').status_code, 400)
         self.assertEqual(self.client.get('/api/alerts/?severity=blocker').status_code, 400)
+        self.assertEqual(self.client.get('/api/alerts/?openedFrom=not-a-date').status_code, 400)
+        self.assertEqual(self.client.get('/api/alerts/?openedFrom=2026-08-27T00:00:00Z&openedTo=2026-08-26T00:00:00Z').status_code, 400)
+        self.assertEqual(self.client.get('/api/work-orders/?updatedFrom=not-a-date').status_code, 400)
         page = self.client.get('/api/assets/?page=1&pageSize=1').json()
         self.assertEqual(page['pageCount'], 1)
         self.assertFalse(page['hasNext'])
@@ -130,6 +138,39 @@ class OperationsApiTests(TestCase):
         self.assertEqual(self.client.post('/api/work-orders/', {'assetCode': self.asset.code, 'title': '不应创建'}, format='json').status_code, 403)
         self.assertEqual(self.client.put('/api/thresholds/missing/', {'warning': 1, 'alarm': 2}, format='json').status_code, 403)
 
+    def test_admin_can_manage_user_lifecycle(self):
+        self.auth(self.admin)
+        created = self.client.post('/api/admin/users/', {'email': 'new-operator@example.com', 'password': 'strong-password-2026', 'displayName': '新运维员', 'role': Profile.Role.OPERATOR}, format='json')
+        self.assertEqual(created.status_code, 201)
+        user_id = created.json()['id']
+        self.assertEqual(created.json()['role'], Profile.Role.OPERATOR)
+        listed = self.client.get('/api/admin/users/?search=new-operator&active=true')
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json()['total'], 1)
+        updated = self.client.patch(f'/api/admin/users/{user_id}/', {'role': Profile.Role.VIEWER, 'isActive': False, 'displayName': '已停用'}, format='json')
+        self.assertEqual(updated.status_code, 200)
+        self.assertFalse(updated.json()['isActive'])
+        duplicate = self.client.post('/api/admin/users/', {'email': 'new-operator@example.com', 'password': 'strong-password-2026'}, format='json')
+        self.assertEqual(duplicate.status_code, 409)
+        invalid_email = self.client.post('/api/admin/users/', {'email': 'not-an-email', 'password': 'strong-password-2026'}, format='json')
+        self.assertEqual(invalid_email.status_code, 400)
+
+    def test_non_admin_cannot_manage_users(self):
+        self.auth(self.operator)
+        self.assertEqual(self.client.get('/api/admin/users/').status_code, 403)
+
+    def test_admin_cannot_remove_last_administrator(self):
+        self.auth(self.admin)
+        response = self.client.patch(f'/api/admin/users/{self.admin.pk}/', {'role': Profile.Role.OPERATOR}, format='json')
+        self.assertEqual(response.status_code, 409)
+
+    def test_superuser_profile_defaults_to_administrator(self):
+        superuser = User.objects.create_superuser(username='root@example.com', email='root@example.com', password='root-password-2026')
+        self.auth(superuser)
+        response = self.client.patch(f'/api/admin/users/{superuser.pk}/', {'displayName': '系统超级管理员'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['role'], Profile.Role.ADMINISTRATOR)
+
     def test_audit_endpoint_serializes_camel_case_fields(self):
         self.auth(self.operator)
         response = self.client.get('/api/audit/')
@@ -167,9 +208,43 @@ class OperationsApiTests(TestCase):
         self.auth(self.admin)
         self.assertEqual(self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.COMPLETED}, format='json').status_code, 200)
 
+    def test_work_order_transition_rejects_stale_version(self):
+        order = WorkOrder.objects.create(code='WO-VERSION', asset=self.asset, title='版本校验', status=WorkOrder.Status.OPEN, created_by=self.operator)
+        self.auth(self.operator)
+        response = self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.ASSIGNED, 'version': 99}, format='json')
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['error'], 'version_conflict')
+        order.refresh_from_db()
+        self.assertEqual(order.status, WorkOrder.Status.OPEN)
+
+    def test_linked_work_order_is_unique_per_alert(self):
+        WorkOrder.objects.create(code='WO-LINKED', source_alert=self.alert, asset=self.asset, title='已存在', created_by=self.operator)
+        self.auth(self.operator)
+        response = self.client.post(f'/api/alerts/{self.alert.pk}/work-order/')
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['error'], 'conflict')
+
     def test_manual_work_order_rejects_unknown_priority(self):
         self.auth(self.operator)
         response = self.client.post('/api/work-orders/', {'assetCode': self.asset.code, 'title': '异常优先级', 'priority': 'blocker'}, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_manual_work_order_is_idempotent(self):
+        self.auth(self.operator)
+        headers = {'HTTP_IDEMPOTENCY_KEY': 'manual-work-order-001'}
+        payload = {'assetCode': self.asset.code, 'title': '幂等工单', 'priority': 'normal'}
+        first = self.client.post('/api/work-orders/', payload, format='json', **headers)
+        second = self.client.post('/api/work-orders/', payload, format='json', **headers)
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json()['id'], second.json()['id'])
+        self.assertEqual(WorkOrder.objects.filter(title='幂等工单').count(), 1)
+        changed = self.client.post('/api/work-orders/', {'assetCode': self.asset.code, 'title': '另一张工单', 'priority': 'normal'}, format='json', **headers)
+        self.assertEqual(changed.status_code, 409)
+
+    def test_idempotency_key_is_validated(self):
+        self.auth(self.operator)
+        response = self.client.post('/api/work-orders/', {'assetCode': self.asset.code, 'title': '非法键'}, format='json', HTTP_IDEMPOTENCY_KEY='bad key')
         self.assertEqual(response.status_code, 400)
 
     def test_manual_work_order_rolls_back_when_audit_fails(self):
@@ -189,11 +264,28 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertFalse(ReportExport.objects.filter(report_type='daily').exists())
 
+    def test_report_export_is_idempotent(self):
+        self.auth(self.operator)
+        first = self.client.post('/api/report-exports/', {'report': 'daily'}, format='json', HTTP_IDEMPOTENCY_KEY='report-export-001')
+        second = self.client.post('/api/report-exports/', {'report': 'daily'}, format='json', HTTP_IDEMPOTENCY_KEY='report-export-001')
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json()['id'], second.json()['id'])
+        self.assertEqual(ReportExport.objects.filter(report_type='daily').count(), 1)
+        changed = self.client.post('/api/report-exports/', {'report': 'assets'}, format='json', HTTP_IDEMPOTENCY_KEY='report-export-001')
+        self.assertEqual(changed.status_code, 409)
+
     def test_threshold_version_must_be_numeric(self):
         threshold = Threshold.objects.create(key='temperature', label='温度', warning=28, alarm=32, unit='°C')
         self.auth(self.admin)
         response = self.client.put(f'/api/thresholds/{threshold.key}/', {'warning': 29, 'alarm': 33, 'version': 'not-a-number'}, format='json')
         self.assertEqual(response.status_code, 400)
+
+    def test_unknown_threshold_returns_not_found(self):
+        self.auth(self.admin)
+        response = self.client.put('/api/thresholds/missing/', {'warning': 1, 'alarm': 2}, format='json')
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()['error'], 'not_found')
 
     def test_threshold_rejects_non_finite_values(self):
         threshold = Threshold.objects.create(key='temperature', label='温度', warning=28, alarm=32, unit='°C')
@@ -201,6 +293,11 @@ class OperationsApiTests(TestCase):
         for warning, alarm in [('NaN', 33), (29, 'Infinity')]:
             response = self.client.put(f'/api/thresholds/{threshold.key}/', {'warning': warning, 'alarm': alarm, 'version': threshold.version}, format='json')
             self.assertEqual(response.status_code, 400)
+
+    def test_database_rejects_invalid_threshold_order(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Threshold.objects.create(key='invalid-order', label='非法', warning=40, alarm=30, unit='°C')
 
     def test_seed_demo_assigns_distinct_twin_positions(self):
         call_command('seed_demo', stdout=io.StringIO())

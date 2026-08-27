@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Alert, Asset, AuditLog, ReportExport, Telemetry, Threshold, WorkOrder
+from django.contrib.auth import get_user_model
+from .models import Alert, Asset, AuditLog, Profile, ReportExport, Telemetry, Threshold, WorkOrder
 
 
 class AssetSerializer(serializers.ModelSerializer):
@@ -82,3 +83,24 @@ class ReportExportSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReportExport
         fields = ['id', 'reportType', 'status', 'fileName', 'createdAt', 'completedAt']
+
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    displayName = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
+    isActive = serializers.BooleanField(source='is_active', read_only=True)
+    lastLogin = serializers.DateTimeField(source='last_login', allow_null=True, read_only=True)
+    createdAt = serializers.DateTimeField(source='date_joined', read_only=True)
+
+    class Meta:
+        model = get_user_model()
+        fields = ['id', 'email', 'displayName', 'role', 'isActive', 'lastLogin', 'createdAt']
+
+    def get_displayName(self, obj):
+        profile = getattr(obj, 'profile', None)
+        return (profile.display_name if profile else '') or obj.get_full_name() or obj.email or obj.username
+
+    def get_role(self, obj):
+        if obj.is_superuser:
+            return Profile.Role.ADMINISTRATOR
+        return getattr(getattr(obj, 'profile', None), 'role', Profile.Role.VIEWER)

@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetListView, AuditListView, DashboardView, HealthView, LoginView, LogoutView, MeView, ReadyView, ReportExportView, TelemetryListView, ThresholdDetailView, ThresholdListView, WorkOrderListView, WorkOrderTransitionView
+from .views import AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetListView, AuditListView, DashboardView, HealthView, LoginView, LogoutView, MeView, ReadyView, ReportExportView, TelemetryListView, ThresholdDetailView, ThresholdListView, WorkOrderListView, WorkOrderTransitionView
 
 
 urlpatterns = [
@@ -8,6 +8,8 @@ urlpatterns = [
     path('auth/login/', LoginView.as_view()),
     path('auth/me/', MeView.as_view()),
     path('auth/logout/', LogoutView.as_view()),
+    path('admin/users/', AdminUserListView.as_view()),
+    path('admin/users/<int:pk>/', AdminUserDetailView.as_view()),
     path('dashboard/', DashboardView.as_view()),
     path('assets/', AssetListView.as_view()),
     path('alerts/', AlertListView.as_view()),

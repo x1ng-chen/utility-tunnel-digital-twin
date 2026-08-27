@@ -11,6 +11,8 @@ DJANGO_ENV = os.getenv('DJANGO_ENV', 'development').strip().lower()
 if DJANGO_ENV not in {'development', 'test', 'production'}:
     raise ValueError('DJANGO_ENV must be development, test, or production.')
 IS_PRODUCTION = DJANGO_ENV == 'production'
+APP_VERSION = os.getenv('APP_VERSION', '0.5.0')
+APP_COMMIT_SHA = os.getenv('APP_COMMIT_SHA', 'local')
 # Fail closed for deployments that do not explicitly provide a debug flag.
 # Local development can opt in through backend/.env.example.
 DEBUG = DJANGO_ENV != 'production' and os.getenv('DJANGO_DEBUG', 'false').lower() in {'1', 'true', 'yes'}

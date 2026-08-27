@@ -101,6 +101,7 @@ class WorkOrder(models.Model):
     reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_work_orders')
     completed_at = models.DateTimeField(null=True, blank=True)
     version = models.PositiveIntegerField(default=1)
+    idempotency_key = models.CharField(max_length=80, unique=True, null=True, blank=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -109,6 +110,13 @@ class WorkOrder(models.Model):
         indexes = [
             models.Index(fields=['status', '-updated_at'], name='wo_status_updated_idx'),
             models.Index(fields=['asset', 'status'], name='wo_asset_status_idx'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['source_alert'],
+                condition=models.Q(source_alert__isnull=False),
+                name='work_order_source_alert_unique',
+            ),
         ]
 
 
@@ -140,6 +148,12 @@ class Threshold(models.Model):
     version = models.PositiveIntegerField(default=1)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(check=models.Q(warning__gte=0), name='threshold_warning_non_negative'),
+            models.CheckConstraint(check=models.Q(alarm__gt=models.F('warning')), name='threshold_alarm_above_warning'),
+        ]
+
 
 class AuditLog(models.Model):
     actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='audit_entries')
@@ -163,6 +177,7 @@ class ReportExport(models.Model):
     report_type = models.CharField(max_length=40)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.COMPLETED)
     file_name = models.CharField(max_length=180)
+    idempotency_key = models.CharField(max_length=80, unique=True, null=True, blank=True, editable=False)
     requested_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='report_exports')
     created_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)

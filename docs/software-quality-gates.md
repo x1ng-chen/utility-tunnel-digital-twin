@@ -4,6 +4,14 @@
 
 ## 自动门禁
 
+仓库级安全扫描可直接执行：
+
+```powershell
+node tools/quality-scan.mjs
+```
+
+该扫描检查所有 Git 跟踪的文本文件，拒绝提交真实 `.env`、私钥和常见云平台令牌；大体积二进制和依赖目录不会被读取。GitHub Actions 会在 Vue/Django 工作流中自动执行。
+
 ```powershell
 cd frontend
 npm ci
@@ -19,6 +27,8 @@ python -m compileall -q config operations
 ```
 
 自动门禁覆盖前端状态机与构建、依赖高危漏洞、Django 配置、数据库迁移一致性、认证令牌、限流、就绪探针、RBAC、告警、工单、阈值、审计、报表和请求 ID。
+
+数据库层同时约束“同一来源告警只能关联一张工单”和“阈值报警值必须大于预警值”；列表 API 支持 ISO-8601 时间范围筛选，避免把完整数据集下载到浏览器后再过滤。
 
 Django 运行日志为依赖无关的 JSON 结构，包含请求耗时和关联 ID；平台侧可按 `status_code >= 500` 建立异常告警，按 `duration_ms` 建立延迟指标。
 

@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
 import AppShell from '../components/AppShell.vue';
+import { api } from '../services/api';
 import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
-import type { Threshold } from '../types';
+import type { AdminUser, Threshold } from '../types';
 
 const store = useOperationsStore();
 const auth = useAuthStore();
 const canWrite = computed(() => !store.offline && auth.user?.role === 'administrator');
 const message = ref('');
 const drafts = reactive<Record<string, { warning: number; alarm: number }>>({});
+const users = ref<AdminUser[]>([]);
+const usersLoading = ref(false);
+const usersError = ref('');
 
 watch(() => store.thresholds.map((item) => ({ key: item.key, warning: item.warning, alarm: item.alarm })), (items) => {
   items.forEach((item) => {
@@ -31,6 +35,42 @@ async function save(item: Threshold) {
     message.value = cause instanceof Error ? cause.message : '保存失败';
   }
 }
+
+const canManageUsers = computed(() => canWrite.value && store.source === 'api');
+
+async function loadUsers() {
+  if (!canManageUsers.value) {
+    users.value = [];
+    return;
+  }
+  usersLoading.value = true;
+  usersError.value = '';
+  try {
+    users.value = (await api.adminUsers({ page: 1, pageSize: 100, active: 'true' })).data.items;
+  } catch (cause: unknown) {
+    usersError.value = cause instanceof Error ? cause.message : '用户列表加载失败';
+  } finally {
+    usersLoading.value = false;
+  }
+}
+
+async function updateUser(user: AdminUser, changes: Record<string, unknown>) {
+  usersError.value = '';
+  try {
+    const response = await api.updateAdminUser(user.id, changes);
+    Object.assign(user, response.data);
+  } catch (cause: unknown) {
+    usersError.value = cause instanceof Error ? cause.message : '用户更新失败';
+    await loadUsers();
+  }
+}
+
+function changeRole(user: AdminUser, event: Event) {
+  const value = (event.target as HTMLSelectElement | null)?.value;
+  if (value) void updateUser(user, { role: value });
+}
+
+watch([() => store.source, () => auth.user?.role], () => { void loadUsers(); }, { immediate: true });
 </script>
 
 <template>
@@ -47,6 +87,20 @@ async function save(item: Threshold) {
       <p v-if="store.offline" class="inline-message">Django API 离线，当前配置只读；重新连接后可继续修改。</p>
       <p v-else-if="!canWrite" class="inline-message">查看者无权修改阈值。</p>
       <p v-else-if="message" class="inline-message" role="status">{{ message }}</p>
+    </section>
+    <section v-if="auth.user?.role === 'administrator'" class="settings-panel user-settings-panel">
+      <div class="settings-head"><span>用户与角色</span><small>{{ store.source === 'api' ? '服务端权限管理' : '仅 API 模式可编辑' }}</small></div>
+      <div v-if="usersLoading" class="empty-state">正在加载用户…</div>
+      <div v-else-if="usersError" class="inline-message error-message" role="alert">{{ usersError }}</div>
+      <div v-else-if="!users.length" class="empty-state">切换到 Django API 后可管理用户。</div>
+      <div v-for="user in users" :key="user.id" class="user-row">
+        <div><b>{{ user.displayName }}</b><small>{{ user.email }}</small></div>
+        <select :value="user.role" :disabled="!canManageUsers || user.id === auth.user?.id" @change="changeRole(user, $event)">
+          <option value="administrator">管理员</option><option value="operator">运维员</option><option value="viewer">查看者</option>
+        </select>
+        <button class="compact-button" :disabled="!canManageUsers || user.id === auth.user?.id" @click="updateUser(user, { isActive: !user.isActive })">{{ user.isActive ? '停用' : '启用' }}</button>
+      </div>
+      <p v-if="!canManageUsers && !store.offline" class="inline-message">用户管理仅在 Django API 模式下可用。</p>
     </section>
   </AppShell>
 </template>

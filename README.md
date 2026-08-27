@@ -108,7 +108,7 @@ flowchart TB
     C[现场控制层<br/>STM32F103RCT6<br/>采集、质量标志、保护联动、命令状态机]
     G[通信层<br/>ESP8266 ESP-AT + MQTT 3.1.1]
     P[标准平台服务层<br/>Django + DRF + PostgreSQL<br/>旧版 Node.js 服务保留兼容]
-    W[应用与孪生层<br/>Vue 3 + TypeScript + Three.js + GLB]
+    W[应用与孪生层<br/>Vue 3 + TypeScript + Vite<br/>可配置二维空间模型]
 
     S <--> C
     C <--> G
@@ -172,7 +172,7 @@ flowchart TB
 | 后端 | Django 4.2 + Django REST Framework | 当前主软件栈，提供 Token 认证、RBAC、业务状态机、审计和 API；Node.js 服务保留兼容 |
 | 数据库 | PostgreSQL（正式）/ SQLite（本地开发回退） | 资产、遥测、告警、工单、配置与审计的唯一主数据库 |
 | 前端 | Vue 3 + TypeScript + Vite | 当前主软件栈，提供本地演示与 Django API 数据源切换；React 旧版保留兼容 |
-| 三维 | Three.js + GLB/glTF + Blender | 完成模型加载、拾取、状态映射和相机定位 |
+| 数字孪生 | Vue 3 可配置二维空间模型 | 已完成资产定位、状态联动和异常高亮；GLB/Three.js 三维模型作为后续增强 |
 
 ## 数据与接口约定
 

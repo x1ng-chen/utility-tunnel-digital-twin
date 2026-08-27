@@ -12,6 +12,7 @@ on:
       - 'docs/deployment-runbook.md'
       - 'docs/software-quality-gates.md'
       - 'deploy/postgres/**'
+      - 'tools/**'
       - '.github/workflows/vue-django.yml'
   pull_request:
     paths:
@@ -24,9 +25,20 @@ on:
       - 'docs/deployment-runbook.md'
       - 'docs/software-quality-gates.md'
       - 'deploy/postgres/**'
+      - 'tools/**'
       - '.github/workflows/vue-django.yml'
 
 jobs:
+  repository-safety:
+    name: Repository safety scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: node tools/quality-scan.mjs
+
   frontend:
     name: Vue3 quality
     runs-on: ubuntu-latest

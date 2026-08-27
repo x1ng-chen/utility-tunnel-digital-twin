@@ -80,6 +80,7 @@
   `error` 用于程序判断，`message` 用于界面展示，`details` 用于字段级错误。写操作的状态冲突使用 `409`，权限不足使用 `403`，未登录或 Token 过期使用 `401`。
 
 - 写入事务：会产生业务记录和审计记录的操作必须在同一个数据库事务中完成；审计写入失败时业务写入一并回滚。
+- 幂等写入：手工建单和报表登记可通过 `Idempotency-Key`（1-80 个字母、数字、`.`、`_`、`:`、`-`）安全重试；相同用户和相同请求返回原记录，不同负载或不同用户复用该键返回 `409 conflict`。
 
 ## 身份与健康检查
 
@@ -88,8 +89,11 @@
 | `POST` | `/auth/login/` | 公开 | `{ email, password }`，返回 `accessToken`、`tokenType` 和 `user` |
 | `GET` | `/auth/me/` | 登录 | 返回当前用户及角色 |
 | `POST` | `/auth/logout/` | 登录 | 撤销当前用户 Token |
-| `GET` | `/health/` | 公开 | 进程存活检查 |
-| `GET` | `/ready/` | 公开 | 数据库可用性检查 |
+| `GET` | `/admin/users/` | 管理员 | 用户检索和状态筛选 |
+| `POST` | `/admin/users/` | 管理员 | 创建用户和角色 |
+| `PATCH` | `/admin/users/{id}/` | 管理员 | 修改显示名、角色、启停用状态或密码 |
+| `GET` | `/health/` | 公开 | 进程存活检查，返回版本和提交标识 |
+| `GET` | `/ready/` | 公开 | 数据库可用性检查，返回数据库状态和查询耗时 |
 
 ## 运维业务接口
 
@@ -97,18 +101,18 @@
 | --- | --- | --- | --- |
 | `GET` | `/dashboard/` | 登录 | 资产、健康度、告警、工单和最新遥测汇总 |
 | `GET` | `/assets/` | 登录 | `search`、`status`、`zone`、`page`、`pageSize` |
-| `GET` | `/alerts/` | 登录 | `status`、`severity`、`page`、`pageSize` |
+| `GET` | `/alerts/` | 登录 | `status`、`severity`、`openedFrom`、`openedTo`、`page`、`pageSize` |
 | `POST` | `/alerts/{id}/acknowledge/` | 管理员/运维员 | 确认待处理告警 |
 | `POST` | `/alerts/{id}/work-order/` | 管理员/运维员 | 从告警创建关联工单 |
-| `GET` | `/work-orders/` | 登录 | `status`、`search`、`page`、`pageSize` |
-| `POST` | `/work-orders/` | 管理员/运维员 | 新建 `{ assetCode, title, description?, priority? }` |
-| `POST` | `/work-orders/{id}/transition/` | 管理员/运维员 | 流转 `{ to }`；完成工单必须管理员复核 |
+| `GET` | `/work-orders/` | 登录 | `status`、`search`、`updatedFrom`、`updatedTo`、`page`、`pageSize` |
+| `POST` | `/work-orders/` | 管理员/运维员 | 新建 `{ assetCode, title, description?, priority? }`；可提供 `Idempotency-Key` 防止重试重复建单 |
+| `POST` | `/work-orders/{id}/transition/` | 管理员/运维员 | 流转 `{ to, version? }`；提供 `version` 时启用乐观锁，完成工单必须管理员复核 |
 | `GET` | `/telemetry/` | 登录 | `assetCode`、`page`、`pageSize` |
 | `GET` | `/thresholds/` | 登录 | 查询阈值策略 |
 | `PUT` | `/thresholds/{key}/` | 管理员 | 更新 `{ warning, alarm, version }`，使用乐观锁 |
 | `GET` | `/audit/` | 登录 | `action`、`search`（动作、资源类型/编号或操作者邮箱）、`page`、`pageSize` |
 | `GET` | `/report-exports/` | 登录 | 导出操作记录 |
-| `POST` | `/report-exports/` | 登录 | 创建 `{ report: alerts\|workOrders\|assets\|daily }` |
+| `POST` | `/report-exports/` | 登录 | 创建 `{ report: alerts\|workOrders\|assets\|daily }`；可提供 `Idempotency-Key` 防止重复登记 |
 
 ## 角色边界
 
