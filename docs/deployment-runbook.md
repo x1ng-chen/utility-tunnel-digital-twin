@@ -26,8 +26,11 @@ python manage.py seed_demo
 - `DATABASE_URL`：只允许 TLS 的运行时账号连接串；
 - `DJANGO_SECRET_KEY`：每个环境独立、至少 32 个随机字符；
 - `DJANGO_ENV=production`、`DJANGO_ALLOWED_HOSTS` 和 `CORS_ALLOWED_ORIGINS`；
+- `DJANGO_CSRF_TRUSTED_ORIGINS`：与前端 HTTPS Origin 精确匹配；生产环境不得使用开发机 Origin；
 - `DATABASE_URL`：`ut_runtime` 的 PostgreSQL TLS 连接串；
 - `API_TOKEN_TTL_SECONDS` 与 `LOGIN_RATE_LIMIT`：按安全策略设置；
+- `DJANGO_MAX_REQUEST_BYTES` 与 `DJANGO_MAX_REQUEST_FIELDS`：限制单次请求体大小和字段数量，防止异常请求耗尽内存；
+- `DJANGO_CACHE_BACKEND` 与 `DJANGO_CACHE_LOCATION`：登录限流必须使用跨进程共享缓存；如果使用 Django 内置 `DatabaseCache`，迁移后执行一次 `python manage.py createcachetable <cache_table>`；
 - `SEED_ADMIN_*`：仅首次种子初始化使用，之后从运行环境移除。
 
 启动后依次检查：

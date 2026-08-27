@@ -20,6 +20,8 @@ class RequestIdMiddleware:
         request.request_id = supplied if REQUEST_ID_PATTERN.fullmatch(supplied) else uuid4().hex
         response = self.get_response(request)
         response['X-Request-Id'] = request.request_id
+        response.setdefault('Cache-Control', 'no-store')
+        response.setdefault('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
         request_logger.info('http_request', extra={
             'request_id': request.request_id,
             'method': request.method,

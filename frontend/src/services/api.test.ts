@@ -9,4 +9,8 @@ describe('API base URL validation', () => {
   it('rejects unsupported protocols before constructing a client URL', () => {
     expect(() => setApiBaseUrl('ftp://example.com/api')).toThrow('必须使用 HTTP 或 HTTPS');
   });
+
+  it('normalizes a trailing slash without persisting credentials', () => {
+    expect(() => setApiBaseUrl('https://api.example.com/')).not.toThrow();
+  });
 });

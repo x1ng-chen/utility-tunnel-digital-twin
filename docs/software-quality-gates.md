@@ -35,6 +35,7 @@ Django 运行日志为依赖无关的 JSON 结构，包含请求耗时和关联 
 ## 发布前检查
 
 - `/api/health/` 返回 200 仅代表进程存活；`/api/ready/` 返回 200 才允许接收流量。
-- 生产环境必须设置不少于 32 位的 `DJANGO_SECRET_KEY`、HTTPS、精确 `CORS_ALLOWED_ORIGINS`、数据库 TLS 和共享缓存。
+- 生产环境必须设置不少于 32 位的 `DJANGO_SECRET_KEY`、显式 `DJANGO_ALLOWED_HOSTS`、HTTPS、精确的 `CORS_ALLOWED_ORIGINS` 与 `DJANGO_CSRF_TRUSTED_ORIGINS`、数据库 TLS 和跨进程共享缓存；Django 会拒绝生产环境的 LocMemCache。
+- 生产环境的 CORS/CSRF Origin 必须使用 HTTPS；缺少这些变量时 Django 应在启动阶段 fail fast。
 - 令牌有效期、登录限流、请求 ID 和审计日志应在部署环境变量中确认；不得把 `.env`、备份文件或密码提交到仓库。
 - 数据库发布前执行 `deploy/postgres/backup-django.ps1`，恢复演练使用隔离目标和 `restore-verify-django.ps1 -ConfirmRestore`。

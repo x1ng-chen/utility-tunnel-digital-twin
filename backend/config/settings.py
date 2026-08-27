@@ -7,7 +7,7 @@ from corsheaders.defaults import default_headers
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
-DJANGO_ENV = os.getenv('DJANGO_ENV', 'development').lower()
+DJANGO_ENV = os.getenv('DJANGO_ENV', 'development').strip().lower()
 IS_PRODUCTION = DJANGO_ENV == 'production'
 # Fail closed for deployments that do not explicitly provide a debug flag.
 # Local development can opt in through backend/.env.example.
@@ -17,7 +17,10 @@ if DJANGO_ENV == 'production' and len(SECRET_KEY) < 32:
     raise RuntimeError('DJANGO_SECRET_KEY must contain at least 32 characters in production.')
 if not SECRET_KEY:
     SECRET_KEY = 'local-development-only-change-me'
-ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if host.strip()]
+raw_allowed_hosts = os.getenv('DJANGO_ALLOWED_HOSTS', '').strip()
+if IS_PRODUCTION and not raw_allowed_hosts:
+    raise RuntimeError('DJANGO_ALLOWED_HOSTS is required in production.')
+ALLOWED_HOSTS = [host.strip() for host in (raw_allowed_hosts or '127.0.0.1,localhost').split(',') if host.strip()]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -86,6 +89,15 @@ def database_config() -> dict:
 
 DATABASES = {'default': database_config()}
 
+
+def parse_origins(raw: str, default: str, setting_name: str) -> list[str]:
+    origins = [origin.strip() for origin in (raw or default).split(',') if origin.strip()]
+    for origin in origins:
+        parsed = urlparse(origin)
+        if parsed.scheme not in {'http', 'https'} or not parsed.netloc or parsed.path or parsed.params or parsed.query or parsed.fragment:
+            raise ValueError(f'{setting_name} must contain origins such as https://ops.example.com without a path.')
+    return origins
+
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -97,7 +109,18 @@ USE_TZ = True
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173').split(',') if origin.strip()]
+raw_cors_origins = os.getenv('CORS_ALLOWED_ORIGINS', '').strip()
+if IS_PRODUCTION and not raw_cors_origins:
+    raise RuntimeError('CORS_ALLOWED_ORIGINS is required in production.')
+CORS_ALLOWED_ORIGINS = parse_origins(raw_cors_origins, 'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173', 'CORS_ALLOWED_ORIGINS')
+if IS_PRODUCTION and any(not origin.lower().startswith('https://') for origin in CORS_ALLOWED_ORIGINS):
+    raise RuntimeError('Production CORS_ALLOWED_ORIGINS must use HTTPS origins.')
+raw_csrf_origins = os.getenv('DJANGO_CSRF_TRUSTED_ORIGINS', '').strip()
+if IS_PRODUCTION and not raw_csrf_origins:
+    raise RuntimeError('DJANGO_CSRF_TRUSTED_ORIGINS is required in production.')
+CSRF_TRUSTED_ORIGINS = parse_origins(raw_csrf_origins, '', 'DJANGO_CSRF_TRUSTED_ORIGINS')
+if IS_PRODUCTION and any(not origin.lower().startswith('https://') for origin in CSRF_TRUSTED_ORIGINS):
+    raise RuntimeError('Production DJANGO_CSRF_TRUSTED_ORIGINS must use HTTPS origins.')
 CORS_ALLOW_CREDENTIALS = os.getenv('CORS_ALLOW_CREDENTIALS', 'false').lower() in {'1', 'true', 'yes'}
 CORS_ALLOW_HEADERS = [*default_headers, 'x-request-id']
 API_TOKEN_TTL_SECONDS = int(os.getenv('API_TOKEN_TTL_SECONDS', '900'))
@@ -122,6 +145,20 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
 SECURE_HSTS_PRELOAD = SECURE_HSTS_SECONDS > 0
 SESSION_COOKIE_SECURE = IS_PRODUCTION
 CSRF_COOKIE_SECURE = IS_PRODUCTION
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv('DJANGO_MAX_REQUEST_BYTES', str(2 * 1024 * 1024)))
+DATA_UPLOAD_MAX_NUMBER_FIELDS = int(os.getenv('DJANGO_MAX_REQUEST_FIELDS', '1000'))
+if DATA_UPLOAD_MAX_MEMORY_SIZE <= 0 or DATA_UPLOAD_MAX_NUMBER_FIELDS <= 0:
+    raise ValueError('Django request limits must be greater than zero.')
+CACHE_BACKEND = os.getenv('DJANGO_CACHE_BACKEND', 'django.core.cache.backends.locmem.LocMemCache').strip()
+CACHE_LOCATION = os.getenv('DJANGO_CACHE_LOCATION', 'utility-tunnel-default-cache').strip()
+if IS_PRODUCTION and (not CACHE_BACKEND or CACHE_BACKEND.endswith('LocMemCache')):
+    raise RuntimeError('Production requires a shared Django cache backend; configure DJANGO_CACHE_BACKEND.')
+if not CACHE_LOCATION:
+    raise ValueError('DJANGO_CACHE_LOCATION must not be empty.')
+CACHES = {'default': {'BACKEND': CACHE_BACKEND, 'LOCATION': CACHE_LOCATION}}
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if os.getenv('DJANGO_TRUST_PROXY_SSL', 'false').lower() in {'1', 'true', 'yes'} else None
 LOGGING = {
     'version': 1,

@@ -26,8 +26,8 @@ python manage.py runserver 127.0.0.1:8000
 ### API 安全与运行检查
 
 - Bearer Token 默认有效期 15 分钟（`API_TOKEN_TTL_SECONDS`），过期令牌会被拒绝并在下一次登录时轮换；生产环境建议使用 5–15 分钟并配合网关刷新策略。
-- 登录接口按客户端地址限流（`LOGIN_RATE_LIMIT`，默认每分钟 10 次），默认只使用 TCP 对端地址；仅在反向代理已覆盖并可信时设置 `DJANGO_TRUST_PROXY_HEADERS=true` 以读取 `X-Forwarded-For`。多实例部署时应把 Django 缓存切换到共享 Redis/Memcached，并在网关再设置一层限流。
-- `DJANGO_ENV=production` 会强制关闭调试、拒绝 SQLite 回退，并要求 PostgreSQL `sslmode=require`/`verify-ca`/`verify-full`，同时启用 HTTPS 重定向、HSTS 与安全 Cookie；`CORS_ALLOWED_ORIGINS` 必须精确填写正式前端 Origin。
+- 登录接口按客户端地址限流（`LOGIN_RATE_LIMIT`，默认每分钟 10 次），默认只使用 TCP 对端地址；仅在反向代理已覆盖并可信时设置 `DJANGO_TRUST_PROXY_HEADERS=true` 以读取 `X-Forwarded-For`。多实例部署时应把 Django 缓存切换到共享 DatabaseCache、Redis 或 Memcached，并在网关再设置一层限流。
+- `DJANGO_ENV=production` 会强制关闭调试、拒绝 SQLite 回退，并要求 PostgreSQL `sslmode=require`/`verify-ca`/`verify-full`，同时启用 HTTPS 重定向、HSTS 与安全 Cookie；`CORS_ALLOWED_ORIGINS` 和 `DJANGO_CSRF_TRUSTED_ORIGINS` 必须精确填写正式 HTTPS 前端 Origin，`DJANGO_ALLOWED_HOSTS` 与共享缓存也必须显式配置。
 - `GET /api/health/` 只表示进程存活；`GET /api/ready/` 会执行数据库探针，返回 503 时禁止流量切入。
 - 所有响应包含 `X-Request-Id`，该值会写入操作审计，便于跨前端、网关和 API 排障。
 - Django 请求日志使用标准库输出 JSON（时间、级别、路径、状态码、耗时和 request ID），可直接接入华为云日志服务；不在日志中记录密码、Bearer Token 或数据库连接串。

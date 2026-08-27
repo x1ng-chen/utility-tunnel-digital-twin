@@ -1,5 +1,6 @@
 import io
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -8,7 +9,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
-from .models import Alert, Asset, AuditLog, Profile, Threshold, WorkOrder
+from .models import Alert, Asset, AuditLog, Profile, ReportExport, Threshold, WorkOrder
 
 
 class OperationsApiTests(TestCase):
@@ -29,15 +30,18 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'ok')
         self.assertTrue(response.headers.get('X-Request-Id'))
+        self.assertEqual(response.headers.get('Cache-Control'), 'no-store')
+        self.assertIn('geolocation=()', response.headers.get('Permissions-Policy', ''))
 
     def test_api_errors_use_a_stable_envelope(self):
         self.auth(self.operator)
         response = self.client.get('/api/assets/?page=invalid')
         self.assertEqual(response.status_code, 400)
         self.assertEqual(set(response.json()), {'error', 'message', 'details'})
-        missing = self.client.get('/api/does-not-exist/')
+        missing = self.client.get('/api/does-not-exist/', HTTP_X_REQUEST_ID='scan-404')
         self.assertEqual(missing.status_code, 404)
         self.assertEqual(set(missing.json()), {'error', 'message', 'details'})
+        self.assertEqual(missing.headers.get('X-Request-Id'), 'scan-404')
 
     def test_ready_checks_database_and_is_public(self):
         response = self.client.get('/api/ready/')
@@ -155,6 +159,23 @@ class OperationsApiTests(TestCase):
         self.auth(self.operator)
         response = self.client.post('/api/work-orders/', {'assetCode': self.asset.code, 'title': '异常优先级', 'priority': 'blocker'}, format='json')
         self.assertEqual(response.status_code, 400)
+
+    def test_manual_work_order_rolls_back_when_audit_fails(self):
+        self.auth(self.operator)
+        self.client.raise_request_exception = False
+        with patch('operations.views.audit', side_effect=RuntimeError('audit unavailable')):
+            response = self.client.post('/api/work-orders/', {'assetCode': self.asset.code, 'title': '审计失败回滚'}, format='json')
+        self.assertEqual(response.status_code, 500)
+        self.assertTrue(response.headers.get('X-Request-Id'))
+        self.assertFalse(WorkOrder.objects.filter(title='审计失败回滚').exists())
+
+    def test_report_export_rolls_back_when_audit_fails(self):
+        self.auth(self.operator)
+        self.client.raise_request_exception = False
+        with patch('operations.views.audit', side_effect=RuntimeError('audit unavailable')):
+            response = self.client.post('/api/report-exports/', {'report': 'daily'}, format='json')
+        self.assertEqual(response.status_code, 500)
+        self.assertFalse(ReportExport.objects.filter(report_type='daily').exists())
 
     def test_threshold_version_must_be_numeric(self):
         threshold = Threshold.objects.create(key='temperature', label='温度', warning=28, alarm=32, unit='°C')

@@ -2,7 +2,35 @@ import axios from 'axios';
 
 const localStorageRef = typeof window !== 'undefined' ? window.localStorage : null;
 const sessionStorageRef = typeof window !== 'undefined' ? window.sessionStorage : null;
-const defaultBaseUrl = localStorageRef?.getItem('vue-api-url') || import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+const fallbackBaseUrl = typeof window !== 'undefined' && window.location.protocol === 'https:'
+  ? `${window.location.origin}/api`
+  : 'http://127.0.0.1:8000/api';
+
+function normalizeApiBaseUrl(baseUrl: string): string {
+  const normalized = baseUrl.trim().replace(/\/$/, '');
+  if (!/^https?:\/\//i.test(normalized)) throw new Error('API 地址必须使用 HTTP 或 HTTPS。');
+  const parsed = new URL(normalized);
+  if (parsed.username || parsed.password) throw new Error('API 地址不得包含账号或密码。');
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && parsed.protocol !== 'https:') {
+    throw new Error('HTTPS 页面只能连接 HTTPS API。');
+  }
+  return normalized;
+}
+
+function initialApiBaseUrl(): string {
+  const stored = localStorageRef?.getItem('vue-api-url') || '';
+  const candidates = [stored, import.meta.env.VITE_API_BASE_URL || '', fallbackBaseUrl].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      return normalizeApiBaseUrl(candidate);
+    } catch {
+      if (candidate === stored) localStorageRef?.removeItem('vue-api-url');
+    }
+  }
+  return fallbackBaseUrl;
+}
+
+const defaultBaseUrl = initialApiBaseUrl();
 const client = axios.create({ baseURL: defaultBaseUrl, timeout: 8000, headers: { 'Content-Type': 'application/json' } });
 client.interceptors.request.use((config) => {
   const token = sessionStorageRef?.getItem('ut-django-token');
@@ -32,13 +60,7 @@ export const api = {
 };
 
 export function setApiBaseUrl(baseUrl: string): void {
-  const normalized = baseUrl.trim().replace(/\/$/, '');
-  if (!/^https?:\/\//i.test(normalized)) throw new Error('API 地址必须使用 HTTP 或 HTTPS。');
-  const parsed = new URL(normalized);
-  if (parsed.username || parsed.password) throw new Error('API 地址不得包含账号或密码。');
-  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && parsed.protocol !== 'https:') {
-    throw new Error('HTTPS 页面只能连接 HTTPS API。');
-  }
+  const normalized = normalizeApiBaseUrl(baseUrl);
   client.defaults.baseURL = normalized;
   localStorageRef?.setItem('vue-api-url', normalized);
 }

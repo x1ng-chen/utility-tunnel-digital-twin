@@ -262,8 +262,9 @@ class WorkOrderListView(APIView):
         priority = payload.get('priority', WorkOrder.Priority.NORMAL)
         if not asset or not title or not isinstance(priority, str) or priority not in WorkOrder.Priority.values:
             return error_response('invalid_request', 'A valid assetCode and title are required.', 400)
-        order = WorkOrder.objects.create(code=work_order_code(), asset=asset, title=title, description=description_value.strip(), priority=priority, created_by=request.user)
-        audit(request.user, 'work_order.created_manual', 'work_order', order.pk, {'assetCode': asset.code}, request_id(request))
+        with transaction.atomic():
+            order = WorkOrder.objects.create(code=work_order_code(), asset=asset, title=title, description=description_value.strip(), priority=priority, created_by=request.user)
+            audit(request.user, 'work_order.created_manual', 'work_order', order.pk, {'assetCode': asset.code}, request_id(request))
         return Response(WorkOrderSerializer(order).data, status=201)
 
 
@@ -403,6 +404,7 @@ class ReportExportView(APIView):
         report_type = report_value.strip()
         if report_type not in {'alerts', 'workOrders', 'assets', 'daily'}:
             return error_response('invalid_request', 'A valid report type is required.', 400)
-        record = ReportExport.objects.create(report_type=report_type, file_name=f'utility-tunnel-{report_type}-{timezone.now():%Y%m%d%H%M%S}.csv', requested_by=request.user, completed_at=timezone.now())
-        audit(request.user, 'report.export', 'report_export', record.pk, {'report': report_type}, request_id(request))
+        with transaction.atomic():
+            record = ReportExport.objects.create(report_type=report_type, file_name=f'utility-tunnel-{report_type}-{timezone.now():%Y%m%d%H%M%S}.csv', requested_by=request.user, completed_at=timezone.now())
+            audit(request.user, 'report.export', 'report_export', record.pk, {'report': report_type}, request_id(request))
         return Response(ReportExportSerializer(record).data, status=201)
