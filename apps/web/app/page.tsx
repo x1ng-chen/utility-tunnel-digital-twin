@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { canPerform, toCsv, toJson } from './lib/operations';
 import type { Asset, OperationsAction, OperationsState, ReportKind, UserRole, WorkOrder, WorkOrderStatus } from './lib/operations';
 import { useOperations } from './lib/use-operations';
@@ -62,6 +63,69 @@ function ExportCenter({ exportReport }: { exportReport: (report: ReportKind, for
 }
 
 type RemoteControls = ReturnType<typeof useOperations>['remote'];
+
+type LoginScreenProps = {
+  remote: RemoteControls;
+  onDemoLogin: (role: UserRole) => void;
+  onApiLogin: (input: { baseUrl: string; email: string; password: string }) => Promise<boolean>;
+};
+
+function BootScreen() {
+  return <main className="boot-screen" aria-label="正在加载运维中枢"><motion.div className="boot-mark" initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.55 }}><i /><i /><i /></motion.div><motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>UT / OPS · 正在建立安全工作区</motion.p></main>;
+}
+
+function LoginScreen({ remote, onDemoLogin, onApiLogin }: LoginScreenProps) {
+  const reduceMotion = useReducedMotion();
+  const [mode, setMode] = useState<'demo' | 'api'>('demo');
+  const [role, setRole] = useState<UserRole>('operator');
+  const [baseUrl, setBaseUrl] = useState(remote.apiBaseUrl);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [localError, setLocalError] = useState('');
+  const [signal, setSignal] = useState(38);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const signalBars = Array.from({ length: 20 }, (_, index) => 30 + ((index * 17 + signal * 3) % 58));
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setSignal((value) => (value + 1) % 100), 900);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLocalError('');
+    if (mode === 'demo') {
+      onDemoLogin(role);
+      return;
+    }
+    setIsSubmitting(true);
+    await onApiLogin({ baseUrl, email, password });
+    setIsSubmitting(false);
+    setPassword('');
+  };
+
+  return <main className="auth-screen">
+    <div className="auth-noise" />
+    <motion.div className="auth-orb orb-a" animate={reduceMotion ? undefined : { x: [0, 34, 0], y: [0, -22, 0], scale: [1, 1.08, 1] }} transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }} />
+    <motion.div className="auth-orb orb-b" animate={reduceMotion ? undefined : { x: [0, -28, 0], y: [0, 26, 0], scale: [1, 0.9, 1] }} transition={{ duration: 13, repeat: Infinity, ease: 'easeInOut' }} />
+    <div className="auth-grid" />
+    <motion.section className="auth-shell" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: 'easeOut' }}>
+      <div className="auth-brand"><span className="auth-logo"><i /><i /><i /></span><div><b>UT / OPS</b><small>UTILITY TUNNEL OPERATIONS</small></div><span className="secure-chip"><i />SECURE WORKSPACE</span></div>
+      <div className="auth-body">
+        <div className="auth-copy"><span className="eyebrow">DIGITAL TWIN CONTROL ROOM</span><h1>让每一米管廊<br /><em>都清晰可见</em></h1><p>统一接入告警、工单、资产与遥测，让现场状态在一个动态工作台中持续可追踪。</p><div className="auth-signal"><div className="signal-label"><span><i />系统链路在线</span><b>{signal}%</b></div><div className="signal-bars">{signalBars.map((height, index) => <motion.i key={index} animate={{ height: `${height}%` }} transition={{ duration: 0.5, ease: 'easeOut' }} />)}</div><small>LOCAL SIMULATION · API READY · 24 / 7 OBSERVABILITY</small></div><div className="auth-highlights"><span><b>04</b>在线资产</span><span><b>03</b>风险阈值</span><span><b>∞</b>审计留痕</span></div></div>
+        <motion.form className="auth-card" onSubmit={submit} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.16, duration: 0.5 }}>
+          <div className="auth-card-head"><div><span className="eyebrow">WELCOME BACK</span><h2>进入运维中枢</h2></div><span className="auth-pulse"><i />LIVE</span></div>
+          <div className="auth-tabs" role="tablist" aria-label="登录方式"><button type="button" role="tab" aria-selected={mode === 'demo'} className={mode === 'demo' ? 'active' : ''} onClick={() => { setMode('demo'); setLocalError(''); }}>演示工作区</button><button type="button" role="tab" aria-selected={mode === 'api'} className={mode === 'api' ? 'active' : ''} onClick={() => { setMode('api'); setLocalError(''); }}>API 正式数据</button></div>
+          {mode === 'demo' ? <div className="auth-fields"><label>演示角色<select value={role} onChange={(event) => setRole(event.target.value as UserRole)}><option value="operator">运维员 · 推荐</option><option value="administrator">管理员</option><option value="viewer">查看者</option></select></label><div className="demo-note"><span className="demo-avatar">WL</span><div><b>本地安全演示模式</b><small>数据仅保存在当前浏览器，不会上传。</small></div><i>✓</i></div></div> : <div className="auth-fields"><label>API 地址<motion.input whileFocus={{ scale: 1.01 }} required value={baseUrl} onChange={(event) => { setBaseUrl(event.target.value); remote.clearError(); }} placeholder="https://api.example.com" inputMode="url" /></label><label>工作邮箱<motion.input whileFocus={{ scale: 1.01 }} required type="email" value={email} onChange={(event) => { setEmail(event.target.value); remote.clearError(); }} autoComplete="username" placeholder="name@company.com" /></label><label>密码<motion.input whileFocus={{ scale: 1.01 }} required type="password" value={password} onChange={(event) => { setPassword(event.target.value); remote.clearError(); }} autoComplete="current-password" placeholder="输入 API 账号密码" /></label></div>}
+          {(localError || remote.error) && <p className="auth-error" role="alert">{localError || remote.error}</p>}
+          <motion.button className="auth-submit" type="submit" disabled={isSubmitting || remote.isConnecting} whileHover={reduceMotion ? undefined : { y: -2, boxShadow: '0 14px 30px rgba(77, 105, 255, .34)' }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}>{isSubmitting || remote.isConnecting ? '正在建立安全会话…' : mode === 'demo' ? '进入演示工作区' : '连接 API 并登录'}<span>→</span></motion.button>
+          <div className="auth-foot"><span><i />TLS 通道就绪</span><span>v0.4.0 · 企业演示版</span></div>
+        </motion.form>
+      </div>
+      <footer className="auth-footer"><span>© 2026 UT / OPS</span><span>身份认证 · 最小权限 · 全链路审计</span><span>SUPPORT / 运维平台组</span></footer>
+    </motion.section>
+  </main>;
+}
 
 function ApiConnectionPanel({ remote }: { remote: RemoteControls }) {
   const [baseUrl, setBaseUrl] = useState(remote.apiBaseUrl);
@@ -176,10 +240,13 @@ function SettingsView({ meta, role, thresholds, dispatch, notify, dataSource }: 
   return <section className="module-page"><ModuleHeader meta={meta} /><PermissionNotice role={role} /><p className="module-note">阈值编辑只负责规则配置；保存后生成独立审计记录，不直接改变告警或工单。</p><div className="settings-layout"><article className="card settings-nav"><b>规则与策略</b><button className="current">报警阈值</button><button onClick={() => notify('联动策略将在接入后端规则引擎时开放')}>联动策略</button><button onClick={() => notify('数据质量规则由模拟数据层统一维护')}>数据质量</button><b>模型与权限</b><button onClick={() => notify('资产映射已在数字孪生模块展示')}>资产映射</button><button onClick={() => notify(dataSource === 'api' ? '当前权限来自已登录 API 账号' : '当前可在顶部切换演示角色')}>角色权限</button></article><article className="card setting-form"><div className="card-head"><div><small>ALARM THRESHOLDS</small><h2>报警阈值</h2></div><span>{dataSource === 'api' ? '数据库版本' : '本地版本'}</span></div>{thresholds.map((threshold) => { const draft = drafts[threshold.key]; return <div className="setting-row" key={threshold.key}><b>{threshold.label}</b><label>预警 <input type="number" disabled={!canUpdate} value={draft?.warning ?? threshold.warning} onChange={(event) => setDrafts({ ...drafts, [threshold.key]: { warning: event.target.value, alarm: draft?.alarm ?? String(threshold.alarm) } })} /> {threshold.unit}</label><label>报警 <input type="number" disabled={!canUpdate} value={draft?.alarm ?? threshold.alarm} onChange={(event) => setDrafts({ ...drafts, [threshold.key]: { warning: draft?.warning ?? String(threshold.warning), alarm: event.target.value } })} /> {threshold.unit}</label><button disabled={!canUpdate} onClick={() => saveThreshold(threshold.key)}>保存</button></div>; })}</article></div></section>;
 }
 
+const authStorageKey = 'ut-ops.authenticated.v1';
+
 export default function Home() {
   const [active, setActive] = useState('overview');
   const [now, setNow] = useState('');
   const [toast, setToast] = useState('');
+  const [authState, setAuthState] = useState<'checking' | 'signed-out' | 'signed-in'>('checking');
   const toastTimer = useRef<number | null>(null);
   const { state, dispatch, reset, remote } = useOperations();
   const openAlerts = useMemo(() => state.alerts.filter((alert) => alert.status === 'open').length, [state.alerts]);
@@ -203,6 +270,25 @@ export default function Home() {
   };
   useEffect(() => { const tick = () => setNow(new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date())); tick(); const timer = window.setInterval(tick, 1000); return () => window.clearInterval(timer); }, []);
   useEffect(() => () => { if (toastTimer.current) window.clearTimeout(toastTimer.current); }, []);
+  useEffect(() => { const timer = window.setTimeout(() => setAuthState(window.localStorage.getItem(authStorageKey) === 'local' ? 'signed-in' : 'signed-out'), 0); return () => window.clearTimeout(timer); }, []);
+  const signInDemo = (role: UserRole) => {
+    remote.setDataSource('local');
+    if (state.session.role !== role) dispatch({ type: 'session.switchRole', role });
+    window.localStorage.setItem(authStorageKey, 'local');
+    setAuthState('signed-in');
+  };
+  const signInApi = async (input: { baseUrl: string; email: string; password: string }) => {
+    const connected = await remote.connect(input);
+    if (connected) setAuthState('signed-in');
+    return connected;
+  };
+  const signOut = () => {
+    window.localStorage.removeItem(authStorageKey);
+    remote.disconnect();
+    setAuthState('signed-out');
+  };
   const sourceDescription = remote.dataSource === 'api' ? remote.isReady ? '已连接 PostgreSQL API；关键操作将由服务端授权、落库并写入审计。' : '已切换到 API 模式，请完成登录后读取正式数据。' : '本地模拟数据持续刷新；关键操作会同步写入浏览器持久化和审计记录。';
-  return <main className="app"><aside className="side"><div className="brand"><span className="mark"><i /><i /><i /></span><span><b>UT / OPS</b><small>UTILITY TUNNEL</small></span></div><nav><p className="caption">运行工作台</p>{nav.slice(0, 4).map(([id, label, icon]) => <button key={id} className={`nav ${active === id ? 'selected' : ''}`} onClick={() => setActive(id)}><i>{icon}</i>{label}{id === 'alerts' && openAlerts > 0 && <em>{openAlerts}</em>}{id === 'orders' && activeOrders > 0 && <em>{activeOrders}</em>}</button>)}<p className="caption lower">资产与系统</p>{nav.slice(4).map(([id, label, icon]) => <button key={id} className={`nav ${active === id ? 'selected' : ''}`} onClick={() => setActive(id)}><i>{icon}</i>{label}</button>)}</nav><div className="user"><span>WL</span><div><b>{state.session.name}</b><small>{roleLabels[state.session.role]}</small></div><button title={remote.dataSource === 'api' ? '刷新 API 数据' : '重置本地演示数据'} onClick={() => { reset(); notify(remote.dataSource === 'api' ? '已请求刷新 API 数据' : '本地演示数据已重置'); }}>↺</button></div></aside><section className="work"><header><div className="crumb">综合管廊 <i>/</i> <b>{labels[active]}</b></div><div className="top-actions"><span className="env"><i />演示环境</span><span className="data-source">{remote.dataSource === 'api' ? remote.isReady ? 'API 已连接' : 'API 待登录' : '本地持久化'}</span><label className="source-select">数据 <select value={remote.dataSource} onChange={(event) => { const next = event.target.value as DataSource; remote.setDataSource(next); notify(next === 'api' ? '已切换到 API 数据源，请登录' : '已切换到浏览器本地数据源'); }} aria-label="切换数据源"><option value="local">本地</option><option value="api">API</option></select></label><label className="role-select">角色 <select disabled={remote.dataSource === 'api'} value={state.session.role} onChange={(event) => { const role = event.target.value as UserRole; dispatch({ type: 'session.switchRole', role }); notify(`已切换为${roleLabels[role]}，权限已刷新`); }} aria-label="切换演示角色">{(Object.keys(roleLabels) as UserRole[]).map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}</select></label><button className="bell" onClick={() => { setActive('alerts'); notify(`目前有 ${openAlerts} 项待确认告警`); }}>♧<b>{openAlerts}</b></button><span className="face">WL</span></div></header><div className="page">{remote.dataSource === 'api' && <ApiConnectionPanel remote={remote} />}{active === 'overview' ? <><section className="hero"><div><small>CONTROL ROOM · {now}</small><h1>运行，一眼掌握</h1><p>{sourceDescription}</p></div><button className="primary" onClick={() => exportReport('daily', 'json')}><i>↓</i>导出运行快照</button></section><section className="metrics">{[['在线设备', String(onlineAssets), `/ ${state.assets.length}`, `${health}%`, 'blue'], ['环境健康度', String(health), '%', remote.dataSource === 'api' ? '数据库回读' : '模拟数据', 'mint'], ['待确认事件', String(openAlerts).padStart(2, '0'), '项', '需关注', 'amber'], ['进行中工单', String(activeOrders).padStart(2, '0'), '项', '状态可追踪', 'violet']].map(([label, value, suffix, delta, tone]) => <article className={`metric ${tone}`} key={label}><div><span>{label}</span><i>↗</i></div><b>{value}<small>{suffix}</small></b><p>{delta}<span> 当前数据层</span></p></article>)}</section><section className="two"><article className="card"><div className="card-head"><div><small>TWIN PULSE</small><h2>管廊实时态势</h2></div><button onClick={() => setActive('twin')}>进入孪生视图　<span>→</span></button></div><div className="tunnel"><div className="grid" /><i className="arch a1" /><i className="arch a2" /><i className="arch a3" /><i className="pipe p1" /><i className="pipe p2" /><i className="pipe p3" />{state.assets.slice(0, 3).map((asset, index) => <b className={`node ${asset.status !== 'normal' ? 'watch' : ''} n${index + 1}`} key={asset.code}>{asset.code}</b>)}<div className="legend"><span><i />正常 {state.assets.filter((asset) => asset.status === 'normal').length}</span><span><i />关注 {state.assets.filter((asset) => asset.status !== 'normal').length}</span></div></div></article><article className="card signal"><div className="card-head"><div><small>LIVE SIGNAL</small><h2>设备环境信号</h2></div><span className="live">{remote.dataSource === 'api' ? '每 10 秒' : '每 5 秒'}</span></div><div className="temp"><b>{telemetry?.value ?? '--'}</b><span>{telemetry?.unit}</span><small>FAN-01 · 风机转速</small></div><div className="bars">{bars.map((height, index) => <i key={index} className={index > 11 ? 'new' : ''} style={{ height: `${height}%` }} />)}</div><div className="range"><span>{remote.dataSource === 'api' ? '服务端遥测' : '历史模拟'}</span><b>可信质量：良好</b><span>当前</span></div></article></section><section className="two bottom"><article className="card stream"><div className="card-head"><div><small>ACTIVITY STREAM</small><h2>最新运行动态</h2></div><button onClick={() => setActive('audit')}>审计追踪　<span>→</span></button></div><div className="log-list">{state.audit.slice(0, 4).map((entry) => <div className="log" key={entry.id}><i className={entry.action.startsWith('alert') ? 'warn' : entry.action.startsWith('work_order') ? 'blue' : 'good'} /><time>{formatTime(entry.occurredAt)}</time><div><b>{entry.action}</b><p>{entry.detail}</p></div></div>)}</div></article><article className="readiness"><small>SYSTEM READINESS</small><h2>演示就绪度</h2><div><b>94</b><span>/ 100</span></div><i className="progress"><em /></i><p>{remote.dataSource === 'api' ? 'API 模式由服务端执行授权、写入 PostgreSQL 并保留审计记录。' : '告警、工单、资产、审计及角色控制已由统一本地数据模型联动。'}</p><button onClick={() => setActive('insights')}>导出答辩资料　<span>→</span></button></article></section></> : <ModuleView active={active} state={state} dispatch={dispatch} go={setActive} notify={notify} exportReport={exportReport} dataSource={remote.dataSource} />}</div></section>{toast && <div className="toast">{toast}</div>}</main>;
+  if (authState === 'checking') return <BootScreen />;
+  if (authState === 'signed-out') return <AnimatePresence mode="wait"><motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><LoginScreen remote={remote} onDemoLogin={signInDemo} onApiLogin={signInApi} /></motion.div></AnimatePresence>;
+  return <AnimatePresence mode="wait"><motion.main key="workspace" className="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.45 }}><aside className="side"><div className="brand"><span className="mark"><i /><i /><i /></span><span><b>UT / OPS</b><small>UTILITY TUNNEL</small></span></div><nav><p className="caption">运行工作台</p>{nav.slice(0, 4).map(([id, label, icon], index) => <motion.button key={id} className={`nav ${active === id ? 'selected' : ''}`} onClick={() => setActive(id)} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.04 }} whileHover={{ x: 3 }}><i>{icon}</i>{label}{id === 'alerts' && openAlerts > 0 && <em>{openAlerts}</em>}{id === 'orders' && activeOrders > 0 && <em>{activeOrders}</em>}</motion.button>)}<p className="caption lower">资产与系统</p>{nav.slice(4).map(([id, label, icon], index) => <motion.button key={id} className={`nav ${active === id ? 'selected' : ''}`} onClick={() => setActive(id)} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: (index + 4) * 0.04 }} whileHover={{ x: 3 }}><i>{icon}</i>{label}</motion.button>)}</nav><div className="user"><span>WL</span><div><b>{state.session.name}</b><small>{roleLabels[state.session.role]}</small></div><button title="退出登录" onClick={signOut}>↪</button><button title={remote.dataSource === 'api' ? '刷新 API 数据' : '重置本地演示数据'} onClick={() => { reset(); notify(remote.dataSource === 'api' ? '已请求刷新 API 数据' : '本地演示数据已重置'); }}>↺</button></div></aside><section className="work"><header><div className="crumb">综合管廊 <i>/</i> <b>{labels[active]}</b></div><div className="top-actions"><span className="env"><i />演示环境</span><span className="data-source">{remote.dataSource === 'api' ? remote.isReady ? 'API 已连接' : 'API 待登录' : '本地持久化'}</span><label className="source-select">数据 <select value={remote.dataSource} onChange={(event) => { const next = event.target.value as DataSource; remote.setDataSource(next); notify(next === 'api' ? '已切换到 API 数据源，请登录' : '已切换到浏览器本地数据源'); }} aria-label="切换数据源"><option value="local">本地</option><option value="api">API</option></select></label><label className="role-select">角色 <select disabled={remote.dataSource === 'api'} value={state.session.role} onChange={(event) => { const role = event.target.value as UserRole; dispatch({ type: 'session.switchRole', role }); notify(`已切换为${roleLabels[role]}，权限已刷新`); }} aria-label="切换演示角色">{(Object.keys(roleLabels) as UserRole[]).map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}</select></label><button className="bell" onClick={() => { setActive('alerts'); notify(`目前有 ${openAlerts} 项待确认告警`); }}>♧<b>{openAlerts}</b></button><span className="face">WL</span></div></header><div className="page">{remote.dataSource === 'api' && <ApiConnectionPanel remote={remote} />}{active === 'overview' ? <><section className="hero"><div><small>CONTROL ROOM · {now}</small><h1>运行，一眼掌握</h1><p>{sourceDescription}</p></div><button className="primary" onClick={() => exportReport('daily', 'json')}><i>↓</i>导出运行快照</button></section><section className="metrics">{[['在线设备', String(onlineAssets), `/ ${state.assets.length}`, `${health}%`, 'blue'], ['环境健康度', String(health), '%', remote.dataSource === 'api' ? '数据库回读' : '模拟数据', 'mint'], ['待确认事件', String(openAlerts).padStart(2, '0'), '项', '需关注', 'amber'], ['进行中工单', String(activeOrders).padStart(2, '0'), '项', '状态可追踪', 'violet']].map(([label, value, suffix, delta, tone], index) => <motion.article className={`metric ${tone}`} key={label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 + index * 0.06 }} layout><div><span>{label}</span><i>↗</i></div><b>{value}<small>{suffix}</small></b><p>{delta}<span> 当前数据层</span></p></motion.article>)}</section><section className="two"><motion.article className="card" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.34 }}><div className="card-head"><div><small>TWIN PULSE</small><h2>管廊实时态势</h2></div><button onClick={() => setActive('twin')}>进入孪生视图　<span>→</span></button></div><div className="tunnel"><div className="grid" /><i className="arch a1" /><i className="arch a2" /><i className="arch a3" /><i className="pipe p1" /><i className="pipe p2" /><i className="pipe p3" />{state.assets.slice(0, 3).map((asset, index) => <b className={`node ${asset.status !== 'normal' ? 'watch' : ''} n${index + 1}`} key={asset.code}>{asset.code}</b>)}<div className="legend"><span><i />正常 {state.assets.filter((asset) => asset.status === 'normal').length}</span><span><i />关注 {state.assets.filter((asset) => asset.status !== 'normal').length}</span></div></div></motion.article><motion.article className="card signal" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}><div className="card-head"><div><small>LIVE SIGNAL</small><h2>设备环境信号</h2></div><span className="live">{remote.dataSource === 'api' ? '每 10 秒' : '每 5 秒'}</span></div><div className="temp"><b>{telemetry?.value ?? '--'}</b><span>{telemetry?.unit}</span><small>FAN-01 · 风机转速</small></div><div className="bars">{bars.map((height, index) => <motion.i key={index} className={index > 11 ? 'new' : ''} animate={{ height: `${height}%` }} transition={{ duration: 0.45, delay: index * 0.015 }} />)}</div><div className="range"><span>{remote.dataSource === 'api' ? '服务端遥测' : '历史模拟'}</span><b>可信质量：良好</b><span>当前</span></div></motion.article></section><section className="two bottom"><motion.article className="card stream" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.46 }}><div className="card-head"><div><small>ACTIVITY STREAM</small><h2>最新运行动态</h2></div><button onClick={() => setActive('audit')}>审计追踪　<span>→</span></button></div><div className="log-list">{state.audit.slice(0, 4).map((entry) => <div className="log" key={entry.id}><i className={entry.action.startsWith('alert') ? 'warn' : entry.action.startsWith('work_order') ? 'blue' : 'good'} /><time>{formatTime(entry.occurredAt)}</time><div><b>{entry.action}</b><p>{entry.detail}</p></div></div>)}</div></motion.article><motion.article className="readiness" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.52 }}><small>SYSTEM READINESS</small><h2>演示就绪度</h2><div><b>94</b><span>/ 100</span></div><i className="progress"><em /></i><p>{remote.dataSource === 'api' ? 'API 模式由服务端执行授权、写入 PostgreSQL 并保留审计记录。' : '告警、工单、资产、审计及角色控制已由统一本地数据模型联动。'}</p><button onClick={() => setActive('insights')}>导出答辩资料　<span>→</span></button></motion.article></section></> : <ModuleView active={active} state={state} dispatch={dispatch} go={setActive} notify={notify} exportReport={exportReport} dataSource={remote.dataSource} />}</div></section>{toast && <div className="toast">{toast}</div>}</motion.main></AnimatePresence>;
 }
