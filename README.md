@@ -333,6 +333,7 @@ chore(deploy): add mosquitto local configuration
 | [API 契约](docs/api-contract.md) | P1 前后端接口、RBAC 与状态机约束 |
 | [软件验收清单](docs/software-acceptance-checklist.md) | P0–P3 软件交付范围与可验证证据 |
 | [部署与恢复手册](docs/deployment-runbook.md) | 托管 PostgreSQL、最小权限、备份恢复与发布步骤 |
+| [华为云部署方案](docs/%E5%8D%8E%E4%B8%BA%E4%BA%91%E9%83%A8%E7%BD%B2%E6%96%B9%E6%A1%88.md) | ECS、RDS PostgreSQL、IoTDA、网络边界与云端上线检查 |
 | [软件使用手册](docs/%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md) | 本地模式与 API 模式操作说明 |
 | [答辩演示脚本](docs/%E7%AD%94%E8%BE%A9%E6%BC%94%E7%A4%BA%E8%84%9A%E6%9C%AC.md) | 六分钟演示流程与备用方案 |
 | [测试报告](docs/%E6%B5%8B%E8%AF%95%E6%8A%A5%E5%91%8A.md) | 自动化与浏览器验证范围 |
