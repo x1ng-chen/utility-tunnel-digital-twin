@@ -14,6 +14,8 @@ export interface WorkOrder { id: number; code: string; sourceAlertId?: number | 
 export interface Telemetry { id: number; eventId?: string | null; assetCode: string; metricKey?: string; metric: string; value: number; unit: string; quality: 'good' | 'suspect' | 'bad' | 'missing'; recordedAt: string; ingestedAt?: string; }
 export interface TelemetryReading { eventId: string; assetCode: string; metricKey: string; metric: string; value: number; unit: string; quality?: Telemetry['quality']; recordedAt: string; }
 export interface TelemetryIngestResult { items: Telemetry[]; created: number; duplicates: number; rules: Record<string, number>; }
+export interface TelemetryQuery { assetCode?: string; metricKey?: string; quality?: Telemetry['quality']; recordedFrom?: string; recordedTo?: string; }
+export interface TelemetrySummary { sampleCount: number; comparable: boolean; minimum: number | null; maximum: number | null; average: number | null; startedAt: string | null; endedAt: string | null; qualityCounts: Record<Telemetry['quality'], number>; latest: Telemetry | null; }
 export interface Threshold { key: string; label: string; warning: number; alarm: number; unit: string; version: number; }
 export interface AuditEntry { id: number; actorName: string; action: string; resourceType: string; resourceId: string; detail: Record<string, unknown>; requestId: string; occurredAt: string; }
 export interface Dashboard { assets: { total: number; online: number }; health: { value: number }; openAlerts: number; activeWorkOrders: number; telemetry: Telemetry | null; }

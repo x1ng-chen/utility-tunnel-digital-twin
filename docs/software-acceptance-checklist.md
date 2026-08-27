@@ -1,6 +1,6 @@
 # 软件验收清单
 
-> 版本：P0–P3 · 更新：2026-08-26
+> 版本：P0–P3 · 更新：2026-08-28
 
 | 类别 | 验收项 | 可验证证据 |
 | --- | --- | --- |
@@ -14,6 +14,7 @@
 | P2 浏览器回归 | 登录、孪生筛选、告警确认、Django API 数据读取和审计的真实浏览器 E2E | `.github/workflows/browser-e2e.yml`；首次绿色运行后归档工作流链接 |
 | P2 韧性 | 健康/就绪检查、结构化日志、速率限制、安全响应头、统一错误码与前端失败提示 | `server.ts`、`rate-limit.ts` |
 | P2 数据治理 | 遥测、审计、导出数据按保留期只读盘点，清理操作必须单独审批 | `python manage.py data_governance_report --format=json` |
+| P2 数据洞察 | 遥测历史按业务时间稳定排序，可按资产、指标、质量和时间查询并获得一致的聚合与最新样本 | `/api/telemetry/`、`/api/telemetry/summary/`、数据洞察页面和前后端测试 |
 | P2 发布制品 | Vue 静态站与 Django API 具备可审查容器制品、非 root 运行、内部 API 网络与运行时密钥注入 | `deploy/containers/`、`tools/check-deployment-artifacts.mjs` |
 | P3 交付 | 部署、使用、测试与答辩脚本完整，可独立演示 | `docs/` 下交付文档 |
 

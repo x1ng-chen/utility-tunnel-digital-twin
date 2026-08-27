@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, DashboardView, HealthView, LoginView, LogoutView, MeView, ReadyView, ReportExportView, TelemetryListView, ThresholdDetailView, ThresholdListView, WorkOrderListView, WorkOrderTransitionView
+from .views import AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, DashboardView, HealthView, LoginView, LogoutView, MeView, ReadyView, ReportExportView, TelemetryListView, TelemetrySummaryView, ThresholdDetailView, ThresholdListView, WorkOrderListView, WorkOrderTransitionView
 
 
 urlpatterns = [
@@ -19,6 +19,7 @@ urlpatterns = [
     path('work-orders/', WorkOrderListView.as_view()),
     path('work-orders/<int:pk>/transition/', WorkOrderTransitionView.as_view()),
     path('telemetry/', TelemetryListView.as_view()),
+    path('telemetry/summary/', TelemetrySummaryView.as_view()),
     path('thresholds/', ThresholdListView.as_view()),
     path('thresholds/<str:key>/', ThresholdDetailView.as_view()),
     path('audit/', AuditListView.as_view()),

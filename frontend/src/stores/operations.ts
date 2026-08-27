@@ -2,7 +2,7 @@ import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import { api } from '../services/api';
 import { useAuthStore } from './auth';
-import type { Alert, Asset, AssetMutation, AuditEntry, Dashboard, Telemetry, TelemetryIngestResult, TelemetryReading, Threshold, WorkOrder } from '../types';
+import type { Alert, Asset, AssetMutation, AuditEntry, Dashboard, Telemetry, TelemetryIngestResult, TelemetryQuery, TelemetryReading, TelemetrySummary, Threshold, WorkOrder } from '../types';
 
 type ReportKind = 'alerts' | 'workOrders' | 'assets' | 'daily';
 const demoTransitions: Record<WorkOrder['status'], WorkOrder['status'][]> = {
@@ -40,7 +40,12 @@ export const useOperationsStore = defineStore('operations', () => {
   const alerts = ref<Alert[]>(seedAlerts());
   const workOrders = ref<WorkOrder[]>(seedOrders());
   const thresholds = ref<Threshold[]>(seedThresholds());
-  const telemetry = ref<Telemetry[]>([]);
+  const telemetry = ref<Telemetry[]>(seedTelemetry());
+  const telemetryInsights = ref<Telemetry[]>([]);
+  const telemetryInsightsTotal = ref(0);
+  const telemetrySummary = ref<TelemetrySummary>(summarizeTelemetry([]));
+  const telemetryInsightsLoading = ref(false);
+  const telemetryInsightsError = ref('');
   const audit = ref<AuditEntry[]>([]);
   const loading = ref(false);
   const source = ref<'demo' | 'api'>('demo');
@@ -260,6 +265,39 @@ export const useOperationsStore = defineStore('operations', () => {
     return response.data as TelemetryIngestResult;
   }
 
+  async function loadTelemetryInsights(query: TelemetryQuery = {}) {
+    telemetryInsightsLoading.value = true;
+    telemetryInsightsError.value = '';
+    try {
+      const recordedFrom = query.recordedFrom ? new Date(query.recordedFrom).getTime() : null;
+      const recordedTo = query.recordedTo ? new Date(query.recordedTo).getTime() : null;
+      if ((recordedFrom != null && !Number.isFinite(recordedFrom)) || (recordedTo != null && !Number.isFinite(recordedTo))) throw new Error('采集时间格式无效。');
+      if (recordedFrom != null && recordedTo != null && recordedFrom > recordedTo) throw new Error('开始时间不能晚于结束时间。');
+      if (source.value === 'demo') {
+        const filtered = telemetry.value.filter((item) => telemetryMatchesQuery(item, query)).sort((left, right) => new Date(right.recordedAt).getTime() - new Date(left.recordedAt).getTime() || right.id - left.id);
+        telemetryInsights.value = filtered.slice(0, 100);
+        telemetryInsightsTotal.value = filtered.length;
+        telemetrySummary.value = summarizeTelemetry(filtered);
+        return;
+      }
+      const params = Object.fromEntries(Object.entries(query).filter(([, value]) => value)) as Record<string, string>;
+      const [historyResponse, summaryResponse] = await Promise.all([
+        api.telemetry({ ...params, page: 1, pageSize: 100 }),
+        api.telemetrySummary(params),
+      ]);
+      telemetryInsights.value = historyResponse.data.items;
+      telemetryInsightsTotal.value = historyResponse.data.total;
+      telemetrySummary.value = summaryResponse.data;
+    } catch (cause: unknown) {
+      const status = responseStatus(cause);
+      if (status === 401) expireApiSession();
+      telemetryInsightsError.value = status != null ? apiErrorMessage(cause) : cause instanceof Error ? cause.message : '遥测查询失败，请稍后重试。';
+      throw new Error(telemetryInsightsError.value);
+    } finally {
+      telemetryInsightsLoading.value = false;
+    }
+  }
+
   function downloadReport(report: ReportKind) {
     if (typeof window === 'undefined' || typeof document === 'undefined' || typeof Blob === 'undefined') return;
     const rows = report === 'alerts' ? alerts.value : report === 'workOrders' ? workOrders.value : report === 'assets' ? assets.value : [{ ...dashboard.value, telemetry: dashboard.value.telemetry }];
@@ -270,8 +308,37 @@ export const useOperationsStore = defineStore('operations', () => {
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
-  return { dashboard, assets, alerts, workOrders, thresholds, telemetry, audit, loading, source, offline, syncError, lastSyncedAt, notice, openAlerts, activeOrders, refresh, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, transition, updateThreshold, createReport, ingestTelemetry };
+  return { dashboard, assets, alerts, workOrders, thresholds, telemetry, telemetryInsights, telemetryInsightsTotal, telemetrySummary, telemetryInsightsLoading, telemetryInsightsError, audit, loading, source, offline, syncError, lastSyncedAt, notice, openAlerts, activeOrders, refresh, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, transition, updateThreshold, createReport, ingestTelemetry, loadTelemetryInsights };
 });
+
+function telemetryMatchesQuery(item: Telemetry, query: TelemetryQuery): boolean {
+  const recordedAt = new Date(item.recordedAt).getTime();
+  return (!query.assetCode || item.assetCode === query.assetCode)
+    && (!query.metricKey || item.metricKey === query.metricKey)
+    && (!query.quality || item.quality === query.quality)
+    && (!query.recordedFrom || recordedAt >= new Date(query.recordedFrom).getTime())
+    && (!query.recordedTo || recordedAt <= new Date(query.recordedTo).getTime());
+}
+
+export function summarizeTelemetry(items: Telemetry[]): TelemetrySummary {
+  const qualityCounts: TelemetrySummary['qualityCounts'] = { good: 0, suspect: 0, bad: 0, missing: 0 };
+  for (const item of items) qualityCounts[item.quality] += 1;
+  if (!items.length) return { sampleCount: 0, comparable: true, minimum: null, maximum: null, average: null, startedAt: null, endedAt: null, qualityCounts, latest: null };
+  const ordered = [...items].sort((left, right) => new Date(right.recordedAt).getTime() - new Date(left.recordedAt).getTime() || right.id - left.id);
+  const comparable = new Set(items.map((item) => `${item.metricKey || ''}\u0000${item.unit}`)).size <= 1;
+  const values = items.map((item) => item.value);
+  return {
+    sampleCount: items.length,
+    comparable,
+    minimum: comparable ? Math.min(...values) : null,
+    maximum: comparable ? Math.max(...values) : null,
+    average: comparable ? values.reduce((total, value) => total + value, 0) / values.length : null,
+    startedAt: ordered.at(-1)!.recordedAt,
+    endedAt: ordered[0].recordedAt,
+    qualityCounts,
+    latest: ordered[0],
+  };
+}
 
 function apiErrorMessage(cause: unknown): string {
   if (typeof cause === 'object' && cause && 'response' in cause) {
@@ -302,6 +369,10 @@ function seedAssets(): Asset[] {
 function seedAlerts(): Alert[] { return [{ id: 1, code: 'ALM-260826-003', assetCode: 'SEEP-W01', severity: 'warning', category: '水浸趋势', status: 'open', title: '水浸趋势异常', detail: '渗水趋势上升，需确认现场情况并安排巡检。', openedAt: '2026-08-26T00:00:00Z' }, { id: 2, code: 'ALM-260826-002', assetCode: 'FAN-01', severity: 'critical', category: '设备反馈', status: 'acknowledged', title: '风机反馈丢失', detail: '执行反馈暂未返回，正在等待工单复核。', openedAt: '2026-08-26T00:00:00Z', acknowledgedBy: '运维员' }, { id: 3, code: 'ALM-260826-001', assetCode: 'CTRL-01', severity: 'warning', category: '通信质量', status: 'open', title: '控制器通信质量波动', detail: '控制器出现短时延迟抖动，建议建立巡检工单并观察后续遥测。', openedAt: '2026-08-26T00:00:00Z' }]; }
 function seedOrders(): WorkOrder[] { return [{ id: 1, code: 'WO-260826-08', sourceAlertId: 1, assetCode: 'SEEP-W01', title: '检查 UT-ZB 接水盘与水位探针', priority: 'high', status: 'open', createdAt: '2026-08-26T00:00:00Z', updatedAt: '2026-08-26T00:00:00Z', version: 1 }, { id: 2, code: 'WO-260826-06', sourceAlertId: 2, assetCode: 'FAN-01', title: '复核风机反馈与现场状态', priority: 'urgent', status: 'in_progress', assigneeName: '运维组 A', createdAt: '2026-08-26T00:00:00Z', updatedAt: '2026-08-26T00:00:00Z', version: 1 }]; }
 function seedThresholds(): Threshold[] { return [{ key: 'temperature', label: '环境温度', warning: 28, alarm: 32, unit: '°C', version: 1 }, { key: 'humidity', label: '环境湿度', warning: 75, alarm: 85, unit: '%RH', version: 1 }, { key: 'water', label: '水浸趋势', warning: 20, alarm: 45, unit: '秒', version: 1 }]; }
+function seedTelemetry(): Telemetry[] {
+  const now = Date.now();
+  return Array.from({ length: 24 }, (_, index) => ({ id: index + 1, eventId: `demo:temperature:${index + 1}`, assetCode: 'ENV-01', metricKey: 'temperature', metric: '环境温度', value: Number((25.4 + Math.sin(index / 3) * 3.2).toFixed(2)), unit: '°C', quality: index === 7 ? 'suspect' : 'good', recordedAt: new Date(now - index * 5 * 60_000).toISOString(), ingestedAt: new Date(now - index * 5 * 60_000 + 500).toISOString() }));
+}
 
 export function csvCell(value: unknown): string {
   const text = value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);

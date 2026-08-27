@@ -201,6 +201,7 @@ class Telemetry(models.Model):
         indexes = [
             models.Index(fields=['asset', '-recorded_at'], name='telemetry_asset_time_idx'),
             models.Index(fields=['metric_key', '-recorded_at'], name='telemetry_metric_time_idx'),
+            models.Index(fields=['asset', 'metric_key', '-recorded_at'], name='telemetry_asset_metric_idx'),
         ]
 
 

@@ -141,6 +141,53 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['telemetry']['id'], latest.id)
 
+    def test_telemetry_history_filters_by_business_time_and_summarizes_quality(self):
+        now = timezone.now()
+        newest = Telemetry.objects.create(asset=self.asset, event_id='history-newest', metric_key='temperature', metric='环境温度', value=32, unit='°C', quality=Telemetry.Quality.GOOD, recorded_at=now)
+        Telemetry.objects.create(asset=self.asset, event_id='history-oldest', metric_key='temperature', metric='环境温度', value=24, unit='°C', quality=Telemetry.Quality.SUSPECT, recorded_at=now - timedelta(minutes=10))
+        Telemetry.objects.create(asset=self.asset, event_id='history-other', metric_key='humidity', metric='环境湿度', value=60, unit='%RH', quality=Telemetry.Quality.GOOD, recorded_at=now - timedelta(minutes=5))
+        self.auth(self.operator)
+        recorded_from = (now - timedelta(hours=1)).isoformat().replace('+00:00', 'Z')
+        recorded_to = (now + timedelta(minutes=1)).isoformat().replace('+00:00', 'Z')
+        params = f'assetCode={self.asset.code}&metricKey=temperature&recordedFrom={recorded_from}&recordedTo={recorded_to}'
+
+        history = self.client.get(f'/api/telemetry/?{params}&page=1&pageSize=10')
+        summary = self.client.get(f'/api/telemetry/summary/?{params}')
+
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual([item['id'] for item in history.json()['items']], [newest.id, newest.id + 1])
+        self.assertEqual(summary.status_code, 200)
+        self.assertEqual(summary.json()['sampleCount'], 2)
+        self.assertTrue(summary.json()['comparable'])
+        self.assertEqual(summary.json()['minimum'], 24)
+        self.assertEqual(summary.json()['maximum'], 32)
+        self.assertEqual(summary.json()['average'], 28)
+        self.assertEqual(summary.json()['qualityCounts'], {'good': 1, 'suspect': 1, 'bad': 0, 'missing': 0})
+        self.assertEqual(summary.json()['latest']['eventId'], 'history-newest')
+        mixed = self.client.get(f'/api/telemetry/summary/?assetCode={self.asset.code}')
+        self.assertFalse(mixed.json()['comparable'])
+        self.assertIsNone(mixed.json()['average'])
+        self.assertIsNone(mixed.json()['minimum'])
+
+    def test_telemetry_history_rejects_invalid_filters_and_supports_empty_results(self):
+        self.auth(self.operator)
+        invalid_queries = [
+            'assetCode=bad code',
+            'metricKey=Temperature',
+            'quality=unknown',
+            'recordedFrom=not-a-date',
+            'recordedFrom=2026-08-28T12:00:00Z&recordedTo=2026-08-28T11:00:00Z',
+        ]
+        for query in invalid_queries:
+            self.assertEqual(self.client.get(f'/api/telemetry/?{query}').status_code, 400)
+            self.assertEqual(self.client.get(f'/api/telemetry/summary/?{query}').status_code, 400)
+        empty = self.client.get('/api/telemetry/summary/?assetCode=NOT-FOUND')
+        self.assertEqual(empty.status_code, 200)
+        self.assertEqual(empty.json()['sampleCount'], 0)
+        self.assertTrue(empty.json()['comparable'])
+        self.assertIsNone(empty.json()['average'])
+        self.assertIsNone(empty.json()['latest'])
+
     def test_telemetry_batch_is_idempotent_and_creates_threshold_alert(self):
         asset = Asset.objects.create(code='ENV-T1', name='环境节点', zone='UT-ZA', asset_type='环境测点')
         Threshold.objects.create(key='temperature', label='环境温度', warning=28, alarm=32, unit='°C')

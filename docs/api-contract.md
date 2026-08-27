@@ -1,6 +1,6 @@
 # 软件平台 API 契约（P1）
 
-> 版本：v1.1 · 更新：2026-08-27
+> 版本：v1.2 · 更新：2026-08-28
 
 本文件同时保留旧版 Node API 与当前 Vue 3 / Django API 的边界，便于迁移期间按入口区分调用方。旧版业务代码不在本阶段修改。
 
@@ -109,7 +109,8 @@
 | `GET` | `/work-orders/` | 登录 | `status`、`search`、`updatedFrom`、`updatedTo`、`page`、`pageSize` |
 | `POST` | `/work-orders/` | 管理员/运维员 | 新建 `{ assetCode, title, description?, priority? }`；可提供 `Idempotency-Key` 防止重试重复建单 |
 | `POST` | `/work-orders/{id}/transition/` | 管理员/运维员 | 流转 `{ to, version? }`；提供 `version` 时启用乐观锁，完成工单必须管理员复核 |
-| `GET` | `/telemetry/` | 登录 | `assetCode`、`page`、`pageSize` |
+| `GET` | `/telemetry/` | 登录 | `assetCode`、`metricKey`、`quality`、`recordedFrom`、`recordedTo`、`page`、`pageSize`；按业务采集时间倒序返回 |
+| `GET` | `/telemetry/summary/` | 登录 | 复用遥测筛选条件，返回样本数、最小值、最大值、平均值、时间范围、质量分布和最新样本 |
 | `POST` | `/telemetry/` | 管理员/运维员 | 批量写入 1–100 条可信遥测；按 `eventId` 幂等，驱动阈值告警和资产状态联动 |
 | `GET` | `/thresholds/` | 登录 | 查询阈值策略 |
 | `PUT` | `/thresholds/{key}/` | 管理员 | 更新 `{ warning, alarm, version }`，使用乐观锁 |
@@ -158,3 +159,5 @@
 - 只有 `quality=good` 的读数参与规则计算。指标存在阈值时，单位必须与阈值配置一致。
 - 首次越过预警线创建自动告警；越过报警线只升级现有活动告警，不重复建告警；恢复到预警线以下时自动解决告警并重算资产状态。
 - 返回 `created`、`duplicates`、`rules` 和本批次 `items`；所有自动创建、升级、恢复和批次写入均写审计日志。
+
+历史查询以 `recordedAt` 作为业务时间、以记录编号作为稳定次序补充，避免延迟到达的数据被误判为最新样本。`recordedFrom` 晚于 `recordedTo`、时间格式无效或筛选枚举无效时返回统一 `400 validation_error`；无匹配数据时汇总字段返回 `null` 或零值，不伪造统计结果。汇总结果通过 `comparable` 标明当前数据是否属于同一指标和单位；混合量纲时不计算均值、最小值和最大值。

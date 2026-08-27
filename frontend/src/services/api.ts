@@ -66,6 +66,7 @@ export const api = {
   createWorkOrder: (payload: Record<string, unknown>, idempotencyKey?: string) => client.post('/work-orders/', payload, { headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined }),
   transitionWorkOrder: (id: number, to: string, version?: number) => client.post(`/work-orders/${id}/transition/`, { to, ...(version == null ? {} : { version }) }),
   telemetry: (params?: Record<string, string | number>) => client.get('/telemetry/', { params }),
+  telemetrySummary: (params?: Record<string, string | number>) => client.get('/telemetry/summary/', { params }),
   ingestTelemetry: (readings: Record<string, unknown>[]) => client.post('/telemetry/', { readings }),
   thresholds: () => client.get('/thresholds/'),
   updateThreshold: (key: string, payload: Record<string, unknown>) => client.put(`/thresholds/${key}/`, payload),

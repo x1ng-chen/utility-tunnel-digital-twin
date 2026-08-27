@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useAuthStore } from './auth';
-import { useOperationsStore } from './operations';
+import { summarizeTelemetry, useOperationsStore } from './operations';
 import { api } from '../services/api';
 
 describe('operations store', () => {
@@ -120,5 +120,33 @@ describe('operations store', () => {
     await expect(store.updateAsset(asset, { name: '越权修改' })).rejects.toThrow('只有管理员');
     await auth.login('', '', 'administrator', 'demo');
     await expect(store.updateAsset(asset, { name: '演示写入' })).rejects.toThrow('仅允许写入 Django API');
+  });
+
+  it('summarizes and filters demo telemetry without changing operational telemetry state', async () => {
+    const store = useOperationsStore();
+    expect(store.telemetry).toHaveLength(24);
+    await store.loadTelemetryInsights({ assetCode: 'ENV-01', metricKey: 'temperature', quality: 'suspect' });
+    expect(store.telemetryInsights).toHaveLength(1);
+    expect(store.telemetrySummary.sampleCount).toBe(1);
+    expect(store.telemetrySummary.qualityCounts.suspect).toBe(1);
+    expect(store.telemetry).toHaveLength(24);
+  });
+
+  it('returns an explicit empty summary for a telemetry query with no samples', () => {
+    expect(summarizeTelemetry([])).toEqual({ sampleCount: 0, comparable: true, minimum: null, maximum: null, average: null, startedAt: null, endedAt: null, qualityCounts: { good: 0, suspect: 0, bad: 0, missing: 0 }, latest: null });
+  });
+
+  it('does not calculate misleading aggregates across different metrics or units', () => {
+    const store = useOperationsStore();
+    const mixed = summarizeTelemetry([...store.telemetry, { ...store.telemetry[0], id: 99, metricKey: 'humidity', unit: '%RH' }]);
+    expect(mixed.comparable).toBe(false);
+    expect(mixed.average).toBeNull();
+    expect(mixed.minimum).toBeNull();
+  });
+
+  it('rejects an inverted telemetry time range consistently in demo mode', async () => {
+    const store = useOperationsStore();
+    await expect(store.loadTelemetryInsights({ recordedFrom: '2026-08-28T12:00:00Z', recordedTo: '2026-08-28T11:00:00Z' })).rejects.toThrow('开始时间不能晚于结束时间');
+    expect(store.telemetryInsightsLoading).toBe(false);
   });
 });

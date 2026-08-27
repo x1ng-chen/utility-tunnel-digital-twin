@@ -10,7 +10,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import IntegrityError, connection, transaction
-from django.db.models import Q
+from django.db.models import Avg, Count, Max, Min, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import status
@@ -41,7 +41,7 @@ def error_response(code: str, message: str, status_code: int, details=None):
     return Response({'error': code, 'message': message, 'details': details or {}}, status=status_code)
 
 
-def paginated(queryset, serializer_class, request):
+def paginated(queryset, serializer_class, request, ordering=('-id',)):
     try:
         page = max(1, int(request.query_params.get('page', '1')))
         page_size = min(100, max(1, int(request.query_params.get('pageSize', '20'))))
@@ -49,7 +49,7 @@ def paginated(queryset, serializer_class, request):
         return error_response('invalid_request', 'page and pageSize must be numbers.', 400)
     # Every paginated endpoint uses a stable newest-first order. Without an
     # explicit order, concurrent inserts can make records move between pages.
-    queryset = queryset.order_by('-id')
+    queryset = queryset.order_by(*ordering)
     total = queryset.count()
     items = queryset[(page - 1) * page_size:page * page_size]
     page_count = (total + page_size - 1) // page_size if total else 0
@@ -118,6 +118,38 @@ def telemetry_matches(reading, payload) -> bool:
         and reading.quality == payload['quality']
         and reading.recorded_at == payload['recordedAt']
     )
+
+
+def filtered_telemetry(request):
+    queryset = Telemetry.objects.select_related('asset')
+    asset_code = request.query_params.get('assetCode', '').strip()
+    metric_key = request.query_params.get('metricKey', '').strip()
+    quality = request.query_params.get('quality', '').strip()
+    if asset_code:
+        if not re.fullmatch(r'[A-Z0-9][A-Z0-9_-]{1,39}', asset_code):
+            return None, error_response('invalid_request', 'assetCode is not valid.', 400)
+        queryset = queryset.filter(asset__code=asset_code)
+    if metric_key:
+        if not re.fullmatch(r'[a-z][a-z0-9_.-]{1,39}', metric_key):
+            return None, error_response('invalid_request', 'metricKey is not valid.', 400)
+        queryset = queryset.filter(metric_key=metric_key)
+    if quality:
+        if quality not in Telemetry.Quality.values:
+            return None, error_response('invalid_request', 'quality is not valid.', 400)
+        queryset = queryset.filter(quality=quality)
+    recorded_from, error = datetime_filter(request, 'recordedFrom')
+    if error:
+        return None, error
+    recorded_to, error = datetime_filter(request, 'recordedTo')
+    if error:
+        return None, error
+    if recorded_from and recorded_to and recorded_from > recorded_to:
+        return None, error_response('invalid_request', 'recordedFrom must be earlier than recordedTo.', 400)
+    if recorded_from:
+        queryset = queryset.filter(recorded_at__gte=recorded_from)
+    if recorded_to:
+        queryset = queryset.filter(recorded_at__lte=recorded_to)
+    return queryset, None
 
 
 class HealthView(APIView):
@@ -634,10 +666,10 @@ class TelemetryListView(APIView):
     permission_classes = [AuthenticatedRead]
 
     def get(self, request):
-        queryset = Telemetry.objects.select_related('asset')
-        if request.query_params.get('assetCode'):
-            queryset = queryset.filter(asset__code=request.query_params['assetCode'])
-        return paginated(queryset, TelemetrySerializer, request)
+        queryset, error = filtered_telemetry(request)
+        if error:
+            return error
+        return paginated(queryset, TelemetrySerializer, request, ordering=('-recorded_at', '-id'))
 
     def post(self, request):
         if not can_write(request):
@@ -719,6 +751,39 @@ class TelemetryListView(APIView):
             'duplicates': duplicate_count,
             'rules': rule_counts,
         }, status=201 if created_count else 200)
+
+
+class TelemetrySummaryView(APIView):
+    permission_classes = [AuthenticatedRead]
+
+    def get(self, request):
+        queryset, error = filtered_telemetry(request)
+        if error:
+            return error
+        aggregate = queryset.aggregate(
+            sample_count=Count('id'),
+            started_at=Min('recorded_at'),
+            ended_at=Max('recorded_at'),
+            metric_count=Count('metric_key', distinct=True),
+            unit_count=Count('unit', distinct=True),
+        )
+        comparable = aggregate['metric_count'] <= 1 and aggregate['unit_count'] <= 1
+        values = queryset.aggregate(minimum=Min('value'), maximum=Max('value'), average=Avg('value')) if comparable else {'minimum': None, 'maximum': None, 'average': None}
+        quality_counts = {quality: 0 for quality in Telemetry.Quality.values}
+        for row in queryset.values('quality').annotate(count=Count('id')):
+            quality_counts[row['quality']] = row['count']
+        latest = queryset.order_by('-recorded_at', '-id').first()
+        return Response({
+            'sampleCount': aggregate['sample_count'],
+            'comparable': comparable,
+            'minimum': values['minimum'],
+            'maximum': values['maximum'],
+            'average': values['average'],
+            'startedAt': aggregate['started_at'],
+            'endedAt': aggregate['ended_at'],
+            'qualityCounts': quality_counts,
+            'latest': TelemetrySerializer(latest).data if latest else None,
+        })
 
 
 class ThresholdListView(APIView):

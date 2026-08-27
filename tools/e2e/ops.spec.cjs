@@ -39,6 +39,14 @@ test('演示工作区可完成孪生定位、筛选和告警确认', async ({ pa
   await page.getByRole('button', { name: /H-04 · UT-ZB/ }).click();
   await expect(page.getByRole('complementary').getByText('待标定', { exact: true })).toBeVisible();
 
+  await page.getByRole('button', { name: '数据洞察' }).click();
+  await expect(page.getByRole('heading', { name: '数据洞察' })).toBeVisible();
+  await expect(page.locator('.insight-metrics article').first()).toContainText('24');
+  await page.getByLabel('质量').selectOption('suspect');
+  await page.getByRole('button', { name: '查询数据' }).click();
+  await expect(page.locator('.insight-metrics article').first()).toContainText('1');
+  await expect(page.locator('.quality-strip')).toContainText('可疑 1');
+
   await page.getByRole('button', { name: '告警中心' }).click();
   await page.locator('.table-row', { hasText: 'ALM-260826-003' }).getByRole('button', { name: '确认', exact: true }).click();
   await expect(page.getByTestId('alert-status-ALM-260826-003')).toHaveText('已确认');
@@ -55,6 +63,10 @@ test('Django API 模式可登录、读取数据并写入审计', async ({ page }
   await page.getByRole('button', { name: '连接 Django 并登录' }).click();
   await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
   await expect(page.getByText('Django API', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: '数据洞察' }).click();
+  await expect(page.getByRole('heading', { name: '数据洞察' })).toBeVisible();
+  await expect(page.getByText('POSTGRESQL HISTORY', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: '告警中心' }).click();
   await page.locator('.table-row', { hasText: 'ALM-260826-003' }).getByRole('button', { name: '确认', exact: true }).click();
