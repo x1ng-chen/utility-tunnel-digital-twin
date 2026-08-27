@@ -9,7 +9,8 @@
 | P1 业务 | 告警确认、来源工单、手工工单、受控流转、阈值、导出均经服务端 RBAC、事务与审计 | API 冒烟脚本与 `audit_log` |
 | P1 数据库 | 迁移、种子、最小权限运行账号、备份恢复步骤可复现 | `migrations/`、`deploy/postgres/provision.sql`、部署手册 |
 | P2 孪生 | 区域与资产坐标独立配置；数据库空间坐标可覆盖视觉回退位置 | `twin-config.ts` 与孪生视图 |
-| P2 质量 | 静态检查、类型检查、单元测试、覆盖率、构建、迁移安全检查与 PostgreSQL 冒烟都自动执行 | `.github/workflows/ci.yml` |
+| P2 质量 | 静态检查、类型检查、单元测试、覆盖率、构建、迁移安全检查与 PostgreSQL 冒烟都自动执行 | `.github/workflows/vue-django.yml`、`.github/workflows/ci.yml` |
+| P2 浏览器回归 | 登录、核心业务操作、角色边界和导出流程的浏览器 E2E | 待接入浏览器运行器后执行；当前不将未执行结果标记为通过 |
 | P2 韧性 | 健康/就绪检查、结构化日志、速率限制、安全响应头、统一错误码与前端失败提示 | `server.ts`、`rate-limit.ts` |
 | P3 交付 | 部署、使用、测试与答辩脚本完整，可独立演示 | `docs/` 下交付文档 |
 

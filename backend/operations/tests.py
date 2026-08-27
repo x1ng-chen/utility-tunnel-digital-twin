@@ -59,6 +59,13 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('accessToken', response.json())
 
+    def test_superuser_login_returns_administrator_role(self):
+        superuser = User.objects.create_superuser(username='login-root@example.com', email='login-root@example.com', password='root-password-2026')
+        response = self.client.post('/api/auth/login/', {'email': superuser.email, 'password': 'root-password-2026'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['user']['role'], Profile.Role.ADMINISTRATOR)
+        self.assertEqual(Profile.objects.get(user=superuser).role, Profile.Role.ADMINISTRATOR)
+
     def test_duplicate_active_emails_are_rejected(self):
         User.objects.create_user(username='duplicate@example.com', email=self.operator.email, password='demo-password')
         response = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'demo-password'}, format='json')
@@ -187,6 +194,9 @@ class OperationsApiTests(TestCase):
         self.assertEqual(body['total'], 1)
         self.assertEqual(body['pageCount'], 1)
         self.assertEqual(body['items'][0]['action'], 'work_order.created_manual')
+        self.assertEqual(self.client.get('/api/audit/?occurredFrom=not-a-date').status_code, 400)
+        self.assertEqual(self.client.get('/api/audit/?occurredFrom=2026-08-27T00:00:00Z&occurredTo=2026-08-26T00:00:00Z').status_code, 400)
+        self.assertEqual(self.client.get('/api/audit/?occurredFrom=2026-08-26T00:00:00Z&occurredTo=2026-08-27T00:00:00Z').status_code, 200)
 
     def test_paginated_lists_are_newest_first(self):
         newer = Asset.objects.create(code='CTRL-02', name='控制器', zone='UT-ZA', asset_type='控制器')

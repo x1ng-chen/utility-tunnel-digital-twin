@@ -160,11 +160,17 @@ class LoginView(APIView):
             if not created and token.created + timedelta(seconds=settings.API_TOKEN_TTL_SECONDS) <= timezone.now():
                 token.delete()
                 token = Token.objects.create(user=authenticated)
-            profile, _ = Profile.objects.get_or_create(user=authenticated, defaults={'display_name': authenticated.get_full_name() or authenticated.email})
+            profile, _ = Profile.objects.get_or_create(
+                user=authenticated,
+                defaults={
+                    'display_name': authenticated.get_full_name() or authenticated.email,
+                    'role': Profile.Role.ADMINISTRATOR if authenticated.is_superuser else Profile.Role.OPERATOR,
+                },
+            )
             authenticated.last_login = timezone.now()
             authenticated.save(update_fields=['last_login'])
             audit(authenticated, 'auth.login', 'app_user', authenticated.pk, {'email': authenticated.email}, request_id(request))
-        return Response({'accessToken': token.key, 'tokenType': 'Bearer', 'user': {'id': authenticated.pk, 'email': authenticated.email, 'displayName': profile.display_name or authenticated.email, 'role': profile.role}})
+        return Response({'accessToken': token.key, 'tokenType': 'Bearer', 'user': {'id': authenticated.pk, 'email': authenticated.email, 'displayName': profile.display_name or authenticated.email, 'role': Profile.Role.ADMINISTRATOR if authenticated.is_superuser else profile.role}})
 
 
 class MeView(APIView):
@@ -597,6 +603,18 @@ class AuditListView(APIView):
                 | Q(resource_id__icontains=search)
                 | Q(actor__email__icontains=search)
             )
+        occurred_from, error = datetime_filter(request, 'occurredFrom')
+        if error:
+            return error
+        occurred_to, error = datetime_filter(request, 'occurredTo')
+        if error:
+            return error
+        if occurred_from:
+            queryset = queryset.filter(occurred_at__gte=occurred_from)
+        if occurred_to:
+            queryset = queryset.filter(occurred_at__lte=occurred_to)
+        if occurred_from and occurred_to and occurred_from > occurred_to:
+            return error_response('invalid_request', 'occurredFrom must be earlier than occurredTo.', 400)
         return paginated(queryset, AuditSerializer, request)
 
 

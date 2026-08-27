@@ -110,7 +110,7 @@
 | `GET` | `/telemetry/` | 登录 | `assetCode`、`page`、`pageSize` |
 | `GET` | `/thresholds/` | 登录 | 查询阈值策略 |
 | `PUT` | `/thresholds/{key}/` | 管理员 | 更新 `{ warning, alarm, version }`，使用乐观锁 |
-| `GET` | `/audit/` | 登录 | `action`、`search`（动作、资源类型/编号或操作者邮箱）、`page`、`pageSize` |
+| `GET` | `/audit/` | 登录 | `action`、`search`（动作、资源类型/编号或操作者邮箱）、`occurredFrom`、`occurredTo`、`page`、`pageSize` |
 | `GET` | `/report-exports/` | 登录 | 导出操作记录 |
 | `POST` | `/report-exports/` | 登录 | 创建 `{ report: alerts\|workOrders\|assets\|daily }`；可提供 `Idempotency-Key` 防止重复登记 |
 
