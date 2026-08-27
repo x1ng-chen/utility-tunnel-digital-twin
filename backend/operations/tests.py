@@ -8,7 +8,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
-from .models import Alert, Asset, Profile, Threshold, WorkOrder
+from .models import Alert, Asset, AuditLog, Profile, Threshold, WorkOrder
 
 
 class OperationsApiTests(TestCase):
@@ -107,6 +107,24 @@ class OperationsApiTests(TestCase):
         response = self.client.get('/api/audit/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('items', response.json())
+
+    def test_audit_endpoint_supports_search_and_pagination(self):
+        AuditLog.objects.create(actor=self.operator, action='work_order.created_manual', resource_type='work_order', resource_id='42', detail={'source': 'manual'}, request_id='req-manual')
+        AuditLog.objects.create(actor=self.operator, action='alert.acknowledged', resource_type='alert', resource_id='7', detail={}, request_id='req-alert')
+        self.auth(self.operator)
+        response = self.client.get('/api/audit/?search=manual&page=1&pageSize=1')
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body['total'], 1)
+        self.assertEqual(body['pageCount'], 1)
+        self.assertEqual(body['items'][0]['action'], 'work_order.created_manual')
+
+    def test_paginated_lists_are_newest_first(self):
+        newer = Asset.objects.create(code='CTRL-02', name='控制器', zone='UT-ZA', asset_type='控制器')
+        self.auth(self.operator)
+        response = self.client.get('/api/assets/?page=1&pageSize=1')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['items'][0]['id'], newer.pk)
 
     def test_operator_can_acknowledge_alert(self):
         self.auth(self.operator)

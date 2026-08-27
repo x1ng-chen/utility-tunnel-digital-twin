@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useOperationsStore } from './stores/operations';
 import { useAuthStore } from './stores/auth';
 
 const operations = useOperationsStore();
 const auth = useAuthStore();
+const router = useRouter();
 let timer: number | undefined;
+watch(() => auth.isAuthenticated, (isAuthenticated) => {
+  if (!isAuthenticated && router.currentRoute.value.path !== '/login') void router.replace('/login');
+});
 onMounted(() => {
   if (auth.isAuthenticated) operations.refresh(window.sessionStorage.getItem('ut-django-token') ? 'api' : 'demo');
   timer = window.setInterval(() => {

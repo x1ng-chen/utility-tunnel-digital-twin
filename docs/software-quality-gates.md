@@ -9,7 +9,7 @@ cd frontend
 npm ci
 npm test
 npm run build
-npm audit --omit=dev --audit-level=high
+npm audit --registry=https://registry.npmjs.org --omit=dev --audit-level=high
 
 cd ..\backend
 python manage.py check

@@ -12,7 +12,7 @@
 面向教室桌面展示的综合管廊数字孪生运维样品，通过真实传感、STM32 现场控制、MQTT 数据链路和 Web 三维可视化，形成“监测—报警—联动—工单—处置—复核—归档”的完整运维闭环。
 
 > [!IMPORTANT]
-> 当前软件平台已完成 P0–P3 软件交付：`apps/web` 提供浏览器本地演示与 PostgreSQL API 数据源切换，`services/api` 提供登录、RBAC、资产、告警、工单、阈值、导出登记、审计与运维健康检查 API。真实托管数据库连接信息仍需部署时配置。STM32 台架固件已接入 TFT、DHT11、水位 ADC 和 SW-420 中断；积水阈值校准、震动实体触发、执行器联动和通信链路仍待完成。本仓库的软件演示无需硬件。
+> 当前软件平台已完成 P0–P3 软件交付：`frontend` 提供 Vue 3 本地演示与 Django API 数据源切换，`backend` 提供登录、RBAC、资产、告警、工单、阈值、导出登记、审计与运维健康检查 API。`apps/web` 与 `services/api` 作为旧版兼容基线保留。真实托管数据库连接信息仍需部署时配置；本阶段的软件演示无需硬件。
 
 > [!NOTE]
 > 软件平台的实际功能、运行方式、质量门禁和后续 PostgreSQL 接入说明见 [软件平台说明](docs/software-platform.md)。本文其余内容保留为 V2.6 总体规划基线。
@@ -107,7 +107,7 @@ flowchart TB
     S[传感器与执行器层<br/>温湿度 / 甲烷 / CO / 烟雾 / 氧气 / 水浸/水位 / 门磁<br/>风机 / 照明 / 声光报警]
     C[现场控制层<br/>STM32F103RCT6<br/>采集、质量标志、保护联动、命令状态机]
     G[通信层<br/>ESP8266 ESP-AT + MQTT 3.1.1]
-    P[平台服务层<br/>Mosquitto + Node.js + SQLite + WebSocket]
+    P[标准平台服务层<br/>Django + DRF + PostgreSQL<br/>旧版 Node.js 服务保留兼容]
     W[应用与孪生层<br/>Vue 3 + TypeScript + Three.js + GLB]
 
     S <--> C
@@ -169,9 +169,9 @@ flowchart TB
 | 主控制器 | STM32F103RCT6 + STM32CubeF1 HAL | 负责实时采集、控制、保护和现场联动 |
 | 通信模块 | ESP8266 ESP-AT | 通过 UART 连接 STM32，原型阶段承担 MQTT 通信 |
 | 消息协议 | MQTT 3.1.1 / Eclipse Mosquitto | 遥测使用 QoS 0；命令、报警与状态使用 QoS 1 |
-| 后端 | Node.js + Fastify + PostgreSQL | 提供 JWT、RBAC、业务状态机、审计和 API |
-| 数据库 | PostgreSQL 18 | 资产、分区遥测、告警、工单、配置与审计的唯一主数据库 |
-| 前端 | React + TypeScript + Vinext | 本地演示与 API 数据源切换的运维界面和孪生容器 |
+| 后端 | Django 4.2 + Django REST Framework | 当前主软件栈，提供 Token 认证、RBAC、业务状态机、审计和 API；Node.js 服务保留兼容 |
+| 数据库 | PostgreSQL（正式）/ SQLite（本地开发回退） | 资产、遥测、告警、工单、配置与审计的唯一主数据库 |
+| 前端 | Vue 3 + TypeScript + Vite | 当前主软件栈，提供本地演示与 Django API 数据源切换；React 旧版保留兼容 |
 | 三维 | Three.js + GLB/glTF + Blender | 完成模型加载、拾取、状态映射和相机定位 |
 
 ## 数据与接口约定

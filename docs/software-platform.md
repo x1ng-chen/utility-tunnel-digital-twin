@@ -2,10 +2,10 @@
 
 ## 已交付的软件演示
 
-前端位于 `apps/web`，同时支持两种明确的数据源：默认的浏览器本地演示模式，以及登录后使用 PostgreSQL API 的正式数据模式。两种模式共用同一套业务对象和页面，避免分别维护互相矛盾的功能。
+当前标准软件栈位于 `frontend/`（Vue 3）与 `backend/`（Django + DRF），同时支持两种明确的数据源：默认的浏览器本地演示模式，以及登录后使用 Django API 的正式数据模式。两种模式共用同一套业务对象和页面，避免分别维护互相矛盾的功能。`apps/web` 与 `services/api` 保留为迁移兼容基线，不是本阶段的主运行入口。
 
-- **本地演示模式**：不接硬件、不开数据库即可运行；数据存储在浏览器 `localStorage`，刷新页面后仍保留，切换浏览器或清除站点数据后会恢复为初始数据。
-- **API 模式**：在顶部将数据源切换为“API”，输入已部署 API 的地址与账号。访问令牌只在页面内存中保留；资产、告警、工单、阈值、遥测、导出登记和审计都由 PostgreSQL API 读取或写入。
+- **本地演示模式**：不接硬件、不开数据库即可运行；业务模拟数据只保存在当前页面会话内，刷新后重新加载安全种子数据，不会把演示记录上传或写入项目文件。
+- **API 模式**：登录页选择“Django API”，输入已部署 API 的地址与账号。访问令牌只保存在当前浏览器会话的 `sessionStorage`，过期会自动清理身份并返回登录页；资产、告警、工单、阈值、遥测、导出登记和审计由 Django API 读取或写入 PostgreSQL（本地开发可回退 SQLite）。
 
 | 模块 | 单一职责 | 已实现能力 |
 | --- | --- | --- |
@@ -19,7 +19,7 @@
 
 ## 数据与闭环规则
 
-前端使用 `app/lib/operations.ts` 作为唯一的数据模型和状态转换入口；`app/lib/twin-config.ts` 只负责区域与空间位置配置；`app/lib/operations-api.ts` 只负责 API 映射。它们共同覆盖资产、告警、工单、遥测、阈值、会话和审计记录，禁止由页面组件各自维护重复业务数据。
+前端使用 `frontend/src/stores/operations.ts` 作为唯一的数据模型和状态转换入口；`frontend/src/stores/auth.ts` 负责会话生命周期；`frontend/src/services/api.ts` 只负责 Django API 映射。它们共同覆盖资产、告警、工单、遥测、阈值、会话和审计记录，禁止由页面组件各自维护重复业务数据。
 
 ```text
 模拟遥测 → 资产状态/孪生高亮
@@ -40,45 +40,57 @@
 | 运维员 | 告警、工单、导出 |
 | 查看者 | 浏览和导出 |
 
-本地模式下页面顶部可以切换演示角色，该动作本身也会进入审计记录。API 模式下角色来自 JWT 会话中的角色声明，角色选择器会被禁用；服务端会再次执行权限校验，不能依赖前端做授权。
+本地模式下登录页可以选择演示角色；该角色只用于当前页面会话，不会上传。API 模式下角色来自服务端登录响应，服务端会再次执行权限校验，不能依赖前端做授权。
 
 ## 运行与质量检查
 
-已具备 Node.js 时，在仓库根目录执行：
+Vue 3 + Django 标准栈本地运行：
 
-```bash
-cd apps/web
+```powershell
+cd frontend
 npm ci
 npm run dev
+
+cd ..\backend
+python manage.py migrate
+python manage.py seed_demo
+python manage.py runserver 127.0.0.1:8000
 ```
 
 提交前执行：
 
-```bash
-npm run check
+```powershell
+cd frontend
+npm test
+npm run build
+
+cd ..\backend
+python manage.py check
+python manage.py makemigrations --check --dry-run
+python manage.py test
+python -m compileall -q config operations
 ```
 
-该命令依次运行 ESLint、TypeScript、业务规则单元测试和生产构建。GitHub Actions 对前端执行相同门禁，并对 `services/api` 执行 PostgreSQL 迁移、种子数据和接口冒烟测试。
+GitHub Actions 对 Vue 3 前端执行测试、类型检查、生产构建和高危依赖审计；对 Django 执行配置检查、迁移一致性、接口/RBAC 测试和字节码检查。上述命令均使用仓库已有工具，不需要硬件或新增运行时服务。
 
 ## 从演示数据迁移到 PostgreSQL
 
-`services/api` 已包含 PostgreSQL 迁移、RBAC、资产、分区遥测、告警、工单、审计、阈值和导出记录。前端已经实现 API 客户端、登录、分页回读、乐观写入与失败回滚；不需要替换页面或重写业务对象。
+`backend` 已包含 Django 迁移、Token Bearer 认证、RBAC、资产、遥测、告警、工单、审计、阈值和导出记录。Vue 前端已经实现 API 客户端、登录、分页回读、会话过期清理和失败降级；不需要替换页面或重写业务对象。`services/api` 的 PostgreSQL 实现仅用于旧版兼容验证。
 
 完整接口、权限和写入约束见 [API 契约](api-contract.md)。要在本地或托管环境启用它：
 
-```bash
-cd services/api
-cp .env.example .env
-# 填入 DATABASE_URL、JWT_SECRET、WEB_ORIGIN 与种子账号后：
-npm ci
-npm run migrate
-npm run seed
-npm run dev
+```powershell
+cd backend
+Copy-Item .env.example .env
+# 填入 DATABASE_URL、DJANGO_SECRET_KEY、DJANGO_ALLOWED_HOSTS 与种子账号后：
+python manage.py migrate
+python manage.py seed_demo
+python manage.py runserver 127.0.0.1:8000
 ```
 
-随后可在 `apps/web/.env.local` 设置 `NEXT_PUBLIC_API_BASE_URL`，或直接在界面中输入 API 地址。部署时必须把前端的真实站点地址加入 API 的 `WEB_ORIGIN`。
+随后可在 `frontend/.env.local` 设置 `VITE_API_BASE_URL`，或直接在界面中输入 API 地址。部署时必须把前端的真实站点地址加入 API 的 `CORS_ALLOWED_ORIGINS`。
 
-不应把数据库连接串、JWT 密钥或真实账号提交到仓库。使用 `services/api/.env.example` 创建本地 `.env`，并由托管数据库平台提供连接字符串。
+不应把数据库连接串、Django 密钥或真实账号提交到仓库。使用 `backend/.env.example` 创建本地 `.env`，并由托管数据库平台提供连接字符串。
 
 ## 验收边界
 

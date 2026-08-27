@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useAuthStore } from './auth';
 import { useOperationsStore } from './operations';
+import { api } from '../services/api';
 
 describe('operations store', () => {
   beforeEach(() => setActivePinia(createPinia()));
+  afterEach(() => vi.restoreAllMocks());
 
   it('starts with the connected demo model', () => {
     const store = useOperationsStore();
@@ -56,5 +58,24 @@ describe('operations store', () => {
     const store = useOperationsStore();
     store.offline = true;
     await expect(store.createWorkOrder({ assetCode: 'GAS-01', title: '不应写入', priority: 'normal' })).rejects.toThrow('只读状态');
+  });
+
+  it('clears the session when an API refresh returns 401', async () => {
+    const auth = useAuthStore();
+    await auth.login('', '', 'operator', 'demo');
+    const store = useOperationsStore();
+    vi.spyOn(api, 'dashboard').mockRejectedValue({ response: { status: 401 } });
+    vi.spyOn(api, 'assets').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'alerts').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'workOrders').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'thresholds').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'telemetry').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'audit').mockResolvedValue({ data: { items: [] } } as never);
+
+    await store.refresh('api');
+
+    expect(auth.isAuthenticated).toBe(false);
+    expect(store.syncError).toBe('登录状态已过期，请重新登录。');
+    expect(store.offline).toBe(true);
   });
 });

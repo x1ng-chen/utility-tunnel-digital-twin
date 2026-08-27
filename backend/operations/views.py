@@ -41,6 +41,9 @@ def paginated(queryset, serializer_class, request):
         page_size = min(100, max(1, int(request.query_params.get('pageSize', '20'))))
     except ValueError:
         return error_response('invalid_request', 'page and pageSize must be numbers.', 400)
+    # Every paginated endpoint uses a stable newest-first order. Without an
+    # explicit order, concurrent inserts can make records move between pages.
+    queryset = queryset.order_by('-id')
     total = queryset.count()
     items = queryset[(page - 1) * page_size:page * page_size]
     page_count = (total + page_size - 1) // page_size if total else 0
@@ -331,7 +334,7 @@ class ThresholdListView(APIView):
     permission_classes = [AuthenticatedRead]
 
     def get(self, request):
-        return Response({'items': ThresholdSerializer(Threshold.objects.all(), many=True).data})
+        return Response({'items': ThresholdSerializer(Threshold.objects.order_by('key'), many=True).data})
 
 
 class ThresholdDetailView(APIView):
@@ -369,8 +372,17 @@ class AuditListView(APIView):
 
     def get(self, request):
         queryset = AuditLog.objects.select_related('actor')
-        if request.query_params.get('action'):
-            queryset = queryset.filter(action__icontains=request.query_params['action'])
+        action = request.query_params.get('action', '').strip()
+        if action:
+            queryset = queryset.filter(action__icontains=action)
+        search = request.query_params.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(action__icontains=search)
+                | Q(resource_type__icontains=search)
+                | Q(resource_id__icontains=search)
+                | Q(actor__email__icontains=search)
+            )
         return paginated(queryset, AuditSerializer, request)
 
 

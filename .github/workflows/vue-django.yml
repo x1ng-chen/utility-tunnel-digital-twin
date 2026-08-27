@@ -7,6 +7,8 @@ on:
       - 'backend/**'
       - 'docs/vue-django-stack.md'
       - 'docs/api-contract.md'
+      - 'docs/software-platform.md'
+      - 'docs/测试报告.md'
       - 'docs/deployment-runbook.md'
       - 'docs/software-quality-gates.md'
       - 'deploy/postgres/**'
@@ -17,6 +19,8 @@ on:
       - 'backend/**'
       - 'docs/vue-django-stack.md'
       - 'docs/api-contract.md'
+      - 'docs/software-platform.md'
+      - 'docs/测试报告.md'
       - 'docs/deployment-runbook.md'
       - 'docs/software-quality-gates.md'
       - 'deploy/postgres/**'
@@ -39,7 +43,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - run: npm audit --omit=dev --audit-level=high
+      - run: npm audit --registry=https://registry.npmjs.org --omit=dev --audit-level=high
 
   backend:
     name: Django quality

@@ -16,6 +16,12 @@ const demoTransitions: Record<WorkOrder['status'], WorkOrder['status'][]> = {
 };
 let localSequence = 0;
 
+function responseStatus(cause: unknown): number | null {
+  if (typeof cause !== 'object' || !cause || !('response' in cause)) return null;
+  const response = (cause as { response?: { status?: unknown } }).response;
+  return typeof response?.status === 'number' ? response.status : null;
+}
+
 function nextLocalId(): number {
   localSequence += 1;
   // Keep demo identifiers unique even when two actions occur in one millisecond.
@@ -52,14 +58,22 @@ export const useOperationsStore = defineStore('operations', () => {
     loading.value = true;
     syncError.value = '';
     try {
-      const [dashboardResponse, assetsResponse, alertsResponse, ordersResponse, thresholdsResponse, telemetryResponse, auditResponse] = await Promise.all([api.dashboard(), api.assets(), api.alerts(), api.workOrders(), api.thresholds(), api.telemetry(), api.audit()]);
+      const listParams = { page: 1, pageSize: 100 };
+      const [dashboardResponse, assetsResponse, alertsResponse, ordersResponse, thresholdsResponse, telemetryResponse, auditResponse] = await Promise.all([api.dashboard(), api.assets(listParams), api.alerts(listParams), api.workOrders(listParams), api.thresholds(), api.telemetry(listParams), api.audit(listParams)]);
       dashboard.value = dashboardResponse.data; assets.value = assetsResponse.data.items; alerts.value = alertsResponse.data.items; workOrders.value = ordersResponse.data.items; thresholds.value = thresholdsResponse.data.items; telemetry.value = telemetryResponse.data.items; audit.value = auditResponse.data.items;
       offline.value = false;
       lastSyncedAt.value = new Date().toISOString();
     } catch (cause: unknown) {
-      offline.value = true;
-      syncError.value = apiErrorMessage(cause);
-      notice.value = 'Django API 暂不可用，当前为只读离线快照。';
+      if (responseStatus(cause) === 401) {
+        auth.expireSession();
+        offline.value = true;
+        syncError.value = '登录状态已过期，请重新登录。';
+        notice.value = '登录状态已过期，请重新登录。';
+      } else {
+        offline.value = true;
+        syncError.value = apiErrorMessage(cause);
+        notice.value = 'Django API 暂不可用，当前为只读离线快照。';
+      }
     }
     finally { loading.value = false; }
   }
@@ -172,7 +186,10 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function syncAudit() {
-    try { audit.value = (await api.audit()).data.items; } catch { /* The primary mutation already succeeded; keep the last audit view. */ }
+    try { audit.value = (await api.audit({ page: 1, pageSize: 100 })).data.items; } catch (cause: unknown) {
+      if (responseStatus(cause) === 401) auth.expireSession();
+      /* The primary mutation already succeeded; keep the last audit view. */
+    }
   }
 
   function downloadReport(report: ReportKind) {
