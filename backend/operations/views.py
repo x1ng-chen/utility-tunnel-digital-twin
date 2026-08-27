@@ -251,14 +251,15 @@ class WorkOrderListView(APIView):
             return error_response('invalid_request', 'A JSON object body is required.', 400)
         asset_code = payload.get('assetCode')
         title_value = payload.get('title', '')
-        if not isinstance(asset_code, str) or not isinstance(title_value, str):
-            return error_response('invalid_request', 'assetCode and title must be strings.', 400)
+        description_value = payload.get('description', '')
+        if not isinstance(asset_code, str) or not isinstance(title_value, str) or not isinstance(description_value, str):
+            return error_response('invalid_request', 'assetCode, title and description must be strings.', 400)
         asset = Asset.objects.filter(code=asset_code.strip()).first()
         title = title_value.strip()
         priority = payload.get('priority', WorkOrder.Priority.NORMAL)
         if not asset or not title or not isinstance(priority, str) or priority not in WorkOrder.Priority.values:
             return error_response('invalid_request', 'A valid assetCode and title are required.', 400)
-        order = WorkOrder.objects.create(code=work_order_code(), asset=asset, title=title, description=str(payload.get('description', '')), priority=priority, created_by=request.user)
+        order = WorkOrder.objects.create(code=work_order_code(), asset=asset, title=title, description=description_value.strip(), priority=priority, created_by=request.user)
         audit(request.user, 'work_order.created_manual', 'work_order', order.pk, {'assetCode': asset.code}, request_id(request))
         return Response(WorkOrderSerializer(order).data, status=201)
 
@@ -309,7 +310,9 @@ class WorkOrderTransitionView(APIView):
                         order.asset.status = Asset.Status.NORMAL
                         order.asset.save(update_fields=['status', 'updated_at'])
             order.version += 1
-            order.save()
+            # Keep the runtime database role least-privileged: transition writes
+            # only the lifecycle fields instead of every model column.
+            order.save(update_fields=['status', 'assignee', 'completed_at', 'reviewed_by', 'version', 'updated_at'])
             audit(request.user, 'work_order.transitioned', 'work_order', order.pk, {'from': previous, 'to': target}, request_id(request))
         return Response(WorkOrderSerializer(order).data)
 
@@ -381,7 +384,10 @@ class ReportExportView(APIView):
         payload = object_payload(request)
         if payload is None:
             return error_response('invalid_request', 'A JSON object body is required.', 400)
-        report_type = str(payload.get('report', '')).strip()
+        report_value = payload.get('report', '')
+        if not isinstance(report_value, str):
+            return error_response('invalid_request', 'A valid report type is required.', 400)
+        report_type = report_value.strip()
         if report_type not in {'alerts', 'workOrders', 'assets', 'daily'}:
             return error_response('invalid_request', 'A valid report type is required.', 400)
         record = ReportExport.objects.create(report_type=report_type, file_name=f'utility-tunnel-{report_type}-{timezone.now():%Y%m%d%H%M%S}.csv', requested_by=request.user, completed_at=timezone.now())

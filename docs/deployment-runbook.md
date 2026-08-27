@@ -7,47 +7,47 @@
 ## 1. 托管 PostgreSQL
 
 1. 创建 PostgreSQL 18 实例和数据库 `utility_tunnel`，启用 TLS、每日自动备份与至少 7 天保留。
-2. 使用迁移身份（数据库所有者或专用发布账号）运行：
+2. 使用 Django 迁移身份（数据库所有者或专用发布账号）运行：
 
 ```bash
-cd services/api
-npm ci
-npm run migration:check
-npm run migrate
-npm run seed
+cd backend
+python -m pip install -r requirements.txt
+python manage.py migrate
+python manage.py seed_demo
 ```
 
-3. 迁移完成后，以数据库所有者身份在平台 SQL 控制台执行 [`deploy/postgres/provision.sql`](../deploy/postgres/provision.sql)，为 API 创建 `ut_runtime` 最小权限账号。脚本会撤销通用表写入权限，仅授予 API 当前 SQL 路径所需的列级权限。
+3. 迁移完成后，以数据库所有者身份在平台 SQL 控制台执行 [`deploy/postgres/provision.sql`](../deploy/postgres/provision.sql)，为 Django API 创建 `ut_runtime` 最小权限账号。脚本会撤销通用表写入权限，仅授予 `backend/operations/views.py` 当前 ORM 路径所需的列级权限。
 4. 将 API 的 `DATABASE_URL` 配置为 `ut_runtime` 的 TLS 连接串。运行时账号不应拥有 `CREATE`、`DROP`、数据库管理员或角色管理权限；后续新增表或写入列时，必须随发布 SQL 显式审查并补充授权。
 
 ## 2. API 环境
 
-按 `services/api/.env.example` 创建部署环境变量：
+按 `backend/.env.example` 创建部署环境变量：
 
 - `DATABASE_URL`：只允许 TLS 的运行时账号连接串；
-- `JWT_SECRET`：每个环境独立、至少 32 个随机字符；
-- `WEB_ORIGIN`：完整的前端站点 Origin；
-- `NODE_ENV=production` 与 `LOG_LEVEL=info`；
+- `DJANGO_SECRET_KEY`：每个环境独立、至少 32 个随机字符；
+- `DJANGO_ENV=production`、`DJANGO_ALLOWED_HOSTS` 和 `CORS_ALLOWED_ORIGINS`；
+- `DATABASE_URL`：`ut_runtime` 的 PostgreSQL TLS 连接串；
+- `API_TOKEN_TTL_SECONDS` 与 `LOGIN_RATE_LIMIT`：按安全策略设置；
 - `SEED_ADMIN_*`：仅首次种子初始化使用，之后从运行环境移除。
 
 启动后依次检查：
 
 ```text
-GET /v1/health   # 进程存活
-GET /v1/ready    # 数据库可用
-POST /v1/auth/login
+GET /api/health/   # 进程存活
+GET /api/ready/    # 数据库可用
+POST /api/auth/login/
 ```
 
 ## 3. 前端
 
-部署 `apps/web` 后设置公开变量 `NEXT_PUBLIC_API_BASE_URL=https://<你的-api-domain>`；这只能是 API 地址，绝不能放入数据库 URL、密码或 JWT。若未设置，站点默认使用本地演示模式。API 的 `WEB_ORIGIN` 必须精确允许该前端 Origin。
+部署 `frontend` 后设置公开变量 `VITE_API_BASE_URL=https://<你的-api-domain>/api`；这只能是 API 地址，绝不能放入数据库 URL、密码或 Token。若未设置，站点默认使用本地演示模式。Django 的 `CORS_ALLOWED_ORIGINS` 必须精确允许该前端 Origin。
 
 ## 4. 备份与恢复
 
 - 日常：在托管 PostgreSQL 平台开启自动快照与时间点恢复，确认最近一次备份成功。
-- 发布前：记录当前迁移版本 `SELECT * FROM schema_migration ORDER BY applied_at;`。
+- 发布前：记录当前迁移版本 `SELECT app, name, applied FROM django_migrations ORDER BY applied;`。
 - 手动导出（在装有 PostgreSQL 客户端的受控发布机）：`pg_dump --format=custom --no-owner --file=utility_tunnel.backup "$DATABASE_URL"`。
-- 恢复演练：先恢复到**隔离的新实例**，用迁移身份运行 `npm run migrate`，再用运行时账号访问 `/v1/ready` 和执行只读验证。不得在未验证备份的生产库上直接恢复。
+- 恢复演练：先恢复到**隔离的新实例**，用迁移身份运行 `python manage.py migrate`，再用运行时账号访问 `/api/ready/` 和执行只读验证。不得在未验证备份的生产库上直接恢复。
 
 ### Django API 数据库
 
