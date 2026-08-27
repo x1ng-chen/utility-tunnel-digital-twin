@@ -6,6 +6,7 @@ import { writeAudit } from '../audit.js';
 import { authenticate, requirePermission } from '../auth.js';
 import { inTransaction, query } from '../db.js';
 import { alertTransitions, assertTransition, workOrderTransitions } from '../domain/lifecycle.js';
+import { realtimeHub } from '../realtime.js';
 
 const idParams = z.object({ id: z.string().uuid() });
 const pageQuery = z.object({
@@ -97,6 +98,18 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
   app.get('/v1/ready', async () => {
     await query('SELECT 1');
     return { status: 'ok', service: 'utility-tunnel-api', kind: 'readiness' };
+  });
+
+  app.get('/v1/realtime/telemetry', { preHandler: [authenticate, requirePermission('dashboard.read')] }, async (request, reply) => {
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    realtimeHub.add(reply.raw);
+    request.raw.once('close', () => realtimeHub.remove(reply.raw));
   });
 
   app.get('/v1/dashboard/overview', { preHandler: [authenticate, requirePermission('dashboard.read')] }, async () => {

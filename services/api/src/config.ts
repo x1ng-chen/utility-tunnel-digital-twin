@@ -9,6 +9,10 @@ const environment = z.object({
   WEB_ORIGIN: z.string().url(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  MQTT_URL: z.string().url().optional(),
+  MQTT_TELEMETRY_TOPIC: z.string().min(1).default('ut/v1/+/telemetry'),
+  MQTT_USERNAME: z.string().optional(),
+  MQTT_PASSWORD: z.string().optional(),
 });
 
 const parsed = environment.safeParse(process.env);

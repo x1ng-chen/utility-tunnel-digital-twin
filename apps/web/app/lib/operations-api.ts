@@ -160,7 +160,7 @@ function mapWorkOrders(items: unknown[]): WorkOrder[] {
   });
 }
 
-function mapTelemetry(items: unknown[]): Telemetry[] {
+export function mapTelemetry(items: unknown[]): Telemetry[] {
   return items.flatMap((item) => {
     if (!isRecord(item) || !asString(item.asset_code) || !asString(item.metric_code)) return [];
     const value = asNumber(item.numeric_value, Number.NaN);
@@ -307,6 +307,14 @@ export class OperationsApiClient {
     await this.request('/v1/report-exports', token, { method: 'POST', body: { report } });
   }
 
+  streamTelemetry(session: ApiSession, onTelemetry: (readings: Telemetry[]) => void, onError: (error: unknown) => void): () => void {
+    const controller = new AbortController();
+    void this.consumeTelemetryStream(session.accessToken, controller.signal, onTelemetry).catch((error: unknown) => {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) onError(error);
+    });
+    return () => controller.abort();
+  }
+
   private async collection(path: string, token: string): Promise<unknown[]> {
     const all: unknown[] = [];
     let page = 1;
@@ -323,6 +331,46 @@ export class OperationsApiClient {
     }
     if (all.length < total) throw new ApiError('列表数据超过客户端安全读取上限，请缩小查询范围。');
     return all.slice(0, total);
+  }
+
+  private async consumeTelemetryStream(token: string, signal: AbortSignal, onTelemetry: (readings: Telemetry[]) => void) {
+    let response: Response;
+    try {
+      response = await fetch(apiPath(this.baseUrl, '/v1/realtime/telemetry'), {
+        headers: { accept: 'text/event-stream', authorization: `Bearer ${token}` },
+        signal,
+      });
+    } catch {
+      if (signal.aborted) return;
+      throw new ApiError('实时遥测连接失败；将继续使用定时回读。');
+    }
+    if (!response.ok || !response.body) throw new ApiError(`实时遥测连接失败（HTTP ${response.status}）。`, response.status);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (!signal.aborted) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
+      let boundary = buffer.indexOf('\n\n');
+      while (boundary >= 0) {
+        const event = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        if (event.startsWith('event: telemetry')) {
+          const data = event.split('\n').find((line) => line.startsWith('data:'))?.slice(5).trim();
+          if (data) {
+            try {
+              const payload: unknown = JSON.parse(data);
+              const readings = isRecord(payload) ? mapTelemetry(asArray(payload.readings)) : [];
+              if (readings.length) onTelemetry(readings);
+            } catch {
+              // Ignore one malformed event; a later valid device message must still be usable.
+            }
+          }
+        }
+        boundary = buffer.indexOf('\n\n');
+      }
+    }
   }
 
   private async request<T>(path: string, token?: string, options?: { method?: string; body?: unknown }): Promise<T> {

@@ -187,6 +187,8 @@ flowchart TB
 | `ut/v1/ctrl-01/cmd_ack` | 设备 → 平台 | `1 / false` | 命令接收及执行回执 |
 | `ut/v1/ctrl-01/status` | 设备 → 平台 | `1 / true` | 在线状态及遗嘱消息 |
 
+实时接入：API 订阅本地 MQTT、写入 PostgreSQL 后以认证 SSE 立即推送到 React 前端；报文格式与本地验证步骤见 [实时遥测接入说明](docs/实时遥测接入说明.md)。
+
 ### 编码规范
 
 - 区域编码：`UT-ZA`、`UT-ZB`、`UT-ZC`。
