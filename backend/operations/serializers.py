@@ -6,10 +6,22 @@ from .models import Alert, Asset, AuditLog, Profile, ReportExport, Telemetry, Th
 class AssetSerializer(serializers.ModelSerializer):
     type = serializers.CharField(source='asset_type', read_only=True)
     lastSeenAt = serializers.DateTimeField(source='last_seen_at', read_only=True)
+    hardwareCode = serializers.CharField(source='hardware_code', allow_null=True, read_only=True)
+    integrationStatus = serializers.CharField(source='integration_status', read_only=True)
+    latitude = serializers.SerializerMethodField()
+    longitude = serializers.SerializerMethodField()
+    locationSource = serializers.CharField(source='location_source', read_only=True)
+    installationNote = serializers.CharField(source='installation_note', read_only=True)
 
     class Meta:
         model = Asset
-        fields = ['id', 'code', 'name', 'zone', 'type', 'status', 'mesh', 'position', 'lastSeenAt']
+        fields = ['id', 'code', 'name', 'zone', 'type', 'status', 'hardwareCode', 'integrationStatus', 'interface', 'capabilities', 'mesh', 'position', 'latitude', 'longitude', 'locationSource', 'installationNote', 'lastSeenAt']
+
+    def get_latitude(self, obj):
+        return float(obj.latitude) if obj.latitude is not None else None
+
+    def get_longitude(self, obj):
+        return float(obj.longitude) if obj.longitude is not None else None
 
 
 class AlertSerializer(serializers.ModelSerializer):

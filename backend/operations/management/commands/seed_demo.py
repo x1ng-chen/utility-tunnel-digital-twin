@@ -24,15 +24,28 @@ class Command(BaseCommand):
             created_users[role] = user
 
         now = timezone.now()
+        # Coordinates use a clearly identified demonstration anchor. They are
+        # not represented as surveyed/GPS locations until site data is entered.
         assets = [
-            ('CTRL-01', '现场控制器', 'UT-ZA', '控制器', Asset.Status.NORMAL, 'MESH_CTRL_01', {'x': 20, 'y': 50, 'z': 0}),
-            ('FAN-01', '送风机 #01', 'UT-ZB', '执行器', Asset.Status.NORMAL, 'MESH_FAN_01', {'x': 52, 'y': 38, 'z': 0}),
-            ('SEEP-W01', '渗水监测点', 'UT-ZB', '测点', Asset.Status.WARNING, 'MESH_SEEP_W01', {'x': 70, 'y': 68, 'z': 0}),
-            ('GAS-01', '甲烷监测节点', 'UT-ZC', '测点', Asset.Status.NORMAL, 'MESH_GAS_01', {'x': 84, 'y': 44, 'z': 0}),
+            {'code': 'CTRL-01', 'hardware_code': 'H-01', 'name': 'STM32F103RCT6 主控板', 'zone': 'CTRL', 'asset_type': '控制器', 'status': Asset.Status.NORMAL, 'integration_status': Asset.IntegrationStatus.VERIFIED, 'interface': '板载 GPIO / ADC / EXTI', 'capabilities': ['系统调度', '数据采集', '本地状态输出'], 'mesh': 'MESH_CTRL_01', 'position': {'x': 15, 'y': 52, 'z': 0}, 'latitude': 31.230400, 'longitude': 121.473700, 'installation_note': '实物主控板；当前固件入口与调度逻辑已验证。'},
+            {'code': 'LED-01', 'hardware_code': 'H-02', 'name': '5V RGB 灯带', 'zone': 'UT-ZA', 'asset_type': '执行器', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.PENDING_VERIFICATION, 'interface': '5V 单总线（待确认）', 'capabilities': ['状态灯效', '告警联动'], 'mesh': 'MESH_LED_01', 'position': {'x': 24, 'y': 32, 'z': 0}, 'latitude': 31.230455, 'longitude': 121.473760, 'installation_note': '实物已到位；供电能力和时序尚未验证，当前固件未接入。'},
+            {'code': 'DISP-01', 'hardware_code': 'H-03', 'name': 'ST7735S TFT 显示屏', 'zone': 'CTRL', 'asset_type': '显示模块', 'status': Asset.Status.NORMAL, 'integration_status': Asset.IntegrationStatus.VERIFIED, 'interface': 'PB4-PB9 软件 SPI', 'capabilities': ['温湿度显示', '水位显示', '振动状态显示'], 'mesh': 'MESH_DISP_01', 'position': {'x': 20, 'y': 62, 'z': 0}, 'latitude': 31.230415, 'longitude': 121.473715, 'installation_note': '实物与当前固件已验证。'},
+            {'code': 'SEEP-W01', 'hardware_code': 'H-04', 'name': '水位传感器', 'zone': 'UT-ZB', 'asset_type': '测点', 'status': Asset.Status.WARNING, 'integration_status': Asset.IntegrationStatus.CALIBRATION_REQUIRED, 'interface': 'PC0 / ADC1_IN10', 'capabilities': ['8 次采样平均', '水位趋势', '阈值告警'], 'mesh': 'MESH_SEEP_W01', 'position': {'x': 58, 'y': 70, 'z': 0}, 'latitude': 31.230505, 'longitude': 121.473910, 'installation_note': '固件已接入；阈值 1000 为临时值，需完成现场标定。'},
+            {'code': 'MOIST-01', 'hardware_code': 'H-05', 'name': '土壤湿度传感器', 'zone': 'UT-ZB', 'asset_type': '辅助测点', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.OPTIONAL, 'interface': '模拟量（待分配）', 'capabilities': ['辅助湿度趋势'], 'mesh': 'MESH_MOIST_01', 'position': {'x': 64, 'y': 64, 'z': 0}, 'latitude': 31.230535, 'longitude': 121.473955, 'installation_note': '仅作辅助展示，不用于安全联锁，当前固件未接入。'},
+            {'code': 'ENV-01', 'hardware_code': 'H-06', 'name': 'DHT11 温湿度传感器', 'zone': 'UT-ZA', 'asset_type': '环境测点', 'status': Asset.Status.NORMAL, 'integration_status': Asset.IntegrationStatus.VERIFIED, 'interface': 'PA1 单总线', 'capabilities': ['环境温度', '环境湿度', '约 2 秒采样'], 'mesh': 'MESH_ENV_01', 'position': {'x': 34, 'y': 44, 'z': 0}, 'latitude': 31.230475, 'longitude': 121.473815, 'installation_note': '实物与当前固件已验证。'},
+            {'code': 'VIB-01', 'hardware_code': 'H-07', 'name': 'SW-420 振动传感器', 'zone': 'UT-ZC', 'asset_type': '安全测点', 'status': Asset.Status.WARNING, 'integration_status': Asset.IntegrationStatus.FIRMWARE_CONNECTED, 'interface': 'PA4 / EXTI4 双边沿', 'capabilities': ['振动事件', '5 秒状态锁存'], 'mesh': 'MESH_VIB_01', 'position': {'x': 76, 'y': 44, 'z': 0}, 'latitude': 31.230590, 'longitude': 121.474070, 'installation_note': '固件已接入，等待实体振动场景复核。'},
+            {'code': 'BUZZ-01', 'hardware_code': 'H-08', 'name': '有源蜂鸣器', 'zone': 'CTRL', 'asset_type': '声光执行器', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.PENDING_VERIFICATION, 'interface': 'GPIO（待分配）', 'capabilities': ['本地声报警'], 'mesh': 'MESH_BUZZ_01', 'position': {'x': 26, 'y': 58, 'z': 0}, 'latitude': 31.230430, 'longitude': 121.473730, 'installation_note': '实物已到位；电平与工作电压待确认，当前固件未接入。'},
+            {'code': 'RELAY-01', 'hardware_code': 'H-09', 'name': '5V 继电器模块', 'zone': 'CTRL', 'asset_type': '控制执行器', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.PENDING_VERIFICATION, 'interface': 'GPIO（待分配）', 'capabilities': ['隔离开关控制'], 'mesh': 'MESH_RELAY_01', 'position': {'x': 31, 'y': 62, 'z': 0}, 'latitude': 31.230445, 'longitude': 121.473745, 'installation_note': '实物已到位；触发电平待确认，当前固件未接入。'},
+            {'code': 'FAN-01', 'hardware_code': 'H-10', 'name': '小风扇与 IN-A/IN-B 驱动', 'zone': 'UT-ZC', 'asset_type': '通风执行器', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.PENDING_VERIFICATION, 'interface': '双路 GPIO（待分配）', 'capabilities': ['启停控制', '通风联动'], 'mesh': 'MESH_FAN_01', 'position': {'x': 84, 'y': 34, 'z': 0}, 'latitude': 31.230630, 'longitude': 121.474125, 'installation_note': '实物已到位；电压、电流、驱动与反馈链路待验证，当前固件未接入。'},
+            {'code': 'BT-01', 'hardware_code': 'H-11', 'name': 'HC-05 蓝牙模块', 'zone': 'CTRL', 'asset_type': '可选通信模块', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.OPTIONAL, 'interface': 'UART（待分配）', 'capabilities': ['近场调试通信'], 'mesh': 'MESH_BT_01', 'position': {'x': 36, 'y': 56, 'z': 0}, 'latitude': 31.230460, 'longitude': 121.473760, 'installation_note': '可选模块，不属于核心数据链路，当前固件未接入。'},
+            {'code': 'PCB-01', 'hardware_code': 'H-25', 'name': '洞洞板', 'zone': 'CTRL', 'asset_type': '施工辅材', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.NON_OPERATIONAL, 'interface': '无', 'capabilities': ['转接与固定'], 'mesh': 'MESH_PCB_01', 'position': {'x': 41, 'y': 63, 'z': 0}, 'latitude': 31.230475, 'longitude': 121.473775, 'installation_note': '非运行资产，仅用于电气转接和实体安装。'},
         ]
         asset_by_code = {}
-        for code, name, zone, asset_type, status, mesh, position in assets:
-            asset, _ = Asset.objects.update_or_create(code=code, defaults={'name': name, 'zone': zone, 'asset_type': asset_type, 'status': status, 'mesh': mesh, 'last_seen_at': now, 'position': position})
+        for spec in assets:
+            code = spec['code']
+            defaults = {key: value for key, value in spec.items() if key != 'code'}
+            defaults.update({'location_source': Asset.LocationSource.DEMO_ANCHOR, 'last_seen_at': now if spec['integration_status'] in {Asset.IntegrationStatus.VERIFIED, Asset.IntegrationStatus.FIRMWARE_CONNECTED, Asset.IntegrationStatus.CALIBRATION_REQUIRED} else None})
+            asset, _ = Asset.objects.update_or_create(code=code, defaults=defaults)
             asset_by_code[code] = asset
 
         alert_specs = [
@@ -48,7 +61,7 @@ class Command(BaseCommand):
         WorkOrder.objects.update_or_create(code='WO-260826-08', defaults={'source_alert': alert_by_code['ALM-260826-003'], 'asset': asset_by_code['SEEP-W01'], 'title': '检查 UT-ZB 接水盘与水位探针', 'priority': WorkOrder.Priority.HIGH, 'status': WorkOrder.Status.OPEN, 'assignee': None, 'created_by': created_users[Profile.Role.OPERATOR], 'due_at': now + timedelta(hours=6), 'completed_at': None, 'reviewed_by': None, 'version': 1})
         WorkOrder.objects.update_or_create(code='WO-260826-06', defaults={'source_alert': alert_by_code['ALM-260826-002'], 'asset': asset_by_code['FAN-01'], 'title': '复核风机反馈与现场状态', 'priority': WorkOrder.Priority.URGENT, 'status': WorkOrder.Status.IN_PROGRESS, 'assignee': created_users[Profile.Role.OPERATOR], 'created_by': created_users[Profile.Role.OPERATOR], 'due_at': now + timedelta(hours=8), 'completed_at': None, 'reviewed_by': None, 'version': 1})
 
-        for asset_code, metric, value, unit, quality in [('FAN-01', '风机转速', 1248, 'rpm', Telemetry.Quality.GOOD), ('SEEP-W01', '积水趋势', 68, '%', Telemetry.Quality.SUSPECT), ('GAS-01', '甲烷浓度', 0.03, '%LEL', Telemetry.Quality.GOOD), ('CTRL-01', '通信延迟', 132, 'ms', Telemetry.Quality.GOOD)]:
+        for asset_code, metric, value, unit, quality in [('ENV-01', '环境温度', 26.4, '°C', Telemetry.Quality.GOOD), ('SEEP-W01', '水位 ADC', 684, 'ADC', Telemetry.Quality.SUSPECT), ('VIB-01', '振动锁存', 0, 'bool', Telemetry.Quality.GOOD), ('CTRL-01', '采集周期', 2.0, 's', Telemetry.Quality.GOOD)]:
             Telemetry.objects.update_or_create(asset=asset_by_code[asset_code], metric=metric, defaults={'value': value, 'unit': unit, 'quality': quality, 'recorded_at': now})
 
         for key, label, warning, alarm, unit in [('temperature', '环境温度', 28, 32, '°C'), ('humidity', '环境湿度', 75, 85, '%RH'), ('water', '水浸趋势', 20, 45, '秒')]:

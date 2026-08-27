@@ -2,7 +2,7 @@
 
 # 综合管廊数字孪生运维实体样品
 
-[![Version](https://img.shields.io/badge/version-V2.6-2E74B5)](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.6.docx)
+[![Version](https://img.shields.io/badge/version-V2.7-2E74B5)](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.7.docx)
 ![Status](https://img.shields.io/badge/status-%E5%8F%B0%E6%9E%B6%E5%AE%9E%E6%96%BD%E9%98%B6%E6%AE%B5-F0AD4E)
 ![Visibility](https://img.shields.io/badge/visibility-private-6C757D)
 ![Safety](https://img.shields.io/badge/safety-low--voltage-success)
@@ -43,7 +43,7 @@
 | 项目属性 | 内容 |
 | --- | --- |
 | 项目名称 | 综合管廊数字孪生运维实体样品 |
-| 规划版本 | V2.6（燃气管道泄漏、渗水监测与华为云部署基线版） |
+| 规划版本 | V2.7（实物清单、燃气管道泄漏、渗水监测与华为云部署基线版） |
 | 计划周期 | 2026-08-25 至 2026-09-30 |
 | 阶段目标 | 2026-09-10 前完成 MVP；2026-09-30 前完成全部交付 |
 | 现场主控 | STM32F103RCT6 |
@@ -173,6 +173,7 @@ flowchart TB
 | 数据库 | PostgreSQL（正式）/ SQLite（本地开发回退） | 资产、遥测、告警、工单、配置与审计的唯一主数据库 |
 | 前端 | Vue 3 + TypeScript + Vite | 当前主软件栈，提供本地演示与 Django API 数据源切换；React 旧版保留兼容 |
 | 数字孪生 | Vue 3 可配置二维空间模型 | 已完成资产定位、状态联动和异常高亮；GLB/Three.js 三维模型作为后续增强 |
+| GIS | Leaflet 1.9.4 + WGS84 | 独立显示实物模块位置、坐标来源和固件接入状态；演示坐标与现场测绘严格区分 |
 
 ## 数据与接口约定
 
@@ -333,6 +334,7 @@ chore(deploy): add mosquitto local configuration
 | --- | --- |
 | [V2.6 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V2.6.docx) | 当前需求、架构、计划、预算、风险、验收与已到货硬件台账 |
 | [硬件现状与接入设计](docs/%E7%A1%AC%E4%BB%B6%E7%8E%B0%E7%8A%B6%E4%B8%8E%E6%8E%A5%E5%85%A5%E8%AE%BE%E8%AE%A1.md) | 实物照片索引、用途、接入边界、待核验项和采购缺口 |
+| [GIS 设备位置模块](docs/GIS%E8%AE%BE%E5%A4%87%E4%BD%8D%E7%BD%AE%E6%A8%A1%E5%9D%97.md) | 实物模块映射、坐标真实性、底图配置与降级边界 |
 | [项目实施日志](docs/%E9%A1%B9%E7%9B%AE%E5%AE%9E%E6%96%BD%E6%97%A5%E5%BF%97.md) | 每日任务、实际完成、证据、风险、变更和周度汇总 |
 | [软件平台说明](docs/software-platform.md) | 当前前端、模拟数据、权限、导出、质量门禁和 PostgreSQL 接入说明 |
 | [API 契约](docs/api-contract.md) | P1 前后端接口、RBAC 与状态机约束 |

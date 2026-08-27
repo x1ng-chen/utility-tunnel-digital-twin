@@ -100,7 +100,7 @@
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
 | `GET` | `/dashboard/` | 登录 | 资产、健康度、告警、工单和最新遥测汇总 |
-| `GET` | `/assets/` | 登录 | `search`、`status`、`zone`、`page`、`pageSize` |
+| `GET` | `/assets/` | 登录 | `search`、`status`、`zone`、`integrationStatus`、`hardwareCode`、`hasLocation=true\|false`、`page`、`pageSize`；返回硬件接入信息、WGS84 坐标和坐标来源 |
 | `GET` | `/alerts/` | 登录 | `status`、`severity`、`openedFrom`、`openedTo`、`page`、`pageSize` |
 | `POST` | `/alerts/{id}/acknowledge/` | 管理员/运维员 | 确认待处理告警 |
 | `POST` | `/alerts/{id}/work-order/` | 管理员/运维员 | 从告警创建关联工单 |

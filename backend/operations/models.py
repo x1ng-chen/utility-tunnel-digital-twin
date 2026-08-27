@@ -24,19 +24,66 @@ class Asset(models.Model):
         OFFLINE = 'offline', '离线'
         UNKNOWN = 'unknown', '未知'
 
+    class IntegrationStatus(models.TextChoices):
+        VERIFIED = 'verified', '已验证'
+        FIRMWARE_CONNECTED = 'firmware_connected', '固件已接入'
+        CALIBRATION_REQUIRED = 'calibration_required', '待标定'
+        PENDING_VERIFICATION = 'pending_verification', '待验证'
+        OPTIONAL = 'optional', '可选模块'
+        NON_OPERATIONAL = 'non_operational', '非运行资产'
+
+    class LocationSource(models.TextChoices):
+        UNASSIGNED = 'unassigned', '未配置'
+        DEMO_ANCHOR = 'demo_anchor', '演示锚点'
+        CONFIGURED = 'configured', '人工配置'
+        SURVEYED = 'surveyed', '现场测绘'
+        GPS = 'gps', 'GPS 定位'
+
     code = models.CharField(max_length=40, unique=True)
     name = models.CharField(max_length=120)
     zone = models.CharField(max_length=40)
     asset_type = models.CharField(max_length=60)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.NORMAL)
+    hardware_code = models.CharField(max_length=20, unique=True, null=True, blank=True)
+    integration_status = models.CharField(max_length=30, choices=IntegrationStatus.choices, default=IntegrationStatus.PENDING_VERIFICATION)
+    interface = models.CharField(max_length=80, blank=True)
+    capabilities = models.JSONField(default=list, blank=True)
     mesh = models.CharField(max_length=80, blank=True)
     position = models.JSONField(default=dict, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    location_source = models.CharField(max_length=20, choices=LocationSource.choices, default=LocationSource.UNASSIGNED)
+    installation_note = models.TextField(blank=True)
     last_seen_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['code']
+        indexes = [
+            models.Index(fields=['zone', 'integration_status'], name='asset_zone_integration_idx'),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=(models.Q(latitude__isnull=True, longitude__isnull=True) | models.Q(latitude__isnull=False, longitude__isnull=False)),
+                name='asset_coordinates_paired',
+            ),
+            models.CheckConstraint(
+                check=(models.Q(latitude__isnull=True) | models.Q(latitude__gte=-90, latitude__lte=90)),
+                name='asset_latitude_range',
+            ),
+            models.CheckConstraint(
+                check=(models.Q(longitude__isnull=True) | models.Q(longitude__gte=-180, longitude__lte=180)),
+                name='asset_longitude_range',
+            ),
+            models.CheckConstraint(
+                check=(
+                    models.Q(latitude__isnull=True, longitude__isnull=True, location_source='unassigned')
+                    | (models.Q(latitude__isnull=False, longitude__isnull=False) & ~models.Q(location_source='unassigned'))
+                ),
+                name='asset_location_source_consistent',
+            ),
+        ]
 
 
 class Alert(models.Model):

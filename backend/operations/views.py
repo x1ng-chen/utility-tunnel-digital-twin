@@ -299,7 +299,7 @@ class DashboardView(APIView):
     def get(self, request):
         latest_telemetry = Telemetry.objects.select_related('asset').order_by('-recorded_at', '-id').first()
         return Response({
-            'assets': {'total': Asset.objects.count(), 'online': Asset.objects.exclude(status=Asset.Status.OFFLINE).count()},
+            'assets': {'total': Asset.objects.count(), 'online': Asset.objects.filter(status__in=[Asset.Status.NORMAL, Asset.Status.WARNING, Asset.Status.ALARM]).count()},
             'health': {'value': 100 if not Asset.objects.filter(status=Asset.Status.ALARM).exists() else 72},
             'openAlerts': Alert.objects.filter(status=Alert.Status.OPEN).count(),
             'activeWorkOrders': WorkOrder.objects.exclude(status__in=[WorkOrder.Status.COMPLETED, WorkOrder.Status.CANCELLED]).count(),
@@ -322,6 +322,18 @@ class AssetListView(APIView):
             queryset = queryset.filter(status=asset_status)
         if request.query_params.get('zone'):
             queryset = queryset.filter(zone=request.query_params['zone'])
+        if request.query_params.get('integrationStatus'):
+            integration_status = request.query_params['integrationStatus']
+            if integration_status not in Asset.IntegrationStatus.values:
+                return error_response('invalid_request', 'integrationStatus is not valid.', 400)
+            queryset = queryset.filter(integration_status=integration_status)
+        if request.query_params.get('hardwareCode'):
+            queryset = queryset.filter(hardware_code=request.query_params['hardwareCode'].strip())
+        if request.query_params.get('hasLocation'):
+            has_location = request.query_params['hasLocation'].lower()
+            if has_location not in {'true', 'false'}:
+                return error_response('invalid_request', 'hasLocation must be true or false.', 400)
+            queryset = queryset.filter(latitude__isnull=has_location == 'false', longitude__isnull=has_location == 'false')
         return paginated(queryset, AssetSerializer, request)
 
 

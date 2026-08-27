@@ -118,6 +118,8 @@ class OperationsApiTests(TestCase):
         self.assertEqual(self.client.get('/api/report-exports/').status_code, 200)
         self.assertEqual(self.client.get('/api/assets/?pageSize=not-a-number').status_code, 400)
         self.assertEqual(self.client.get('/api/assets/?status=broken').status_code, 400)
+        self.assertEqual(self.client.get('/api/assets/?integrationStatus=broken').status_code, 400)
+        self.assertEqual(self.client.get('/api/assets/?hasLocation=maybe').status_code, 400)
         self.assertEqual(self.client.get('/api/alerts/?severity=blocker').status_code, 400)
         self.assertEqual(self.client.get('/api/alerts/?openedFrom=not-a-date').status_code, 400)
         self.assertEqual(self.client.get('/api/alerts/?openedFrom=2026-08-27T00:00:00Z&openedTo=2026-08-26T00:00:00Z').status_code, 400)
@@ -331,8 +333,39 @@ class OperationsApiTests(TestCase):
     def test_seed_demo_assigns_distinct_twin_positions(self):
         call_command('seed_demo', stdout=io.StringIO())
         positions = list(Asset.objects.values_list('code', 'position'))
-        self.assertEqual(len(positions), 4)
-        self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 4)
+        self.assertEqual(len(positions), 12)
+        self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 12)
+        water = Asset.objects.get(hardware_code='H-04')
+        self.assertEqual(water.integration_status, Asset.IntegrationStatus.CALIBRATION_REQUIRED)
+        self.assertEqual(float(water.latitude), 31.230505)
+        self.assertEqual(Asset.objects.filter(latitude__isnull=False, longitude__isnull=False).count(), 12)
+
+    def test_asset_gis_filters_and_serialization(self):
+        self.asset.hardware_code = 'H-10'
+        self.asset.integration_status = Asset.IntegrationStatus.PENDING_VERIFICATION
+        self.asset.latitude = 31.230630
+        self.asset.longitude = 121.474125
+        self.asset.location_source = Asset.LocationSource.CONFIGURED
+        self.asset.capabilities = ['启停控制']
+        self.asset.save()
+        self.auth(self.operator)
+
+        response = self.client.get('/api/assets/?hardwareCode=H-10&hasLocation=true&integrationStatus=pending_verification')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['total'], 1)
+        item = response.json()['items'][0]
+        self.assertEqual(item['hardwareCode'], 'H-10')
+        self.assertEqual(item['latitude'], 31.23063)
+        self.assertEqual(item['capabilities'], ['启停控制'])
+
+    def test_database_rejects_partial_or_out_of_range_gis_coordinates(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Asset.objects.create(code='BAD-COORD-1', name='错误坐标', zone='CTRL', asset_type='测试', latitude=31.2)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Asset.objects.create(code='BAD-COORD-2', name='错误坐标', zone='CTRL', asset_type='测试', latitude=91, longitude=121.4)
 
     def test_seed_demo_resets_lifecycle_timestamps(self):
         call_command('seed_demo', stdout=io.StringIO())

@@ -33,6 +33,10 @@ function statusLabel(status: Asset['status']) {
   return { normal: '正常', warning: '关注', alarm: '告警', offline: '离线', unknown: '未知' }[status];
 }
 
+function integrationLabel(status: Asset['integrationStatus']) {
+  return { verified: '已验证', firmware_connected: '固件已接入', calibration_required: '待标定', pending_verification: '待验证', optional: '可选模块', non_operational: '非运行资产' }[status];
+}
+
 function formatTime(value?: string | null) {
   return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '暂无记录';
 }
@@ -57,7 +61,8 @@ function formatTime(value?: string | null) {
 
       <aside v-if="selectedAsset" class="asset-detail-panel" aria-live="polite">
         <div class="detail-heading"><div><span class="eyebrow">SELECTED NODE</span><h2>{{ selectedAsset.name }}</h2><b>{{ selectedAsset.code }}</b></div><span :class="['asset-status', selectedAsset.status]">{{ statusLabel(selectedAsset.status) }}</span></div>
-        <div class="detail-grid"><div><small>区域</small><strong>{{ selectedAsset.zone }}</strong></div><div><small>模型</small><strong>{{ selectedAsset.mesh || '未配置' }}</strong></div><div><small>坐标</small><strong>{{ selectedAsset.position?.x ?? '-' }}, {{ selectedAsset.position?.y ?? '-' }}</strong></div><div><small>最近上报</small><strong>{{ formatTime(selectedAsset.lastSeenAt) }}</strong></div></div>
+        <div class="detail-grid"><div><small>硬件编号</small><strong>{{ selectedAsset.hardwareCode || '未分配' }}</strong></div><div><small>接入状态</small><strong>{{ integrationLabel(selectedAsset.integrationStatus) }}</strong></div><div><small>接口</small><strong>{{ selectedAsset.interface || '未配置' }}</strong></div><div><small>最近上报</small><strong>{{ formatTime(selectedAsset.lastSeenAt) }}</strong></div></div>
+        <div class="detail-block"><span class="eyebrow">ACTUAL HARDWARE</span><p class="detail-list">{{ selectedAsset.installationNote }}</p><div class="capability-tags"><span v-for="capability in selectedAsset.capabilities" :key="capability">{{ capability }}</span></div></div>
         <div class="detail-block"><span class="eyebrow">TELEMETRY</span><div v-if="selectedTelemetry" class="detail-reading"><strong>{{ selectedTelemetry.value }}</strong><span>{{ selectedTelemetry.unit }}</span><small>{{ selectedTelemetry.metric }} · {{ selectedTelemetry.quality }}</small></div><p v-else class="detail-empty">暂无遥测数据</p></div>
         <div class="detail-block"><span class="eyebrow">LINKED EVENTS</span><p v-if="selectedAlerts.length" class="detail-list">{{ selectedAlerts.length }} 条告警 · {{ selectedAlerts.filter((item) => ['open', 'acknowledged'].includes(item.status)).length }} 条待处置</p><p v-else class="detail-empty">暂无告警</p><p v-if="selectedOrders.length" class="detail-list">{{ selectedOrders.length }} 个关联工单</p><p v-else class="detail-empty">暂无关联工单</p></div>
       </aside>
@@ -65,7 +70,7 @@ function formatTime(value?: string | null) {
     </section>
 
     <section class="asset-grid">
-      <button v-for="asset in visible" :key="asset.id" class="asset-card asset-card-button" :class="{ selected: selectedAsset?.code === asset.code }" @click="selectAsset(asset)"><div class="asset-icon" :class="asset.status">◈</div><div class="asset-card-copy"><span class="eyebrow">{{ asset.zone }}</span><h2>{{ asset.name }}</h2><b>{{ asset.code }}</b><p>{{ asset.type }} · {{ asset.mesh || '未配置模型' }}</p></div><span :class="['asset-status', asset.status]">{{ statusLabel(asset.status) }}</span></button>
+      <button v-for="asset in visible" :key="asset.id" class="asset-card asset-card-button" :class="{ selected: selectedAsset?.code === asset.code }" @click="selectAsset(asset)"><div class="asset-icon" :class="asset.status">◈</div><div class="asset-card-copy"><span class="eyebrow">{{ asset.zone }} · {{ asset.hardwareCode || 'NO HW ID' }}</span><h2>{{ asset.name }}</h2><b>{{ asset.code }}</b><p>{{ integrationLabel(asset.integrationStatus) }} · {{ asset.interface || '未配置接口' }}</p></div><span :class="['asset-status', asset.status]">{{ statusLabel(asset.status) }}</span></button>
     </section>
   </AppShell>
 </template>

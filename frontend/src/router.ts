@@ -5,6 +5,7 @@ import DashboardView from './views/DashboardView.vue';
 import AlertsView from './views/AlertsView.vue';
 import WorkOrdersView from './views/WorkOrdersView.vue';
 import AssetsView from './views/AssetsView.vue';
+import GisView from './views/GisView.vue';
 import SettingsView from './views/SettingsView.vue';
 import AuditView from './views/AuditView.vue';
 
@@ -17,6 +18,7 @@ const router = createRouter({
     { path: '/alerts', component: AlertsView },
     { path: '/work-orders', component: WorkOrdersView },
     { path: '/assets', component: AssetsView },
+    { path: '/gis', component: GisView },
     { path: '/settings', component: SettingsView },
     { path: '/audit', component: AuditView },
   ],

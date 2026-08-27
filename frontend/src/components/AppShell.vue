@@ -9,7 +9,7 @@ const router = useRouter();
 const auth = useAuthStore();
 const operations = useOperationsStore();
 const userName = computed(() => auth.user?.displayName || '运维员');
-const nav = [{ path: '/dashboard', icon: '⌂', label: '运行总览' }, { path: '/alerts', icon: '!', label: '告警中心' }, { path: '/work-orders', icon: '✓', label: '工单中心' }, { path: '/assets', icon: '▦', label: '设备台账' }, { path: '/settings', icon: '⚙', label: '系统配置' }, { path: '/audit', icon: '≡', label: '审计追踪' }];
+const nav = [{ path: '/dashboard', icon: '⌂', label: '运行总览' }, { path: '/alerts', icon: '!', label: '告警中心' }, { path: '/work-orders', icon: '✓', label: '工单中心' }, { path: '/assets', icon: '▦', label: '设备台账' }, { path: '/gis', icon: '◎', label: 'GIS 总览' }, { path: '/settings', icon: '⚙', label: '系统配置' }, { path: '/audit', icon: '≡', label: '审计追踪' }];
 async function logout() { await auth.logout(); router.push('/login'); }
 async function retrySync() { await operations.refresh('api'); }
 </script>
