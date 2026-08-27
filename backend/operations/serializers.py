@@ -16,10 +16,11 @@ class AlertSerializer(serializers.ModelSerializer):
     openedAt = serializers.DateTimeField(source='opened_at', read_only=True)
     acknowledgedAt = serializers.DateTimeField(source='acknowledged_at', allow_null=True, read_only=True)
     acknowledgedBy = serializers.SerializerMethodField()
+    resolvedAt = serializers.DateTimeField(source='resolved_at', allow_null=True, read_only=True)
 
     class Meta:
         model = Alert
-        fields = ['id', 'code', 'assetCode', 'severity', 'category', 'status', 'title', 'detail', 'openedAt', 'acknowledgedAt', 'acknowledgedBy']
+        fields = ['id', 'code', 'assetCode', 'severity', 'category', 'status', 'title', 'detail', 'openedAt', 'acknowledgedAt', 'acknowledgedBy', 'resolvedAt']
 
     def get_acknowledgedBy(self, obj):
         return obj.acknowledged_by.get_full_name() or obj.acknowledged_by.email if obj.acknowledged_by else None
@@ -32,10 +33,11 @@ class WorkOrderSerializer(serializers.ModelSerializer):
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
     updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
     dueAt = serializers.DateTimeField(source='due_at', allow_null=True, read_only=True)
+    completedAt = serializers.DateTimeField(source='completed_at', allow_null=True, read_only=True)
 
     class Meta:
         model = WorkOrder
-        fields = ['id', 'code', 'sourceAlertId', 'assetCode', 'title', 'description', 'priority', 'status', 'assigneeName', 'dueAt', 'createdAt', 'updatedAt', 'version']
+        fields = ['id', 'code', 'sourceAlertId', 'assetCode', 'title', 'description', 'priority', 'status', 'assigneeName', 'dueAt', 'completedAt', 'createdAt', 'updatedAt', 'version']
 
     def get_assigneeName(self, obj):
         return obj.assignee.get_full_name() or obj.assignee.email if obj.assignee else None

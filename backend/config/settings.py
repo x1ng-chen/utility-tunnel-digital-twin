@@ -8,6 +8,7 @@ from corsheaders.defaults import default_headers
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
 DJANGO_ENV = os.getenv('DJANGO_ENV', 'development').lower()
+IS_PRODUCTION = DJANGO_ENV == 'production'
 # Fail closed for deployments that do not explicitly provide a debug flag.
 # Local development can opt in through backend/.env.example.
 DEBUG = DJANGO_ENV != 'production' and os.getenv('DJANGO_DEBUG', 'false').lower() in {'1', 'true', 'yes'}
@@ -34,6 +35,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'operations.middleware.RequestIdMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -90,13 +92,35 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173').split(',') if origin.strip()]
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_CREDENTIALS = os.getenv('CORS_ALLOW_CREDENTIALS', 'false').lower() in {'1', 'true', 'yes'}
 CORS_ALLOW_HEADERS = [*default_headers, 'x-request-id']
+API_TOKEN_TTL_SECONDS = int(os.getenv('API_TOKEN_TTL_SECONDS', '900'))
+if API_TOKEN_TTL_SECONDS <= 0:
+    raise ValueError('API_TOKEN_TTL_SECONDS must be greater than zero.')
+TRUST_PROXY_HEADERS = os.getenv('DJANGO_TRUST_PROXY_HEADERS', 'false').lower() in {'1', 'true', 'yes'}
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': ['operations.authentication.BearerTokenAuthentication'],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
     'DEFAULT_RENDERER_CLASSES': ['rest_framework.renderers.JSONRenderer'],
+    'DEFAULT_THROTTLE_RATES': {'login': os.getenv('LOGIN_RATE_LIMIT', '10/min')},
 }
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_REFERRER_POLICY = 'no-referrer'
+SECURE_SSL_REDIRECT = IS_PRODUCTION and os.getenv('DJANGO_SECURE_SSL_REDIRECT', 'true').lower() in {'1', 'true', 'yes'}
+SECURE_HSTS_SECONDS = 31536000 if IS_PRODUCTION and os.getenv('DJANGO_ENABLE_HSTS', 'true').lower() in {'1', 'true', 'yes'} else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
+SECURE_HSTS_PRELOAD = SECURE_HSTS_SECONDS > 0
+SESSION_COOKIE_SECURE = IS_PRODUCTION
+CSRF_COOKIE_SECURE = IS_PRODUCTION
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if os.getenv('DJANGO_TRUST_PROXY_SSL', 'false').lower() in {'1', 'true', 'yes'} else None
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {'json': {'()': 'config.logging.JsonFormatter'}},
+    'handlers': {'console_json': {'class': 'logging.StreamHandler', 'formatter': 'json'}},
+    'loggers': {
+        'operations.request': {'handlers': ['console_json'], 'level': 'INFO', 'propagate': False},
+        'django.request': {'handlers': ['console_json'], 'level': 'WARNING', 'propagate': False},
+    },
+}

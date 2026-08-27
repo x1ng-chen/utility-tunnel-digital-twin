@@ -6,12 +6,18 @@ on:
       - 'frontend/**'
       - 'backend/**'
       - 'docs/vue-django-stack.md'
+      - 'docs/deployment-runbook.md'
+      - 'docs/software-quality-gates.md'
+      - 'deploy/postgres/**'
       - '.github/workflows/vue-django.yml'
   pull_request:
     paths:
       - 'frontend/**'
       - 'backend/**'
       - 'docs/vue-django-stack.md'
+      - 'docs/deployment-runbook.md'
+      - 'docs/software-quality-gates.md'
+      - 'deploy/postgres/**'
       - '.github/workflows/vue-django.yml'
 
 jobs:
@@ -46,6 +52,11 @@ jobs:
           python-version: '3.11'
           cache: pip
           cache-dependency-path: backend/requirements.txt
+      - name: Configure CI settings
+        shell: bash
+        run: |
+          echo "DJANGO_ENV=test" >> "$GITHUB_ENV"
+          echo "DJANGO_SECRET_KEY=ci-only-django-secret-that-is-longer-than-thirty-two-characters" >> "$GITHUB_ENV"
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt
       - run: python manage.py check

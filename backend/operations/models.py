@@ -66,6 +66,10 @@ class Alert(models.Model):
 
     class Meta:
         ordering = ['-opened_at']
+        indexes = [
+            models.Index(fields=['status', '-opened_at'], name='alert_status_opened_idx'),
+            models.Index(fields=['asset', 'status'], name='alert_asset_status_idx'),
+        ]
 
 
 class WorkOrder(models.Model):
@@ -102,6 +106,10 @@ class WorkOrder(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-updated_at'], name='wo_status_updated_idx'),
+            models.Index(fields=['asset', 'status'], name='wo_asset_status_idx'),
+        ]
 
 
 class Telemetry(models.Model):
@@ -120,6 +128,7 @@ class Telemetry(models.Model):
 
     class Meta:
         ordering = ['-recorded_at']
+        indexes = [models.Index(fields=['asset', '-recorded_at'], name='telemetry_asset_time_idx')]
 
 
 class Threshold(models.Model):
@@ -143,6 +152,7 @@ class AuditLog(models.Model):
 
     class Meta:
         ordering = ['-occurred_at']
+        indexes = [models.Index(fields=['action', '-occurred_at'], name='audit_action_time_idx')]
 
 
 class ReportExport(models.Model):

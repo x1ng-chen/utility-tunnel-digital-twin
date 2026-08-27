@@ -28,6 +28,10 @@ Thumbs.db
 *.db
 *.sqlite
 *.sqlite3
+*.backup
+*.dump
+deploy/postgres/backups/
+*.sha256
 data/
 
 # Document render and temporary artifacts

@@ -49,6 +49,26 @@ POST /v1/auth/login
 - 手动导出（在装有 PostgreSQL 客户端的受控发布机）：`pg_dump --format=custom --no-owner --file=utility_tunnel.backup "$DATABASE_URL"`。
 - 恢复演练：先恢复到**隔离的新实例**，用迁移身份运行 `npm run migrate`，再用运行时账号访问 `/v1/ready` 和执行只读验证。不得在未验证备份的生产库上直接恢复。
 
+### Django API 数据库
+
+Django 栈使用同一 `DATABASE_URL`，备份脚本不保存密码或备份文件到 Git：
+
+```powershell
+$env:DATABASE_URL = 'postgresql://<backup-user>:<password>@<host>:5432/utility_tunnel?sslmode=require'
+.\deploy\postgres\backup-django.ps1
+```
+
+脚本生成 PostgreSQL custom-format 备份和 SHA-256 校验文件。恢复必须在隔离实例执行，并显式确认：
+
+```powershell
+.\deploy\postgres\restore-verify-django.ps1 `
+  -BackupFile .\deploy\postgres\backups\utility-tunnel-django-<timestamp>.backup `
+  -TargetDatabaseUrl 'postgresql://<restore-user>:<password>@<isolated-host>:5432/utility_tunnel?sslmode=require' `
+  -ConfirmRestore
+```
+
+恢复验收标准：`pg_restore` 无错误、`operations_asset` 与 `django_migrations` 可查询、`GET /api/ready/` 返回 200、API 只读接口和登录接口通过 smoke test。不要在未验证的生产库上直接使用 `--clean`。
+
 ## 5. 回滚
 
 本仓库迁移策略是前向修复：若发布失败，停止 API、恢复上一版应用，并创建新的补偿迁移；禁止在生产库手工删除已记录的迁移或执行未评审的破坏性 SQL。

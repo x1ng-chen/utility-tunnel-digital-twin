@@ -1,9 +1,10 @@
 from datetime import timedelta
 from math import isfinite
 from uuid import uuid4
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
@@ -17,6 +18,11 @@ from .models import Alert, Asset, AuditLog, Profile, ReportExport, Telemetry, Th
 from .permissions import AuthenticatedRead
 from .serializers import AlertSerializer, AssetSerializer, AuditSerializer, ReportExportSerializer, TelemetrySerializer, ThresholdSerializer, WorkOrderSerializer
 from .services import actor_name, audit
+from .throttling import LoginRateThrottle
+
+
+def request_id(request) -> str:
+    return getattr(request, 'request_id', request.headers.get('X-Request-Id', ''))
 
 
 def paginated(queryset, serializer_class, request):
@@ -53,9 +59,24 @@ class HealthView(APIView):
         return Response({'status': 'ok', 'service': 'utility-tunnel-django', 'time': timezone.now()})
 
 
+class ReadyView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT 1')
+                cursor.fetchone()
+        except Exception:
+            return Response({'status': 'not_ready', 'service': 'utility-tunnel-django'}, status=503)
+        return Response({'status': 'ready', 'service': 'utility-tunnel-django', 'time': timezone.now()})
+
+
 class LoginView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         email = str(request.data.get('email', '')).strip().lower()
@@ -66,11 +87,15 @@ class LoginView(APIView):
         authenticated = authenticate(username=user.username if user else email, password=password)
         if not authenticated:
             return Response({'error': 'invalid_credentials', 'message': 'Invalid email or password.'}, status=401)
-        token, _ = Token.objects.get_or_create(user=authenticated)
+        token = Token.objects.filter(user=authenticated).first()
+        if token and token.created + timedelta(seconds=settings.API_TOKEN_TTL_SECONDS) <= timezone.now():
+            token.delete()
+            token = None
+        token = token or Token.objects.create(user=authenticated)
         profile, _ = Profile.objects.get_or_create(user=authenticated, defaults={'display_name': authenticated.get_full_name() or authenticated.email})
         authenticated.last_login = timezone.now()
         authenticated.save(update_fields=['last_login'])
-        audit(authenticated, 'auth.login', 'app_user', authenticated.pk, {'email': authenticated.email}, request.headers.get('X-Request-Id', ''))
+        audit(authenticated, 'auth.login', 'app_user', authenticated.pk, {'email': authenticated.email}, request_id(request))
         return Response({'accessToken': token.key, 'tokenType': 'Bearer', 'user': {'id': authenticated.pk, 'email': authenticated.email, 'displayName': profile.display_name or authenticated.email, 'role': profile.role}})
 
 
@@ -87,7 +112,7 @@ class LogoutView(APIView):
 
     def post(self, request):
         Token.objects.filter(user=request.user).delete()
-        audit(request.user, 'auth.logout', 'app_user', request.user.pk, request_id=request.headers.get('X-Request-Id', ''))
+        audit(request.user, 'auth.logout', 'app_user', request.user.pk, request_id=request_id(request))
         return Response(status=204)
 
 
@@ -147,7 +172,7 @@ class AlertAcknowledgeView(APIView):
             alert.acknowledged_at = timezone.now()
             alert.acknowledged_by = request.user
             alert.save(update_fields=['status', 'acknowledged_at', 'acknowledged_by'])
-            audit(request.user, 'alert.acknowledged', 'alert', alert.pk, {'code': alert.code}, request.headers.get('X-Request-Id', ''))
+            audit(request.user, 'alert.acknowledged', 'alert', alert.pk, {'code': alert.code}, request_id(request))
         return Response(AlertSerializer(alert).data)
 
 
@@ -164,7 +189,7 @@ class AlertWorkOrderView(APIView):
             if WorkOrder.objects.filter(source_alert=alert).exists():
                 return Response({'error': 'conflict', 'message': 'A linked work order already exists.'}, status=409)
             order = WorkOrder.objects.create(code=work_order_code(), source_alert=alert, asset=alert.asset, title=f'处置 {alert.code}：{alert.title}', priority=WorkOrder.Priority.URGENT if alert.severity == Alert.Severity.CRITICAL else WorkOrder.Priority.HIGH, created_by=request.user, due_at=timezone.now() + timedelta(hours=8))
-            audit(request.user, 'work_order.created_from_alert', 'work_order', order.pk, {'alertCode': alert.code}, request.headers.get('X-Request-Id', ''))
+            audit(request.user, 'work_order.created_from_alert', 'work_order', order.pk, {'alertCode': alert.code}, request_id(request))
         return Response(WorkOrderSerializer(order).data, status=201)
 
 
@@ -189,7 +214,7 @@ class WorkOrderListView(APIView):
         if not asset or not title or priority not in WorkOrder.Priority.values:
             return Response({'error': 'invalid_request', 'message': 'A valid assetCode and title are required.'}, status=400)
         order = WorkOrder.objects.create(code=work_order_code(), asset=asset, title=title, description=str(request.data.get('description', '')), priority=priority, created_by=request.user)
-        audit(request.user, 'work_order.created_manual', 'work_order', order.pk, {'assetCode': asset.code}, request.headers.get('X-Request-Id', ''))
+        audit(request.user, 'work_order.created_manual', 'work_order', order.pk, {'assetCode': asset.code}, request_id(request))
         return Response(WorkOrderSerializer(order).data, status=201)
 
 
@@ -235,7 +260,7 @@ class WorkOrderTransitionView(APIView):
                         order.asset.save(update_fields=['status', 'updated_at'])
             order.version += 1
             order.save()
-            audit(request.user, 'work_order.transitioned', 'work_order', order.pk, {'from': previous, 'to': target}, request.headers.get('X-Request-Id', ''))
+            audit(request.user, 'work_order.transitioned', 'work_order', order.pk, {'from': previous, 'to': target}, request_id(request))
         return Response(WorkOrderSerializer(order).data)
 
 
@@ -279,7 +304,7 @@ class ThresholdDetailView(APIView):
                 return Response({'error': 'version_conflict', 'message': 'Threshold was changed by another request.'}, status=409)
         threshold.warning, threshold.alarm, threshold.version = warning, alarm, threshold.version + 1
         threshold.save(update_fields=['warning', 'alarm', 'version', 'updated_at'])
-        audit(request.user, 'setting.threshold.update', 'threshold', threshold.key, {'version': threshold.version}, request.headers.get('X-Request-Id', ''))
+        audit(request.user, 'setting.threshold.update', 'threshold', threshold.key, {'version': threshold.version}, request_id(request))
         return Response(ThresholdSerializer(threshold).data)
 
 
@@ -304,5 +329,5 @@ class ReportExportView(APIView):
         if report_type not in {'alerts', 'workOrders', 'assets', 'daily'}:
             return Response({'error': 'invalid_request', 'message': 'A valid report type is required.'}, status=400)
         record = ReportExport.objects.create(report_type=report_type, file_name=f'utility-tunnel-{report_type}-{timezone.now():%Y%m%d%H%M%S}.csv', requested_by=request.user, completed_at=timezone.now())
-        audit(request.user, 'report.export', 'report_export', record.pk, {'report': report_type}, request.headers.get('X-Request-Id', ''))
+        audit(request.user, 'report.export', 'report_export', record.pk, {'report': report_type}, request_id(request))
         return Response(ReportExportSerializer(record).data, status=201)
