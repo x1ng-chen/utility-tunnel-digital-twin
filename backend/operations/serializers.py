@@ -1,6 +1,10 @@
-from rest_framework import serializers
+from datetime import timedelta
 from math import isfinite
+
 from django.contrib.auth import get_user_model
+from django.utils import timezone
+from rest_framework import serializers
+
 from .models import Alert, Asset, AuditLog, Profile, ReportExport, Telemetry, Threshold, WorkOrder
 
 
@@ -49,6 +53,13 @@ class AssetMutationSerializer(serializers.ModelSerializer):
             'latitude': {'allow_null': True, 'required': False},
             'longitude': {'allow_null': True, 'required': False},
         }
+
+    def update(self, instance, validated_data):
+        """Persist only API-owned columns so the production role stays least-privileged."""
+        for attribute, value in validated_data.items():
+            setattr(instance, attribute, value)
+        instance.save(update_fields=[*validated_data.keys(), 'updated_at'])
+        return instance
 
     def validate_hardwareCode(self, value):
         return value or None
@@ -105,10 +116,12 @@ class AlertSerializer(serializers.ModelSerializer):
     acknowledgedAt = serializers.DateTimeField(source='acknowledged_at', allow_null=True, read_only=True)
     acknowledgedBy = serializers.SerializerMethodField()
     resolvedAt = serializers.DateTimeField(source='resolved_at', allow_null=True, read_only=True)
+    ruleKey = serializers.CharField(source='rule_key', allow_null=True, read_only=True)
+    lastObservedValue = serializers.FloatField(source='last_observed_value', allow_null=True, read_only=True)
 
     class Meta:
         model = Alert
-        fields = ['id', 'code', 'assetCode', 'severity', 'category', 'status', 'title', 'detail', 'openedAt', 'acknowledgedAt', 'acknowledgedBy', 'resolvedAt']
+        fields = ['id', 'code', 'assetCode', 'severity', 'category', 'status', 'title', 'detail', 'ruleKey', 'lastObservedValue', 'openedAt', 'acknowledgedAt', 'acknowledgedBy', 'resolvedAt']
 
     def get_acknowledgedBy(self, obj):
         return obj.acknowledged_by.get_full_name() or obj.acknowledged_by.email if obj.acknowledged_by else None
@@ -133,11 +146,38 @@ class WorkOrderSerializer(serializers.ModelSerializer):
 
 class TelemetrySerializer(serializers.ModelSerializer):
     assetCode = serializers.CharField(source='asset.code', read_only=True)
+    eventId = serializers.CharField(source='event_id', allow_null=True, read_only=True)
+    metricKey = serializers.CharField(source='metric_key', read_only=True)
     recordedAt = serializers.DateTimeField(source='recorded_at', read_only=True)
+    ingestedAt = serializers.DateTimeField(source='ingested_at', read_only=True)
 
     class Meta:
         model = Telemetry
-        fields = ['id', 'assetCode', 'metric', 'value', 'unit', 'quality', 'recordedAt']
+        fields = ['id', 'eventId', 'assetCode', 'metricKey', 'metric', 'value', 'unit', 'quality', 'recordedAt', 'ingestedAt']
+
+
+class TelemetryReadingSerializer(serializers.Serializer):
+    eventId = serializers.RegexField(r'^[A-Za-z0-9._:-]{1,80}$', max_length=80)
+    assetCode = serializers.RegexField(r'^[A-Z0-9][A-Z0-9_-]{1,39}$', max_length=40)
+    metricKey = serializers.RegexField(r'^[a-z][a-z0-9_.-]{1,39}$', max_length=40)
+    metric = serializers.CharField(max_length=80)
+    value = serializers.FloatField(min_value=-1_000_000_000, max_value=1_000_000_000)
+    unit = serializers.CharField(max_length=20)
+    quality = serializers.ChoiceField(choices=Telemetry.Quality.choices, default=Telemetry.Quality.GOOD)
+    recordedAt = serializers.DateTimeField()
+
+    def validate_value(self, value):
+        if not isfinite(value):
+            raise serializers.ValidationError('Telemetry value must be finite.')
+        return value
+
+    def validate_recordedAt(self, value):
+        now = timezone.now()
+        if value > now + timedelta(minutes=5):
+            raise serializers.ValidationError('recordedAt cannot be more than five minutes in the future.')
+        if value < now - timedelta(days=30):
+            raise serializers.ValidationError('recordedAt cannot be more than 30 days old.')
+        return value
 
 
 class ThresholdSerializer(serializers.ModelSerializer):

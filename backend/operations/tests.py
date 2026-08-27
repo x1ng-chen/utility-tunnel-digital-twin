@@ -141,6 +141,110 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['telemetry']['id'], latest.id)
 
+    def test_telemetry_batch_is_idempotent_and_creates_threshold_alert(self):
+        asset = Asset.objects.create(code='ENV-T1', name='环境节点', zone='UT-ZA', asset_type='环境测点')
+        Threshold.objects.create(key='temperature', label='环境温度', warning=28, alarm=32, unit='°C')
+        self.auth(self.operator)
+        recorded_at = timezone.now()
+        reading = {'eventId': 'evt-temperature-1', 'assetCode': asset.code, 'metricKey': 'temperature', 'metric': '环境温度', 'value': 30, 'unit': '°C', 'quality': 'good', 'recordedAt': recorded_at.isoformat()}
+
+        created = self.client.post('/api/telemetry/', {'readings': [reading]}, format='json', HTTP_X_REQUEST_ID='telemetry-batch-1')
+
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.json()['created'], 1)
+        self.assertEqual(created.json()['rules']['created'], 1)
+        self.assertEqual(created.json()['items'][0]['eventId'], reading['eventId'])
+        self.assertEqual(created.json()['items'][0]['metricKey'], 'temperature')
+        asset.refresh_from_db()
+        self.assertEqual(asset.status, Asset.Status.WARNING)
+        alert = Alert.objects.get(asset=asset, rule_key='temperature')
+        self.assertEqual(alert.severity, Alert.Severity.WARNING)
+        self.assertEqual(alert.last_observed_value, 30)
+        self.assertTrue(AuditLog.objects.filter(action='alert.auto_created', resource_id=str(alert.pk)).exists())
+        self.assertTrue(AuditLog.objects.filter(action='telemetry.batch_ingested', request_id='telemetry-batch-1').exists())
+
+        duplicate = self.client.post('/api/telemetry/', {'readings': [reading]}, format='json')
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertEqual(duplicate.json()['created'], 0)
+        self.assertEqual(duplicate.json()['duplicates'], 1)
+        self.assertEqual(Telemetry.objects.filter(event_id=reading['eventId']).count(), 1)
+        conflict = self.client.post('/api/telemetry/', {'readings': [{**reading, 'value': 31}]}, format='json')
+        self.assertEqual(conflict.status_code, 409)
+
+    def test_threshold_alert_escalates_without_duplication_and_auto_resolves(self):
+        asset = Asset.objects.create(code='ENV-T2', name='环境节点', zone='UT-ZA', asset_type='环境测点')
+        Threshold.objects.create(key='temperature', label='环境温度', warning=28, alarm=32, unit='°C')
+        self.auth(self.operator)
+        now = timezone.now()
+
+        def ingest(event_id, value, seconds):
+            return self.client.post('/api/telemetry/', {'readings': [{'eventId': event_id, 'assetCode': asset.code, 'metricKey': 'temperature', 'metric': '环境温度', 'value': value, 'unit': '°C', 'quality': 'good', 'recordedAt': (now + timedelta(seconds=seconds)).isoformat()}]}, format='json')
+
+        self.assertEqual(ingest('evt-rule-warning', 29, 0).json()['rules']['created'], 1)
+        escalated = ingest('evt-rule-alarm', 34, 1)
+        self.assertEqual(escalated.status_code, 201)
+        self.assertEqual(escalated.json()['rules']['escalated'], 1)
+        self.assertEqual(Alert.objects.filter(asset=asset, rule_key='temperature').count(), 1)
+        alert = Alert.objects.get(asset=asset, rule_key='temperature')
+        self.assertEqual(alert.severity, Alert.Severity.CRITICAL)
+        asset.refresh_from_db()
+        self.assertEqual(asset.status, Asset.Status.ALARM)
+
+        deescalated = ingest('evt-rule-deescalated', 30, 2)
+        self.assertEqual(deescalated.json()['rules']['deescalated'], 1)
+        alert.refresh_from_db()
+        asset.refresh_from_db()
+        self.assertEqual(alert.severity, Alert.Severity.WARNING)
+        self.assertEqual(asset.status, Asset.Status.WARNING)
+
+        stale = ingest('evt-rule-stale', 35, 1.5)
+        self.assertEqual(stale.json()['rules']['skipped_stale'], 1)
+        alert.refresh_from_db()
+        self.assertEqual(alert.severity, Alert.Severity.WARNING)
+
+        resolved = ingest('evt-rule-normal', 25, 3)
+        self.assertEqual(resolved.json()['rules']['resolved'], 1)
+        alert.refresh_from_db()
+        asset.refresh_from_db()
+        self.assertEqual(alert.status, Alert.Status.RESOLVED)
+        self.assertEqual(asset.status, Asset.Status.NORMAL)
+        self.assertTrue(AuditLog.objects.filter(action='alert.auto_escalated').exists())
+        self.assertTrue(AuditLog.objects.filter(action='alert.auto_deescalated').exists())
+        self.assertTrue(AuditLog.objects.filter(action='alert.auto_resolved').exists())
+
+    def test_telemetry_batch_validation_is_atomic_and_quality_can_skip_rules(self):
+        asset = Asset.objects.create(code='ENV-T3', name='环境节点', zone='UT-ZA', asset_type='环境测点')
+        Threshold.objects.create(key='temperature', label='环境温度', warning=28, alarm=32, unit='°C')
+        now = timezone.now().isoformat()
+        self.auth(self.operator)
+        valid = {'eventId': 'evt-valid', 'assetCode': asset.code, 'metricKey': 'temperature', 'metric': '环境温度', 'value': 35, 'unit': '°C', 'quality': 'good', 'recordedAt': now}
+        invalid_batch = self.client.post('/api/telemetry/', {'readings': [valid, {**valid, 'eventId': 'evt-missing', 'assetCode': 'MISSING-1'}]}, format='json')
+        self.assertEqual(invalid_batch.status_code, 400)
+        self.assertEqual(Telemetry.objects.filter(event_id='evt-valid').count(), 0)
+        duplicate_batch = self.client.post('/api/telemetry/', {'readings': [valid, valid]}, format='json')
+        self.assertEqual(duplicate_batch.status_code, 400)
+        bad_quality = self.client.post('/api/telemetry/', {'readings': [{**valid, 'eventId': 'evt-bad-quality', 'quality': 'bad'}]}, format='json')
+        self.assertEqual(bad_quality.status_code, 201)
+        self.assertEqual(bad_quality.json()['rules']['skipped_quality'], 1)
+        self.assertFalse(Alert.objects.filter(asset=asset, rule_key='temperature').exists())
+        wrong_unit = self.client.post('/api/telemetry/', {'readings': [{**valid, 'eventId': 'evt-wrong-unit', 'unit': 'K'}]}, format='json')
+        self.assertEqual(wrong_unit.status_code, 400)
+
+        original = {**valid, 'eventId': 'evt-existing'}
+        self.assertEqual(self.client.post('/api/telemetry/', {'readings': [original]}, format='json').status_code, 201)
+        new_reading = {**valid, 'eventId': 'evt-must-rollback', 'value': 20}
+        conflict = {**original, 'value': 31}
+        conflicted_batch = self.client.post('/api/telemetry/', {'readings': [new_reading, conflict]}, format='json')
+        self.assertEqual(conflicted_batch.status_code, 409)
+        self.assertFalse(Telemetry.objects.filter(event_id='evt-must-rollback').exists())
+
+    def test_viewer_cannot_ingest_telemetry(self):
+        viewer = User.objects.create_user(username='telemetry-viewer@example.com', email='telemetry-viewer@example.com', password='demo-password')
+        Profile.objects.create(user=viewer, display_name='查看者', role=Profile.Role.VIEWER)
+        self.auth(viewer)
+        self.assertEqual(self.client.post('/api/telemetry/', {'readings': []}, format='json').status_code, 403)
+        self.assertIn('idempotency-key', settings.CORS_ALLOW_HEADERS)
+
     def test_malformed_object_payloads_return_400_instead_of_500(self):
         self.auth(self.operator)
         self.assertEqual(self.client.post('/api/work-orders/', ['not', 'an', 'object'], format='json').status_code, 400)

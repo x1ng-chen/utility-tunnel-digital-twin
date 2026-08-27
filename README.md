@@ -12,7 +12,7 @@
 面向教室桌面展示的综合管廊数字孪生运维样品，通过真实传感、STM32 现场控制、MQTT 数据链路和 Web 三维可视化，形成“监测—报警—联动—工单—处置—复核—归档”的完整运维闭环。
 
 > [!IMPORTANT]
-> 当前软件平台已完成 P0–P3 软件交付：`frontend` 提供 Vue 3 本地演示与 Django API 数据源切换，`backend` 提供登录、RBAC、资产、告警、工单、阈值、导出登记、审计与运维健康检查 API。`apps/web` 与 `services/api` 作为旧版兼容基线保留。真实托管数据库连接信息仍需部署时配置；本阶段的软件演示无需硬件。
+> 当前软件平台已完成 P0–P3 软件交付：`frontend` 提供 Vue 3 本地演示与 Django API 数据源切换，`backend` 提供登录、RBAC、资产、可信遥测批量接入、自动阈值告警、工单、阈值、导出登记、审计与运维健康检查 API。`apps/web` 与 `services/api` 作为旧版兼容基线保留。真实托管数据库连接信息仍需部署时配置；本阶段的软件演示无需硬件。
 
 > [!NOTE]
 > 软件平台的实际功能、运行方式、质量门禁和后续 PostgreSQL 接入说明见 [软件平台说明](docs/software-platform.md)。本文其余内容保留为 V2.6 总体规划基线。
@@ -246,7 +246,7 @@ npm ci
 npm run dev
 ```
 
-浏览器打开终端提示的本地地址即可体验告警确认、工单闭环、设备筛选、数字孪生定位、角色权限、审计和 CSV/JSON 导出。默认数据仅保存在当前浏览器；清除浏览器站点数据或点击左下角重置即可恢复演示初始值。若已部署 `services/api`，可在顶部切换到 API 模式登录 PostgreSQL 数据源，详细配置见 [软件平台说明](docs/software-platform.md) 与 [API 契约](docs/api-contract.md)。
+浏览器打开终端提示的本地地址即可体验告警确认、工单闭环、设备筛选、数字孪生定位、角色权限、审计和 CSV/JSON 导出。演示模式数据仅保留在当前页面运行期；选择 Django API 模式后，业务数据统一由 Django 写入 PostgreSQL（本地开发可回退 SQLite）。详细配置见 [软件平台说明](docs/software-platform.md) 与 [API 契约](docs/api-contract.md)。
 
 ### STM32 台架固件
 

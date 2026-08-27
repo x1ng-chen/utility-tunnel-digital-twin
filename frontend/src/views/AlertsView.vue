@@ -45,7 +45,7 @@ async function runAction(id: number, action: () => Promise<unknown>) {
       <div class="table-head"><span>告警编码</span><span>资产 / 事件</span><span>级别</span><span>状态</span><span>操作</span></div>
       <div v-for="alert in visible" :key="alert.id" class="table-row">
         <div><b>{{ alert.code }}</b><small>{{ new Date(alert.openedAt).toLocaleString('zh-CN') }}</small></div>
-        <div><strong>{{ alert.title }}</strong><small>{{ alert.assetCode || '未关联资产' }} · {{ alert.category }}</small></div>
+        <div><strong>{{ alert.title }}</strong><small>{{ alert.assetCode || '未关联资产' }} · {{ alert.category }}<template v-if="alert.ruleKey"> · 自动规则 {{ alert.ruleKey }}<template v-if="alert.lastObservedValue != null">（最新值 {{ alert.lastObservedValue }}）</template></template></small></div>
         <span :class="['badge', alert.severity]">{{ alert.severity === 'critical' ? '严重' : alert.severity === 'warning' ? '警告' : '提示' }}</span>
         <span :data-testid="`alert-status-${alert.code}`" :class="['status-text', alert.status]">{{ alert.status === 'open' ? '待确认' : alert.status === 'acknowledged' ? '已确认' : alert.status === 'resolved' ? '已解决' : '已关闭' }}</span>
         <div class="row-actions">

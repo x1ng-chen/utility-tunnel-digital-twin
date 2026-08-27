@@ -2,7 +2,7 @@ import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import { api } from '../services/api';
 import { useAuthStore } from './auth';
-import type { Alert, Asset, AssetMutation, AuditEntry, Dashboard, Telemetry, Threshold, WorkOrder } from '../types';
+import type { Alert, Asset, AssetMutation, AuditEntry, Dashboard, Telemetry, TelemetryIngestResult, TelemetryReading, Threshold, WorkOrder } from '../types';
 
 type ReportKind = 'alerts' | 'workOrders' | 'assets' | 'daily';
 const demoTransitions: Record<WorkOrder['status'], WorkOrder['status'][]> = {
@@ -250,6 +250,16 @@ export const useOperationsStore = defineStore('operations', () => {
     }
   }
 
+  async function ingestTelemetry(readings: TelemetryReading[]): Promise<TelemetryIngestResult> {
+    if (source.value !== 'api') throw new Error('遥测写入仅允许使用 Django API 数据源。');
+    if (offline.value) throw new Error('Django API 当前离线，无法写入遥测。');
+    if (auth.user?.role === 'viewer') throw new Error('当前角色没有遥测写入权限。');
+    const response = await runApiMutation(() => api.ingestTelemetry(readings as unknown as Record<string, unknown>[]));
+    await refresh('api');
+    notice.value = `遥测批次已处理：新增 ${response.data.created}，重复 ${response.data.duplicates}`;
+    return response.data as TelemetryIngestResult;
+  }
+
   function downloadReport(report: ReportKind) {
     if (typeof window === 'undefined' || typeof document === 'undefined' || typeof Blob === 'undefined') return;
     const rows = report === 'alerts' ? alerts.value : report === 'workOrders' ? workOrders.value : report === 'assets' ? assets.value : [{ ...dashboard.value, telemetry: dashboard.value.telemetry }];
@@ -260,7 +270,7 @@ export const useOperationsStore = defineStore('operations', () => {
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
-  return { dashboard, assets, alerts, workOrders, thresholds, telemetry, audit, loading, source, offline, syncError, lastSyncedAt, notice, openAlerts, activeOrders, refresh, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, transition, updateThreshold, createReport };
+  return { dashboard, assets, alerts, workOrders, thresholds, telemetry, audit, loading, source, offline, syncError, lastSyncedAt, notice, openAlerts, activeOrders, refresh, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, transition, updateThreshold, createReport, ingestTelemetry };
 });
 
 function apiErrorMessage(cause: unknown): string {

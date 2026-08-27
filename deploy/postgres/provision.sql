@@ -45,9 +45,22 @@ GRANT SELECT, INSERT, DELETE ON authtoken_token TO ut_runtime;
 GRANT SELECT ON operations_asset, operations_alert, operations_workorder,
   operations_telemetry, operations_threshold, operations_auditlog,
   operations_reportexport TO ut_runtime;
-GRANT UPDATE (status, updated_at) ON operations_asset TO ut_runtime;
-GRANT UPDATE (status, acknowledged_at, acknowledged_by_id, resolved_at)
+GRANT INSERT (code, name, zone, asset_type, status, hardware_code,
+  integration_status, interface, capabilities, mesh, position, latitude,
+  longitude, location_source, installation_note, is_active, version,
+  last_seen_at, created_at, updated_at) ON operations_asset TO ut_runtime;
+GRANT UPDATE (code, name, zone, asset_type, status, hardware_code,
+  integration_status, interface, capabilities, mesh, position, latitude,
+  longitude, location_source, installation_note, is_active, version,
+  last_seen_at, updated_at) ON operations_asset TO ut_runtime;
+GRANT INSERT (code, asset_id, severity, category, status, title, detail,
+  rule_key, last_observed_value, opened_at, acknowledged_at,
+  acknowledged_by_id, resolved_at, created_at) ON operations_alert TO ut_runtime;
+GRANT UPDATE (severity, status, detail, last_observed_value,
+  acknowledged_at, acknowledged_by_id, resolved_at)
   ON operations_alert TO ut_runtime;
+GRANT INSERT (asset_id, event_id, metric_key, metric, value, unit, quality,
+  recorded_at, ingested_at) ON operations_telemetry TO ut_runtime;
 GRANT INSERT ON operations_workorder TO ut_runtime;
 GRANT UPDATE (status, assignee_id, completed_at, reviewed_by_id, version, updated_at)
   ON operations_workorder TO ut_runtime;
@@ -57,6 +70,7 @@ GRANT INSERT ON operations_auditlog, operations_reportexport TO ut_runtime;
 -- BigAutoField-backed inserts need sequence usage, but the API must not be
 -- able to alter sequence ownership or create new schema objects.
 GRANT USAGE, SELECT ON SEQUENCE operations_profile_id_seq,
+  operations_asset_id_seq, operations_alert_id_seq, operations_telemetry_id_seq,
   operations_workorder_id_seq, operations_auditlog_id_seq,
   operations_reportexport_id_seq TO ut_runtime;
 GRANT USAGE, SELECT ON SEQUENCE auth_user_id_seq, authtoken_token_id_seq TO ut_runtime;

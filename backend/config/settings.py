@@ -147,7 +147,7 @@ CSRF_TRUSTED_ORIGINS = parse_origins(raw_csrf_origins, '', 'DJANGO_CSRF_TRUSTED_
 if IS_PRODUCTION and any(not origin.lower().startswith('https://') for origin in CSRF_TRUSTED_ORIGINS):
     raise RuntimeError('Production DJANGO_CSRF_TRUSTED_ORIGINS must use HTTPS origins.')
 CORS_ALLOW_CREDENTIALS = os.getenv('CORS_ALLOW_CREDENTIALS', 'false').lower() in {'1', 'true', 'yes'}
-CORS_ALLOW_HEADERS = [*default_headers, 'x-request-id']
+CORS_ALLOW_HEADERS = [*default_headers, 'x-request-id', 'idempotency-key']
 API_TOKEN_TTL_SECONDS = int(os.getenv('API_TOKEN_TTL_SECONDS', '900'))
 if API_TOKEN_TTL_SECONDS <= 0:
     raise ValueError('API_TOKEN_TTL_SECONDS must be greater than zero.')

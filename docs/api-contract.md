@@ -110,6 +110,7 @@
 | `POST` | `/work-orders/` | 管理员/运维员 | 新建 `{ assetCode, title, description?, priority? }`；可提供 `Idempotency-Key` 防止重试重复建单 |
 | `POST` | `/work-orders/{id}/transition/` | 管理员/运维员 | 流转 `{ to, version? }`；提供 `version` 时启用乐观锁，完成工单必须管理员复核 |
 | `GET` | `/telemetry/` | 登录 | `assetCode`、`page`、`pageSize` |
+| `POST` | `/telemetry/` | 管理员/运维员 | 批量写入 1–100 条可信遥测；按 `eventId` 幂等，驱动阈值告警和资产状态联动 |
 | `GET` | `/thresholds/` | 登录 | 查询阈值策略 |
 | `PUT` | `/thresholds/{key}/` | 管理员 | 更新 `{ warning, alarm, version }`，使用乐观锁 |
 | `GET` | `/audit/` | 登录 | `action`、`search`（动作、资源类型/编号或操作者邮箱）、`occurredFrom`、`occurredTo`、`page`、`pageSize` |
@@ -121,6 +122,7 @@
 | 操作 | 管理员 | 运维员 | 查看者 |
 | --- | --- | --- | --- |
 | 查询业务数据 | ✓ | ✓ | ✓ |
+| 写入可信遥测 | ✓ | ✓ | — |
 | 确认告警 | ✓ | ✓ | — |
 | 新建/流转工单 | ✓ | ✓ | — |
 | 完成工单复核 | ✓ | — | — |
@@ -129,3 +131,30 @@
 | 导出报表 | ✓ | ✓ | ✓ |
 
 任何未列出的写操作默认拒绝，后端权限校验是最终边界，前端按钮隐藏仅用于改善使用体验。
+
+## 遥测批量写入与自动规则
+
+`POST /telemetry/` 接受以下结构；整个批次在同一事务内校验与写入，任意未知/停用资产、单位不一致或幂等冲突都会拒绝整批数据，不产生部分提交：
+
+```json
+{
+  "readings": [
+    {
+      "eventId": "sim:ENV-01:temperature:20260827T160000Z",
+      "assetCode": "ENV-01",
+      "metricKey": "temperature",
+      "metric": "环境温度",
+      "value": 30.2,
+      "unit": "°C",
+      "quality": "good",
+      "recordedAt": "2026-08-27T16:00:00+08:00"
+    }
+  ]
+}
+```
+
+- `eventId` 全局唯一。相同事件和相同数据重试返回已有记录；复用事件号提交不同数据返回 `409 idempotency_conflict`。
+- `recordedAt` 不得早于当前时间 30 天，允许最多 5 分钟时钟漂移；数值必须有限且位于安全输入范围。
+- 只有 `quality=good` 的读数参与规则计算。指标存在阈值时，单位必须与阈值配置一致。
+- 首次越过预警线创建自动告警；越过报警线只升级现有活动告警，不重复建告警；恢复到预警线以下时自动解决告警并重算资产状态。
+- 返回 `created`、`duplicates`、`rules` 和本批次 `items`；所有自动创建、升级、恢复和批次写入均写审计日志。

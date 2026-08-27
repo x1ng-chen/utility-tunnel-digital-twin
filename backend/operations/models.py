@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils import timezone
 
 
 class Profile(models.Model):
@@ -107,6 +108,8 @@ class Alert(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
     title = models.CharField(max_length=160)
     detail = models.TextField()
+    rule_key = models.CharField(max_length=40, null=True, blank=True, editable=False)
+    last_observed_value = models.FloatField(null=True, blank=True, editable=False)
     opened_at = models.DateTimeField()
     acknowledged_at = models.DateTimeField(null=True, blank=True)
     acknowledged_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='acknowledged_alerts')
@@ -118,6 +121,13 @@ class Alert(models.Model):
         indexes = [
             models.Index(fields=['status', '-opened_at'], name='alert_status_opened_idx'),
             models.Index(fields=['asset', 'status'], name='alert_asset_status_idx'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['asset', 'rule_key'],
+                condition=models.Q(rule_key__isnull=False, status__in=['open', 'acknowledged']),
+                name='alert_active_rule_unique',
+            ),
         ]
 
 
@@ -177,15 +187,21 @@ class Telemetry(models.Model):
         MISSING = 'missing', '缺失'
 
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='telemetry')
+    event_id = models.CharField(max_length=80, unique=True, null=True, blank=True, editable=False)
+    metric_key = models.CharField(max_length=40, blank=True)
     metric = models.CharField(max_length=80)
     value = models.FloatField()
     unit = models.CharField(max_length=20)
     quality = models.CharField(max_length=20, choices=Quality.choices, default=Quality.GOOD)
     recorded_at = models.DateTimeField()
+    ingested_at = models.DateTimeField(default=timezone.now, editable=False)
 
     class Meta:
         ordering = ['-recorded_at']
-        indexes = [models.Index(fields=['asset', '-recorded_at'], name='telemetry_asset_time_idx')]
+        indexes = [
+            models.Index(fields=['asset', '-recorded_at'], name='telemetry_asset_time_idx'),
+            models.Index(fields=['metric_key', '-recorded_at'], name='telemetry_metric_time_idx'),
+        ]
 
 
 class Threshold(models.Model):

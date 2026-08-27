@@ -12,6 +12,12 @@ const required = [
   ['profile read access', /grant select on operations_profile to ut_runtime/],
   ['profile lifecycle updates', /grant update \(display_name, role\) on operations_profile to ut_runtime/],
   ['token lifecycle access', /grant select, insert, delete on authtoken_token to ut_runtime/],
+  ['asset master-data insert access', /grant insert \(code, name, zone, asset_type, status, hardware_code, .*\) on operations_asset to ut_runtime/],
+  ['asset lifecycle update access', /grant update \(code, name, zone, asset_type, status, hardware_code, .* last_seen_at, updated_at\) on operations_asset to ut_runtime/],
+  ['automatic alert insert access', /grant insert \(code, asset_id, severity, category, status, title, detail, .*\) on operations_alert to ut_runtime/],
+  ['alert rule update access', /grant update \(severity, status, detail, last_observed_value, acknowledged_at, acknowledged_by_id, resolved_at\) on operations_alert to ut_runtime/],
+  ['telemetry insert access', /grant insert \(asset_id, event_id, metric_key, metric, value, unit, quality, recorded_at, ingested_at\) on operations_telemetry to ut_runtime/],
+  ['operational insert sequences', /grant usage, select on sequence operations_profile_id_seq, operations_asset_id_seq, operations_alert_id_seq, operations_telemetry_id_seq, operations_workorder_id_seq, operations_auditlog_id_seq, operations_reportexport_id_seq to ut_runtime/],
   ['user and token sequences', /grant usage, select on sequence auth_user_id_seq, authtoken_token_id_seq to ut_runtime/],
   ['placeholder guard', /replace the ut_runtime password placeholder before executing/],
 ];

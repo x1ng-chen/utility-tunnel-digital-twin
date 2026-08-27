@@ -24,7 +24,7 @@
 前端使用 `frontend/src/stores/operations.ts` 作为唯一的数据模型和状态转换入口；`frontend/src/stores/auth.ts` 负责会话生命周期；`frontend/src/services/api.ts` 只负责 Django API 映射。它们共同覆盖资产、告警、工单、遥测、阈值、会话和审计记录，禁止由页面组件各自维护重复业务数据。
 
 ```text
-模拟遥测 → 资产状态/孪生高亮
+可信遥测批次 → 幂等落库 → 阈值规则 → 告警创建/升级/恢复 → 资产状态/孪生高亮 + 审计
 告警确认 → 审计
 告警创建工单 → 来源关联 + 审计
 工单 派发 → 处置 → 复核 → 完成 → 来源告警恢复 + 资产状态刷新 + 审计
@@ -79,7 +79,7 @@ GIS 使用项目内 Leaflet 依赖。开发底图默认使用 OpenStreetMap 并�
 
 ## 从演示数据迁移到 PostgreSQL
 
-`backend` 已包含 Django 迁移、Token Bearer 认证、RBAC、资产、遥测、告警、工单、审计、阈值和导出记录。Vue 前端已经实现 API 客户端、登录、分页回读、会话过期清理和失败降级；不需要替换页面或重写业务对象。`services/api` 的 PostgreSQL 实现仅用于旧版兼容验证。
+`backend` 已包含 Django 迁移、Token Bearer 认证、RBAC、资产、可信遥测批量写入、阈值自动告警、工单、审计、阈值和导出记录。Vue 前端已经实现 API 客户端、登录、分页回读、显式刷新与同步时间、会话过期清理和失败降级；不需要替换页面或重写业务对象。`services/api` 的 PostgreSQL 实现仅用于旧版兼容验证。
 
 完整接口、权限和写入约束见 [API 契约](api-contract.md)。要在本地或托管环境启用它：
 

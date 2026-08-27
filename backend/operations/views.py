@@ -22,8 +22,9 @@ from rest_framework.views import APIView
 
 from .models import Alert, Asset, AuditLog, Profile, ReportExport, Telemetry, Threshold, WorkOrder
 from .permissions import AuthenticatedRead
-from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, ReportExportSerializer, TelemetrySerializer, ThresholdSerializer, WorkOrderSerializer
+from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, ReportExportSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, WorkOrderSerializer
 from .services import actor_name, audit
+from .telemetry_rules import evaluate_threshold
 from .throttling import LoginRateThrottle
 
 
@@ -105,6 +106,18 @@ def datetime_filter(request, key: str):
     if timezone.is_naive(parsed):
         parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
     return parsed, None
+
+
+def telemetry_matches(reading, payload) -> bool:
+    return (
+        reading.asset.code == payload['assetCode']
+        and reading.metric_key == payload['metricKey']
+        and reading.metric == payload['metric']
+        and reading.value == payload['value']
+        and reading.unit == payload['unit']
+        and reading.quality == payload['quality']
+        and reading.recorded_at == payload['recordedAt']
+    )
 
 
 class HealthView(APIView):
@@ -625,6 +638,87 @@ class TelemetryListView(APIView):
         if request.query_params.get('assetCode'):
             queryset = queryset.filter(asset__code=request.query_params['assetCode'])
         return paginated(queryset, TelemetrySerializer, request)
+
+    def post(self, request):
+        if not can_write(request):
+            return error_response('forbidden', 'Telemetry ingestion permission is required.', 403)
+        payload = object_payload(request)
+        if payload is None or not isinstance(payload.get('readings'), list):
+            return error_response('invalid_request', 'A JSON object with a readings array is required.', 400)
+        readings = payload['readings']
+        if not 1 <= len(readings) <= 100:
+            return error_response('invalid_request', 'readings must contain between 1 and 100 items.', 400)
+        serializer = TelemetryReadingSerializer(data=readings, many=True)
+        if not serializer.is_valid():
+            return error_response('validation_error', 'Telemetry batch is invalid.', 400, serializer.errors)
+        validated = serializer.validated_data
+        event_ids = [item['eventId'] for item in validated]
+        if len(event_ids) != len(set(event_ids)):
+            return error_response('validation_error', 'eventId values must be unique within a batch.', 400, {'eventId': ['Duplicate eventId in batch.']})
+
+        try:
+            with transaction.atomic():
+                asset_codes = {item['assetCode'] for item in validated}
+                assets = Asset.objects.select_for_update().filter(code__in=asset_codes).in_bulk(field_name='code')
+                invalid_assets = sorted(code for code in asset_codes if code not in assets or not assets[code].is_active)
+                if invalid_assets:
+                    return error_response('validation_error', 'Telemetry references missing or inactive assets.', 400, {'assetCode': invalid_assets})
+                metric_keys = {item['metricKey'] for item in validated}
+                thresholds = Threshold.objects.filter(key__in=metric_keys).in_bulk(field_name='key')
+                unit_errors = sorted({item['metricKey'] for item in validated if item['metricKey'] in thresholds and item['unit'] != thresholds[item['metricKey']].unit})
+                if unit_errors:
+                    return error_response('validation_error', 'Telemetry units must match configured threshold units.', 400, {'metricKey': unit_errors})
+
+                existing = Telemetry.objects.select_related('asset').filter(event_id__in=event_ids).in_bulk(field_name='event_id')
+                for item in validated:
+                    prior = existing.get(item['eventId'])
+                    if prior and not telemetry_matches(prior, item):
+                        return error_response(
+                            'idempotency_conflict',
+                            'An eventId was already used with different telemetry data.',
+                            409,
+                            {'eventId': item['eventId']},
+                        )
+
+                stored = []
+                created_count = 0
+                duplicate_count = 0
+                rule_counts = {}
+                for item in validated:
+                    prior = existing.get(item['eventId'])
+                    if prior:
+                        stored.append(prior)
+                        duplicate_count += 1
+                        continue
+                    asset = assets[item['assetCode']]
+                    reading = Telemetry.objects.create(
+                        asset=asset,
+                        event_id=item['eventId'],
+                        metric_key=item['metricKey'],
+                        metric=item['metric'],
+                        value=item['value'],
+                        unit=item['unit'],
+                        quality=item['quality'],
+                        recorded_at=item['recordedAt'],
+                    )
+                    if asset.last_seen_at is None or item['recordedAt'] > asset.last_seen_at:
+                        asset.last_seen_at = item['recordedAt']
+                        asset.save(update_fields=['last_seen_at', 'updated_at'])
+                    threshold = thresholds.get(item['metricKey'])
+                    action = evaluate_threshold(reading, threshold, request.user, request_id(request)).action if threshold else 'no_rule'
+                    rule_counts[action] = rule_counts.get(action, 0) + 1
+                    stored.append(reading)
+                    created_count += 1
+                if created_count:
+                    audit(request.user, 'telemetry.batch_ingested', 'telemetry_batch', '', {'created': created_count, 'duplicates': duplicate_count, 'rules': rule_counts}, request_id(request))
+        except IntegrityError:
+            return error_response('conflict', 'Telemetry ingestion conflicted with a concurrent request. Retry the same eventId values.', 409)
+        return Response({
+            'items': TelemetrySerializer(stored, many=True).data,
+            'created': created_count,
+            'duplicates': duplicate_count,
+            'rules': rule_counts,
+        }, status=201 if created_count else 200)
 
 
 class ThresholdListView(APIView):
