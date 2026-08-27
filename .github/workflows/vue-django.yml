@@ -12,6 +12,7 @@ on:
       - 'docs/deployment-runbook.md'
       - 'docs/software-quality-gates.md'
       - 'deploy/postgres/**'
+      - 'deploy/containers/**'
       - 'tools/**'
       - '.github/workflows/vue-django.yml'
   pull_request:
@@ -25,6 +26,7 @@ on:
       - 'docs/deployment-runbook.md'
       - 'docs/software-quality-gates.md'
       - 'deploy/postgres/**'
+      - 'deploy/containers/**'
       - 'tools/**'
       - '.github/workflows/vue-django.yml'
 
@@ -39,6 +41,7 @@ jobs:
           node-version: 22
       - run: node tools/quality-scan.mjs
       - run: node tools/check-postgres-policy.mjs
+      - run: node tools/check-deployment-artifacts.mjs
 
   frontend:
     name: Vue3 quality
@@ -81,6 +84,7 @@ jobs:
       - run: python manage.py check
       - run: python manage.py migrate --noinput
       - run: python manage.py production_preflight --allow-non-production
+      - run: python manage.py data_governance_report --format=json
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test
       - run: python -m compileall -q config operations

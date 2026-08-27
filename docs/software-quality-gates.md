@@ -30,6 +30,7 @@ python manage.py check
 python manage.py makemigrations --check --dry-run
 python manage.py test
 python -m compileall -q config operations
+python manage.py data_governance_report --format=json
 ```
 
 自动门禁覆盖前端状态机与构建、依赖高危漏洞、Django 配置、数据库迁移一致性、认证令牌、限流、就绪探针、RBAC、告警、工单、阈值、审计、报表和请求 ID。
@@ -40,13 +41,15 @@ Django 运行日志为依赖无关的 JSON 结构，包含请求耗时和关联 
 
 ## 浏览器端回归
 
-浏览器 E2E 尚未纳入当前仓库依赖；待 CI 提供浏览器运行器后执行以下验收路径（不将未执行结果标记为通过）：
+`.github/workflows/browser-e2e.yml` 已在 GitHub Actions 中使用临时浏览器运行器执行真实浏览器回归，不向开发电脑或项目依赖写入浏览器包。该工作流会启动隔离的 Django 与 Vue 服务，并验证以下路径：
 
 1. 打开前端登录页，使用演示工作区进入运行总览。
 2. 进入设备台账，确认四个空间节点渲染；点击 `SEEP-W01`，详情面板应显示 `关注`、坐标 `70, 68`、1 条待处置告警和 1 个关联工单。
 3. 搜索不存在的编码，确认地图节点和详情区进入空态；清空搜索后列表恢复。
 4. 退出，切换 Django API，使用 `operator@example.com / demo-password-2026` 登录；确认仪表盘显示 `Django API`、审计流出现 `auth.login`。
-5. 检查浏览器控制台，Errors 和 Warnings 必须为 0。
+5. 检查浏览器控制台，Errors 必须为 0；失败时上传 Django/Vue 服务日志供定位。
+
+首次推送后必须以该工作流绿色结果作为浏览器回归证据；未运行或失败不得写入“通过”。
 
 ## 发布前检查
 
@@ -55,3 +58,4 @@ Django 运行日志为依赖无关的 JSON 结构，包含请求耗时和关联 
 - 生产环境的 CORS/CSRF Origin 必须使用 HTTPS；缺少这些变量时 Django 应在启动阶段 fail fast。
 - 令牌有效期、登录限流、请求 ID 和审计日志应在部署环境变量中确认；不得把 `.env`、备份文件或密码提交到仓库。
 - 数据库发布前执行 `deploy/postgres/backup-django.ps1`，恢复演练使用隔离目标和 `restore-verify-django.ps1 -ConfirmRestore`。
+- `data_governance_report` 仅输出数据保留期候选统计；它不会清理历史数据，防止未审批任务误删审计或遥测记录。

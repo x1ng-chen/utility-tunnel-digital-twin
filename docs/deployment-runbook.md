@@ -55,6 +55,19 @@ python manage.py production_preflight
 
 部署 `frontend` 后设置公开变量 `VITE_API_BASE_URL=https://<你的-api-domain>/api`；这只能是 API 地址，绝不能放入数据库 URL、密码或 Token。若未设置，站点默认使用本地演示模式。Django 的 `CORS_ALLOWED_ORIGINS` 必须精确允许该前端 Origin。
 
+### 容器化制品
+
+仓库提供无需在开发电脑额外安装服务的部署制品：`deploy/containers/Dockerfile.api`、`Dockerfile.web` 与 `docker-compose.production.yml`。它们以非 root API 用户、只读文件系统、内部 API 网络和回环 Web 端口为默认安全边界；真实 RDS 始终由外部托管，不会被 Compose 以数据卷方式创建。
+
+在具备 Docker 和华为云环境变量的 ECS 上，按 [容器部署说明](../deploy/containers/README.md) 执行。构建完成后必须在 API 容器内运行：
+
+```bash
+python manage.py production_preflight
+python manage.py data_governance_report --format=json
+```
+
+第二条命令仅生成遥测、审计与导出记录的保留期审查报告，不会删除任何业务数据。实际数据清理必须由单独、经审批且带审计记录的发布执行。
+
 ## 4. 备份与恢复
 
 - 日常：在托管 PostgreSQL 平台开启自动快照与时间点恢复，确认最近一次备份成功。

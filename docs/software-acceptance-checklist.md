@@ -11,8 +11,10 @@
 | P0 上线预检 | 正式流量前验证生产安全配置、TLS 反向代理信任、数据库 TLS、共享缓存、数据库连通性和迁移状态 | `python manage.py production_preflight`、`deploy/postgres/provision.sql` |
 | P2 孪生 | 区域与资产坐标独立配置；数据库空间坐标可覆盖视觉回退位置 | `twin-config.ts` 与孪生视图 |
 | P2 质量 | 静态检查、类型检查、单元测试、覆盖率、构建、迁移安全检查与 PostgreSQL 冒烟都自动执行 | `.github/workflows/vue-django.yml`、`.github/workflows/ci.yml` |
-| P2 浏览器回归 | 登录、核心业务操作、角色边界和导出流程的浏览器 E2E | 待接入浏览器运行器后执行；当前不将未执行结果标记为通过 |
+| P2 浏览器回归 | 登录、孪生筛选、告警确认、Django API 数据读取和审计的真实浏览器 E2E | `.github/workflows/browser-e2e.yml`；首次绿色运行后归档工作流链接 |
 | P2 韧性 | 健康/就绪检查、结构化日志、速率限制、安全响应头、统一错误码与前端失败提示 | `server.ts`、`rate-limit.ts` |
+| P2 数据治理 | 遥测、审计、导出数据按保留期只读盘点，清理操作必须单独审批 | `python manage.py data_governance_report --format=json` |
+| P2 发布制品 | Vue 静态站与 Django API 具备可审查容器制品、非 root 运行、内部 API 网络与运行时密钥注入 | `deploy/containers/`、`tools/check-deployment-artifacts.mjs` |
 | P3 交付 | 部署、使用、测试与答辩脚本完整，可独立演示 | `docs/` 下交付文档 |
 
 ## 不纳入本轮验收

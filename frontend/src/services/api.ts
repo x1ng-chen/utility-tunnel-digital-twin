@@ -6,8 +6,12 @@ const fallbackBaseUrl = typeof window !== 'undefined' && window.location.protoco
   ? `${window.location.origin}/api`
   : 'http://127.0.0.1:8000/api';
 
-function normalizeApiBaseUrl(baseUrl: string): string {
-  const normalized = baseUrl.trim().replace(/\/+$/, '');
+export function resolveApiBaseUrl(baseUrl: string, allowSameOriginPath = false, sameOrigin = typeof window !== 'undefined' ? window.location.origin : ''): string {
+  let normalized = baseUrl.trim().replace(/\/+$/, '');
+  if (allowSameOriginPath && normalized.startsWith('/')) {
+    if (!sameOrigin) throw new Error('相对 API 地址只能在浏览器中使用。');
+    normalized = new URL(normalized, sameOrigin).toString().replace(/\/+$/, '');
+  }
   if (!/^https?:\/\//i.test(normalized)) throw new Error('API 地址必须使用 HTTP 或 HTTPS。');
   const parsed = new URL(normalized);
   if (parsed.username || parsed.password) throw new Error('API 地址不得包含账号或密码。');
@@ -20,12 +24,16 @@ function normalizeApiBaseUrl(baseUrl: string): string {
 
 function initialApiBaseUrl(): string {
   const stored = localStorageRef?.getItem('vue-api-url') || '';
-  const candidates = [stored, import.meta.env.VITE_API_BASE_URL || '', fallbackBaseUrl].filter(Boolean);
+  const candidates = [
+    { value: stored, allowSameOriginPath: false },
+    { value: import.meta.env.VITE_API_BASE_URL || '', allowSameOriginPath: true },
+    { value: fallbackBaseUrl, allowSameOriginPath: false },
+  ].filter((candidate) => candidate.value);
   for (const candidate of candidates) {
     try {
-      return normalizeApiBaseUrl(candidate);
+      return resolveApiBaseUrl(candidate.value, candidate.allowSameOriginPath);
     } catch {
-      if (candidate === stored) localStorageRef?.removeItem('vue-api-url');
+      if (candidate.value === stored) localStorageRef?.removeItem('vue-api-url');
     }
   }
   return fallbackBaseUrl;
@@ -63,7 +71,11 @@ export const api = {
 };
 
 export function setApiBaseUrl(baseUrl: string): void {
-  const normalized = normalizeApiBaseUrl(baseUrl);
+  const normalized = resolveApiBaseUrl(baseUrl);
   client.defaults.baseURL = normalized;
   localStorageRef?.setItem('vue-api-url', normalized);
+}
+
+export function getApiBaseUrl(): string {
+  return String(client.defaults.baseURL || defaultBaseUrl);
 }

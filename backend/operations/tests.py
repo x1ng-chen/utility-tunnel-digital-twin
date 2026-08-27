@@ -1,4 +1,5 @@
 import io
+import json
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -11,7 +12,7 @@ from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 from config.settings import parse_origins
-from .models import Alert, Asset, AuditLog, Profile, ReportExport, Threshold, WorkOrder
+from .models import Alert, Asset, AuditLog, Profile, ReportExport, Telemetry, Threshold, WorkOrder
 
 
 class OperationsApiTests(TestCase):
@@ -58,6 +59,19 @@ class OperationsApiTests(TestCase):
         output = io.StringIO()
         call_command('production_preflight', '--allow-non-production', '--skip-migrations', stdout=output)
         self.assertIn('Production preflight passed', output.getvalue())
+
+    def test_data_governance_report_is_read_only_and_machine_readable(self):
+        Telemetry.objects.create(asset=self.asset, metric='temperature', value=26, unit='°C', quality=Telemetry.Quality.GOOD, recorded_at=timezone.now() - timedelta(days=91))
+        AuditLog.objects.create(actor=self.operator, action='test.audit', resource_type='test', resource_id='1', detail={})
+        before = {'telemetry': Telemetry.objects.count(), 'audit': AuditLog.objects.count(), 'exports': ReportExport.objects.count()}
+        output = io.StringIO()
+
+        call_command('data_governance_report', '--telemetry-days=90', '--format=json', stdout=output)
+
+        report = json.loads(output.getvalue())
+        self.assertEqual(report['mode'], 'read-only')
+        self.assertEqual(report['collections']['telemetry']['reviewCandidates'], 1)
+        self.assertEqual(before, {'telemetry': Telemetry.objects.count(), 'audit': AuditLog.objects.count(), 'exports': ReportExport.objects.count()})
 
     def test_login_returns_token(self):
         response = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'demo-password'}, format='json')

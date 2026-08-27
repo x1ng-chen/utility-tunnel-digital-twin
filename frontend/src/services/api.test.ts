@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { setApiBaseUrl } from './api';
+import { resolveApiBaseUrl, setApiBaseUrl } from './api';
 import { csvCell } from '../stores/operations';
 
 describe('API base URL validation', () => {
@@ -13,6 +13,10 @@ describe('API base URL validation', () => {
 
   it('normalizes a trailing slash without persisting credentials', () => {
     expect(() => setApiBaseUrl('https://api.example.com/')).not.toThrow();
+  });
+
+  it('resolves a build-time same-origin API route for the production reverse proxy', () => {
+    expect(resolveApiBaseUrl('/api', true, 'https://ops.example.com')).toBe('https://ops.example.com/api');
   });
 
   it('rejects query strings and neutralizes spreadsheet formulas in exports', () => {

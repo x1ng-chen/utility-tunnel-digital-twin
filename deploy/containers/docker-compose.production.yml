@@ -1,0 +1,61 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/containers/Dockerfile.api
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      DJANGO_ENV: production
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set-in-secret-store}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?set-public-api-host}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set-public-web-origin}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:?set-public-web-origin}
+      DATABASE_URL: ${DATABASE_URL:?set-rds-tls-connection-string}
+      DJANGO_CACHE_BACKEND: ${DJANGO_CACHE_BACKEND:?set-shared-cache-backend}
+      DJANGO_CACHE_LOCATION: ${DJANGO_CACHE_LOCATION:?set-shared-cache-location}
+      DJANGO_SECURE_SSL_REDIRECT: "true"
+      DJANGO_ENABLE_HSTS: "true"
+      DJANGO_TRUST_PROXY_SSL: "true"
+      APP_VERSION: ${APP_VERSION:-0.5.0}
+      APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
+    expose:
+      - "8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/containers/Dockerfile.web
+      args:
+        VITE_API_BASE_URL: /api
+    restart: unless-stopped
+    init: true
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/healthz | grep -q ok"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M

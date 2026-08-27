@@ -47,7 +47,7 @@ async function runAction(id: number, action: () => Promise<unknown>) {
         <div><b>{{ alert.code }}</b><small>{{ new Date(alert.openedAt).toLocaleString('zh-CN') }}</small></div>
         <div><strong>{{ alert.title }}</strong><small>{{ alert.assetCode || '未关联资产' }} · {{ alert.category }}</small></div>
         <span :class="['badge', alert.severity]">{{ alert.severity === 'critical' ? '严重' : alert.severity === 'warning' ? '警告' : '提示' }}</span>
-        <span :class="['status-text', alert.status]">{{ alert.status === 'open' ? '待确认' : alert.status === 'acknowledged' ? '已确认' : alert.status === 'resolved' ? '已解决' : '已关闭' }}</span>
+        <span :data-testid="`alert-status-${alert.code}`" :class="['status-text', alert.status]">{{ alert.status === 'open' ? '待确认' : alert.status === 'acknowledged' ? '已确认' : alert.status === 'resolved' ? '已解决' : '已关闭' }}</span>
         <div class="row-actions">
           <template v-if="canWrite">
             <button v-if="alert.status === 'open'" :disabled="busyId === alert.id" @click="acknowledge(alert)">{{ busyId === alert.id ? '处理中…' : '确认' }}</button>

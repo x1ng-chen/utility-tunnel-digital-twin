@@ -92,6 +92,10 @@ python manage.py runserver 127.0.0.1:8000
 
 不应把数据库连接串、Django 密钥或真实账号提交到仓库。使用 `backend/.env.example` 创建本地 `.env`，并由托管数据库平台提供连接字符串。
 
+## 发布制品与数据治理
+
+`deploy/containers/` 提供面向 ECS 的 Vue 静态站与 Django API 容器制品；容器运行时从受控环境注入密钥，API 以非 root 用户运行且不公开容器内部端口。数据保留期先通过 `python manage.py data_governance_report --format=json` 进行只读盘点；审计、遥测或导出记录的真实清理必须走单独的审批、备份和审计流程。
+
 ## 验收边界
 
 本版本验证软件业务流程，不代表工业控制或生命安全系统。模拟遥测、阈值和告警仅用于答辩演示，不能直接用于真实管廊或控制设备。

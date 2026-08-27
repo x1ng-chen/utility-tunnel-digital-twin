@@ -3,7 +3,7 @@ import { onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
-import { setApiBaseUrl } from '../services/api';
+import { getApiBaseUrl, setApiBaseUrl } from '../services/api';
 import type { Role } from '../types';
 
 const router = useRouter();
@@ -13,7 +13,7 @@ const mode = ref<'demo' | 'api'>('demo');
 const role = ref<Role>('operator');
 const email = ref('operator@example.com');
 const password = ref('demo-password-2026');
-const apiUrl = ref(import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api');
+const apiUrl = ref(getApiBaseUrl());
 const signal = ref(72);
 let signalTimer: number | undefined;
 onMounted(() => { signalTimer = window.setInterval(() => { signal.value = Math.round(58 + Math.random() * 36); }, 2500); });

@@ -1,0 +1,14 @@
+.git
+.github
+**/node_modules
+**/dist
+**/__pycache__
+**/*.py[cod]
+**/*.sqlite3
+**/*.db
+**/.env
+**/.env.*
+!**/.env.example
+deploy/postgres/backups
+firmware
+docs/assets
