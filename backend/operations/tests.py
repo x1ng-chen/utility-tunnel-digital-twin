@@ -76,6 +76,18 @@ class OperationsApiTests(TestCase):
         self.assertEqual(page['pageCount'], 1)
         self.assertFalse(page['hasNext'])
 
+    def test_dashboard_uses_the_latest_telemetry_reading(self):
+        from .models import Telemetry
+
+        Telemetry.objects.create(asset=self.asset, metric='temperature', value=31, unit='°C', quality=Telemetry.Quality.GOOD, recorded_at='2026-08-26T01:00:00Z')
+        latest = Telemetry.objects.create(asset=self.asset, metric='temperature', value=35, unit='°C', quality=Telemetry.Quality.GOOD, recorded_at='2026-08-26T02:00:00Z')
+        self.auth(self.operator)
+
+        response = self.client.get('/api/dashboard/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['telemetry']['id'], latest.id)
+
     def test_malformed_object_payloads_return_400_instead_of_500(self):
         self.auth(self.operator)
         self.assertEqual(self.client.post('/api/work-orders/', ['not', 'an', 'object'], format='json').status_code, 400)

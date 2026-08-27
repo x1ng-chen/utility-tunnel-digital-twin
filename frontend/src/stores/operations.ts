@@ -46,6 +46,22 @@ export const useOperationsStore = defineStore('operations', () => {
   const openAlerts = computed(() => alerts.value.filter((item) => item.status === 'open').length);
   const activeOrders = computed(() => workOrders.value.filter((item) => !['completed', 'cancelled'].includes(item.status)).length);
 
+  function expireApiSession() {
+    auth.expireSession();
+    offline.value = true;
+    syncError.value = '登录状态已过期，请重新登录。';
+    notice.value = '登录状态已过期，请重新登录。';
+  }
+
+  async function runApiMutation<T>(request: () => Promise<T>): Promise<T> {
+    try {
+      return await request();
+    } catch (cause: unknown) {
+      if (responseStatus(cause) === 401) expireApiSession();
+      throw cause;
+    }
+  }
+
   async function refresh(mode: 'demo' | 'api' = source.value) {
     source.value = mode;
     if (mode === 'demo') {
@@ -65,10 +81,7 @@ export const useOperationsStore = defineStore('operations', () => {
       lastSyncedAt.value = new Date().toISOString();
     } catch (cause: unknown) {
       if (responseStatus(cause) === 401) {
-        auth.expireSession();
-        offline.value = true;
-        syncError.value = '登录状态已过期，请重新登录。';
-        notice.value = '登录状态已过期，请重新登录。';
+        expireApiSession();
       } else {
         offline.value = true;
         syncError.value = apiErrorMessage(cause);
@@ -87,7 +100,7 @@ export const useOperationsStore = defineStore('operations', () => {
   async function acknowledge(alert: Alert) {
     if (offline.value) throw new Error('Django API 当前离线，离线快照为只读状态。');
     if (source.value === 'demo' && alert.status !== 'open') throw new Error('只有待确认告警可以确认');
-    const response = source.value === 'api' ? await api.acknowledge(alert.id) : null;
+    const response = source.value === 'api' ? await runApiMutation(() => api.acknowledge(alert.id)) : null;
     Object.assign(alert, response?.data ?? { status: 'acknowledged', acknowledgedAt: new Date().toISOString(), acknowledgedBy: auth.user?.displayName || '演示用户' });
     if (source.value === 'demo') appendAudit('alert.acknowledged', 'alert', alert.id, { code: alert.code });
     else await syncAudit();
@@ -99,7 +112,7 @@ export const useOperationsStore = defineStore('operations', () => {
     const existing = workOrders.value.find((item) => item.sourceAlertId === alert.id);
     if (existing) { notice.value = `${alert.code} 已有关联工单`; return existing; }
     if (!alert.assetCode) throw new Error('告警缺少关联资产，无法创建工单');
-    const response = source.value === 'api' ? await api.createAlertWorkOrder(alert.id) : null;
+    const response = source.value === 'api' ? await runApiMutation(() => api.createAlertWorkOrder(alert.id)) : null;
     const now = new Date().toISOString();
     const next: WorkOrder = response?.data ?? { id: nextLocalId(), code: `WO-${now.slice(2, 10).replaceAll('-', '')}-${String(localSequence).padStart(2, '0')}`, sourceAlertId: alert.id, assetCode: alert.assetCode, title: `处置 ${alert.code}：${alert.title}`, priority: alert.severity === 'critical' ? 'urgent' : 'high', status: 'open', createdAt: now, updatedAt: now, version: 1 };
     workOrders.value.unshift(next);
@@ -114,7 +127,7 @@ export const useOperationsStore = defineStore('operations', () => {
     if (source.value === 'demo' && !demoTransitions[order.status].includes(to)) throw new Error('无效的工单状态流转');
     if (source.value === 'demo' && to === 'completed' && auth.user?.role !== 'administrator') throw new Error('只有管理员可以完成工单');
     const previous = order.status;
-    const response = source.value === 'api' ? await api.transitionWorkOrder(order.id, to) : null;
+    const response = source.value === 'api' ? await runApiMutation(() => api.transitionWorkOrder(order.id, to)) : null;
     Object.assign(order, response?.data ?? { status: to, assigneeName: to === 'assigned' ? (auth.user?.displayName || '演示运维员') : order.assigneeName, updatedAt: new Date().toISOString(), completedAt: to === 'completed' ? new Date().toISOString() : order.completedAt, version: order.version + 1 });
     if (source.value === 'demo' && to === 'completed') {
       const linkedAlert = order.sourceAlertId ? alerts.value.find((item) => item.id === order.sourceAlertId) : undefined;
@@ -134,7 +147,7 @@ export const useOperationsStore = defineStore('operations', () => {
   async function updateThreshold(threshold: Threshold, warning: number, alarm: number) {
     if (offline.value) throw new Error('Django API 当前离线，离线快照为只读状态。');
     if (!Number.isFinite(warning) || !Number.isFinite(alarm) || warning < 0 || alarm <= warning) throw new Error('报警阈值必须大于预警阈值');
-    if (source.value === 'api') await api.updateThreshold(threshold.key, { warning, alarm, version: threshold.version });
+    if (source.value === 'api') await runApiMutation(() => api.updateThreshold(threshold.key, { warning, alarm, version: threshold.version }));
     threshold.warning = warning; threshold.alarm = alarm; threshold.version += 1;
     if (source.value === 'demo') appendAudit('setting.threshold.update', 'threshold', threshold.key, { warning, alarm, version: threshold.version });
     else await syncAudit();
@@ -147,7 +160,7 @@ export const useOperationsStore = defineStore('operations', () => {
     if (!title) throw new Error('工单标题不能为空');
     const asset = assets.value.find((item) => item.code === input.assetCode);
     if (!asset) throw new Error('请选择有效的关联资产');
-    const response = source.value === 'api' ? await api.createWorkOrder({ ...input, title }) : null;
+    const response = source.value === 'api' ? await runApiMutation(() => api.createWorkOrder({ ...input, title })) : null;
     const now = new Date().toISOString();
     const next: WorkOrder = response?.data ?? {
       id: nextLocalId(),
@@ -173,7 +186,7 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function createReport(report: ReportKind) {
-    if (source.value === 'api') await api.report(report);
+    if (source.value === 'api') await runApiMutation(() => api.report(report));
     downloadReport(report);
     if (source.value === 'demo') appendAudit('report.export', 'report_export', report, { report, format: 'csv' });
     else await syncAudit();
@@ -187,7 +200,7 @@ export const useOperationsStore = defineStore('operations', () => {
 
   async function syncAudit() {
     try { audit.value = (await api.audit({ page: 1, pageSize: 100 })).data.items; } catch (cause: unknown) {
-      if (responseStatus(cause) === 401) auth.expireSession();
+      if (responseStatus(cause) === 401) expireApiSession();
       /* The primary mutation already succeeded; keep the last audit view. */
     }
   }

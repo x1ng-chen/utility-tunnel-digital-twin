@@ -154,7 +154,7 @@ class DashboardView(APIView):
             'health': {'value': 100 if not Asset.objects.filter(status=Asset.Status.ALARM).exists() else 72},
             'openAlerts': Alert.objects.filter(status=Alert.Status.OPEN).count(),
             'activeWorkOrders': WorkOrder.objects.exclude(status__in=[WorkOrder.Status.COMPLETED, WorkOrder.Status.CANCELLED]).count(),
-            'telemetry': TelemetrySerializer(Telemetry.objects.select_related('asset').first()).data if Telemetry.objects.exists() else None,
+            'telemetry': TelemetrySerializer(Telemetry.objects.select_related('asset').order_by('-recorded_at', '-id').first()).data if Telemetry.objects.exists() else None,
         })
 
 
@@ -346,25 +346,26 @@ class ThresholdDetailView(APIView):
         payload = object_payload(request)
         if payload is None:
             return error_response('invalid_request', 'A JSON object body is required.', 400)
-        try:
-            threshold = Threshold.objects.get(key=key)
-            warning = float(payload.get('warning'))
-            alarm = float(payload.get('alarm'))
-        except (Threshold.DoesNotExist, TypeError, ValueError):
-            return error_response('invalid_request', 'A valid threshold key and values are required.', 400)
-        if not isfinite(warning) or not isfinite(alarm) or warning < 0 or alarm <= warning:
-            return error_response('invalid_request', 'Alarm must be greater than warning.', 400)
-        if payload.get('version') is not None:
+        with transaction.atomic():
             try:
-                version = int(payload['version'])
-            except (TypeError, ValueError):
-                return error_response('invalid_request', 'version must be a number.', 400)
-            if version != threshold.version:
-                return error_response('version_conflict', 'Threshold was changed by another request.', 409)
-        threshold.warning, threshold.alarm, threshold.version = warning, alarm, threshold.version + 1
-        threshold.save(update_fields=['warning', 'alarm', 'version', 'updated_at'])
-        audit(request.user, 'setting.threshold.update', 'threshold', threshold.key, {'version': threshold.version}, request_id(request))
-        return Response(ThresholdSerializer(threshold).data)
+                threshold = Threshold.objects.select_for_update().get(key=key)
+                warning = float(payload.get('warning'))
+                alarm = float(payload.get('alarm'))
+            except (Threshold.DoesNotExist, TypeError, ValueError):
+                return error_response('invalid_request', 'A valid threshold key and values are required.', 400)
+            if not isfinite(warning) or not isfinite(alarm) or warning < 0 or alarm <= warning:
+                return error_response('invalid_request', 'Alarm must be greater than warning.', 400)
+            if payload.get('version') is not None:
+                try:
+                    version = int(payload['version'])
+                except (TypeError, ValueError):
+                    return error_response('invalid_request', 'version must be a number.', 400)
+                if version != threshold.version:
+                    return error_response('version_conflict', 'Threshold was changed by another request.', 409)
+            threshold.warning, threshold.alarm, threshold.version = warning, alarm, threshold.version + 1
+            threshold.save(update_fields=['warning', 'alarm', 'version', 'updated_at'])
+            audit(request.user, 'setting.threshold.update', 'threshold', threshold.key, {'version': threshold.version}, request_id(request))
+            return Response(ThresholdSerializer(threshold).data)
 
 
 class AuditListView(APIView):

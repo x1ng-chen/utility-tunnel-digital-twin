@@ -222,7 +222,7 @@ utility-tunnel-digital-twin/
 ├── firmware/              # STM32CubeIDE 工程、驱动、协议和固件发布
 ├── hardware/              # 原理图、PCB、Gerber、接线图和结构加工文件
 ├── model/                 # Blender、GLB、纹理和资产映射
-├── apps/web/              # Vue 3 + Three.js 前端
+├── apps/web/              # React/vinext 兼容前端（旧版入口）
 ├── services/api/          # Node.js 后端、MQTT 接入和数据库迁移
 ├── deploy/                # Mosquitto、环境配置、启停和备份脚本
 ├── docs/                  # 需求、设计、接口、测试、部署和演示文档

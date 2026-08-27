@@ -78,4 +78,18 @@ describe('operations store', () => {
     expect(store.syncError).toBe('登录状态已过期，请重新登录。');
     expect(store.offline).toBe(true);
   });
+
+  it('clears the session when an API mutation returns 401', async () => {
+    const auth = useAuthStore();
+    await auth.login('', '', 'operator', 'demo');
+    const store = useOperationsStore();
+    store.source = 'api';
+    vi.spyOn(api, 'acknowledge').mockRejectedValue({ response: { status: 401 } } as never);
+
+    await expect(store.acknowledge(store.alerts[0])).rejects.toBeDefined();
+
+    expect(auth.isAuthenticated).toBe(false);
+    expect(store.offline).toBe(true);
+    expect(store.syncError).toBe('登录状态已过期，请重新登录。');
+  });
 });
