@@ -22,6 +22,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "st7735.h"
+#include <stdio.h>
+#include <string.h>
 
 /* USER CODE END Includes */
 
@@ -47,6 +49,8 @@ ADC_HandleTypeDef hadc1;
 
 TIM_HandleTypeDef htim2;
 
+UART_HandleTypeDef huart2;
+
 /* USER CODE BEGIN PV */
 static volatile uint32_t vibration_alarm_until = 0U;
 /* USER CODE END PV */
@@ -56,6 +60,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -168,6 +173,40 @@ static uint16_t Water_ReadRaw(void)
   }
 
   return (valid_samples > 0U) ? (uint16_t)(sum / valid_samples) : 0U;
+}
+
+static void Bluetooth_SendTelemetry(uint8_t temperature,
+                                    uint8_t humidity,
+                                    uint16_t water_raw,
+                                    uint8_t dht_ok,
+                                    uint8_t vibration_alarm)
+{
+  char json[512];
+  int length;
+
+  length = snprintf(
+    json, sizeof(json),
+    "{\"schema\":\"ut.telemetry.v1\","
+    "\"readings\":["
+    "{\"assetCode\":\"ENV-01\",\"metric\":\"temperature\","
+    "\"value\":%u,\"unit\":\"degC\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"ENV-01\",\"metric\":\"humidity\","
+    "\"value\":%u,\"unit\":\"%%RH\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"SEEP-W01\",\"metric\":\"water.raw\","
+    "\"value\":%u,\"unit\":\"adc\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"CTRL-01\",\"metric\":\"vibration.alarm\","
+    "\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"}"
+    "]}\r\n",
+    temperature, dht_ok ? "good" : "bad",
+    humidity, dht_ok ? "good" : "bad",
+    water_raw, vibration_alarm
+  );
+
+  if ((length > 0) && (length < (int)sizeof(json)))
+  {
+    (void)HAL_UART_Transmit(&huart2, (uint8_t *)json, (uint16_t)length, 1000U);
+  }
+
 }
 
 #if 0
@@ -463,6 +502,7 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM2_Init();
   MX_ADC1_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK)
   {
@@ -485,6 +525,7 @@ int main(void)
   uint8_t humidity = 0;
   uint8_t dht_ok = 0;
   uint32_t last_dht_read = HAL_GetTick() - 2000U;
+  uint32_t last_bluetooth_send = HAL_GetTick() - 2000U;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -510,6 +551,13 @@ int main(void)
     water_raw = Water_ReadRaw();
     vibration_alarm = ((int32_t)(vibration_alarm_until - HAL_GetTick()) > 0) ? 1U : 0U;
     LCD_ShowValues(temperature, humidity, water_raw, dht_ok, vibration_alarm);
+
+    if ((HAL_GetTick() - last_bluetooth_send) >= 2000U)
+    {
+      Bluetooth_SendTelemetry(temperature, humidity, water_raw,
+                              dht_ok, vibration_alarm);
+      last_bluetooth_send = HAL_GetTick();
+    }
     HAL_Delay(200);
   }
   /* USER CODE END 3 */
@@ -603,6 +651,27 @@ static void MX_ADC1_Init(void)
 
   /* USER CODE END ADC1_Init 2 */
 
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 9600;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /**

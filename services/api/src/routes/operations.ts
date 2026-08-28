@@ -1,12 +1,14 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { PoolClient } from 'pg';
 import { z } from 'zod';
 import { writeAudit } from '../audit.js';
 import { authenticate, requirePermission } from '../auth.js';
+import { config } from '../config.js';
 import { inTransaction, query } from '../db.js';
 import { alertTransitions, assertTransition, workOrderTransitions } from '../domain/lifecycle.js';
 import { realtimeHub } from '../realtime.js';
+import { parseDeviceTelemetry, persistTelemetry } from '../telemetry.js';
 
 const idParams = z.object({ id: z.string().uuid() });
 const pageQuery = z.object({
@@ -90,6 +92,13 @@ function formatExportFileName(report: z.infer<typeof reportExportBody>['report']
   return `utility-tunnel-${report}-${date}.json`;
 }
 
+function tokensMatch(received: string | undefined, expected: string): boolean {
+  if (!received) return false;
+  const actualBuffer = Buffer.from(received);
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
 export async function registerOperationsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/health', async () => {
     return { status: 'ok', service: 'utility-tunnel-api', kind: 'liveness' };
@@ -98,6 +107,28 @@ export async function registerOperationsRoutes(app: FastifyInstance): Promise<vo
   app.get('/v1/ready', async () => {
     await query('SELECT 1');
     return { status: 'ok', service: 'utility-tunnel-api', kind: 'readiness' };
+  });
+
+  app.post('/v1/device/telemetry', async (request, reply) => {
+    if (!config.DEVICE_INGEST_TOKEN) {
+      return reply.code(503).send({ error: 'device_ingest_disabled', message: 'Device ingest is not configured.' });
+    }
+    const receivedToken = request.headers['x-device-ingest-token'];
+    const token = Array.isArray(receivedToken) ? receivedToken[0] : receivedToken;
+    if (!tokensMatch(token, config.DEVICE_INGEST_TOKEN)) {
+      return reply.code(401).send({ error: 'invalid_device_token', message: 'Device authentication failed.' });
+    }
+    const deviceHeader = request.headers['x-device-id'];
+    const deviceId = Array.isArray(deviceHeader) ? deviceHeader[0] : deviceHeader;
+    if (!deviceId) return reply.code(400).send({ error: 'invalid_device_id', message: 'A device identifier is required.' });
+
+    try {
+      const readings = await persistTelemetry(parseDeviceTelemetry(deviceId, request.body));
+      return reply.code(202).send({ accepted: readings.length, deviceId: deviceId.toUpperCase() });
+    } catch (error) {
+      request.log.warn({ error, deviceId }, 'rejected device telemetry');
+      return reply.code(422).send({ error: 'invalid_telemetry', message: 'Device telemetry was rejected.' });
+    }
   });
 
   app.get('/v1/realtime/telemetry', { preHandler: [authenticate, requirePermission('dashboard.read')] }, async (request, reply) => {

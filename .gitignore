@@ -20,6 +20,8 @@ dist/
 # Editors and operating systems
 .idea/
 .vscode/
+!firmware/stm32f103rct6/.vscode/
+!firmware/stm32f103rct6/.vscode/tasks.json
 .DS_Store
 Thumbs.db
 
@@ -47,6 +49,7 @@ ut-ops-site.tar.gz
 
 # STM32/CMake generated artifacts
 firmware/**/build/
+firmware/**/build-*/
 firmware/**/*.elf
 firmware/**/*.bin
 firmware/**/*.hex

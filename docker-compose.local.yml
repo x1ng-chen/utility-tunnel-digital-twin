@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: utility-tunnel-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: utility_tunnel
+      POSTGRES_USER: ut_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在仓库根目录.env中设置本地数据库密码}
+    ports:
+      - "5432:5432"
+    volumes:
+      - utility_tunnel_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ut_app -d utility_tunnel"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  utility_tunnel_postgres:

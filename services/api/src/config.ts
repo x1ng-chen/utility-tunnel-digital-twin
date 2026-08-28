@@ -13,6 +13,7 @@ const environment = z.object({
   MQTT_TELEMETRY_TOPIC: z.string().min(1).default('ut/v1/+/telemetry'),
   MQTT_USERNAME: z.string().optional(),
   MQTT_PASSWORD: z.string().optional(),
+  DEVICE_INGEST_TOKEN: z.string().min(32).optional(),
 });
 
 const parsed = environment.safeParse(process.env);

@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "STM32: Build and Flash (COM8)",
+      "type": "shell",
+      "command": "cmd.exe",
+      "args": [
+        "/d",
+        "/c",
+        "cmake --build \"${workspaceFolder}\\build\\Debug\" && python -m stm32loader --port COM8 --baud 115200 --family F1 --erase --write --verify --go-address 0x08000000 \"${workspaceFolder}\\build\\Debug\\led_blink.bin\""
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}

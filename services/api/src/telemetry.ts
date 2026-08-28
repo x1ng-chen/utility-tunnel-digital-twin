@@ -18,18 +18,32 @@ const telemetrySchema = z.object({
 
 export type IncomingTelemetry = z.infer<typeof telemetrySchema> & { deviceId: string; recordedAt: string };
 
-export function parseTelemetry(topic: string, payload: Buffer | string): IncomingTelemetry {
-  const topicMatch = topicPattern.exec(topic);
-  if (!topicMatch?.[1]) throw new Error('Unexpected telemetry topic.');
+function parseTelemetryPayload(payload: Buffer | string | unknown) {
   let input: unknown;
-  try {
-    input = JSON.parse(String(payload));
-  } catch {
-    throw new Error('Telemetry payload is not valid JSON.');
+  if (Buffer.isBuffer(payload) || typeof payload === 'string') {
+    try {
+      input = JSON.parse(String(payload));
+    } catch {
+      throw new Error('Telemetry payload is not valid JSON.');
+    }
+  } else {
+    input = payload;
   }
   const parsed = telemetrySchema.safeParse(input);
   if (!parsed.success) throw new Error(`Invalid telemetry payload: ${parsed.error.issues.map((issue) => issue.path.join('.')).join(', ')}`);
-  return { ...parsed.data, deviceId: topicMatch[1].toUpperCase(), recordedAt: parsed.data.ts ?? new Date().toISOString() };
+  return parsed.data;
+}
+
+export function parseDeviceTelemetry(deviceId: string, payload: Buffer | string | unknown): IncomingTelemetry {
+  if (!/^[a-z0-9-]{1,64}$/i.test(deviceId)) throw new Error('Invalid device identifier.');
+  const telemetry = parseTelemetryPayload(payload);
+  return { ...telemetry, deviceId: deviceId.toUpperCase(), recordedAt: telemetry.ts ?? new Date().toISOString() };
+}
+
+export function parseTelemetry(topic: string, payload: Buffer | string): IncomingTelemetry {
+  const topicMatch = topicPattern.exec(topic);
+  if (!topicMatch?.[1]) throw new Error('Unexpected telemetry topic.');
+  return parseDeviceTelemetry(topicMatch[1], payload);
 }
 
 export async function persistTelemetry(input: IncomingTelemetry): Promise<RealtimeTelemetryReading[]> {

@@ -39,8 +39,9 @@ try {
     await client.query(
       `INSERT INTO asset (code, name, zone_id, asset_type, operational_status, model_mesh_code, location_x, location_y, location_z, metadata)
        SELECT item.code, item.name, zone.id, item.asset_type, item.operational_status, item.model_mesh_code, item.x, item.y, item.z, item.metadata::jsonb
-       FROM (VALUES
+      FROM (VALUES
          ('CTRL-01', '现场控制器', 'UT-ZA', 'controller', 'normal', 'MESH_CTRL_01', 2.0, 1.0, 1.5, '{"nodeId":"CTRL-01"}'),
+         ('ENV-01', '温湿度监测点', 'UT-ZB', 'sensor', 'normal', 'MESH_ENV_01', 10.0, 1.0, 1.8, '{"nodeId":"CTRL-01"}'),
          ('FAN-01', '送风机 #01', 'UT-ZB', 'actuator', 'normal', 'MESH_FAN_01', 12.5, 1.0, 2.2, '{"nodeId":"FAN-01"}'),
          ('SEEP-W01', '渗水监测点', 'UT-ZB', 'sensor', 'warning', 'MESH_SEEP_W01', 14.0, 0.4, 0.2, '{"nodeId":"SEEP-W01"}'),
          ('GAS-01', '甲烷监测节点', 'UT-ZC', 'sensor', 'normal', 'MESH_GAS_01', 23.0, 1.0, 1.8, '{"nodeId":"GAS-01"}')
