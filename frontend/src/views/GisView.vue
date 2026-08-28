@@ -8,6 +8,7 @@ import { escapeMapText, hasValidLocation, integrationLabels, locationSourceLabel
 import { useOperationsStore } from '../stores/operations';
 import type { Asset, HardwareBindingStatus, IntegrationStatus, SpatialFeature, SpatialLayerType } from '../types';
 import '../assets/gis.css';
+import '../assets/operational-layout-polish.css';
 
 const store = useOperationsStore();
 const router = useRouter();
