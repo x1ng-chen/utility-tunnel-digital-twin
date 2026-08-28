@@ -3,6 +3,7 @@ import { onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useOperationsStore } from './stores/operations';
 import { useAuthStore } from './stores/auth';
+import ExperienceLayer from './components/ExperienceLayer.vue';
 
 const operations = useOperationsStore();
 const auth = useAuthStore();
@@ -18,4 +19,5 @@ onMounted(() => { if (auth.isAuthenticated) void operations.refresh('api'); });
     <Transition name="route" mode="out-in"><component :is="Component" /></Transition>
   </RouterView>
   <Transition name="toast"><div v-if="operations.notice" class="toast" @click="operations.notice = ''">{{ operations.notice }}<span>×</span></div></Transition>
+  <ExperienceLayer />
 </template>
