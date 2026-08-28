@@ -2,7 +2,7 @@ import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import { api } from '../services/api';
 import { useAuthStore } from './auth';
-import type { Alert, Asset, AssetMutation, AuditEntry, Dashboard, Telemetry, TelemetryIngestResult, TelemetryQuery, TelemetryReading, TelemetrySummary, Threshold, WorkOrder } from '../types';
+import type { Alert, Asset, AssetMutation, AuditEntry, Dashboard, HardwareBinding, SpatialFeature, Telemetry, TelemetryIngestResult, TelemetryQuery, TelemetryReading, TelemetrySummary, Threshold, WorkOrder } from '../types';
 
 type ReportKind = 'alerts' | 'workOrders' | 'assets' | 'daily';
 const demoTransitions: Record<WorkOrder['status'], WorkOrder['status'][]> = {
@@ -37,6 +37,8 @@ export const useOperationsStore = defineStore('operations', () => {
   const auth = useAuthStore();
   const dashboard = ref<Dashboard>({ assets: { total: 12, online: 5 }, health: { value: 100 }, openAlerts: 2, activeWorkOrders: 2, telemetry: { id: 1, assetCode: 'ENV-01', metric: '环境温度', value: 26.4, unit: '°C', quality: 'good', recordedAt: new Date().toISOString() } });
   const assets = ref<Asset[]>(seedAssets());
+  const spatialFeatures = ref<SpatialFeature[]>([]);
+  const hardwareBindings = ref<HardwareBinding[]>(seedHardwareBindings());
   const alerts = ref<Alert[]>(seedAlerts());
   const workOrders = ref<WorkOrder[]>(seedOrders());
   const thresholds = ref<Threshold[]>(seedThresholds());
@@ -85,8 +87,9 @@ export const useOperationsStore = defineStore('operations', () => {
     syncError.value = '';
     try {
       const listParams = { page: 1, pageSize: 100 };
-      const [dashboardResponse, assetsResponse, alertsResponse, ordersResponse, thresholdsResponse, telemetryResponse, auditResponse] = await Promise.all([api.dashboard(), api.assets(listParams), api.alerts(listParams), api.workOrders(listParams), api.thresholds(), api.telemetry(listParams), api.audit(listParams)]);
-      dashboard.value = dashboardResponse.data; assets.value = assetsResponse.data.items; alerts.value = alertsResponse.data.items; workOrders.value = ordersResponse.data.items; thresholds.value = thresholdsResponse.data.items; telemetry.value = telemetryResponse.data.items; audit.value = auditResponse.data.items;
+      const gisStatus = auth.user?.role === 'administrator' ? 'all' : 'published';
+      const [dashboardResponse, assetsResponse, alertsResponse, ordersResponse, thresholdsResponse, telemetryResponse, auditResponse, gisResponse, bindingsResponse] = await Promise.all([api.dashboard(), api.assets(listParams), api.alerts(listParams), api.workOrders(listParams), api.thresholds(), api.telemetry(listParams), api.audit(listParams), api.gisFeatures({ status: gisStatus }), api.hardwareBindings(listParams)]);
+      dashboard.value = dashboardResponse.data; assets.value = assetsResponse.data.items; alerts.value = alertsResponse.data.items; workOrders.value = ordersResponse.data.items; thresholds.value = thresholdsResponse.data.items; telemetry.value = telemetryResponse.data.items; audit.value = auditResponse.data.items; spatialFeatures.value = normalizeSpatialFeatures(gisResponse.data.features); hardwareBindings.value = bindingsResponse.data.items;
       offline.value = false;
       lastSyncedAt.value = new Date().toISOString();
     } catch (cause: unknown) {
@@ -230,6 +233,40 @@ export const useOperationsStore = defineStore('operations', () => {
     if (offline.value) throw new Error('Django API 当前离线，离线快照为只读状态。');
   }
 
+  function assertGisWriteAllowed() {
+    if (auth.user?.role !== 'administrator') throw new Error('只有管理员可以维护 GIS 空间数据和硬件接入契约。');
+    if (source.value !== 'api') throw new Error('GIS 空间数据仅允许写入 Django API。');
+    if (offline.value) throw new Error('Django API 当前离线，离线快照为只读状态。');
+  }
+
+  async function importGisFeatures(payload: Record<string, unknown>) {
+    assertGisWriteAllowed();
+    const response = await runApiMutation(() => api.importGisFeatures(payload));
+    spatialFeatures.value = [...normalizeSpatialFeatures(response.data.features), ...spatialFeatures.value.filter((feature) => !response.data.features.some((item: { id?: string; properties: SpatialFeature }) => Number(item.id ?? item.properties.id) === feature.id))];
+    await syncAudit();
+    notice.value = `已导入 ${response.data.meta.created} 个 GIS 空间对象，待审核后方可发布。`;
+    return response.data;
+  }
+
+  async function updateGisFeature(feature: SpatialFeature, payload: Record<string, unknown>) {
+    assertGisWriteAllowed();
+    const response = await runApiMutation(() => api.updateGisFeature(feature.id, { ...payload, version: feature.version }));
+    const updated = normalizeSpatialFeatures([response.data])[0];
+    spatialFeatures.value = spatialFeatures.value.map((item) => item.id === updated.id ? updated : item);
+    await syncAudit();
+    notice.value = `${updated.code} 已更新为 ${updated.status === 'published' ? '已发布' : updated.status} 状态。`;
+    return updated;
+  }
+
+  async function createHardwareBinding(payload: Record<string, unknown>) {
+    assertGisWriteAllowed();
+    const response = await runApiMutation(() => api.createHardwareBinding(payload));
+    hardwareBindings.value.unshift(response.data as HardwareBinding);
+    await syncAudit();
+    notice.value = `${response.data.assetCode} 的硬件接入契约已预留。`;
+    return response.data as HardwareBinding;
+  }
+
   function recalculateAssetSummary() {
     const active = assets.value.filter((item) => item.isActive);
     dashboard.value = { ...dashboard.value, assets: { total: active.length, online: active.filter((item) => ['normal', 'warning', 'alarm'].includes(item.status)).length } };
@@ -308,7 +345,7 @@ export const useOperationsStore = defineStore('operations', () => {
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
-  return { dashboard, assets, alerts, workOrders, thresholds, telemetry, telemetryInsights, telemetryInsightsTotal, telemetrySummary, telemetryInsightsLoading, telemetryInsightsError, audit, loading, source, offline, syncError, lastSyncedAt, notice, openAlerts, activeOrders, refresh, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, transition, updateThreshold, createReport, ingestTelemetry, loadTelemetryInsights };
+  return { dashboard, assets, spatialFeatures, hardwareBindings, alerts, workOrders, thresholds, telemetry, telemetryInsights, telemetryInsightsTotal, telemetrySummary, telemetryInsightsLoading, telemetryInsightsError, audit, loading, source, offline, syncError, lastSyncedAt, notice, openAlerts, activeOrders, refresh, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, importGisFeatures, updateGisFeature, createHardwareBinding, transition, updateThreshold, createReport, ingestTelemetry, loadTelemetryInsights };
 });
 
 function telemetryMatchesQuery(item: Telemetry, query: TelemetryQuery): boolean {
@@ -318,6 +355,10 @@ function telemetryMatchesQuery(item: Telemetry, query: TelemetryQuery): boolean 
     && (!query.quality || item.quality === query.quality)
     && (!query.recordedFrom || recordedAt >= new Date(query.recordedFrom).getTime())
     && (!query.recordedTo || recordedAt <= new Date(query.recordedTo).getTime());
+}
+
+function normalizeSpatialFeatures(features: { id?: string; geometry: SpatialFeature['geometry']; properties: SpatialFeature }[]): SpatialFeature[] {
+  return features.map((feature) => ({ ...feature.properties, id: Number(feature.id ?? feature.properties.id), geometry: feature.geometry }));
 }
 
 export function summarizeTelemetry(items: Telemetry[]): TelemetrySummary {
@@ -365,6 +406,19 @@ function seedAssets(): Asset[] {
     { id: 11, code: 'BT-01', hardwareCode: 'H-11', name: 'HC-05 蓝牙模块', zone: 'CTRL', type: '可选通信模块', status: 'unknown', integrationStatus: 'optional', interface: 'UART（待分配）', capabilities: ['近场调试通信'], mesh: 'MESH_BT_01', position: { x: 36, y: 56, z: 0 }, latitude: 31.23046, longitude: 121.47376, locationSource: 'demo_anchor', installationNote: '可选模块，不属于核心数据链路，当前固件未接入。', lastSeenAt: null },
     { id: 12, code: 'PCB-01', hardwareCode: 'H-25', name: '洞洞板', zone: 'CTRL', type: '施工辅材', status: 'unknown', integrationStatus: 'non_operational', interface: '无', capabilities: ['转接与固定'], mesh: 'MESH_PCB_01', position: { x: 41, y: 63, z: 0 }, latitude: 31.230475, longitude: 121.473775, locationSource: 'demo_anchor', installationNote: '非运行资产，仅用于电气转接和实体安装。', lastSeenAt: null },
   ].map((asset) => ({ ...asset, isActive: true, version: 1 })) as Asset[];
+}
+function seedHardwareBindings(): HardwareBinding[] {
+  return ['CTRL-01', 'LED-01', 'DISP-01', 'SEEP-W01', 'MOIST-01', 'ENV-01', 'VIB-01', 'BUZZ-01', 'RELAY-01', 'FAN-01', 'BT-01', 'PCB-01'].map((assetCode, index) => ({
+    id: index + 1,
+    assetCode,
+    protocol: 'mqtt',
+    deviceIdentifier: `ut-demo-${assetCode.toLowerCase()}`,
+    endpoint: `ut/v1/${assetCode.toLowerCase()}/telemetry`,
+    expectedIntervalSeconds: 60,
+    status: 'reserved',
+    lastHeartbeatAt: null,
+    version: 1,
+  }));
 }
 function seedAlerts(): Alert[] { return [{ id: 1, code: 'ALM-260826-003', assetCode: 'SEEP-W01', severity: 'warning', category: '水浸趋势', status: 'open', title: '水浸趋势异常', detail: '渗水趋势上升，需确认现场情况并安排巡检。', openedAt: '2026-08-26T00:00:00Z' }, { id: 2, code: 'ALM-260826-002', assetCode: 'FAN-01', severity: 'critical', category: '设备反馈', status: 'acknowledged', title: '风机反馈丢失', detail: '执行反馈暂未返回，正在等待工单复核。', openedAt: '2026-08-26T00:00:00Z', acknowledgedBy: '运维员' }, { id: 3, code: 'ALM-260826-001', assetCode: 'CTRL-01', severity: 'warning', category: '通信质量', status: 'open', title: '控制器通信质量波动', detail: '控制器出现短时延迟抖动，建议建立巡检工单并观察后续遥测。', openedAt: '2026-08-26T00:00:00Z' }]; }
 function seedOrders(): WorkOrder[] { return [{ id: 1, code: 'WO-260826-08', sourceAlertId: 1, assetCode: 'SEEP-W01', title: '检查 UT-ZB 接水盘与水位探针', priority: 'high', status: 'open', createdAt: '2026-08-26T00:00:00Z', updatedAt: '2026-08-26T00:00:00Z', version: 1 }, { id: 2, code: 'WO-260826-06', sourceAlertId: 2, assetCode: 'FAN-01', title: '复核风机反馈与现场状态', priority: 'urgent', status: 'in_progress', assigneeName: '运维组 A', createdAt: '2026-08-26T00:00:00Z', updatedAt: '2026-08-26T00:00:00Z', version: 1 }]; }

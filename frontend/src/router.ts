@@ -10,6 +10,7 @@ import SettingsView from './views/SettingsView.vue';
 import AuditView from './views/AuditView.vue';
 import AssetAdminView from './views/AssetAdminView.vue';
 import TelemetryView from './views/TelemetryView.vue';
+import GisAdminView from './views/GisAdminView.vue';
 import type { Role } from './types';
 
 const router = createRouter({
@@ -23,6 +24,7 @@ const router = createRouter({
     { path: '/assets', component: AssetsView },
     { path: '/asset-admin', component: AssetAdminView, meta: { roles: ['administrator'] } },
     { path: '/gis', component: GisView },
+    { path: '/gis-admin', component: GisAdminView, meta: { roles: ['administrator'] } },
     { path: '/telemetry', component: TelemetryView },
     { path: '/settings', component: SettingsView },
     { path: '/audit', component: AuditView },

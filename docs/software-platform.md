@@ -75,7 +75,7 @@ python -m compileall -q config operations
 
 GitHub Actions 对 Vue 3 前端执行测试、类型检查、生产构建和高危依赖审计；对 Django 执行配置检查、迁移一致性、接口/RBAC 测试和字节码检查；浏览器回归覆盖设备孪生、GIS 模块、遥测数据洞察、告警闭环和 API 登录。上述命令均使用仓库已有工具，不需要硬件或新增桌面软件。
 
-GIS 使用项目内 Leaflet 依赖。开发底图默认使用 OpenStreetMap 并保留署名；正式环境应通过 `VITE_GIS_TILE_URL` 和 `VITE_GIS_ATTRIBUTION` 接入获批或自建瓦片服务。当前种子坐标均标记为演示锚点，不代表现场 GPS 或测绘结果，详见 [GIS 设备位置模块](GIS设备位置模块.md)。
+GIS 使用项目内 Leaflet 依赖。开发底图可使用 OpenStreetMap 并保留署名；其公共服务不提供生产 SLA，正式环境必须通过 `VITE_GIS_TILE_URL` 和 `VITE_GIS_ATTRIBUTION` 接入获批或自建瓦片服务。空间对象采用 PostgreSQL 中受控的 WGS84 GeoJSON：管理员导入草稿、登记来源并审核发布，普通运维地图只读取已发布对象。当前资产种子坐标均标记为演示锚点，不代表现场 GPS 或测绘结果，详见 [GIS 设备位置模块](GIS设备位置模块.md)。
 
 ## 从演示数据迁移到 PostgreSQL
 

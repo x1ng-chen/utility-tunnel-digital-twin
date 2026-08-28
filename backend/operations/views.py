@@ -20,9 +20,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Alert, Asset, AuditLog, Profile, ReportExport, Telemetry, Threshold, WorkOrder
+from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
 from .permissions import AuthenticatedRead
-from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, ReportExportSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, WorkOrderSerializer
+from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, HardwareBindingMutationSerializer, HardwareBindingSerializer, ReportExportSerializer, SpatialFeatureMutationSerializer, SpatialFeatureSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, WorkOrderSerializer
 from .services import actor_name, audit
 from .telemetry_rules import evaluate_threshold
 from .throttling import LoginRateThrottle
@@ -150,6 +150,62 @@ def filtered_telemetry(request):
     if recorded_to:
         queryset = queryset.filter(recorded_at__lte=recorded_to)
     return queryset, None
+
+
+def _geometry_points(geometry):
+    coordinates = geometry.get('coordinates', [])
+    if geometry.get('type') == 'Point':
+        return [coordinates]
+    if geometry.get('type') == 'LineString':
+        return coordinates
+    if geometry.get('type') == 'Polygon':
+        return [point for ring in coordinates for point in ring]
+    return []
+
+
+def _parse_bbox(request):
+    value = request.query_params.get('bbox', '').strip()
+    if not value:
+        return None, None
+    try:
+        min_longitude, min_latitude, max_longitude, max_latitude = [float(item) for item in value.split(',')]
+    except ValueError:
+        return None, error_response('invalid_request', 'bbox must be minLongitude,minLatitude,maxLongitude,maxLatitude.', 400)
+    values = (min_longitude, min_latitude, max_longitude, max_latitude)
+    if not all(isfinite(item) for item in values) or not (-180 <= min_longitude <= 180 and -180 <= max_longitude <= 180 and -90 <= min_latitude <= 90 and -90 <= max_latitude <= 90) or min_longitude > max_longitude or min_latitude > max_latitude:
+        return None, error_response('invalid_request', 'bbox is outside WGS84 bounds or inverted.', 400)
+    return values, None
+
+
+def _intersects_bbox(geometry, bbox):
+    if bbox is None:
+        return True
+    min_longitude, min_latitude, max_longitude, max_latitude = bbox
+    points = _geometry_points(geometry)
+    if not points:
+        return False
+    geometry_min_longitude = min(point[0] for point in points)
+    geometry_max_longitude = max(point[0] for point in points)
+    geometry_min_latitude = min(point[1] for point in points)
+    geometry_max_latitude = max(point[1] for point in points)
+    # Envelope intersection deliberately avoids false negatives for lines or
+    # polygons that cross the requested viewport without a vertex inside it.
+    return not (
+        geometry_max_longitude < min_longitude
+        or geometry_min_longitude > max_longitude
+        or geometry_max_latitude < min_latitude
+        or geometry_min_latitude > max_latitude
+    )
+
+
+def _geojson_feature(feature):
+    data = SpatialFeatureSerializer(feature).data
+    return {
+        'type': 'Feature',
+        'id': str(feature.pk),
+        'geometry': data.pop('geometry'),
+        'properties': data,
+    }
 
 
 class HealthView(APIView):
@@ -449,6 +505,174 @@ class AssetDetailView(APIView):
         except IntegrityError:
             return error_response('conflict', 'Asset code or hardware code already exists.', 409)
         return Response(AssetSerializer(asset).data)
+
+
+class SpatialFeatureListView(APIView):
+    permission_classes = [AuthenticatedRead]
+
+    def get(self, request):
+        queryset = SpatialFeature.objects.all()
+        layer_type = request.query_params.get('layerType', '').strip()
+        if layer_type:
+            if layer_type not in SpatialFeature.LayerType.values:
+                return error_response('invalid_request', 'layerType is not valid.', 400)
+            queryset = queryset.filter(layer_type=layer_type)
+        requested_status = request.query_params.get('status', SpatialFeature.Status.PUBLISHED).strip()
+        if requested_status == 'all':
+            if not is_admin(request):
+                return error_response('forbidden', 'Administrator permission is required to list unpublished GIS features.', 403)
+        elif requested_status in SpatialFeature.Status.values:
+            queryset = queryset.filter(status=requested_status)
+        else:
+            return error_response('invalid_request', 'status is not valid.', 400)
+        bbox, error = _parse_bbox(request)
+        if error:
+            return error
+        features = [_geojson_feature(feature) for feature in queryset[:1000] if _intersects_bbox(feature.geometry, bbox)]
+        return Response({'type': 'FeatureCollection', 'features': features, 'meta': {'crs': 'EPSG:4326', 'count': len(features), 'bounded': bbox is not None}})
+
+    def post(self, request):
+        if not is_admin(request):
+            return error_response('forbidden', 'Administrator GIS permission is required.', 403)
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        serializer = SpatialFeatureMutationSerializer(data=payload)
+        if not serializer.is_valid():
+            return error_response('validation_error', 'GIS feature data is invalid.', 400, serializer.errors)
+        try:
+            with transaction.atomic():
+                feature = serializer.save(version=1)
+                audit(request.user, 'gis.feature.created', 'spatial_feature', feature.pk, {'code': feature.code, 'layerType': feature.layer_type, 'status': feature.status}, request_id(request))
+        except IntegrityError:
+            return error_response('conflict', 'GIS feature code already exists.', 409)
+        return Response(_geojson_feature(feature), status=201)
+
+
+class SpatialFeatureDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not is_admin(request):
+            return error_response('forbidden', 'Administrator GIS permission is required.', 403)
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        payload = payload.copy()
+        requested_version = payload.pop('version', None)
+        try:
+            requested_version = int(requested_version)
+        except (TypeError, ValueError):
+            return error_response('invalid_request', 'version is required and must be a positive number.', 400)
+        if requested_version < 1 or not payload:
+            return error_response('invalid_request', 'version and at least one GIS feature field are required.', 400)
+        try:
+            with transaction.atomic():
+                feature = SpatialFeature.objects.select_for_update().filter(pk=pk).first()
+                if not feature:
+                    return error_response('not_found', 'GIS feature not found.', 404)
+                if feature.version != requested_version:
+                    return error_response('version_conflict', 'GIS feature was changed by another request.', 409)
+                serializer = SpatialFeatureMutationSerializer(feature, data=payload, partial=True)
+                if not serializer.is_valid():
+                    return error_response('validation_error', 'GIS feature data is invalid.', 400, serializer.errors)
+                fields = sorted(payload)
+                feature = serializer.save(version=feature.version + 1)
+                audit(request.user, 'gis.feature.updated', 'spatial_feature', feature.pk, {'code': feature.code, 'fields': fields, 'version': feature.version}, request_id(request))
+        except IntegrityError:
+            return error_response('conflict', 'GIS feature code already exists.', 409)
+        return Response(_geojson_feature(feature))
+
+
+class SpatialFeatureImportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not is_admin(request):
+            return error_response('forbidden', 'Administrator GIS permission is required.', 403)
+        payload = object_payload(request)
+        features = payload.get('features') if payload and payload.get('type') == 'FeatureCollection' else None
+        if not isinstance(features, list) or not 1 <= len(features) <= 100:
+            return error_response('invalid_request', 'A GeoJSON FeatureCollection with 1 to 100 features is required.', 400)
+        serializers = []
+        for index, item in enumerate(features):
+            if not isinstance(item, Mapping) or item.get('type') != 'Feature' or not isinstance(item.get('properties'), Mapping):
+                return error_response('validation_error', 'Each import item must be a GeoJSON Feature with properties.', 400, {str(index): 'invalid_feature'})
+            feature_payload = {**item['properties'], 'geometry': item.get('geometry')}
+            serializer = SpatialFeatureMutationSerializer(data=feature_payload)
+            if not serializer.is_valid():
+                return error_response('validation_error', 'GIS import data is invalid; no records were created.', 400, {str(index): serializer.errors})
+            serializers.append(serializer)
+        try:
+            with transaction.atomic():
+                created = [serializer.save(version=1) for serializer in serializers]
+                audit(request.user, 'gis.feature.imported', 'spatial_feature', 'bulk', {'count': len(created), 'codes': [feature.code for feature in created]}, request_id(request))
+        except IntegrityError:
+            return error_response('conflict', 'One or more GIS feature codes already exist; no records were created.', 409)
+        return Response({'type': 'FeatureCollection', 'features': [_geojson_feature(feature) for feature in created], 'meta': {'created': len(created), 'crs': 'EPSG:4326'}}, status=201)
+
+
+class HardwareBindingListView(APIView):
+    permission_classes = [AuthenticatedRead]
+
+    def get(self, request):
+        queryset = HardwareBinding.objects.select_related('asset')
+        asset_code = request.query_params.get('assetCode', '').strip()
+        if asset_code:
+            queryset = queryset.filter(asset__code=asset_code)
+        return paginated(queryset, HardwareBindingSerializer, request, ordering=('asset__code',))
+
+    def post(self, request):
+        if not is_admin(request):
+            return error_response('forbidden', 'Administrator hardware binding permission is required.', 403)
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        serializer = HardwareBindingMutationSerializer(data=payload)
+        if not serializer.is_valid():
+            return error_response('validation_error', 'Hardware binding data is invalid.', 400, serializer.errors)
+        try:
+            with transaction.atomic():
+                binding = serializer.save(version=1)
+                audit(request.user, 'hardware.binding.created', 'hardware_binding', binding.pk, {'assetCode': binding.asset.code, 'protocol': binding.protocol, 'status': binding.status}, request_id(request))
+        except IntegrityError:
+            return error_response('conflict', 'An active binding or device identifier already exists.', 409)
+        return Response(HardwareBindingSerializer(binding).data, status=201)
+
+
+class HardwareBindingDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not is_admin(request):
+            return error_response('forbidden', 'Administrator hardware binding permission is required.', 403)
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        payload = payload.copy()
+        requested_version = payload.pop('version', None)
+        try:
+            requested_version = int(requested_version)
+        except (TypeError, ValueError):
+            return error_response('invalid_request', 'version is required and must be a positive number.', 400)
+        if requested_version < 1 or not payload:
+            return error_response('invalid_request', 'version and at least one hardware binding field are required.', 400)
+        try:
+            with transaction.atomic():
+                binding = HardwareBinding.objects.select_for_update().select_related('asset').filter(pk=pk).first()
+                if not binding:
+                    return error_response('not_found', 'Hardware binding not found.', 404)
+                if binding.version != requested_version:
+                    return error_response('version_conflict', 'Hardware binding was changed by another request.', 409)
+                serializer = HardwareBindingMutationSerializer(binding, data=payload, partial=True)
+                if not serializer.is_valid():
+                    return error_response('validation_error', 'Hardware binding data is invalid.', 400, serializer.errors)
+                fields = sorted(payload)
+                binding = serializer.save(version=binding.version + 1)
+                audit(request.user, 'hardware.binding.updated', 'hardware_binding', binding.pk, {'assetCode': binding.asset.code, 'fields': fields, 'version': binding.version}, request_id(request))
+        except IntegrityError:
+            return error_response('conflict', 'deviceIdentifier already exists.', 409)
+        return Response(HardwareBindingSerializer(binding).data)
 
 
 class AlertListView(APIView):

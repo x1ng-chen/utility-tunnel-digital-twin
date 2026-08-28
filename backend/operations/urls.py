@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, DashboardView, HealthView, LoginView, LogoutView, MeView, ReadyView, ReportExportView, TelemetryListView, TelemetrySummaryView, ThresholdDetailView, ThresholdListView, WorkOrderListView, WorkOrderTransitionView
+from .views import AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, DashboardView, HardwareBindingDetailView, HardwareBindingListView, HealthView, LoginView, LogoutView, MeView, ReadyView, ReportExportView, SpatialFeatureDetailView, SpatialFeatureImportView, SpatialFeatureListView, TelemetryListView, TelemetrySummaryView, ThresholdDetailView, ThresholdListView, WorkOrderListView, WorkOrderTransitionView
 
 
 urlpatterns = [
@@ -13,6 +13,11 @@ urlpatterns = [
     path('dashboard/', DashboardView.as_view()),
     path('assets/', AssetListView.as_view()),
     path('assets/<int:pk>/', AssetDetailView.as_view()),
+    path('gis/features/', SpatialFeatureListView.as_view()),
+    path('gis/features/import/', SpatialFeatureImportView.as_view()),
+    path('gis/features/<int:pk>/', SpatialFeatureDetailView.as_view()),
+    path('hardware-bindings/', HardwareBindingListView.as_view()),
+    path('hardware-bindings/<int:pk>/', HardwareBindingDetailView.as_view()),
     path('alerts/', AlertListView.as_view()),
     path('alerts/<int:pk>/acknowledge/', AlertAcknowledgeView.as_view()),
     path('alerts/<int:pk>/work-order/', AlertWorkOrderView.as_view()),

@@ -122,6 +122,24 @@ describe('operations store', () => {
     await expect(store.updateAsset(asset, { name: '演示写入' })).rejects.toThrow('仅允许写入 Django API');
   });
 
+  it('imports and version-publishes governed GeoJSON only through the administrator API', async () => {
+    const auth = useAuthStore();
+    await auth.login('', '', 'administrator', 'demo');
+    const store = useOperationsStore();
+    store.source = 'api';
+    const geoJson = { type: 'Feature', id: '81', geometry: { type: 'Point', coordinates: [121.4737, 31.2304] }, properties: { id: 81, code: 'MH-81', name: '测试井口', layerType: 'manhole', source: 'surveyed', sourceReference: '测绘成果 #81', accuracyM: '0.250', capturedAt: null, verifiedAt: null, status: 'draft', description: '', version: 1 } };
+    const published = { ...geoJson, properties: { ...geoJson.properties, verifiedAt: '2026-08-28T00:00:00Z', status: 'published', version: 2 } };
+    vi.spyOn(api, 'importGisFeatures').mockResolvedValue({ data: { type: 'FeatureCollection', features: [geoJson], meta: { created: 1 } } } as never);
+    vi.spyOn(api, 'updateGisFeature').mockResolvedValue({ data: published } as never);
+    vi.spyOn(api, 'audit').mockResolvedValue({ data: { items: [] } } as never);
+
+    await store.importGisFeatures({ type: 'FeatureCollection', features: [geoJson] });
+    expect(store.spatialFeatures[0]).toMatchObject({ id: 81, code: 'MH-81', status: 'draft' });
+    const updated = await store.updateGisFeature(store.spatialFeatures[0], { status: 'published', verifiedAt: '2026-08-28T00:00:00Z' });
+    expect(api.updateGisFeature).toHaveBeenCalledWith(81, { status: 'published', verifiedAt: '2026-08-28T00:00:00Z', version: 1 });
+    expect(updated).toMatchObject({ id: 81, status: 'published', version: 2 });
+  });
+
   it('summarizes and filters demo telemetry without changing operational telemetry state', async () => {
     const store = useOperationsStore();
     expect(store.telemetry).toHaveLength(24);

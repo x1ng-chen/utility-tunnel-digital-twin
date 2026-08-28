@@ -12,7 +12,7 @@ from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 from config.settings import parse_origins
-from .models import Alert, Asset, AuditLog, Profile, ReportExport, Telemetry, Threshold, WorkOrder
+from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
 
 
 class OperationsApiTests(TestCase):
@@ -593,6 +593,50 @@ class OperationsApiTests(TestCase):
             with transaction.atomic():
                 Asset.objects.create(code='BAD-COORD-2', name='错误坐标', zone='CTRL', asset_type='测试', latitude=91, longitude=121.4)
 
+    def test_gis_features_are_governed_geojson_with_review_and_bbox_boundaries(self):
+        self.auth(self.operator)
+        self.assertEqual(self.client.get('/api/gis/features/').status_code, 200)
+        self.assertEqual(self.client.post('/api/gis/features/', {}, format='json').status_code, 403)
+
+        self.auth(self.admin)
+        payload = {
+            'code': 'SEG-01', 'name': 'A 区管廊段', 'layerType': 'tunnel_segment',
+            'geometry': {'type': 'LineString', 'coordinates': [[121.473700, 31.230400], [121.473900, 31.230500]]},
+            'source': 'surveyed', 'sourceReference': '2026 测绘成果 #01', 'accuracyM': '0.250', 'status': 'draft',
+        }
+        created = self.client.post('/api/gis/features/', payload, format='json')
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(self.client.get('/api/gis/features/').json()['meta']['count'], 0)
+        # Neither endpoint is in this small viewport, but the line crosses it.
+        # Spatial filtering must not silently omit that feature.
+        all_features = self.client.get('/api/gis/features/?status=all&bbox=121.47379,31.23044,121.47381,31.23046')
+        self.assertEqual(all_features.status_code, 200)
+        self.assertEqual(all_features.json()['features'][0]['properties']['code'], 'SEG-01')
+        rejected_publish = self.client.patch(f"/api/gis/features/{created.json()['id']}/", {'status': 'published', 'version': 1}, format='json')
+        self.assertEqual(rejected_publish.status_code, 400)
+        published = self.client.patch(f"/api/gis/features/{created.json()['id']}/", {'status': 'published', 'verifiedAt': timezone.now().isoformat(), 'version': 1}, format='json')
+        self.assertEqual(published.status_code, 200)
+        self.assertEqual(self.client.get('/api/gis/features/?bbox=121.4736,31.2303,121.4740,31.2306').json()['meta']['count'], 1)
+        self.assertEqual(self.client.get('/api/gis/features/?bbox=121,31,120,32').status_code, 400)
+
+    def test_gis_import_is_atomic_and_hardware_bindings_reserve_future_interfaces(self):
+        self.auth(self.admin)
+        feature = {
+            'type': 'Feature', 'geometry': {'type': 'Point', 'coordinates': [121.4737, 31.2304]},
+            'properties': {'code': 'MH-01', 'name': '一号井口', 'layerType': 'manhole', 'source': 'cad_import', 'sourceReference': '管廊总图 V1', 'status': 'draft'},
+        }
+        imported = self.client.post('/api/gis/features/import/', {'type': 'FeatureCollection', 'features': [feature]}, format='json')
+        self.assertEqual(imported.status_code, 201)
+        self.assertEqual(SpatialFeature.objects.count(), 1)
+        conflict = self.client.post('/api/gis/features/import/', {'type': 'FeatureCollection', 'features': [feature, feature]}, format='json')
+        self.assertEqual(conflict.status_code, 409)
+        self.assertEqual(SpatialFeature.objects.count(), 1)
+        binding = self.client.post('/api/hardware-bindings/', {'assetCode': self.asset.code, 'protocol': 'mqtt', 'deviceIdentifier': 'ctrl-gateway-01', 'endpoint': 'ut/v1/fan-01/telemetry', 'expectedIntervalSeconds': 30, 'status': 'reserved'}, format='json')
+        self.assertEqual(binding.status_code, 201)
+        self.assertEqual(binding.json()['assetCode'], self.asset.code)
+        self.assertEqual(binding.json()['deviceIdentifier'], 'ctrl-gateway-01')
+        self.assertEqual(HardwareBinding.objects.get(asset=self.asset).status, HardwareBinding.Status.RESERVED)
+
     def test_seed_demo_resets_lifecycle_timestamps(self):
         call_command('seed_demo', stdout=io.StringIO())
         alert = Alert.objects.get(code='ALM-260826-003')
@@ -616,3 +660,4 @@ class OperationsApiTests(TestCase):
         self.assertIsNone(order.completed_at)
         self.assertIsNone(order.reviewed_by)
         self.assertEqual(order.version, 1)
+        self.assertEqual(HardwareBinding.objects.filter(status=HardwareBinding.Status.RESERVED).count(), 12)

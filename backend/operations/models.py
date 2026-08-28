@@ -221,6 +221,87 @@ class Threshold(models.Model):
         ]
 
 
+class SpatialFeature(models.Model):
+    """Governed WGS84 GIS features; geometry is stored as validated GeoJSON."""
+
+    class LayerType(models.TextChoices):
+        TUNNEL_SEGMENT = 'tunnel_segment', '管廊区段'
+        CHAMBER = 'chamber', '舱室'
+        MANHOLE = 'manhole', '井口'
+        INSPECTION_ROUTE = 'inspection_route', '巡检路线'
+        RISK_ZONE = 'risk_zone', '风险区域'
+        INSTALLATION_POINT = 'installation_point', '安装点'
+
+    class Status(models.TextChoices):
+        DRAFT = 'draft', '待审核'
+        PUBLISHED = 'published', '已发布'
+        RETIRED = 'retired', '已退役'
+
+    class Source(models.TextChoices):
+        SURVEYED = 'surveyed', '现场测绘'
+        CAD_IMPORT = 'cad_import', 'CAD/GIS 导入'
+        CONFIGURED = 'configured', '人工配置'
+
+    code = models.CharField(max_length=40, unique=True)
+    name = models.CharField(max_length=120)
+    layer_type = models.CharField(max_length=30, choices=LayerType.choices)
+    geometry = models.JSONField(default=dict)
+    crs = models.CharField(max_length=20, default='EPSG:4326')
+    source = models.CharField(max_length=20, choices=Source.choices)
+    source_reference = models.CharField(max_length=180, blank=True)
+    accuracy_m = models.DecimalField(max_digits=8, decimal_places=3, null=True, blank=True)
+    captured_at = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    description = models.TextField(blank=True)
+    version = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['layer_type', 'code']
+        indexes = [
+            models.Index(fields=['layer_type', 'status'], name='spatial_layer_status_idx'),
+            models.Index(fields=['status', '-updated_at'], name='spatial_status_updated_idx'),
+        ]
+        constraints = [
+            models.CheckConstraint(check=models.Q(crs='EPSG:4326'), name='spatial_wgs84_only'),
+            models.CheckConstraint(check=models.Q(accuracy_m__isnull=True) | models.Q(accuracy_m__gt=0), name='spatial_accuracy_positive'),
+        ]
+
+
+class HardwareBinding(models.Model):
+    """Reserved, audited hardware-to-platform endpoint contract; it never opens a device connection."""
+
+    class Protocol(models.TextChoices):
+        MQTT = 'mqtt', 'MQTT'
+        HTTP = 'http', 'HTTP'
+        SERIAL = 'serial', '串口网关'
+        MANUAL = 'manual', '人工登记'
+
+    class Status(models.TextChoices):
+        RESERVED = 'reserved', '接口已预留'
+        CONNECTED = 'connected', '已接入'
+        INACTIVE = 'inactive', '未启用'
+        ERROR = 'error', '接入异常'
+
+    asset = models.OneToOneField(Asset, on_delete=models.CASCADE, related_name='hardware_binding')
+    protocol = models.CharField(max_length=12, choices=Protocol.choices)
+    device_identifier = models.CharField(max_length=80, unique=True)
+    endpoint = models.CharField(max_length=200)
+    expected_interval_seconds = models.PositiveIntegerField(default=60)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.RESERVED)
+    last_heartbeat_at = models.DateTimeField(null=True, blank=True)
+    version = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['asset__code']
+        indexes = [models.Index(fields=['status', '-last_heartbeat_at'], name='binding_status_heartbeat_idx')]
+        constraints = [models.CheckConstraint(check=models.Q(expected_interval_seconds__gte=1, expected_interval_seconds__lte=86400), name='binding_interval_range')]
+
+
 class AuditLog(models.Model):
     actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='audit_entries')
     action = models.CharField(max_length=100)

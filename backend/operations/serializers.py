@@ -1,11 +1,12 @@
 from datetime import timedelta
+from decimal import Decimal
 from math import isfinite
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Alert, Asset, AuditLog, Profile, ReportExport, Telemetry, Threshold, WorkOrder
+from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
 
 
 class AssetSerializer(serializers.ModelSerializer):
@@ -107,6 +108,140 @@ class AssetMutationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'latitude': 'Latitude must be between -90 and 90.'})
         if longitude is not None and not -180 <= longitude <= 180:
             raise serializers.ValidationError({'longitude': 'Longitude must be between -180 and 180.'})
+        return attrs
+
+
+def _coordinate_pair(value):
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        raise serializers.ValidationError('GeoJSON coordinates must be [longitude, latitude] pairs.')
+    longitude, latitude = value
+    if any(isinstance(item, bool) or not isinstance(item, (int, float)) or not isfinite(item) for item in (longitude, latitude)):
+        raise serializers.ValidationError('GeoJSON coordinates must be finite numbers.')
+    if not -180 <= longitude <= 180 or not -90 <= latitude <= 90:
+        raise serializers.ValidationError('GeoJSON coordinates are outside WGS84 bounds.')
+    return [float(longitude), float(latitude)]
+
+
+def _normalize_geometry(geometry):
+    if not isinstance(geometry, dict):
+        raise serializers.ValidationError('geometry must be a GeoJSON object.')
+    geometry_type = geometry.get('type')
+    coordinates = geometry.get('coordinates')
+    if geometry_type == 'Point':
+        return {'type': geometry_type, 'coordinates': _coordinate_pair(coordinates)}
+    if geometry_type == 'LineString':
+        if not isinstance(coordinates, list) or not 2 <= len(coordinates) <= 2000:
+            raise serializers.ValidationError('LineString must contain 2 to 2000 coordinate pairs.')
+        return {'type': geometry_type, 'coordinates': [_coordinate_pair(point) for point in coordinates]}
+    if geometry_type == 'Polygon':
+        if not isinstance(coordinates, list) or not 1 <= len(coordinates) <= 50:
+            raise serializers.ValidationError('Polygon must contain 1 to 50 rings.')
+        rings = []
+        for ring in coordinates:
+            if not isinstance(ring, list) or not 4 <= len(ring) <= 2000:
+                raise serializers.ValidationError('Each Polygon ring must contain 4 to 2000 coordinate pairs.')
+            normalized_ring = [_coordinate_pair(point) for point in ring]
+            if normalized_ring[0] != normalized_ring[-1]:
+                raise serializers.ValidationError('Polygon rings must be closed.')
+            rings.append(normalized_ring)
+        return {'type': geometry_type, 'coordinates': rings}
+    raise serializers.ValidationError('geometry.type must be Point, LineString or Polygon.')
+
+
+class SpatialFeatureSerializer(serializers.ModelSerializer):
+    layerType = serializers.CharField(source='layer_type', read_only=True)
+    sourceReference = serializers.CharField(source='source_reference', read_only=True)
+    accuracyM = serializers.DecimalField(source='accuracy_m', max_digits=8, decimal_places=3, allow_null=True, read_only=True)
+    capturedAt = serializers.DateTimeField(source='captured_at', allow_null=True, read_only=True)
+    verifiedAt = serializers.DateTimeField(source='verified_at', allow_null=True, read_only=True)
+
+    class Meta:
+        model = SpatialFeature
+        fields = ['id', 'code', 'name', 'layerType', 'geometry', 'crs', 'source', 'sourceReference', 'accuracyM', 'capturedAt', 'verifiedAt', 'status', 'description', 'version', 'created_at', 'updated_at']
+
+
+class SpatialFeatureMutationSerializer(serializers.ModelSerializer):
+    code = serializers.RegexField(r'^[A-Z0-9][A-Z0-9_-]{1,39}$', max_length=40)
+    layerType = serializers.ChoiceField(source='layer_type', choices=SpatialFeature.LayerType.choices)
+    sourceReference = serializers.CharField(source='source_reference', allow_blank=True, max_length=180, required=False)
+    accuracyM = serializers.DecimalField(source='accuracy_m', max_digits=8, decimal_places=3, min_value=Decimal('0.001'), allow_null=True, required=False)
+    capturedAt = serializers.DateTimeField(source='captured_at', allow_null=True, required=False)
+    verifiedAt = serializers.DateTimeField(source='verified_at', allow_null=True, required=False)
+    geometry = serializers.JSONField()
+
+    class Meta:
+        model = SpatialFeature
+        fields = ['code', 'name', 'layerType', 'geometry', 'crs', 'source', 'sourceReference', 'accuracyM', 'capturedAt', 'verifiedAt', 'status', 'description']
+        extra_kwargs = {'crs': {'required': False}, 'description': {'allow_blank': True, 'required': False}}
+
+    def validate_crs(self, value):
+        if value != 'EPSG:4326':
+            raise serializers.ValidationError('Only EPSG:4326 WGS84 geometry is accepted by this API.')
+        return value
+
+    def validate_geometry(self, value):
+        return _normalize_geometry(value)
+
+    def validate(self, attrs):
+        status = attrs.get('status', self.instance.status if self.instance else SpatialFeature.Status.DRAFT)
+        source = attrs.get('source', self.instance.source if self.instance else None)
+        verified_at = attrs.get('verified_at', self.instance.verified_at if self.instance else None)
+        source_reference = attrs.get('source_reference', self.instance.source_reference if self.instance else '')
+        if status == SpatialFeature.Status.PUBLISHED and (not verified_at or not source_reference.strip()):
+            raise serializers.ValidationError({'status': 'Published GIS features require verifiedAt and sourceReference.'})
+        if not source:
+            raise serializers.ValidationError({'source': 'A governed spatial data source is required.'})
+        return attrs
+
+
+class HardwareBindingSerializer(serializers.ModelSerializer):
+    assetCode = serializers.CharField(source='asset.code', read_only=True)
+    deviceIdentifier = serializers.CharField(source='device_identifier', read_only=True)
+    lastHeartbeatAt = serializers.DateTimeField(source='last_heartbeat_at', allow_null=True, read_only=True)
+    expectedIntervalSeconds = serializers.IntegerField(source='expected_interval_seconds', read_only=True)
+
+    class Meta:
+        model = HardwareBinding
+        fields = ['id', 'assetCode', 'protocol', 'deviceIdentifier', 'endpoint', 'expectedIntervalSeconds', 'status', 'lastHeartbeatAt', 'version', 'created_at', 'updated_at']
+
+
+class HardwareBindingMutationSerializer(serializers.ModelSerializer):
+    assetCode = serializers.RegexField(r'^[A-Z0-9][A-Z0-9_-]{1,39}$', write_only=True, required=False)
+    deviceIdentifier = serializers.CharField(source='device_identifier', max_length=80, required=False)
+    expectedIntervalSeconds = serializers.IntegerField(source='expected_interval_seconds', min_value=1, max_value=86400, required=False)
+
+    class Meta:
+        model = HardwareBinding
+        fields = ['assetCode', 'protocol', 'deviceIdentifier', 'endpoint', 'expectedIntervalSeconds', 'status']
+        extra_kwargs = {
+            'endpoint': {'max_length': 200},
+            'protocol': {'required': False},
+            'status': {'required': False},
+        }
+
+    def validate_deviceIdentifier(self, value):
+        normalized = value.strip()
+        if not normalized:
+            raise serializers.ValidationError('device_identifier is required.')
+        return normalized
+
+    def validate_endpoint(self, value):
+        normalized = value.strip()
+        if not normalized or any(character.isspace() for character in normalized):
+            raise serializers.ValidationError('endpoint must be a non-empty identifier without whitespace.')
+        return normalized
+
+    def validate(self, attrs):
+        asset_code = attrs.pop('assetCode', None)
+        if asset_code:
+            asset = Asset.objects.filter(code=asset_code, is_active=True).first()
+            if not asset:
+                raise serializers.ValidationError({'assetCode': 'An active asset with this code is required.'})
+            if self.instance and asset.pk != self.instance.asset_id:
+                raise serializers.ValidationError({'assetCode': 'A hardware binding cannot be moved to another asset.'})
+            attrs['asset'] = asset
+        elif not self.instance:
+            raise serializers.ValidationError({'assetCode': 'This field is required.'})
         return attrs
 
 

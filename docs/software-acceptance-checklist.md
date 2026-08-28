@@ -10,6 +10,8 @@
 | P1 数据库 | 迁移、种子、最小权限运行账号、备份恢复步骤可复现 | `migrations/`、`deploy/postgres/provision.sql`、部署手册 |
 | P0 上线预检 | 正式流量前验证生产安全配置、TLS 反向代理信任、数据库 TLS、共享缓存、数据库连通性和迁移状态 | `python manage.py production_preflight`、`deploy/postgres/provision.sql` |
 | P2 孪生 | 区域与资产坐标独立配置；数据库空间坐标可覆盖视觉回退位置 | `twin-config.ts` 与孪生视图 |
+| P2 GIS 治理 | 管理员可原子导入、审核、发布 WGS84 GeoJSON；已发布空间对象才进入运维地图，所有变更可审计 | `SpatialFeature`、`/api/gis/features/`、空间数据管理页面 |
+| P2 接口预留 | 每个盘点资产的通信协议、端点、设备标识与期望心跳可版本化管理；预留不等于在线 | `HardwareBinding`、`/api/hardware-bindings/` |
 | P2 质量 | 静态检查、类型检查、单元测试、覆盖率、构建、迁移安全检查与 PostgreSQL 冒烟都自动执行 | `.github/workflows/vue-django.yml`、`.github/workflows/ci.yml` |
 | P2 浏览器回归 | 登录、孪生筛选、告警确认、Django API 数据读取和审计的真实浏览器 E2E | `.github/workflows/browser-e2e.yml`；首次绿色运行后归档工作流链接 |
 | P2 韧性 | 健康/就绪检查、结构化日志、速率限制、安全响应头、统一错误码与前端失败提示 | `server.ts`、`rate-limit.ts` |

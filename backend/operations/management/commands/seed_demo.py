@@ -2,7 +2,7 @@ from datetime import timedelta
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from operations.models import Alert, Asset, Profile, Telemetry, Threshold, WorkOrder
+from operations.models import Alert, Asset, HardwareBinding, Profile, Telemetry, Threshold, WorkOrder
 
 
 class Command(BaseCommand):
@@ -47,6 +47,22 @@ class Command(BaseCommand):
             defaults.update({'location_source': Asset.LocationSource.DEMO_ANCHOR, 'last_seen_at': now if spec['integration_status'] in {Asset.IntegrationStatus.VERIFIED, Asset.IntegrationStatus.FIRMWARE_CONNECTED, Asset.IntegrationStatus.CALIBRATION_REQUIRED} else None, 'is_active': True, 'version': 1})
             asset, _ = Asset.objects.update_or_create(code=code, defaults=defaults)
             asset_by_code[code] = asset
+
+        # These are integration contracts only. They reserve stable identifiers
+        # for future gateways and never claim that an unconnected module is online.
+        for code, asset in asset_by_code.items():
+            HardwareBinding.objects.update_or_create(
+                asset=asset,
+                defaults={
+                    'protocol': HardwareBinding.Protocol.MQTT,
+                    'device_identifier': f'ut-demo-{code.lower()}',
+                    'endpoint': f'ut/v1/{code.lower()}/telemetry',
+                    'expected_interval_seconds': 60,
+                    'status': HardwareBinding.Status.RESERVED,
+                    'last_heartbeat_at': None,
+                    'version': 1,
+                },
+            )
 
         alert_specs = [
             ('ALM-260826-003', 'SEEP-W01', Alert.Severity.WARNING, '水浸趋势', Alert.Status.OPEN, '水浸趋势异常', '渗水趋势上升，需确认现场情况并安排巡检。'),

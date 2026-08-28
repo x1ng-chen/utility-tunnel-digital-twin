@@ -9,7 +9,7 @@ const router = useRouter();
 const auth = useAuthStore();
 const operations = useOperationsStore();
 const userName = computed(() => auth.user?.displayName || '运维员');
-const allNav = [{ path: '/dashboard', icon: '⌂', label: '运行总览' }, { path: '/alerts', icon: '!', label: '告警中心' }, { path: '/work-orders', icon: '✓', label: '工单中心' }, { path: '/assets', icon: '▦', label: '设备台账' }, { path: '/asset-admin', icon: '◇', label: '资产主数据', adminOnly: true }, { path: '/gis', icon: '◎', label: 'GIS 总览' }, { path: '/telemetry', icon: '∿', label: '数据洞察' }, { path: '/settings', icon: '⚙', label: '系统配置' }, { path: '/audit', icon: '≡', label: '审计追踪' }];
+const allNav = [{ path: '/dashboard', icon: '⌂', label: '运行总览' }, { path: '/alerts', icon: '!', label: '告警中心' }, { path: '/work-orders', icon: '✓', label: '工单中心' }, { path: '/assets', icon: '▦', label: '设备台账' }, { path: '/asset-admin', icon: '◇', label: '资产主数据', adminOnly: true }, { path: '/gis', icon: '◎', label: 'GIS 总览' }, { path: '/gis-admin', icon: '⌖', label: '空间数据管理', adminOnly: true }, { path: '/telemetry', icon: '∿', label: '数据洞察' }, { path: '/settings', icon: '⚙', label: '系统配置' }, { path: '/audit', icon: '≡', label: '审计追踪' }];
 const nav = computed(() => allNav.filter((item) => !item.adminOnly || auth.user?.role === 'administrator'));
 async function logout() { await auth.logout(); router.push('/login'); }
 async function retrySync() { await operations.refresh('api'); }
