@@ -59,6 +59,53 @@ test('账号密码登录后可读取运行数据并写入审计', async ({ page 
   expect(consoleErrors).toEqual([]);
 });
 
+test('运维员可确认告警、生成工单并推进处置流程', async ({ page }) => {
+  const consoleErrors = trackConsoleErrors(page);
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('operator@example.com');
+  await page.getByLabel('密码').fill('demo-password-2026');
+  await page.getByRole('button', { name: /安全登录/ }).click();
+
+  await page.getByRole('button', { name: '告警中心' }).click();
+  const alertRow = page.locator('.table-row').filter({ hasText: 'ALM-260826-001' });
+  await alertRow.getByRole('button', { name: '确认' }).click();
+  await expect(alertRow.getByTestId('alert-status-ALM-260826-001')).toHaveText('已确认');
+  await alertRow.getByRole('button', { name: '转工单' }).click();
+
+  await page.getByRole('button', { name: '工单中心' }).click();
+  const linkedOrder = page.locator('.order-card').filter({ hasText: 'ALM-260826-001' });
+  await expect(linkedOrder).toBeVisible();
+  await linkedOrder.getByRole('button', { name: '推进至 已分派' }).click();
+  await linkedOrder.getByRole('button', { name: '推进至 处理中' }).click();
+  await linkedOrder.getByRole('button', { name: '推进至 待复核' }).click();
+  await expect(linkedOrder.getByRole('button', { name: '推进至 已完成' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: '数据洞察' }).click();
+  await page.getByLabel('资产').selectOption('ENV-01');
+  await page.getByRole('button', { name: '查询数据' }).click();
+  await expect(page.getByText('环境温度', { exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: '重置' }).click();
+  await expect(page.getByRole('button', { name: '查询数据' })).toBeVisible();
+
+  await page.getByRole('button', { name: '审计追踪' }).click();
+  await expect(page.getByText('确认告警', { exact: true }).first()).toBeVisible();
+  expect(consoleErrors).toEqual([]);
+});
+
+test('查看者只能查看，不会出现写入、审批或管理入口', async ({ page }) => {
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('viewer@example.com');
+  await page.getByLabel('密码').fill('demo-password-2026');
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await page.getByRole('button', { name: '告警中心' }).click();
+  await expect(page.getByText('只读角色', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: '资产主数据' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '空间数据管理' })).toHaveCount(0);
+  await page.getByRole('button', { name: '工单中心' }).click();
+  await expect(page.getByText('查看者无权新建或流转工单。')).toBeVisible();
+  await expect(page.getByRole('button', { name: /新建工单/ })).toHaveCount(0);
+});
+
 test('注册申请须经管理员批准后才能登录使用', async ({ page }) => {
   const suffix = `${Date.now()}`.slice(-8);
   const account = `e2e-operator-${suffix}`;

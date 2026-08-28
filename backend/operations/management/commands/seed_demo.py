@@ -21,6 +21,10 @@ class Command(BaseCommand):
             User.objects.filter(email__startswith='e2e-operator-').delete()
             SpatialFeature.objects.filter(code__startswith='SEG-E2E-').delete()
             Asset.objects.filter(code__startswith='ENV-E2E-').delete()
+            # The browser suite creates a linked order for this fixed demo
+            # alert.  Remove it only in explicit E2E-clean mode so normal
+            # demonstration data is never discarded by a regular seed.
+            WorkOrder.objects.filter(source_alert__code='ALM-260826-001').delete()
         users = [
             ('admin', '管理员', Profile.Role.ADMINISTRATOR, '123'),
             ('operator@example.com', '运维员', Profile.Role.OPERATOR, 'demo-password-2026'),

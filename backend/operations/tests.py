@@ -420,9 +420,12 @@ class OperationsApiTests(TestCase):
 
     def test_operator_can_acknowledge_alert(self):
         self.auth(self.operator)
-        response = self.client.post(f'/api/alerts/{self.alert.pk}/acknowledge/')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['status'], Alert.Status.ACKNOWLEDGED)
+        first = self.client.post(f'/api/alerts/{self.alert.pk}/acknowledge/')
+        repeated = self.client.post(f'/api/alerts/{self.alert.pk}/acknowledge/')
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(repeated.status_code, 200)
+        self.assertEqual(repeated.json()['status'], Alert.Status.ACKNOWLEDGED)
+        self.assertEqual(AuditLog.objects.filter(action='alert.acknowledged', resource_id=str(self.alert.pk)).count(), 1)
 
     def test_completed_work_order_requires_admin(self):
         order = WorkOrder.objects.create(code='WO-1', asset=self.asset, title='测试工单', status=WorkOrder.Status.PENDING_REVIEW, created_by=self.operator)
@@ -441,11 +444,11 @@ class OperationsApiTests(TestCase):
         self.assertEqual(order.status, WorkOrder.Status.OPEN)
 
     def test_linked_work_order_is_unique_per_alert(self):
-        WorkOrder.objects.create(code='WO-LINKED', source_alert=self.alert, asset=self.asset, title='已存在', created_by=self.operator)
+        existing = WorkOrder.objects.create(code='WO-LINKED', source_alert=self.alert, asset=self.asset, title='已存在', created_by=self.operator)
         self.auth(self.operator)
         response = self.client.post(f'/api/alerts/{self.alert.pk}/work-order/')
-        self.assertEqual(response.status_code, 409)
-        self.assertEqual(response.json()['error'], 'conflict')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['id'], existing.pk)
 
     def test_manual_work_order_rejects_unknown_priority(self):
         self.auth(self.operator)

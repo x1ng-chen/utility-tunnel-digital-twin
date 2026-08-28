@@ -821,6 +821,11 @@ class AlertAcknowledgeView(APIView):
             alert = Alert.objects.select_for_update().filter(pk=pk).first()
             if not alert:
                 return error_response('not_found', 'Alert not found.', 404)
+            # Acknowledgement is intentionally idempotent.  A second click,
+            # browser retry, or another operator completing the same action
+            # must return the current result rather than an opaque 409.
+            if alert.status == Alert.Status.ACKNOWLEDGED:
+                return Response(AlertSerializer(alert).data)
             if alert.status != Alert.Status.OPEN:
                 return error_response('invalid_state', 'Only open alerts can be acknowledged.', 409)
             alert.status = Alert.Status.ACKNOWLEDGED
@@ -840,14 +845,20 @@ class AlertWorkOrderView(APIView):
         try:
             with transaction.atomic():
                 alert = Alert.objects.select_for_update().select_related('asset').filter(pk=pk).first()
-                if not alert or not alert.asset or alert.status not in {Alert.Status.OPEN, Alert.Status.ACKNOWLEDGED}:
+                if not alert or not alert.asset:
                     return error_response('invalid_state', 'Alert is not eligible for a work order.', 409)
-                if WorkOrder.objects.filter(source_alert=alert).exists():
-                    return error_response('conflict', 'A linked work order already exists.', 409)
+                existing = WorkOrder.objects.select_related('asset', 'source_alert', 'assignee').filter(source_alert=alert).first()
+                if existing:
+                    return Response(WorkOrderSerializer(existing).data)
+                if alert.status not in {Alert.Status.OPEN, Alert.Status.ACKNOWLEDGED}:
+                    return error_response('invalid_state', 'Alert is not eligible for a work order.', 409)
                 order = WorkOrder.objects.create(code=work_order_code(), source_alert=alert, asset=alert.asset, title=f'处置 {alert.code}：{alert.title}', priority=WorkOrder.Priority.URGENT if alert.severity == Alert.Severity.CRITICAL else WorkOrder.Priority.HIGH, created_by=request.user, due_at=timezone.now() + timedelta(hours=8))
                 audit(request.user, 'work_order.created_from_alert', 'work_order', order.pk, {'alertCode': alert.code}, request_id(request))
         except IntegrityError:
-            # The partial unique constraint is the final concurrency boundary.
+            # A concurrent request may create the same linked order first.
+            existing = WorkOrder.objects.select_related('asset', 'source_alert', 'assignee').filter(source_alert_id=pk).first()
+            if existing:
+                return Response(WorkOrderSerializer(existing).data)
             return error_response('conflict', 'A linked work order already exists.', 409)
         return Response(WorkOrderSerializer(order).data, status=201)
 
