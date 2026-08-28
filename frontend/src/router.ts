@@ -22,6 +22,7 @@ const router = createRouter({
     { path: '/alerts', component: AlertsView },
     { path: '/work-orders', component: WorkOrdersView },
     { path: '/assets', component: AssetsView },
+    { path: '/twin-3d', component: () => import('./views/Twin3DView.vue') },
     { path: '/asset-admin', component: AssetAdminView, meta: { roles: ['administrator'] } },
     { path: '/gis', component: GisView },
     { path: '/gis-admin', component: GisAdminView, meta: { roles: ['administrator'] } },

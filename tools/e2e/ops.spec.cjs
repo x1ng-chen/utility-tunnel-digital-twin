@@ -42,6 +42,26 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
   expect(consoleErrors).toEqual([]);
 });
 
+test('三维孪生在模型交付前仍可定位设备并展示告警状态', async ({ page }) => {
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码').fill('123');
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await page.getByRole('button', { name: '3D 孪生' }).click();
+  await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
+  await expect(page.getByRole('application', { name: '综合管廊三维数字孪生场景' })).toBeVisible();
+  await expect(page.getByText('等待实体模型交付，当前为可交互预览场景')).toBeVisible();
+  await page.getByRole('button', { name: /ENV-01 DHT11 温湿度传感器/ }).click();
+  const inspector = page.locator('.twin-inspector');
+  await expect(inspector.getByText('MESH_ENV_01', { exact: true })).toBeVisible();
+  await expect(inspector.getByText('运行正常', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '设备台账' }).click();
+  await page.getByRole('button', { name: '定位 水位传感器' }).click();
+  await page.getByRole('button', { name: '在三维中查看 →' }).click();
+  await expect(page).toHaveURL(/\/twin-3d\?asset=SEEP-W01/);
+  await expect(page.locator('.twin-inspector').getByText('MESH_SEEP_W01', { exact: true })).toBeVisible();
+});
+
 test('账号密码登录后可读取运行数据并写入审计', async ({ page }) => {
   const consoleErrors = trackConsoleErrors(page);
   await page.goto(webUrl);

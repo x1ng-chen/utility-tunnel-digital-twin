@@ -1,5 +1,6 @@
 from datetime import timedelta
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from operations.models import Alert, Asset, HardwareBinding, Profile, RegistrationRequest, SpatialFeature, Telemetry, Threshold, WorkOrder
@@ -17,6 +18,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if options['clean_e2e_data']:
+            # Browser regression performs many legitimate logins from the
+            # local loopback address. Clear only that local test throttle key;
+            # production rate limiting remains unchanged.
+            cache.delete('throttle_login_127.0.0.1')
             RegistrationRequest.objects.filter(account__startswith='e2e-operator-').delete()
             User.objects.filter(email__startswith='e2e-operator-').delete()
             SpatialFeature.objects.filter(code__startswith='SEG-E2E-').delete()
