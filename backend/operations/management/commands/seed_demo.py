@@ -10,15 +10,20 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         users = [
-            ('admin@example.com', '管理员', Profile.Role.ADMINISTRATOR),
-            ('operator@example.com', '运维员', Profile.Role.OPERATOR),
-            ('viewer@example.com', '查看者', Profile.Role.VIEWER),
+            ('admin', '管理员', Profile.Role.ADMINISTRATOR, '123'),
+            ('operator@example.com', '运维员', Profile.Role.OPERATOR, 'demo-password-2026'),
+            ('viewer@example.com', '查看者', Profile.Role.VIEWER, 'demo-password-2026'),
         ]
         created_users = {}
-        for email, display_name, role in users:
-            user, _ = User.objects.get_or_create(username=email, defaults={'email': email, 'first_name': display_name})
-            user.email = email
-            user.set_password('demo-password-2026')
+        for username, display_name, role, password in users:
+            legacy_username = 'admin@example.com' if username == 'admin' else username
+            user = User.objects.filter(username=username).first() or User.objects.filter(username=legacy_username).first()
+            if user is None:
+                user = User(username=username)
+            user.username = username
+            user.email = username
+            user.first_name = display_name
+            user.set_password(password)
             user.save()
             Profile.objects.update_or_create(user=user, defaults={'display_name': display_name, 'role': role})
             created_users[role] = user
@@ -82,4 +87,4 @@ class Command(BaseCommand):
 
         for key, label, warning, alarm, unit in [('temperature', '环境温度', 28, 32, '°C'), ('humidity', '环境湿度', 75, 85, '%RH'), ('water', '水浸趋势', 20, 45, '秒')]:
             Threshold.objects.update_or_create(key=key, defaults={'label': label, 'warning': warning, 'alarm': alarm, 'unit': unit})
-        self.stdout.write(self.style.SUCCESS('Django demo data seeded. Users share password: demo-password-2026'))
+        self.stdout.write(self.style.SUCCESS('Django demo data seeded. Administrator: admin / 123'))

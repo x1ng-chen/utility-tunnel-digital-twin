@@ -21,7 +21,7 @@ python manage.py seed_demo
 python manage.py runserver 127.0.0.1:8000
 ```
 
-默认演示账号由 `seed_demo` 创建，密码为 `demo-password-2026`。生产环境必须替换密码、密钥、允许主机和 `DATABASE_URL`。
+默认演示管理员由 `seed_demo` 创建，账号为 `admin`、密码为 `123`，仅可用于本地演示。生产环境必须替换密码、密钥、允许主机和 `DATABASE_URL`。
 
 ### API 安全与运行检查
 
