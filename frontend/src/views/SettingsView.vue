@@ -75,7 +75,7 @@ watch([() => store.source, () => auth.user?.role], () => { void loadUsers(); }, 
 
 <template>
   <AppShell>
-    <section class="section-title"><div><span class="eyebrow light">SYSTEM CONFIGURATION</span><h1>系统配置</h1><p>管理告警阈值与数据源，管理员变更会写入审计日志。</p></div><span class="config-source"><i />{{ store.source === 'api' ? 'Django API' : '本地演示数据' }}</span></section>
+    <section class="section-title"><div><span class="eyebrow light">SYSTEM CONFIGURATION</span><h1>系统配置</h1><p>管理告警阈值与数据服务，管理员变更会写入审计日志。</p></div><span class="config-source"><i />{{ store.offline ? '离线数据快照' : '数据服务在线' }}</span></section>
     <section class="settings-panel">
       <div class="settings-head"><span>阈值策略</span><small>报警值必须高于预警值</small></div>
       <div v-for="item in store.thresholds" :key="item.key" class="threshold-row">
@@ -84,7 +84,7 @@ watch([() => store.source, () => auth.user?.role], () => { void loadUsers(); }, 
         <label>报警<input v-model.number="draft(item).alarm" :disabled="!canWrite" type="number" min="0" /></label>
         <button :disabled="!canWrite" @click="save(item)">保存 v{{ item.version }}</button>
       </div>
-      <p v-if="store.offline" class="inline-message">Django API 离线，当前配置只读；重新连接后可继续修改。</p>
+      <p v-if="store.offline" class="inline-message">数据服务离线，当前配置只读；重新连接后可继续修改。</p>
       <p v-else-if="!canWrite" class="inline-message">查看者无权修改阈值。</p>
       <p v-else-if="message" class="inline-message" role="status">{{ message }}</p>
     </section>
@@ -92,7 +92,7 @@ watch([() => store.source, () => auth.user?.role], () => { void loadUsers(); }, 
       <div class="settings-head"><span>用户与角色</span><small>{{ store.source === 'api' ? '服务端权限管理' : '仅 API 模式可编辑' }}</small></div>
       <div v-if="usersLoading" class="empty-state">正在加载用户…</div>
       <div v-else-if="usersError" class="inline-message error-message" role="alert">{{ usersError }}</div>
-      <div v-else-if="!users.length" class="empty-state">切换到 Django API 后可管理用户。</div>
+      <div v-else-if="!users.length" class="empty-state">当前没有可管理的用户。</div>
       <div v-for="user in users" :key="user.id" class="user-row">
         <div><b>{{ user.displayName }}</b><small>{{ user.email }}</small></div>
         <select :value="user.role" :disabled="!canManageUsers || user.id === auth.user?.id" @change="changeRole(user, $event)">
@@ -100,7 +100,7 @@ watch([() => store.source, () => auth.user?.role], () => { void loadUsers(); }, 
         </select>
         <button class="compact-button" :disabled="!canManageUsers || user.id === auth.user?.id" @click="updateUser(user, { isActive: !user.isActive })">{{ user.isActive ? '停用' : '启用' }}</button>
       </div>
-      <p v-if="!canManageUsers && !store.offline" class="inline-message">用户管理仅在 Django API 模式下可用。</p>
+      <p v-if="!canManageUsers && !store.offline" class="inline-message">当前账号没有用户管理权限。</p>
     </section>
   </AppShell>
 </template>

@@ -98,7 +98,7 @@ export const useOperationsStore = defineStore('operations', () => {
       } else {
         offline.value = true;
         syncError.value = apiErrorMessage(cause);
-        notice.value = 'Django API 暂不可用，当前为只读离线快照。';
+        notice.value = '数据服务暂不可用，当前为只读离线快照。';
       }
     }
     finally { loading.value = false; }
@@ -111,7 +111,7 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function acknowledge(alert: Alert) {
-    if (offline.value) throw new Error('Django API 当前离线，离线快照为只读状态。');
+    if (offline.value) throw new Error('数据服务当前离线，离线快照为只读状态。');
     if (source.value === 'demo' && alert.status !== 'open') throw new Error('只有待确认告警可以确认');
     const response = source.value === 'api' ? await runApiMutation(() => api.acknowledge(alert.id)) : null;
     Object.assign(alert, response?.data ?? { status: 'acknowledged', acknowledgedAt: new Date().toISOString(), acknowledgedBy: auth.user?.displayName || '演示用户' });
@@ -121,7 +121,7 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function createAlertOrder(alert: Alert) {
-    if (offline.value) throw new Error('Django API 当前离线，离线快照为只读状态。');
+    if (offline.value) throw new Error('数据服务当前离线，离线快照为只读状态。');
     const existing = workOrders.value.find((item) => item.sourceAlertId === alert.id);
     if (existing) { notice.value = `${alert.code} 已有关联工单`; return existing; }
     if (!alert.assetCode) throw new Error('告警缺少关联资产，无法创建工单');
@@ -136,7 +136,7 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function transition(order: WorkOrder, to: WorkOrder['status']) {
-    if (offline.value) throw new Error('Django API 当前离线，离线快照为只读状态。');
+    if (offline.value) throw new Error('数据服务当前离线，离线快照为只读状态。');
     if (source.value === 'demo' && !demoTransitions[order.status].includes(to)) throw new Error('无效的工单状态流转');
     if (source.value === 'demo' && to === 'completed' && auth.user?.role !== 'administrator') throw new Error('只有管理员可以完成工单');
     const previous = order.status;
@@ -158,7 +158,7 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function updateThreshold(threshold: Threshold, warning: number, alarm: number) {
-    if (offline.value) throw new Error('Django API 当前离线，离线快照为只读状态。');
+    if (offline.value) throw new Error('数据服务当前离线，离线快照为只读状态。');
     if (!Number.isFinite(warning) || !Number.isFinite(alarm) || warning < 0 || alarm <= warning) throw new Error('报警阈值必须大于预警阈值');
     const response = source.value === 'api' ? await runApiMutation(() => api.updateThreshold(threshold.key, { warning, alarm, version: threshold.version })) : null;
     if (response?.data) {
@@ -172,7 +172,7 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function createWorkOrder(input: { assetCode: string; title: string; description?: string; priority: WorkOrder['priority'] }) {
-    if (offline.value) throw new Error('Django API 当前离线，离线快照为只读状态。');
+    if (offline.value) throw new Error('数据服务当前离线，离线快照为只读状态。');
     const title = input.title.trim();
     if (!title) throw new Error('工单标题不能为空');
     const asset = assets.value.find((item) => item.code === input.assetCode);
@@ -229,14 +229,14 @@ export const useOperationsStore = defineStore('operations', () => {
 
   function assertAssetWriteAllowed() {
     if (auth.user?.role !== 'administrator') throw new Error('只有管理员可以维护资产主数据。');
-    if (source.value !== 'api') throw new Error('资产主数据仅允许写入 Django API。');
-    if (offline.value) throw new Error('Django API 当前离线，离线快照为只读状态。');
+    if (source.value !== 'api') throw new Error('资产主数据仅允许写入受控数据服务。');
+    if (offline.value) throw new Error('数据服务当前离线，离线快照为只读状态。');
   }
 
   function assertGisWriteAllowed() {
     if (auth.user?.role !== 'administrator') throw new Error('只有管理员可以维护 GIS 空间数据和硬件接入契约。');
-    if (source.value !== 'api') throw new Error('GIS 空间数据仅允许写入 Django API。');
-    if (offline.value) throw new Error('Django API 当前离线，离线快照为只读状态。');
+    if (source.value !== 'api') throw new Error('GIS 空间数据仅允许写入受控数据服务。');
+    if (offline.value) throw new Error('数据服务当前离线，离线快照为只读状态。');
   }
 
   async function importGisFeatures(payload: Record<string, unknown>) {
@@ -293,8 +293,8 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function ingestTelemetry(readings: TelemetryReading[]): Promise<TelemetryIngestResult> {
-    if (source.value !== 'api') throw new Error('遥测写入仅允许使用 Django API 数据源。');
-    if (offline.value) throw new Error('Django API 当前离线，无法写入遥测。');
+    if (source.value !== 'api') throw new Error('遥测写入仅允许使用受控数据服务。');
+    if (offline.value) throw new Error('数据服务当前离线，无法写入遥测。');
     if (auth.user?.role === 'viewer') throw new Error('当前角色没有遥测写入权限。');
     const response = await runApiMutation(() => api.ingestTelemetry(readings as unknown as Record<string, unknown>[]));
     await refresh('api');
@@ -386,7 +386,7 @@ function apiErrorMessage(cause: unknown): string {
     const response = (cause as { response?: { data?: { message?: string } } }).response;
     return response?.data?.message || 'API 请求失败，请稍后重试。';
   }
-  return '无法连接 Django API，请检查服务状态。';
+  return '无法连接数据服务，请检查服务状态。';
 }
 
 function seedAssets(): Asset[] {

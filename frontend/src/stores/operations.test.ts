@@ -119,7 +119,7 @@ describe('operations store', () => {
     const asset = store.assets[0];
     await expect(store.updateAsset(asset, { name: '越权修改' })).rejects.toThrow('只有管理员');
     await auth.login('', '', 'administrator', 'demo');
-    await expect(store.updateAsset(asset, { name: '演示写入' })).rejects.toThrow('仅允许写入 Django API');
+    await expect(store.updateAsset(asset, { name: '演示写入' })).rejects.toThrow('仅允许写入受控数据服务');
   });
 
   it('imports and version-publishes governed GeoJSON only through the administrator API', async () => {

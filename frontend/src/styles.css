@@ -8,3 +8,6 @@
 .user-settings-panel{margin-top:17px}.user-row{display:grid;grid-template-columns:1fr 150px auto;gap:14px;align-items:center;padding:15px 21px;border-top:1px solid #1d3652}.user-row b,.user-row small{display:block}.user-row small{margin-top:4px;color:#7890ad;font-size:9px}.user-row select{height:34px;padding:0 8px;border:1px solid #2b4764;border-radius:7px;background:#0a182b;color:#e4edff;font-size:10px}.user-row button{margin:0}.error-message{color:#ff9bab}
 @media(max-width:720px){.user-row{grid-template-columns:1fr auto}.user-row select{grid-column:1}.user-row button{grid-column:2;grid-row:2}}
 @media(max-width:720px){.sidebar nav{grid-template-columns:repeat(7,1fr)}}
+
+/* Final delivery login: account authentication only. */
+.login-card-description{margin:9px 0 22px;color:#7d8ca7;font-size:10px;line-height:1.6}

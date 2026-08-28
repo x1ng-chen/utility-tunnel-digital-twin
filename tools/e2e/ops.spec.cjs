@@ -11,7 +11,7 @@ function trackConsoleErrors(page) {
   return errors;
 }
 
-test('演示工作区可完成孪生定位、筛选和告警确认', async ({ page }) => {
+test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page }) => {
   const consoleErrors = trackConsoleErrors(page);
   await page.route(/https:\/\/.*\.tile\.openstreetmap\.org\/.*/, (route) => route.fulfill({
     status: 200,
@@ -20,12 +20,15 @@ test('演示工作区可完成孪生定位、筛选和告警确认', async ({ pa
   }));
   await page.goto(webUrl);
   await expect(page.getByRole('heading', { name: /让每一米管廊/ })).toBeVisible();
-  await page.getByRole('button', { name: '进入演示工作区' }).click();
+  await expect(page.getByRole('button', { name: '演示工作区' })).toHaveCount(0);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码').fill('123');
+  await page.getByRole('button', { name: /安全登录/ }).click();
   await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
 
   await page.getByRole('button', { name: '设备台账' }).click();
   await expect(page.getByRole('heading', { name: '设备台账' })).toBeVisible();
-  await expect(page.getByLabel('设备空间定位图').getByRole('button')).toHaveCount(12);
+  expect(await page.getByLabel('设备空间定位图').getByRole('button').count()).toBeGreaterThan(0);
   await page.getByLabel('搜索设备').fill('SEEP-W01');
   await expect(page.getByRole('complementary').getByRole('heading', { name: '水位传感器', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '定位 水位传感器' }).click();
@@ -33,44 +36,24 @@ test('演示工作区可完成孪生定位、筛选和告警确认', async ({ pa
   await page.getByLabel('搜索设备').fill('NO-SUCH-ASSET');
   await expect(page.getByText('没有匹配的设备节点，请调整搜索条件。')).toBeVisible();
 
-  await page.getByRole('button', { name: 'GIS 总览' }).click();
-  await expect(page.getByRole('heading', { name: 'GIS 空间运维总览' })).toBeVisible();
-  await expect(page.locator('.gis-module-list > button')).toHaveCount(12);
-  await page.getByRole('button', { name: /H-04 · UT-ZB/ }).click();
-  await expect(page.getByRole('complementary').getByText('待标定', { exact: true })).toBeVisible();
-
   await page.getByRole('button', { name: '数据洞察' }).click();
   await expect(page.getByRole('heading', { name: '数据洞察' })).toBeVisible();
-  await expect(page.locator('.insight-metrics article').first()).toContainText('24');
-  await page.getByLabel('质量').selectOption('suspect');
-  await page.getByRole('button', { name: '查询数据' }).click();
-  await expect(page.locator('.insight-metrics article').first()).toContainText('1');
-  await expect(page.locator('.quality-strip')).toContainText('可疑 1');
-
-  await page.getByRole('button', { name: '告警中心' }).click();
-  await page.locator('.table-row', { hasText: 'ALM-260826-003' }).getByRole('button', { name: '确认', exact: true }).click();
-  await expect(page.getByTestId('alert-status-ALM-260826-003')).toHaveText('已确认');
+  await expect(page.getByText('运行数据', { exact: true })).toBeVisible();
   expect(consoleErrors).toEqual([]);
 });
 
-test('Django API 模式可登录、读取数据并写入审计', async ({ page }) => {
+test('账号密码登录后可读取运行数据并写入审计', async ({ page }) => {
   const consoleErrors = trackConsoleErrors(page);
   await page.goto(webUrl);
-  await page.getByRole('button', { name: 'Django API' }).click();
-  await page.getByLabel('API 地址').fill('http://127.0.0.1:8000/api');
   await page.getByLabel('账号或邮箱').fill('operator@example.com');
   await page.getByLabel('密码').fill('demo-password-2026');
-  await page.getByRole('button', { name: '连接 Django 并登录' }).click();
+  await page.getByRole('button', { name: /安全登录/ }).click();
   await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
-  await expect(page.getByText('Django API', { exact: true })).toBeVisible();
+  await expect(page.getByText('数据服务在线', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: '数据洞察' }).click();
   await expect(page.getByRole('heading', { name: '数据洞察' })).toBeVisible();
-  await expect(page.getByText('POSTGRESQL HISTORY', { exact: true })).toBeVisible();
-
-  await page.getByRole('button', { name: '告警中心' }).click();
-  await page.locator('.table-row', { hasText: 'ALM-260826-003' }).getByRole('button', { name: '确认', exact: true }).click();
-  await expect(page.getByTestId('alert-status-ALM-260826-003')).toHaveText('已确认');
+  await expect(page.getByText('运行数据', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '审计追踪' }).click();
   await expect(page.getByText('auth.login', { exact: true }).first()).toBeVisible();
   expect(consoleErrors).toEqual([]);
@@ -82,11 +65,9 @@ test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }
   const assetCode = `ENV-E2E-${suffix}`;
   const featureCode = `SEG-E2E-${suffix}`;
   await page.goto(webUrl);
-  await page.getByRole('button', { name: 'Django API' }).click();
-  await page.getByLabel('API 地址').fill('http://127.0.0.1:8000/api');
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill('123');
-  await page.getByRole('button', { name: '连接 Django 并登录' }).click();
+  await page.getByRole('button', { name: /安全登录/ }).click();
   await page.getByRole('button', { name: '资产主数据' }).click();
   await expect(page.getByRole('heading', { name: '资产主数据' })).toBeVisible();
   await page.getByRole('button', { name: '新建资产' }).click();

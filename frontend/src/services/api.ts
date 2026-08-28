@@ -9,13 +9,13 @@ const fallbackBaseUrl = typeof window !== 'undefined' && window.location.protoco
 export function resolveApiBaseUrl(baseUrl: string, allowSameOriginPath = false, sameOrigin = typeof window !== 'undefined' ? window.location.origin : ''): string {
   let normalized = baseUrl.trim().replace(/\/+$/, '');
   if (allowSameOriginPath && normalized.startsWith('/')) {
-    if (!sameOrigin) throw new Error('相对 API 地址只能在浏览器中使用。');
+    if (!sameOrigin) throw new Error('相对数据服务地址只能在浏览器中使用。');
     normalized = new URL(normalized, sameOrigin).toString().replace(/\/+$/, '');
   }
-  if (!/^https?:\/\//i.test(normalized)) throw new Error('API 地址必须使用 HTTP 或 HTTPS。');
+  if (!/^https?:\/\//i.test(normalized)) throw new Error('数据服务地址配置无效。');
   const parsed = new URL(normalized);
-  if (parsed.username || parsed.password) throw new Error('API 地址不得包含账号或密码。');
-  if (parsed.search || parsed.hash || !parsed.hostname) throw new Error('API 地址不得包含查询参数或片段。');
+  if (parsed.username || parsed.password) throw new Error('数据服务地址不得包含认证信息。');
+  if (parsed.search || parsed.hash || !parsed.hostname) throw new Error('数据服务地址不得包含无关参数。');
   if (typeof window !== 'undefined' && window.location.protocol === 'https:' && parsed.protocol !== 'https:') {
     throw new Error('HTTPS 页面只能连接 HTTPS API。');
   }
