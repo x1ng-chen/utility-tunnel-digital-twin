@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
 import TwinScene from '../components/TwinScene.vue';
 import { useOperationsStore } from '../stores/operations';
-import { resolveTwinVisualState, twinModelUrl, twinStateLabel, type TwinVisualState } from '../services/twin3d';
+import { resolveTwinVisualState, twinStateLabel, type TwinVisualState } from '../services/twin3d';
 
 const store = useOperationsStore();
 const route = useRoute();
@@ -12,25 +12,16 @@ const requestedCode = typeof route.query.asset === 'string' ? route.query.asset 
 const selectedCode = ref(store.assets.some((asset) => asset.code === requestedCode) ? requestedCode : store.alerts.find((alert) => !['resolved', 'closed'].includes(alert.status))?.assetCode || store.assets[0]?.code || null);
 const scene = ref<InstanceType<typeof TwinScene>>();
 const query = ref('');
-const stateFilter = ref<'all' | TwinVisualState>('all');
 const selectedAsset = computed(() => store.assets.find((asset) => asset.code === selectedCode.value) || null);
 const selectedAlerts = computed(() => selectedAsset.value ? store.alerts.filter((alert) => alert.assetCode === selectedAsset.value?.code) : []);
 const selectedOrders = computed(() => selectedAsset.value ? store.workOrders.filter((order) => order.assetCode === selectedAsset.value?.code) : []);
 const selectedTelemetry = computed(() => selectedAsset.value ? store.telemetry.find((reading) => reading.assetCode === selectedAsset.value?.code) : null);
-const visibleAssets = computed(() => store.assets.filter((asset) => {
-  const matchQuery = !query.value || `${asset.code} ${asset.name} ${asset.zone}`.toLowerCase().includes(query.value.toLowerCase());
-  const matchState = stateFilter.value === 'all' || resolveTwinVisualState(asset, store.alerts) === stateFilter.value;
-  return matchQuery && matchState;
-}));
-const counts = computed(() => store.assets.reduce<Record<TwinVisualState, number>>((result, asset) => {
-  result[resolveTwinVisualState(asset, store.alerts)] += 1;
-  return result;
-}, { normal: 0, warning: 0, alarm: 0, unknown: 0 }));
+const visibleAssets = computed(() => store.assets.filter((asset) => !query.value || `${asset.code} ${asset.name} ${asset.zone}`.toLowerCase().includes(query.value.toLowerCase())));
 
 function select(code: string) { selectedCode.value = code; scene.value?.focusAsset(code); }
 function resetView() { scene.value?.resetView(); }
 async function fullscreen() {
-  const target = document.querySelector('.twin-workspace');
+  const target = document.querySelector('.twin-stage-panel');
   if (!target) return;
   if (document.fullscreenElement) await document.exitFullscreen();
   else await target.requestFullscreen();
@@ -46,16 +37,11 @@ watch(() => route.query.asset, (code) => { if (typeof code === 'string' && store
       <div><span class="eyebrow light">THREE-DIMENSIONAL DIGITAL TWIN</span><h1>三维孪生中心</h1><p>以真实实体模型定位设备、告警与工单；三维状态与运行数据实时同步。</p></div>
       <div class="twin-title-actions"><span class="twin-live"><i />三维数据联动</span><button class="primary-button compact-button" @click="resetView">⌖ 重置视角</button><button class="outline-button" @click="fullscreen">⛶ 全屏查看</button></div>
     </section>
-    <section class="twin-stat-grid" aria-label="三维场景状态统计">
-      <button class="twin-stat alarm" :class="{ active: stateFilter === 'alarm' }" @click="stateFilter = stateFilter === 'alarm' ? 'all' : 'alarm'"><span>告警定位</span><strong>{{ counts.alarm }}</strong><small>红色高亮设备</small></button>
-      <button class="twin-stat warning" :class="{ active: stateFilter === 'warning' }" @click="stateFilter = stateFilter === 'warning' ? 'all' : 'warning'"><span>需要关注</span><strong>{{ counts.warning }}</strong><small>橙色关注设备</small></button>
-      <button class="twin-stat normal" :class="{ active: stateFilter === 'normal' }" @click="stateFilter = stateFilter === 'normal' ? 'all' : 'normal'"><span>稳定运行</span><strong>{{ counts.normal }}</strong><small>绿色在线设备</small></button>
-      <button class="twin-stat unknown" :class="{ active: stateFilter === 'unknown' }" @click="stateFilter = stateFilter === 'unknown' ? 'all' : 'unknown'"><span>待核验</span><strong>{{ counts.unknown }}</strong><small>灰蓝待验证设备</small></button>
-    </section>
     <section class="twin-workspace">
       <article class="twin-stage-panel">
         <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" @select="select" />
-        <div class="twin-stage-footer"><div><span>模型地址</span><code>{{ twinModelUrl }}</code></div><div><span>绑定规则</span><b>Blender 对象名 = 资产 Mesh 编码</b></div><div class="twin-legend"><span class="alarm"><i />告警</span><span class="warning"><i />关注</span><span class="normal"><i />正常</span><span class="unknown"><i />待核验</span></div></div>
+        <div v-if="selectedAsset" class="twin-focus-status" aria-live="polite"><span :class="resolveTwinVisualState(selectedAsset, store.alerts)"><i />{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span><b>{{ selectedAsset.name }}</b><small>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</small></div>
+        <div class="twin-quick-switch" aria-label="场景内设备切换"><button v-for="asset in visibleAssets" :key="asset.id" :class="[resolveTwinVisualState(asset, store.alerts), { selected: asset.code === selectedCode }]" @click="select(asset.code)"><i />{{ asset.code }}</button></div>
       </article>
       <aside class="twin-inspector" aria-live="polite">
         <template v-if="selectedAsset">

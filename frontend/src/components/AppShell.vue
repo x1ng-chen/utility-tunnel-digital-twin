@@ -9,8 +9,11 @@ const router = useRouter();
 const auth = useAuthStore();
 const operations = useOperationsStore();
 const userName = computed(() => auth.user?.displayName || '运维员');
-const allNav = [{ path: '/dashboard', icon: '⌂', label: '运行总览' }, { path: '/alerts', icon: '!', label: '告警中心' }, { path: '/work-orders', icon: '✓', label: '工单中心' }, { path: '/assets', icon: '▦', label: '设备台账' }, { path: '/twin-3d', icon: '◉', label: '3D 孪生' }, { path: '/asset-admin', icon: '◇', label: '资产主数据', adminOnly: true }, { path: '/gis', icon: '◎', label: 'GIS 总览' }, { path: '/gis-admin', icon: '⌖', label: '空间数据管理', adminOnly: true }, { path: '/telemetry', icon: '∿', label: '数据洞察' }, { path: '/settings', icon: '⚙', label: '系统配置' }, { path: '/audit', icon: '≡', label: '审计追踪' }];
-const nav = computed(() => allNav.filter((item) => !item.adminOnly || auth.user?.role === 'administrator'));
+type NavItem = { path: string; icon: string; label: string; adminOnly?: boolean };
+const primaryNav: NavItem[] = [{ path: '/dashboard', icon: '⌂', label: '运行总览' }, { path: '/alerts', icon: '!', label: '告警中心' }, { path: '/work-orders', icon: '✓', label: '工单中心' }, { path: '/assets', icon: '▦', label: '设备台账' }, { path: '/twin-3d', icon: '◉', label: '三维孪生' }, { path: '/gis', icon: '◎', label: 'GIS 总览' }, { path: '/telemetry', icon: '∿', label: '数据洞察' }];
+const governanceNav: NavItem[] = [{ path: '/asset-admin', icon: '◇', label: '资产配置', adminOnly: true }, { path: '/gis-admin', icon: '⌖', label: '空间配置', adminOnly: true }, { path: '/settings', icon: '⚙', label: '系统配置' }, { path: '/audit', icon: '≡', label: '审计追踪' }];
+const nav = computed(() => [...primaryNav, ...governanceNav].filter((item) => !item.adminOnly || auth.user?.role === 'administrator'));
+const visibleGovernanceNav = computed(() => governanceNav.filter((item) => !item.adminOnly || auth.user?.role === 'administrator'));
 async function logout() { await auth.logout(); router.push('/login'); }
 async function retrySync() { await operations.refresh('api'); }
 </script>
@@ -20,7 +23,7 @@ async function retrySync() { await operations.refresh('api'); }
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark"><i /><i /><i /></span><span><b>UT / OPS</b><small>UTILITY TUNNEL</small></span></div>
       <div class="side-caption">运行工作台</div>
-      <nav><button v-for="item in nav" :key="item.path" :class="['nav-item', { active: route.path === item.path }]" @click="router.push(item.path)"><span>{{ item.icon }}</span>{{ item.label }}<em v-if="item.path === '/alerts' && operations.openAlerts">{{ operations.openAlerts }}</em><em v-if="item.path === '/work-orders' && operations.activeOrders">{{ operations.activeOrders }}</em></button></nav>
+      <nav><button v-for="item in primaryNav" :key="item.path" :class="['nav-item', { active: route.path === item.path }]" @click="router.push(item.path)"><span>{{ item.icon }}</span>{{ item.label }}<em v-if="item.path === '/alerts' && operations.openAlerts">{{ operations.openAlerts }}</em><em v-if="item.path === '/work-orders' && operations.activeOrders">{{ operations.activeOrders }}</em></button><details class="governance-nav" :open="visibleGovernanceNav.some((item) => item.path === route.path)"><summary>平台治理 <span>⌄</span></summary><button v-for="item in visibleGovernanceNav" :key="item.path" :class="['nav-item governance-item', { active: route.path === item.path }]" @click="router.push(item.path)"><span>{{ item.icon }}</span>{{ item.label }}</button></details></nav>
       <div class="sidebar-foot"><div class="avatar">{{ userName.slice(0, 1) }}</div><div><b>{{ userName }}</b><small>{{ auth.user?.role === 'administrator' ? '管理员' : auth.user?.role === 'viewer' ? '查看者' : '运维员' }}</small></div><button title="退出登录" @click="logout">↪</button></div>
     </aside>
     <main class="main-panel">

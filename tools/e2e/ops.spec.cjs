@@ -47,14 +47,16 @@ test('三维孪生在模型交付前仍可定位设备并展示告警状态', as
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill('123');
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await page.getByRole('button', { name: '3D 孪生' }).click();
+  await page.getByRole('button', { name: '三维孪生' }).click();
   await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
   await expect(page.getByRole('application', { name: '综合管廊三维数字孪生场景' })).toBeVisible();
   await expect(page.getByText('等待实体模型交付，当前为可交互预览场景')).toBeVisible();
-  await page.getByRole('button', { name: /ENV-01 DHT11 温湿度传感器/ }).click();
+  await page.getByRole('button', { name: 'ENV-01' }).click();
   const inspector = page.locator('.twin-inspector');
   await expect(inspector.getByText('MESH_ENV_01', { exact: true })).toBeVisible();
   await expect(inspector.getByText('运行正常', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'BT-01' }).click();
+  await expect(page.locator('.twin-focus-status').getByText('HC-05 蓝牙模块', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '设备台账' }).click();
   await page.getByRole('button', { name: '定位 水位传感器' }).click();
   await page.getByRole('button', { name: '在三维中查看 →' }).click();
@@ -74,12 +76,13 @@ test('账号密码登录后可读取运行数据并写入审计', async ({ page 
   await page.getByRole('button', { name: '数据洞察' }).click();
   await expect(page.getByRole('heading', { name: '数据洞察' })).toBeVisible();
   await expect(page.getByText('运行数据', { exact: true })).toBeVisible();
+  await page.locator('.governance-nav summary').click();
   await page.getByRole('button', { name: '审计追踪' }).click();
   await expect(page.getByText('用户登录系统', { exact: true }).first()).toBeVisible();
   expect(consoleErrors).toEqual([]);
 });
 
-test('操作反馈在页面上方显示并在三秒后自动关闭', async ({ page }) => {
+test('操作反馈在页面上方显示并在两秒内自动关闭', async ({ page }) => {
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill('123');
@@ -88,7 +91,7 @@ test('操作反馈在页面上方显示并在三秒后自动关闭', async ({ pa
   const notice = page.getByRole('status').filter({ hasText: '报表已生成' });
   await expect(notice).toBeVisible();
   await expect(notice.getByText('操作已完成', { exact: true })).toBeVisible();
-  await expect(notice).toHaveCount(0, { timeout: 4200 });
+  await expect(notice).toHaveCount(0, { timeout: 3200 });
 });
 
 test('运维员可确认告警、生成工单并推进处置流程', async ({ page }) => {
@@ -119,6 +122,7 @@ test('运维员可确认告警、生成工单并推进处置流程', async ({ pa
   await page.getByRole('button', { name: '重置' }).click();
   await expect(page.getByRole('button', { name: '查询数据' })).toBeVisible();
 
+  await page.locator('.governance-nav summary').click();
   await page.getByRole('button', { name: '审计追踪' }).click();
   await expect(page.getByText('确认告警', { exact: true }).first()).toBeVisible();
   expect(consoleErrors).toEqual([]);
@@ -131,8 +135,8 @@ test('查看者只能查看，不会出现写入、审批或管理入口', async
   await page.getByRole('button', { name: /安全登录/ }).click();
   await page.getByRole('button', { name: '告警中心' }).click();
   await expect(page.getByText('只读角色', { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole('button', { name: '资产主数据' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '空间数据管理' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '资产配置' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '空间配置' })).toHaveCount(0);
   await page.getByRole('button', { name: '工单中心' }).click();
   await expect(page.getByText('查看者无权新建或流转工单。')).toBeVisible();
   await expect(page.getByRole('button', { name: /新建工单/ })).toHaveCount(0);
@@ -157,6 +161,7 @@ test('注册申请须经管理员批准后才能登录使用', async ({ page }) 
   await adminPage.getByLabel('账号或邮箱').fill('admin');
   await adminPage.getByLabel('密码').fill('123');
   await adminPage.getByRole('button', { name: /安全登录/ }).click();
+  await adminPage.locator('.governance-nav summary').click();
   await adminPage.getByRole('button', { name: '系统配置' }).click();
   const applicationRow = adminPage.locator('.registration-request-row').filter({ hasText: account });
   await expect(applicationRow).toBeVisible();
@@ -179,7 +184,8 @@ test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill('123');
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await page.getByRole('button', { name: '资产主数据' }).click();
+  await page.locator('.governance-nav summary').click();
+  await page.getByRole('button', { name: '资产配置' }).click();
   await expect(page.getByRole('heading', { name: '资产主数据' })).toBeVisible();
   await page.getByRole('button', { name: '新建资产' }).click();
   await page.getByLabel('资产编码').fill(assetCode);
@@ -197,7 +203,7 @@ test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }
   await expect(page.getByText(`${assetCode} 已保存，当前版本 v2。`)).toBeVisible();
   await expect(page.getByText('乐观锁 v2')).toBeVisible();
 
-  await page.getByRole('button', { name: '空间数据管理' }).click();
+  await page.getByRole('button', { name: '空间配置' }).click();
   await expect(page.getByRole('heading', { name: '空间数据管理' })).toBeVisible();
   await page.getByLabel('对象名称').fill('端到端管廊段');
   await page.getByLabel('对象编码').fill(featureCode);

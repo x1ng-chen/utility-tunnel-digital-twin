@@ -1,16 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from './stores/auth';
 import LoginView from './views/LoginView.vue';
-import DashboardView from './views/DashboardView.vue';
-import AlertsView from './views/AlertsView.vue';
-import WorkOrdersView from './views/WorkOrdersView.vue';
-import AssetsView from './views/AssetsView.vue';
-import GisView from './views/GisView.vue';
-import SettingsView from './views/SettingsView.vue';
-import AuditView from './views/AuditView.vue';
-import AssetAdminView from './views/AssetAdminView.vue';
-import TelemetryView from './views/TelemetryView.vue';
-import GisAdminView from './views/GisAdminView.vue';
 import type { Role } from './types';
 
 const router = createRouter({
@@ -18,17 +8,17 @@ const router = createRouter({
   routes: [
     { path: '/', redirect: '/dashboard' },
     { path: '/login', component: LoginView, meta: { guest: true } },
-    { path: '/dashboard', component: DashboardView },
-    { path: '/alerts', component: AlertsView },
-    { path: '/work-orders', component: WorkOrdersView },
-    { path: '/assets', component: AssetsView },
+    { path: '/dashboard', component: () => import('./views/DashboardView.vue') },
+    { path: '/alerts', component: () => import('./views/AlertsView.vue') },
+    { path: '/work-orders', component: () => import('./views/WorkOrdersView.vue') },
+    { path: '/assets', component: () => import('./views/AssetsView.vue') },
     { path: '/twin-3d', component: () => import('./views/Twin3DView.vue') },
-    { path: '/asset-admin', component: AssetAdminView, meta: { roles: ['administrator'] } },
-    { path: '/gis', component: GisView },
-    { path: '/gis-admin', component: GisAdminView, meta: { roles: ['administrator'] } },
-    { path: '/telemetry', component: TelemetryView },
-    { path: '/settings', component: SettingsView },
-    { path: '/audit', component: AuditView },
+    { path: '/asset-admin', component: () => import('./views/AssetAdminView.vue'), meta: { roles: ['administrator'] } },
+    { path: '/gis', component: () => import('./views/GisView.vue') },
+    { path: '/gis-admin', component: () => import('./views/GisAdminView.vue'), meta: { roles: ['administrator'] } },
+    { path: '/telemetry', component: () => import('./views/TelemetryView.vue') },
+    { path: '/settings', component: () => import('./views/SettingsView.vue') },
+    { path: '/audit', component: () => import('./views/AuditView.vue') },
   ],
 });
 
