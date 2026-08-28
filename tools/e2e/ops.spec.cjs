@@ -59,6 +59,18 @@ test('账号密码登录后可读取运行数据并写入审计', async ({ page 
   expect(consoleErrors).toEqual([]);
 });
 
+test('操作反馈在页面上方显示并在三秒后自动关闭', async ({ page }) => {
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码').fill('123');
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await page.getByRole('button', { name: '↓ 导出运行快照' }).click();
+  const notice = page.getByRole('status').filter({ hasText: '报表已生成' });
+  await expect(notice).toBeVisible();
+  await expect(notice.getByText('操作已完成', { exact: true })).toBeVisible();
+  await expect(notice).toHaveCount(0, { timeout: 4200 });
+});
+
 test('运维员可确认告警、生成工单并推进处置流程', async ({ page }) => {
   const consoleErrors = trackConsoleErrors(page);
   await page.goto(webUrl);
