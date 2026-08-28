@@ -55,8 +55,40 @@ test('账号密码登录后可读取运行数据并写入审计', async ({ page 
   await expect(page.getByRole('heading', { name: '数据洞察' })).toBeVisible();
   await expect(page.getByText('运行数据', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '审计追踪' }).click();
-  await expect(page.getByText('auth.login', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('用户登录系统', { exact: true }).first()).toBeVisible();
   expect(consoleErrors).toEqual([]);
+});
+
+test('注册申请须经管理员批准后才能登录使用', async ({ page }) => {
+  const suffix = `${Date.now()}`.slice(-8);
+  const account = `e2e-operator-${suffix}`;
+  const password = 'Operator-pass-2026!';
+  await page.goto(webUrl);
+  await page.getByRole('button', { name: /提交注册申请/ }).click();
+  await page.getByLabel('姓名或称呼').fill('值班运维员');
+  await page.getByLabel('申请账号').fill(account);
+  await page.getByLabel('设置密码').fill(password);
+  await page.getByLabel('确认密码').fill(password);
+  await page.getByRole('button', { name: '提交注册申请' }).click();
+  await expect(page.getByText('申请已提交，请等待管理员审批。审批通过后即可使用该账号登录。')).toBeVisible();
+  await page.getByRole('button', { name: /返回登录/ }).click();
+
+  const adminPage = await page.context().newPage();
+  await adminPage.goto(webUrl);
+  await adminPage.getByLabel('账号或邮箱').fill('admin');
+  await adminPage.getByLabel('密码').fill('123');
+  await adminPage.getByRole('button', { name: /安全登录/ }).click();
+  await adminPage.getByRole('button', { name: '系统配置' }).click();
+  const applicationRow = adminPage.locator('.registration-request-row').filter({ hasText: account });
+  await expect(applicationRow).toBeVisible();
+  await applicationRow.getByRole('button', { name: '批准并创建账号' }).click();
+  await expect(applicationRow).toHaveCount(0);
+  await adminPage.close();
+
+  await page.getByLabel('账号或邮箱').fill(account);
+  await page.getByLabel('密码').fill(password);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
 });
 
 test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }) => {
@@ -88,16 +120,10 @@ test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }
 
   await page.getByRole('button', { name: '空间数据管理' }).click();
   await expect(page.getByRole('heading', { name: '空间数据管理' })).toBeVisible();
-  await page.getByLabel('GeoJSON 导入内容').fill(JSON.stringify({
-    type: 'FeatureCollection',
-    features: [{
-      type: 'Feature',
-      geometry: { type: 'LineString', coordinates: [[121.473700, 31.230400], [121.473900, 31.230500]] },
-      properties: { code: featureCode, name: '端到端管廊段', layerType: 'tunnel_segment', source: 'surveyed', sourceReference: `E2E 测绘成果 ${suffix}`, accuracyM: '0.250', status: 'draft' },
-    }],
-  }));
-  await page.getByRole('button', { name: '校验并导入空间对象' }).click();
-  await expect(page.getByText('已建立 1 个空间对象草稿。请在审核后将状态更新为 published。')).toBeVisible();
+  await page.getByLabel('对象名称').fill('端到端管廊段');
+  await page.getByLabel('对象编码').fill(featureCode);
+  await page.getByRole('button', { name: '保存为待审核对象' }).click();
+  await expect(page.getByText('已建立 1 个待审核空间对象。')).toBeVisible();
   await page.getByRole('button', { name: '审核并发布' }).click();
   await expect(page.getByText(`${featureCode} 已通过审核并发布到运维地图。`)).toBeVisible();
   await page.getByRole('button', { name: 'GIS 总览' }).click();

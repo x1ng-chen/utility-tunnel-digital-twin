@@ -51,10 +51,13 @@ client.interceptors.request.use((config) => {
 
 export const api = {
   login: (payload: { email: string; password: string }) => client.post('/auth/login/', payload),
+  requestRegistration: (payload: { account: string; displayName: string; role: 'operator' | 'viewer'; password: string }) => client.post('/auth/registration-requests/', payload),
   me: () => client.get('/auth/me/'),
   logout: () => client.post('/auth/logout/'),
   adminUsers: (params?: Record<string, string | number>) => client.get('/admin/users/', { params }),
   updateAdminUser: (id: number, payload: Record<string, unknown>) => client.patch(`/admin/users/${id}/`, payload),
+  registrationRequests: (params?: Record<string, string | number>) => client.get('/admin/registration-requests/', { params }),
+  reviewRegistrationRequest: (id: number, payload: { status: 'approved' | 'rejected'; reviewNote?: string }) => client.patch(`/admin/registration-requests/${id}/`, payload),
   dashboard: () => client.get('/dashboard/'),
   assets: (params?: Record<string, string | number>) => client.get('/assets/', { params }),
   createAsset: (payload: Record<string, unknown>) => client.post('/assets/', payload),

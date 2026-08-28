@@ -2,13 +2,25 @@ from datetime import timedelta
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from operations.models import Alert, Asset, HardwareBinding, Profile, Telemetry, Threshold, WorkOrder
+from operations.models import Alert, Asset, HardwareBinding, Profile, RegistrationRequest, SpatialFeature, Telemetry, Threshold, WorkOrder
 
 
 class Command(BaseCommand):
     help = 'Create deterministic local demonstration data for the Vue 3 + Django stack.'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--clean-e2e-data',
+            action='store_true',
+            help='Remove only records created by the browser regression suite before seeding demo data.',
+        )
+
     def handle(self, *args, **options):
+        if options['clean_e2e_data']:
+            RegistrationRequest.objects.filter(account__startswith='e2e-operator-').delete()
+            User.objects.filter(email__startswith='e2e-operator-').delete()
+            SpatialFeature.objects.filter(code__startswith='SEG-E2E-').delete()
+            Asset.objects.filter(code__startswith='ENV-E2E-').delete()
         users = [
             ('admin', '管理员', Profile.Role.ADMINISTRATOR, '123'),
             ('operator@example.com', '运维员', Profile.Role.OPERATOR, 'demo-password-2026'),

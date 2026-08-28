@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import AppShell from '../components/AppShell.vue';
 import { useOperationsStore } from '../stores/operations';
-import type { HardwareProtocol } from '../types';
+import type { HardwareProtocol, SpatialLayerType, SpatialSource } from '../types';
 import '../assets/gis.css';
 import '../assets/gis-admin.css';
 
@@ -17,6 +17,9 @@ const importText = ref(JSON.stringify({
 }, null, 2));
 const importError = ref('');
 const importSuccess = ref('');
+const quickImport = ref({ code: '', name: '', layerType: 'installation_point' as SpatialLayerType, source: 'configured' as SpatialSource, latitude: 31.230400, longitude: 121.473700 });
+const quickImportError = ref('');
+const quickImportSuccess = ref('');
 const bindingError = ref('');
 const bindingSuccess = ref('');
 const reviewError = ref('');
@@ -38,6 +41,18 @@ async function importFeatures() {
   } catch (cause) {
     importError.value = cause instanceof Error ? cause.message : 'GeoJSON 导入失败。';
   }
+}
+
+async function createQuickFeature() {
+  quickImportError.value = ''; quickImportSuccess.value = '';
+  const item = quickImport.value;
+  if (!item.code.trim() || !item.name.trim() || !Number.isFinite(item.latitude) || !Number.isFinite(item.longitude)) { quickImportError.value = '请填写对象名称、编码和有效的位置坐标。'; return; }
+  if (item.latitude < -90 || item.latitude > 90 || item.longitude < -180 || item.longitude > 180) { quickImportError.value = '位置坐标超出范围：纬度应在 -90 到 90 之间，经度应在 -180 到 180 之间。'; return; }
+  try {
+    const result = await store.importGisFeatures({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [item.longitude, item.latitude] }, properties: { code: item.code.trim().toUpperCase(), name: item.name.trim(), layerType: item.layerType, source: item.source, sourceReference: '人工登记', accuracyM: '5.000', status: 'draft' } }] });
+    quickImportSuccess.value = `已建立 ${result.meta.created} 个待审核空间对象。`;
+    quickImport.value = { code: '', name: '', layerType: 'installation_point', source: 'configured', latitude: 31.230400, longitude: 121.473700 };
+  } catch (cause) { quickImportError.value = cause instanceof Error ? cause.message : '空间对象保存失败。'; }
 }
 
 async function createBinding() {
@@ -80,11 +95,12 @@ async function publishFeature(featureId: number) {
     <section class="gis-admin-grid">
       <article class="panel gis-import-panel">
         <div class="panel-head"><div><span class="eyebrow">GEOJSON IMPORT</span><h2>导入真实空间数据</h2></div><span class="panel-limit">1–100 个对象 / 次</span></div>
-        <div class="gis-panel-body"><p class="panel-description">仅接受 <b>EPSG:4326 / WGS84</b> 的 Point、LineString、Polygon。导入后先保留草稿，补全测绘或 CAD 来源，审核后再发布到运维地图。</p>
-        <label class="gis-textarea-label"><span>GeoJSON 内容</span><textarea v-model="importText" aria-label="GeoJSON 导入内容" spellcheck="false" /></label>
+        <div class="gis-panel-body"><p class="panel-description">在下方填写名称、位置和来源即可登记一个空间对象。保存后会进入待审核队列，不会直接出现在运行地图。</p>
+        <form class="gis-quick-import" @submit.prevent="createQuickFeature"><div class="quick-import-heading"><div><b>登记空间对象</b><small>适用于设备安装点、井口和现场人工定位</small></div><span>第 1 步：填写基础信息</span></div><div class="gis-form-grid"><label>对象名称<input v-model.trim="quickImport.name" required maxlength="120" placeholder="例如：A 区环境监测点" /></label><label>对象编码<input v-model.trim="quickImport.code" required maxlength="40" placeholder="例如：POINT-A01" /></label><label>对象类型<select v-model="quickImport.layerType"><option value="installation_point">设备安装点</option><option value="manhole">井口</option><option value="chamber">舱室</option><option value="risk_zone">风险区域</option><option value="inspection_route">巡检路线</option><option value="tunnel_segment">管廊区段</option></select></label><label>信息来源<select v-model="quickImport.source"><option value="configured">人工登记</option><option value="surveyed">现场测绘</option><option value="cad_import">图纸整理</option></select></label><label>纬度<input v-model.number="quickImport.latitude" required type="number" min="-90" max="90" step="0.000001" /></label><label>经度<input v-model.number="quickImport.longitude" required type="number" min="-180" max="180" step="0.000001" /></label></div><p v-if="quickImportError" class="inline-message error-message" role="alert">{{ quickImportError }}</p><p v-if="quickImportSuccess" class="inline-message success-message">{{ quickImportSuccess }}</p><div class="gis-panel-actions"><small>对象会先进入待审核队列，审核通过后才会显示在运行地图。</small><button class="primary-button" type="submit">保存为待审核对象 <span>→</span></button></div></form>
+        <details class="gis-advanced-import"><summary>高级批量导入（仅 GIS 数据整理人员使用）</summary><p>如需一次导入多个对象，可粘贴标准空间数据。普通使用者无需填写此项。</p><label class="gis-textarea-label"><span>批量导入内容</span><textarea v-model="importText" aria-label="GeoJSON 导入内容" spellcheck="false" /></label>
         <p v-if="importError" class="inline-message error-message" role="alert">{{ importError }}</p>
         <p v-if="importSuccess" class="inline-message success-message">{{ importSuccess }}</p>
-        <div class="gis-panel-actions"><small>导入操作会生成版本记录，草稿不会直接出现在运行地图。</small><button class="primary-button" type="button" @click="importFeatures">校验并导入空间对象 <span>→</span></button></div></div>
+        <div class="gis-panel-actions"><small>导入操作会生成版本记录，草稿不会直接出现在运行地图。</small><button class="primary-button" type="button" @click="importFeatures">校验并导入空间对象 <span>→</span></button></div></details></div>
       </article>
 
       <article class="panel gis-binding-panel">

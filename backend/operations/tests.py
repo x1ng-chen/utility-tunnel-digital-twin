@@ -12,7 +12,7 @@ from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 from config.settings import parse_origins
-from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
+from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
 
 
 class OperationsApiTests(TestCase):
@@ -77,6 +77,46 @@ class OperationsApiTests(TestCase):
         response = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'demo-password'}, format='json')
         self.assertEqual(response.status_code, 200)
         self.assertIn('accessToken', response.json())
+
+    def test_registration_request_needs_administrator_approval_before_login(self):
+        application = self.client.post('/api/auth/registration-requests/', {
+            'account': 'new.operator',
+            'displayName': '新运维员',
+            'role': Profile.Role.OPERATOR,
+            'password': 'NewOperator!2026',
+        }, format='json')
+        self.assertEqual(application.status_code, 201)
+        self.assertFalse(User.objects.filter(email='new.operator').exists())
+        request_id = application.json()['id']
+        self.auth(self.admin)
+        pending = self.client.get('/api/admin/registration-requests/?status=pending')
+        self.assertEqual(pending.status_code, 200)
+        self.assertEqual(pending.json()['total'], 1)
+        approved = self.client.patch(f'/api/admin/registration-requests/{request_id}/', {'status': 'approved'}, format='json')
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(approved.json()['status'], RegistrationRequest.Status.APPROVED)
+        created = User.objects.get(email='new.operator')
+        self.assertEqual(created.profile.role, Profile.Role.OPERATOR)
+        self.client.credentials()
+        login = self.client.post('/api/auth/login/', {'email': 'new.operator', 'password': 'NewOperator!2026'}, format='json')
+        self.assertEqual(login.status_code, 200)
+        self.assertTrue(AuditLog.objects.filter(action='registration.approved').exists())
+
+    def test_registration_cannot_create_or_promote_a_second_administrator(self):
+        public = self.client.post('/api/auth/registration-requests/', {
+            'account': 'another.admin',
+            'displayName': '第二管理员',
+            'role': Profile.Role.ADMINISTRATOR,
+            'password': 'AnotherAdmin!2026',
+        }, format='json')
+        self.assertEqual(public.status_code, 400)
+        self.auth(self.admin)
+        created = self.client.post('/api/admin/users/', {
+            'email': 'second-admin@example.com', 'displayName': '第二管理员', 'password': 'AnotherAdmin!2026', 'role': Profile.Role.ADMINISTRATOR,
+        }, format='json')
+        self.assertEqual(created.status_code, 409)
+        promoted = self.client.patch(f'/api/admin/users/{self.operator.pk}/', {'role': Profile.Role.ADMINISTRATOR}, format='json')
+        self.assertEqual(promoted.status_code, 409)
 
     def test_superuser_login_returns_administrator_role(self):
         superuser = User.objects.create_superuser(username='login-root@example.com', email='login-root@example.com', password='root-password-2026')

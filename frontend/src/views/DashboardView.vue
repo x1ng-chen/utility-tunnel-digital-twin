@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import AppShell from '../components/AppShell.vue';
 import { useOperationsStore } from '../stores/operations';
+import { presentAudit } from '../utils/audit';
 
 const store = useOperationsStore();
 const bars = computed(() => {
@@ -46,6 +47,6 @@ async function report() {
       <article class="panel twin-panel"><div class="panel-head"><div><span class="eyebrow">TWIN PULSE</span><h2>管廊实时态势</h2></div><RouterLink to="/assets">进入孪生视图 →</RouterLink></div><div class="tunnel-map"><div class="map-grid" /><div class="map-track track-one" /><div class="map-track track-two" /><div v-for="asset in store.assets" :key="asset.id" class="map-node" :class="asset.status" :style="{ left: `${asset.position.x}%`, top: `${asset.position.y}%` }"><i /><span>{{ asset.code }}</span></div><div class="map-legend"><span><i class="normal" />正常 {{ store.assets.filter((item) => item.status === 'normal').length }}</span><span><i class="warning" />关注 {{ store.assets.filter((item) => item.status !== 'normal').length }}</span></div></div></article>
       <article class="panel signal-panel"><div class="panel-head"><div><span class="eyebrow">LIVE SIGNAL</span><h2>设备环境信号</h2></div><span class="live-dot">● 最新采集值</span></div><div class="signal-value"><strong>{{ store.dashboard.telemetry?.value.toFixed(0) || '--' }}</strong><span>{{ store.dashboard.telemetry?.unit }}</span><small>{{ store.dashboard.telemetry?.assetCode || '--' }} · {{ store.dashboard.telemetry?.metric || '暂无遥测' }}</small></div><div class="chart-bars"><i v-for="(height, index) in bars" :key="index" :style="{ height: `${height}%` }" :class="{ current: index > 20 }" /></div><div class="chart-meta"><span>运行记录</span><b>质量：{{ store.dashboard.telemetry?.quality || '暂无' }}</b><span>当前</span></div></article>
     </section>
-    <section class="dashboard-grid lower-grid"><article class="panel activity-panel"><div class="panel-head"><div><span class="eyebrow">ACTIVITY STREAM</span><h2>最新运行动态</h2></div><RouterLink to="/audit">审计追踪 →</RouterLink></div><div v-for="item in store.audit.slice(0, 4)" :key="item.id" class="activity-item"><i /><time>{{ new Date(item.occurredAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time><div><b>{{ item.action }}</b><p>{{ JSON.stringify(item.detail) }}</p></div></div><div v-if="!store.audit.length" class="empty-state">当前暂无审计记录。</div></article></section>
+    <section class="dashboard-grid lower-grid"><article class="panel activity-panel"><div class="panel-head"><div><span class="eyebrow">ACTIVITY STREAM</span><h2>最新运行动态</h2></div><RouterLink to="/audit">审计追踪 →</RouterLink></div><div v-for="item in store.audit.slice(0, 4)" :key="item.id" class="activity-item"><i /><time>{{ new Date(item.occurredAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time><div><b>{{ presentAudit(item).title }}</b><p>{{ presentAudit(item).description }}</p></div></div><div v-if="!store.audit.length" class="empty-state">当前暂无审计记录。</div></article></section>
   </AppShell>
 </template>

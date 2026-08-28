@@ -5,6 +5,7 @@ import re
 from uuid import uuid4
 from django.conf import settings
 from django.contrib.auth import authenticate
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -20,9 +21,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
+from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
 from .permissions import AuthenticatedRead
-from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, HardwareBindingMutationSerializer, HardwareBindingSerializer, ReportExportSerializer, SpatialFeatureMutationSerializer, SpatialFeatureSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, WorkOrderSerializer
+from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, HardwareBindingMutationSerializer, HardwareBindingSerializer, RegistrationRequestSerializer, ReportExportSerializer, SpatialFeatureMutationSerializer, SpatialFeatureSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, WorkOrderSerializer
 from .services import actor_name, audit
 from .telemetry_rules import evaluate_threshold
 from .throttling import LoginRateThrottle
@@ -35,6 +36,16 @@ def request_id(request) -> str:
 def object_payload(request):
     """Return an object payload or ``None`` for malformed JSON bodies."""
     return request.data if isinstance(request.data, Mapping) else None
+
+
+ACCOUNT_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.@-]{2,79}$')
+
+
+def validate_registration_account(value):
+    if not isinstance(value, str):
+        return None
+    account = value.strip().lower()
+    return account if ACCOUNT_PATTERN.fullmatch(account) else None
 
 
 def error_response(code: str, message: str, status_code: int, details=None):
@@ -291,6 +302,97 @@ class LogoutView(APIView):
         return Response(status=204)
 
 
+class RegistrationRequestView(APIView):
+    """Public account application endpoint; it never creates an active user."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [LoginRateThrottle]
+
+    def post(self, request):
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        account = validate_registration_account(payload.get('account'))
+        display_name = payload.get('displayName')
+        requested_role = payload.get('role')
+        password_value = payload.get('password')
+        if not account or not isinstance(display_name, str) or not display_name.strip() or not isinstance(password_value, str):
+            return error_response('invalid_request', '请填写账号、姓名和密码。', 400)
+        if requested_role not in {Profile.Role.OPERATOR, Profile.Role.VIEWER}:
+            return error_response('invalid_request', '只能申请运维员或查看者账号。', 400)
+        if len(password_value) < 8:
+            return error_response('invalid_request', '密码至少需要 8 位。', 400)
+        try:
+            validate_password(password_value)
+        except ValidationError:
+            return error_response('invalid_request', '密码强度不足，请使用更复杂的密码。', 400)
+        if User.objects.filter(Q(email__iexact=account) | Q(username__iexact=account)).exists():
+            return error_response('conflict', '该账号已存在，请直接登录。', 409)
+        if RegistrationRequest.objects.filter(account__iexact=account, status=RegistrationRequest.Status.PENDING).exists():
+            return error_response('conflict', '该账号的申请正在审批中，请勿重复提交。', 409)
+        application = RegistrationRequest.objects.create(
+            account=account,
+            display_name=display_name.strip()[:80],
+            requested_role=requested_role,
+            password_hash=make_password(password_value),
+        )
+        return Response({'id': application.pk, 'status': application.status, 'message': '申请已提交，请等待管理员审批。'}, status=status.HTTP_201_CREATED)
+
+
+class AdminRegistrationRequestListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_admin(request):
+            return error_response('forbidden', 'Administrator permission is required.', 403)
+        queryset = RegistrationRequest.objects.select_related('reviewed_by', 'created_user')
+        requested_status = request.query_params.get('status', RegistrationRequest.Status.PENDING)
+        if requested_status not in RegistrationRequest.Status.values:
+            return error_response('invalid_request', 'status is not valid.', 400)
+        return paginated(queryset.filter(status=requested_status), RegistrationRequestSerializer, request, ordering=('-created_at', '-id'))
+
+
+class AdminRegistrationRequestDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not is_admin(request):
+            return error_response('forbidden', 'Administrator permission is required.', 403)
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        next_status = payload.get('status')
+        review_note = payload.get('reviewNote', '')
+        if next_status not in {RegistrationRequest.Status.APPROVED, RegistrationRequest.Status.REJECTED}:
+            return error_response('invalid_request', 'status must be approved or rejected.', 400)
+        if not isinstance(review_note, str):
+            return error_response('invalid_request', 'reviewNote must be a string.', 400)
+        with transaction.atomic():
+            application = RegistrationRequest.objects.select_for_update().filter(pk=pk).first()
+            if not application:
+                return error_response('not_found', 'Registration request not found.', 404)
+            if application.status != RegistrationRequest.Status.PENDING:
+                return error_response('conflict', '该申请已处理，不能重复审批。', 409)
+            application.status = next_status
+            application.review_note = review_note.strip()[:300]
+            application.reviewed_by = request.user
+            application.reviewed_at = timezone.now()
+            if next_status == RegistrationRequest.Status.APPROVED:
+                if User.objects.filter(Q(email__iexact=application.account) | Q(username__iexact=application.account)).exists():
+                    return error_response('conflict', '该账号已存在，无法批准申请。', 409)
+                user = User(username=f'user-{uuid4().hex}', email=application.account, password=application.password_hash)
+                user.save()
+                Profile.objects.create(user=user, display_name=application.display_name, role=application.requested_role)
+                application.created_user = user
+                action = 'registration.approved'
+            else:
+                action = 'registration.rejected'
+            application.save(update_fields=['status', 'review_note', 'reviewed_by', 'reviewed_at', 'created_user'])
+            audit(request.user, action, 'registration_request', application.pk, {'account': application.account, 'role': application.requested_role}, request_id(request))
+        return Response(RegistrationRequestSerializer(application).data)
+
+
 class AdminUserListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -331,6 +433,8 @@ class AdminUserListView(APIView):
             return error_response('conflict', 'A user with this email already exists.', 409)
         if requested_role not in Profile.Role.values:
             return error_response('invalid_request', 'role is not valid.', 400)
+        if requested_role == Profile.Role.ADMINISTRATOR:
+            return error_response('conflict', '系统仅保留一个管理员账号，不能新增管理员。', 409)
         if not password_value or len(password_value) < 12:
             return error_response('invalid_request', 'password must contain at least 12 characters.', 400)
         try:
@@ -374,6 +478,8 @@ class AdminUserDetailView(APIView):
             if user.is_superuser and (not next_active or next_role != Profile.Role.ADMINISTRATOR):
                 return error_response('conflict', 'The superuser administrator cannot be disabled or demoted here.', 409)
             currently_admin = profile.role == Profile.Role.ADMINISTRATOR or user.is_superuser
+            if not currently_admin and next_role == Profile.Role.ADMINISTRATOR:
+                return error_response('conflict', '系统仅保留一个管理员账号，不能提升其他账号。', 409)
             removing_admin = currently_admin and (not next_active or next_role != Profile.Role.ADMINISTRATOR)
             if removing_admin:
                 remaining = Profile.objects.filter(role=Profile.Role.ADMINISTRATOR, user__is_active=True).exclude(user_id=user.pk).exists() or User.objects.filter(is_superuser=True, is_active=True).exclude(pk=user.pk).exists()

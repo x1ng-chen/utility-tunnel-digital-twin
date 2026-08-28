@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
+from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
 
 
 class AssetSerializer(serializers.ModelSerializer):
@@ -366,3 +366,20 @@ class AdminUserSerializer(serializers.ModelSerializer):
         if obj.is_superuser:
             return Profile.Role.ADMINISTRATOR
         return getattr(getattr(obj, 'profile', None), 'role', Profile.Role.VIEWER)
+
+
+class RegistrationRequestSerializer(serializers.ModelSerializer):
+    requestedRole = serializers.CharField(source='requested_role', read_only=True)
+    reviewNote = serializers.CharField(source='review_note', read_only=True)
+    reviewedAt = serializers.DateTimeField(source='reviewed_at', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    reviewerName = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RegistrationRequest
+        fields = ['id', 'account', 'display_name', 'requestedRole', 'status', 'reviewNote', 'reviewerName', 'reviewedAt', 'createdAt']
+
+    def get_reviewerName(self, obj):
+        if not obj.reviewed_by:
+            return None
+        return obj.reviewed_by.get_full_name() or getattr(getattr(obj.reviewed_by, 'profile', None), 'display_name', '') or obj.reviewed_by.email

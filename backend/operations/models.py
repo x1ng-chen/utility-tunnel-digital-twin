@@ -17,6 +17,36 @@ class Profile(models.Model):
         return self.display_name or self.user.email or self.user.username
 
 
+class RegistrationRequest(models.Model):
+    """A password-hashed account application. Approval creates the actual user."""
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', '待审批'
+        APPROVED = 'approved', '已通过'
+        REJECTED = 'rejected', '未通过'
+
+    account = models.CharField(max_length=80)
+    display_name = models.CharField(max_length=80)
+    requested_role = models.CharField(max_length=20, choices=[
+        (Profile.Role.OPERATOR, '运维员'),
+        (Profile.Role.VIEWER, '查看者'),
+    ])
+    password_hash = models.CharField(max_length=128, editable=False)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    review_note = models.CharField(max_length=300, blank=True)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_registration_requests')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='registration_request')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['status', '-created_at'], name='registration_status_time_idx')]
+        constraints = [
+            models.UniqueConstraint(fields=['account'], condition=models.Q(status='pending'), name='registration_pending_account_unique'),
+        ]
+
+
 class Asset(models.Model):
     class Status(models.TextChoices):
         NORMAL = 'normal', '正常'

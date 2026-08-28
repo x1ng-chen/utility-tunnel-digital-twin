@@ -7,6 +7,7 @@ export type LocationSource = 'unassigned' | 'demo_anchor' | 'configured' | 'surv
 
 export interface User { id: number; email: string; displayName: string; role: Role; }
 export interface AdminUser extends User { isActive: boolean; lastLogin: string | null; createdAt: string; }
+export interface RegistrationRequest { id: number; account: string; display_name: string; requestedRole: Exclude<Role, 'administrator'>; status: 'pending' | 'approved' | 'rejected'; reviewNote: string; reviewerName: string | null; reviewedAt: string | null; createdAt: string; }
 export interface Asset { id: number; code: string; name: string; zone: string; type: string; status: Status; hardwareCode: string | null; integrationStatus: IntegrationStatus; interface: string; capabilities: string[]; mesh: string; position: Record<string, number>; latitude: number | null; longitude: number | null; locationSource: LocationSource; installationNote: string; lastSeenAt: string | null; isActive: boolean; version: number; }
 export interface AssetMutation { code: string; name: string; zone: string; type: string; status: Status; hardwareCode: string | null; integrationStatus: IntegrationStatus; interface: string; capabilities: string[]; mesh: string; position: Record<string, number>; latitude: number | null; longitude: number | null; locationSource: LocationSource; installationNote: string; isActive: boolean; }
 export type SpatialLayerType = 'tunnel_segment' | 'chamber' | 'manhole' | 'inspection_route' | 'risk_zone' | 'installation_point';
