@@ -47,6 +47,9 @@ page-*.png
 Git-2.55.0.5-64-bit.exe
 ut-ops-site.tar.gz
 
+# PlatformIO generated artifacts
+firmware/**/.pio/
+
 # STM32/CMake generated artifacts
 firmware/**/build/
 firmware/**/build-*/
