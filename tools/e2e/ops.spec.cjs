@@ -58,7 +58,7 @@ test('Django API 模式可登录、读取数据并写入审计', async ({ page }
   await page.goto(webUrl);
   await page.getByRole('button', { name: 'Django API' }).click();
   await page.getByLabel('API 地址').fill('http://127.0.0.1:8000/api');
-  await page.getByLabel('工作邮箱').fill('operator@example.com');
+  await page.getByLabel('账号或邮箱').fill('operator@example.com');
   await page.getByLabel('密码').fill('demo-password-2026');
   await page.getByRole('button', { name: '连接 Django 并登录' }).click();
   await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
@@ -84,7 +84,7 @@ test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }
   await page.goto(webUrl);
   await page.getByRole('button', { name: 'Django API' }).click();
   await page.getByLabel('API 地址').fill('http://127.0.0.1:8000/api');
-  await page.getByLabel('工作邮箱').fill('admin');
+  await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill('123');
   await page.getByRole('button', { name: '连接 Django 并登录' }).click();
   await page.getByRole('button', { name: '资产主数据' }).click();
