@@ -42,7 +42,10 @@ watch(() => route.query.asset, (code) => { if (typeof code === 'string' && store
       <article class="twin-stage-panel">
         <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" @select="select" />
         <div v-if="selectedAsset" class="twin-focus-status" aria-live="polite"><span :class="resolveTwinVisualState(selectedAsset, store.alerts)"><i />{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span><b :title="selectedAsset.name">{{ selectedAssetName }}</b><small>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</small></div>
-        <div class="twin-quick-switch" aria-label="场景内设备切换"><button v-for="asset in visibleAssets" :key="asset.id" :class="[resolveTwinVisualState(asset, store.alerts), { selected: asset.code === selectedCode }]" @click="select(asset.code)"><i />{{ asset.code }}</button></div>
+        <nav class="twin-quick-switch" aria-label="场景内设备切换" @pointerdown.stop @mousedown.stop>
+          <div class="twin-quick-switch-heading"><span>设备快速切换</span><b>{{ selectedAssetName || '请选择设备' }}</b></div>
+          <div class="twin-quick-switch-list"><button v-for="asset in visibleAssets" :key="asset.id" :class="[resolveTwinVisualState(asset, store.alerts), { selected: asset.code === selectedCode }]" :aria-label="`选择 ${asset.name}，设备编码 ${asset.code}`" :title="`${asset.name} · ${asset.zone}`" @pointerdown.stop @click.stop="select(asset.code)"><i /><span><b>{{ asset.code }}</b><small>{{ asset.name }}</small></span></button></div>
+        </nav>
       </article>
       <aside class="twin-inspector" aria-live="polite">
         <template v-if="selectedAsset">

@@ -13,6 +13,20 @@
 .twin-detail-section{padding:11px 0}
 .twin-install-note{margin-top:12px;padding:10px}
 
+/* The scene selector stays above the WebGL canvas and never loses pointer input. */
+.twin-quick-switch{z-index:8;display:grid;gap:7px;min-height:74px;padding:9px 11px;pointer-events:auto;touch-action:pan-x}
+.twin-quick-switch-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#8fa8c7;font-size:8px;letter-spacing:.12em}
+.twin-quick-switch-heading b{overflow:hidden;color:#eef5ff;font-size:10px;letter-spacing:0;text-overflow:ellipsis;white-space:nowrap}
+.twin-quick-switch-list{display:flex;gap:7px;overflow-x:auto;padding:1px 1px 4px;scrollbar-color:#5c7ed1 #0a1728;scrollbar-width:thin}
+.twin-quick-switch button{position:relative;display:flex;flex:0 0 128px;align-items:center;gap:7px;min-height:37px;padding:7px 9px;text-align:left;transition:border-color .18s ease,background .18s ease,box-shadow .18s ease,transform .18s ease}
+.twin-quick-switch button span{min-width:0}
+.twin-quick-switch button b,.twin-quick-switch button small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.twin-quick-switch button b{font:9px ui-monospace,monospace}
+.twin-quick-switch button small{margin-top:3px;color:#8fa6c3;font-size:8px}
+.twin-quick-switch button:hover,.twin-quick-switch button:focus-visible{z-index:1;border-color:#91b0ff;background:#1b3c6c;color:#fff;box-shadow:0 0 0 3px #789cff2b,0 8px 18px #0005;outline:0;transform:translateY(-2px)}
+.twin-quick-switch button:hover small,.twin-quick-switch button:focus-visible small{color:#d8e6ff}
+.twin-quick-switch button.selected{border-color:#9bb6ff;background:linear-gradient(135deg,#294e8a,#394c9b);box-shadow:0 0 0 2px #7398ff35,0 8px 18px #0004}
+
 @media (min-width:721px) and (max-width:1280px){
   .gis-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
   .gis-metrics article:last-child{grid-column:1 / -1}
