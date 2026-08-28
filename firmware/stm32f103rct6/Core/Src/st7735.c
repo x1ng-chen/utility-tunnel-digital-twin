@@ -8,6 +8,17 @@
 #include "st7735.h"
 #include "st7735_font.h"
 
+/* Direct BSRR writes replace HAL_GPIO_WritePin in the pixel hot path. */
+static inline __attribute__((always_inline)) void gpio_set(uint16_t pin)
+{
+    LCD_PORT->BSRR = pin;
+}
+
+static inline __attribute__((always_inline)) void gpio_reset(uint16_t pin)
+{
+    LCD_PORT->BSRR = (uint32_t)pin << 16U;
+}
+
 /* ============ GPIO 初始化 ============ */
 static void ST7735_GPIO_Init(void)
 {
@@ -28,33 +39,33 @@ static void ST7735_GPIO_Init(void)
 static void spi_write_byte(uint8_t b)
 {
     for (int i = 0; i < 8; i++) {
-        HAL_GPIO_WritePin(LCD_PORT, LCD_SCK_PIN, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(LCD_PORT, LCD_MOSI_PIN,
-                          (b & 0x80) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        gpio_reset(LCD_SCK_PIN);
+        if (b & 0x80U) gpio_set(LCD_MOSI_PIN);
+        else gpio_reset(LCD_MOSI_PIN);
         b <<= 1;
-        HAL_GPIO_WritePin(LCD_PORT, LCD_SCK_PIN, GPIO_PIN_SET);
+        gpio_set(LCD_SCK_PIN);
     }
 }
 
 /* ============ 写命令 / 写数据 ============ */
 static void ST7735_Cmd(uint8_t cmd)
 {
-    HAL_GPIO_WritePin(LCD_PORT, LCD_DC_PIN, GPIO_PIN_RESET);   /* DC=0 命令 */
+    gpio_reset(LCD_DC_PIN);   /* DC=0 命令 */
     spi_write_byte(cmd);
 }
 
 static void ST7735_Data(uint8_t data)
 {
-    HAL_GPIO_WritePin(LCD_PORT, LCD_DC_PIN, GPIO_PIN_SET);     /* DC=1 数据 */
+    gpio_set(LCD_DC_PIN);     /* DC=1 数据 */
     spi_write_byte(data);
 }
 
 /* ============ 复位 ============ */
 static void ST7735_Reset(void)
 {
-    HAL_GPIO_WritePin(LCD_PORT, LCD_RES_PIN, GPIO_PIN_RESET);
+    gpio_reset(LCD_RES_PIN);
     HAL_Delay(20);
-    HAL_GPIO_WritePin(LCD_PORT, LCD_RES_PIN, GPIO_PIN_SET);
+    gpio_set(LCD_RES_PIN);
     HAL_Delay(120);
 }
 
@@ -76,7 +87,7 @@ static void ST7735_SetWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 }
 
 /* ============ 填充矩形 ============ */
-static void ST7735_FillRect(int x, int y, int w, int h, uint16_t color)
+void ST7735_FillRect(int x, int y, int w, int h, uint16_t color)
 {
     ST7735_SetWindow(x, y, x + w - 1, y + h - 1);
     uint32_t n = (uint32_t)w * h;
@@ -135,6 +146,20 @@ void ST7735_Init(void)
 void ST7735_Clear(uint16_t color)
 {
     ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, color);
+}
+
+void ST7735_DrawGlyph16(int x, int y, const uint8_t glyph[32], uint16_t color, uint16_t bg)
+{
+    int row, col;
+    ST7735_SetWindow(x, y, x + 15, y + 15);
+    for (row = 0; row < 16; row++) {
+        for (col = 0; col < 16; col++) {
+            const uint8_t bits = glyph[row * 2 + col / 8];
+            const uint16_t pixel = (bits & (0x80 >> (col % 8))) ? color : bg;
+            ST7735_Data(pixel >> 8);
+            ST7735_Data(pixel & 0xFF);
+        }
+    }
 }
 
 /* ============ 显示字符（8x16，带背景色） ============ */

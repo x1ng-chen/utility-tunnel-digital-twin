@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "st7735.h"
+#include "ui_menu.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -37,6 +38,12 @@
 #define WATER_ALARM_THRESHOLD  1000U
 #define WATER_SAMPLE_COUNT     8U
 #define VIBRATION_HOLD_MS      5000U
+#define HMI_KEY_PRESSED         GPIO_PIN_RESET
+#define HMI_LONG_PRESS_MS       700U
+#define DHT11_SAMPLE_INTERVAL_MS 2000U
+#define BLUETOOTH_SEND_INTERVAL_MS 2000U
+#define UI_REFRESH_INTERVAL_MS  50U
+#define MAIN_LOOP_DELAY_MS      20U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -219,6 +226,61 @@ static void Bluetooth_SendTelemetry(uint8_t temperature,
     (void)HAL_UART_Transmit(&huart2, (uint8_t *)json, (uint16_t)length, 1000U);
   }
 
+}
+
+/*
+ * Temporary board-key adapter. PA0/PC8/PC9 are the exposed K2/K3/K4 keys on
+ * this board. When the joystick is wired, replace only this adapter with the
+ * joystick GPIO/ADC reader; the UI menu continues to use UiInput unchanged.
+ */
+static UiInput HMI_ReadInput(void)
+{
+  static uint8_t up_latched;
+  static uint8_t down_latched;
+  static uint8_t ok_latched;
+  static uint32_t ok_pressed_at;
+
+  if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == HMI_KEY_PRESSED)
+  {
+    if (!up_latched)
+    {
+      up_latched = 1U;
+      return UI_INPUT_UP;
+    }
+  }
+  else
+  {
+    up_latched = 0U;
+  }
+
+  if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8) == HMI_KEY_PRESSED)
+  {
+    if (!down_latched)
+    {
+      down_latched = 1U;
+      return UI_INPUT_DOWN;
+    }
+  }
+  else
+  {
+    down_latched = 0U;
+  }
+
+  if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9) == HMI_KEY_PRESSED)
+  {
+    if (!ok_latched)
+    {
+      ok_latched = 1U;
+      ok_pressed_at = HAL_GetTick();
+    }
+  }
+  else if (ok_latched)
+  {
+    ok_latched = 0U;
+    return ((HAL_GetTick() - ok_pressed_at) >= HMI_LONG_PRESS_MS) ? UI_INPUT_BACK : UI_INPUT_OK;
+  }
+
+  return UI_INPUT_NONE;
 }
 
 #if 0
@@ -435,6 +497,9 @@ static void TFT_BacklightTest(void)
 }
 #endif
 
+/* The original raw value view is retained as reference; UI_Menu now renders
+ * the operational dashboard and menus. */
+#if 0
 static void LCD_ShowValues(uint8_t temperature, uint8_t humidity,
                            uint16_t water_raw, uint8_t dht_ok,
                            uint8_t water_ok,
@@ -488,6 +553,7 @@ static void LCD_ShowValues(uint8_t temperature, uint8_t humidity,
     ST7735_DrawString(8, 108, "VIB OK     ", LCD_GREEN, LCD_BLACK);
   }
 }
+#endif
 /* USER CODE END 0 */
 
 /**
@@ -539,12 +605,13 @@ int main(void)
   }
   HAL_TIM_Base_Start(&htim2);
   ST7735_Init();
-  ST7735_Clear(LCD_BLACK);
+  UI_MenuInit();
   uint8_t temperature = 0;
   uint8_t humidity = 0;
   uint8_t dht_ok = 0;
-  uint32_t last_dht_read = HAL_GetTick() - 2000U;
-  uint32_t last_bluetooth_send = HAL_GetTick() - 2000U;
+  uint32_t last_dht_read = HAL_GetTick() - DHT11_SAMPLE_INTERVAL_MS;
+  uint32_t last_bluetooth_send = HAL_GetTick() - BLUETOOTH_SEND_INTERVAL_MS;
+  uint32_t last_ui_update = HAL_GetTick() - UI_REFRESH_INTERVAL_MS;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -558,7 +625,7 @@ int main(void)
     uint8_t water_ok;
     uint8_t vibration_alarm;
 
-    if ((HAL_GetTick() - last_dht_read) >= 2000U)
+    if ((HAL_GetTick() - last_dht_read) >= DHT11_SAMPLE_INTERVAL_MS)
     {
       dht_ok = DHT11_Read(&temperature, &humidity);
       last_dht_read = HAL_GetTick();
@@ -570,16 +637,30 @@ int main(void)
 
     water_ok = Water_ReadRaw(&water_raw);
     vibration_alarm = ((int32_t)(vibration_alarm_until - HAL_GetTick()) > 0) ? 1U : 0U;
-    LCD_ShowValues(temperature, humidity, water_raw, dht_ok, water_ok,
-                   vibration_alarm);
+    if ((HAL_GetTick() - last_ui_update) >= UI_REFRESH_INTERVAL_MS)
+    {
+      UiTelemetry uiTelemetry = {
+        .temperature = temperature,
+        .humidity = humidity,
+        .waterRaw = water_raw,
+        .dhtOk = dht_ok,
+        .vibrationAlarm = vibration_alarm,
+        .telemetryTxEnabled = 1U,
+      };
+      UI_MenuSetTelemetry(&uiTelemetry);
+      last_ui_update = HAL_GetTick();
+    }
 
-    if ((HAL_GetTick() - last_bluetooth_send) >= 2000U)
+    UI_MenuHandleInput(HMI_ReadInput());
+    UI_MenuTick(HAL_GetTick());
+
+    if ((HAL_GetTick() - last_bluetooth_send) >= BLUETOOTH_SEND_INTERVAL_MS)
     {
       Bluetooth_SendTelemetry(temperature, humidity, water_raw,
                               dht_ok, water_ok, vibration_alarm);
       last_bluetooth_send = HAL_GetTick();
     }
-    HAL_Delay(200);
+    HAL_Delay(MAIN_LOOP_DELAY_MS);
   }
   /* USER CODE END 3 */
 }
@@ -770,6 +851,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* Configure board keys K2/K3/K4 as temporary HMI Up/Down/OK inputs. */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA4 */
   GPIO_InitStruct.Pin = GPIO_PIN_4;
