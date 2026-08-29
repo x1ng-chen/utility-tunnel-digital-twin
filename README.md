@@ -116,7 +116,7 @@ flowchart LR
 
 ## 系统架构
 
-```MERMAID```
+```mermaid
 flowchart TB
     S[传感器与执行器层<br/>温湿度 / 甲烷 / CO / 烟雾 / 氧气 / 水浸/水位 / 门磁<br/>风机 / 照明 / 声光报警]
     C[现场控制层<br/>STM32F103RCT6<br/>采集、质量标志、本地保护、命令状态机]
