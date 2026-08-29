@@ -4,6 +4,8 @@
 
 `utility-tunnel-annular-v04.blend` 是当前展示和评审使用的 Blender 模型；
 `utility-tunnel-annular-v04.glb` 是面向 Web 三维场景导入的轻量导出文件。
+网页运行时副本为 `frontend/public/models/utility-tunnel.glb`，由同一源模型
+生成，符合项目《三维实体模型接入规范》的默认路径约定。
 
 模型以 `utility_tunnel_annular_v04.py` 为入口脚本，并复用
 `utility_tunnel_ring_v01.py` 中的环形舱体、透明亚克力壳体、顶盖和基础

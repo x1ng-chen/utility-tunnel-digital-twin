@@ -11,6 +11,7 @@ ROOT = r"D:\shixi\model"
 PRE = os.path.join(ROOT, "previews")
 V04_BLEND = os.path.join(ROOT, "utility-tunnel-annular-v04.blend")
 V04_GLB = os.path.join(ROOT, "utility-tunnel-annular-v04.glb")
+WEB_GLB = r"D:\shixi\frontend\public\models\utility-tunnel.glb"
 V04_HERO = os.path.join(PRE, "utility-tunnel-annular-v04-hero.png")
 V04_FUNCTION = os.path.join(PRE, "utility-tunnel-annular-v04-functional.png")
 
@@ -81,7 +82,11 @@ for obj in MODEL.objects:
     if obj.type in {'MESH', 'CURVE', 'FONT'}: obj.select_set(True)
 bpy.context.view_layer.objects.active = bpy.data.objects.get('MESH_BASE_01')
 bpy.ops.export_scene.gltf(filepath=V04_GLB, export_format='GLB', use_selection=True, export_apply=True, export_yup=True, export_materials='EXPORT', export_cameras=False, export_lights=False)
+# Web runtime delivery uses the project-standard filename.  Both GLB files
+# are generated from the same selected objects and preserve asset mesh names.
+os.makedirs(os.path.dirname(WEB_GLB), exist_ok=True)
+bpy.ops.export_scene.gltf(filepath=WEB_GLB, export_format='GLB', use_selection=True, export_apply=True, export_yup=True, export_materials='EXPORT', export_cameras=False, export_lights=False)
 bpy.ops.wm.save_as_mainfile(filepath=V04_BLEND)
 required = ['MESH_PIPE_G01', 'MESH_AIR_IN_01_FILTER_PORT', 'MESH_AIR_IN_01_SAFE_ROUTE', 'MESH_FAN_01', 'MESH_VENT_01', 'MESH_WATER_TRAY', 'MESH_WATER_DROP_01', 'MESH_HILEVEL_01', 'MESH_CTRL_01', 'MESH_SIMBOX_01']
 missing = [n for n in required if bpy.data.objects.get(n) is None]
-print({'V04_DONE': not missing, 'missing': missing, 'blend': V04_BLEND, 'glb': V04_GLB})
+print({'V04_DONE': not missing, 'missing': missing, 'blend': V04_BLEND, 'glb': V04_GLB, 'web_glb': WEB_GLB})
