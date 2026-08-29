@@ -14,7 +14,7 @@
 .twin-install-note{margin-top:12px;padding:10px}
 
 /* The scene selector stays above the WebGL canvas and never loses pointer input. */
-.twin-quick-switch{z-index:8;display:grid;gap:7px;min-height:108px;padding:9px 11px;pointer-events:auto;touch-action:pan-x}
+.twin-quick-switch{z-index:8;display:grid;gap:7px;min-height:108px;padding:9px 11px;pointer-events:auto;touch-action:pan-x;user-select:none}
 .twin-quick-switch-tools{display:grid;gap:7px}
 .twin-quick-switch-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#8fa8c7;font-size:8px;letter-spacing:.12em}
 .twin-quick-switch-heading b{overflow:hidden;color:#eef5ff;font-size:10px;letter-spacing:0;text-overflow:ellipsis;white-space:nowrap}
@@ -64,6 +64,8 @@
 .twin-fx-trail{width:13px;height:13px;background:radial-gradient(circle,#7df3d5b5,#7194ff20 64%,transparent 71%);transform-origin:center}
 .twin-fx-pulse{width:16px;height:16px;border:1px solid #a6fff0;box-shadow:0 0 18px #69f0d09a;animation:twin-fx-pulse .68s cubic-bezier(.16,1,.3,1) forwards}
 .twin-fullscreen-fx.pressed .twin-fx-ring{width:20px;height:20px;border-color:#fff;background:#9aafff3b}
+.twin-fullscreen-fx.dragging .twin-fx-ring{width:42px;height:22px;border-color:#78f2d2;background:linear-gradient(90deg,#6df0cf1c,#7898ff28);box-shadow:0 0 22px #69e9ce72,inset 0 0 12px #7af1d333}
+.twin-fullscreen-fx.dragging .twin-fx-dot{background:#8bffe0;box-shadow:0 0 16px #8bffe0}
 
 @keyframes twin-fx-pulse{from{opacity:.95;transform:translate3d(var(--twin-pulse-x),var(--twin-pulse-y),0) translate(-50%,-50%) scale(.2)}to{opacity:0;transform:translate3d(var(--twin-pulse-x),var(--twin-pulse-y),0) translate(-50%,-50%) scale(5)}}
 

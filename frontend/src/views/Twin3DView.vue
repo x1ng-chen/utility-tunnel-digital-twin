@@ -17,7 +17,7 @@ const query = ref('');
 const stateFilter = ref<'all' | TwinVisualState>('all');
 const finePointer = ref(false);
 const fullscreenActive = ref(false);
-const fullscreenPointer = reactive({ x: -80, y: -80, active: false, pressed: false });
+const fullscreenPointer = reactive({ x: -80, y: -80, active: false, pressed: false, draggingSwitcher: false });
 const fullscreenTrail = ref(Array.from({ length: 8 }, (_, index) => ({ x: -80, y: -80, opacity: 0.42 - index * 0.043, scale: 1 - index * 0.07 })));
 const fullscreenPulse = ref<{ key: number; x: number; y: number } | null>(null);
 let pendingFullscreenPointer: PointerEvent | undefined;
@@ -61,7 +61,11 @@ async function refreshModelReadiness() {
 }
 function updateFullscreenState() {
   fullscreenActive.value = document.fullscreenElement === stage.value;
-  if (!fullscreenActive.value) { fullscreenPointer.active = false; fullscreenPointer.pressed = false; }
+  if (!fullscreenActive.value) {
+    fullscreenPointer.active = false;
+    fullscreenPointer.pressed = false;
+    fullscreenPointer.draggingSwitcher = false;
+  }
 }
 function paintFullscreenPointer() {
   fullscreenPointerFrame = 0;
@@ -93,8 +97,33 @@ function onStagePointerDown(event: PointerEvent) {
   if (fullscreenPulseTimer) window.clearTimeout(fullscreenPulseTimer);
   fullscreenPulseTimer = window.setTimeout(() => { fullscreenPulse.value = null; }, 700);
 }
-function onStagePointerUp() { fullscreenPointer.pressed = false; }
-function onStagePointerLeave() { fullscreenPointer.active = false; }
+function onStagePointerUp() {
+  fullscreenPointer.pressed = false;
+  fullscreenPointer.draggingSwitcher = false;
+}
+function onStagePointerLeave(event?: PointerEvent) {
+  const target = event?.currentTarget;
+  if (event && target instanceof HTMLElement && target.hasPointerCapture(event.pointerId)) return;
+  fullscreenPointer.active = false;
+  fullscreenPointer.draggingSwitcher = false;
+}
+function onQuickSwitchPointerDown(event: PointerEvent) {
+  if (!finePointer.value || !fullscreenActive.value) return;
+  const target = event.currentTarget;
+  if (target instanceof HTMLElement && event.pointerType !== 'touch') target.setPointerCapture(event.pointerId);
+  fullscreenPointer.draggingSwitcher = true;
+  onStagePointerMove(event);
+  onStagePointerDown(event);
+}
+function onQuickSwitchPointerMove(event: PointerEvent) {
+  if (!fullscreenPointer.draggingSwitcher) return;
+  onStagePointerMove(event);
+}
+function onQuickSwitchPointerEnd(event: PointerEvent) {
+  const target = event.currentTarget;
+  if (target instanceof HTMLElement && target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
+  onStagePointerUp();
+}
 async function fullscreen() {
   const target = stage.value;
   if (!target) return;
@@ -127,11 +156,11 @@ onBeforeUnmount(() => {
       <article ref="stage" class="twin-stage-panel" @pointermove="onStagePointerMove" @pointerdown="onStagePointerDown" @pointerup="onStagePointerUp" @pointerleave="onStagePointerLeave">
         <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" @select="select" @model-report="receiveModelReport" />
         <div v-if="selectedAsset" class="twin-focus-status" aria-live="polite"><span :class="resolveTwinVisualState(selectedAsset, store.alerts)"><i />{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span><b :title="selectedAsset.name">{{ selectedAssetName }}</b><small>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</small></div>
-        <nav class="twin-quick-switch" aria-label="场景内设备切换" @pointerdown.stop @mousedown.stop>
+        <nav class="twin-quick-switch" aria-label="场景内设备切换" @pointerdown.stop="onQuickSwitchPointerDown" @pointermove.stop="onQuickSwitchPointerMove" @pointerup.stop="onQuickSwitchPointerEnd" @pointercancel.stop="onQuickSwitchPointerEnd" @mousedown.stop>
           <div class="twin-quick-switch-tools"><div class="twin-quick-switch-heading"><span>设备快速切换 · {{ visibleAssets.length }}/{{ store.assets.length }}</span><b>{{ selectedAssetName || '请选择设备' }}</b></div><div class="twin-switch-filters" role="group" aria-label="按运行状态筛选设备"><button v-for="filter in filterOptions" :key="filter.value" :class="{ selected: stateFilter === filter.value }" type="button" @pointerdown.stop @click.stop="stateFilter = filter.value">{{ filter.label }}</button></div></div>
           <div class="twin-quick-switch-list"><button v-for="asset in visibleAssets" :key="asset.id" :class="[resolveTwinVisualState(asset, store.alerts), { selected: asset.code === selectedCode }]" :aria-label="`选择 ${asset.name}，设备编码 ${asset.code}`" :title="`${asset.name} · ${asset.zone}`" @pointerdown.stop @click.stop="select(asset.code)"><i /><span><b>{{ asset.code }}</b><small>{{ asset.name }}</small></span></button></div>
         </nav>
-        <div v-if="finePointer" class="twin-fullscreen-fx" :class="{ active: fullscreenPointer.active, pressed: fullscreenPointer.pressed }" aria-hidden="true" :style="{ transform: `translate3d(${fullscreenPointer.x}px, ${fullscreenPointer.y}px, 0)` }">
+        <div v-if="finePointer" class="twin-fullscreen-fx" :class="{ active: fullscreenPointer.active, pressed: fullscreenPointer.pressed, dragging: fullscreenPointer.draggingSwitcher }" aria-hidden="true" :style="{ transform: `translate3d(${fullscreenPointer.x}px, ${fullscreenPointer.y}px, 0)` }">
           <i v-for="(point, index) in fullscreenTrail" :key="index" class="twin-fx-trail" :style="{ transform: `translate3d(${point.x - fullscreenPointer.x}px, ${point.y - fullscreenPointer.y}px, 0) scale(${point.scale})`, opacity: point.opacity }" />
           <i class="twin-fx-ring" /><i class="twin-fx-dot" /><i v-if="fullscreenPulse" :key="fullscreenPulse.key" class="twin-fx-pulse" :style="{ '--twin-pulse-x': `${fullscreenPulse.x - fullscreenPointer.x}px`, '--twin-pulse-y': `${fullscreenPulse.y - fullscreenPointer.y}px` }" />
         </div>
