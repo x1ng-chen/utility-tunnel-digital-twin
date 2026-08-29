@@ -102,6 +102,17 @@ class OperationsApiTests(TestCase):
         self.assertEqual(login.status_code, 200)
         self.assertTrue(AuditLog.objects.filter(action='registration.approved').exists())
 
+    def test_registration_rejects_a_numeric_weak_password(self):
+        response = self.client.post('/api/auth/registration-requests/', {
+            'account': 'weak-password.operator',
+            'displayName': '弱口令测试账号',
+            'role': Profile.Role.OPERATOR,
+            'password': '123456789',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['error'], 'invalid_request')
+        self.assertFalse(RegistrationRequest.objects.filter(account='weak-password.operator').exists())
+
     def test_registration_cannot_create_or_promote_a_second_administrator(self):
         public = self.client.post('/api/auth/registration-requests/', {
             'account': 'another.admin',

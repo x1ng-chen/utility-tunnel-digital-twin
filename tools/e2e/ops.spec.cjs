@@ -70,6 +70,35 @@ test('三维孪生在模型交付前仍可定位设备并展示告警状态', as
   await expect(page.locator('.twin-inspector').getByText('MESH_SEEP_W01', { exact: true })).toBeVisible();
 });
 
+test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续选择设备', async ({ page }) => {
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码').fill('123');
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await page.getByRole('button', { name: '三维孪生' }).click();
+  await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
+
+  await page.getByRole('button', { name: '⛶ 全屏查看' }).click();
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+
+  const switcher = page.locator('.twin-quick-switch');
+  const box = await switcher.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.move(box.x + 36, box.y + 18);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 220, box.y + 18, { steps: 5 });
+  // Headless Chromium does not expose `(hover: hover) and (pointer: fine)`, so
+  // it intentionally keeps the visual cursor hidden. The drag-state class is
+  // the browser-independent contract that keeps the real desktop cursor alive.
+  await expect(page.locator('.twin-fullscreen-fx.dragging')).toHaveCount(1);
+  await page.mouse.up();
+  await expect(page.locator('.twin-fullscreen-fx.dragging')).toHaveCount(0);
+  await page.getByRole('button', { name: 'ENV-01' }).click();
+  await expect(page.locator('.twin-focus-status').getByText('DHT11 温湿度传感器', { exact: true })).toBeVisible();
+  await page.evaluate(() => document.exitFullscreen());
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
+});
+
 test('账号密码登录后可读取运行数据并写入审计', async ({ page }) => {
   const consoleErrors = trackConsoleErrors(page);
   await page.goto(webUrl);
