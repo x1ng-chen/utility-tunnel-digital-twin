@@ -40,6 +40,10 @@
 .twin-model-readiness strong{color:#72dcc9;font-size:10px;font-weight:700;white-space:nowrap}
 .twin-model-readiness p{margin:0;color:#8fa8c7;font-size:10px;line-height:1.5}
 .twin-model-readiness.loaded{border-color:#2e746e;background:linear-gradient(135deg,#102f42,#0b2333)}
+.twin-model-retry{justify-self:start;min-height:28px;padding:0 10px;border:1px solid #426c9b;border-radius:8px;background:#12345a;color:#d7e8ff;font-size:9px;font-weight:800;transition:border-color .18s ease,background .18s ease,transform .18s ease}
+.twin-model-retry:hover,.twin-model-retry:focus-visible{border-color:#79a7ff;background:#1c4b7d;outline:0;transform:translateY(-1px)}
+.twin-model-retry-top{border-color:#3a7193;background:#0e2b43;color:#a8f3df}
+.twin-model-retry-top:hover,.twin-model-retry-top:focus-visible{border-color:#61dfc2;background:#11465b;color:#effffb;outline:0}
 
 /* Fullscreen is a browser top layer, so it carries its own pointer treatment. */
 .twin-fullscreen-fx{display:none;position:absolute;z-index:20;top:0;left:0;pointer-events:none;opacity:0;transition:opacity .16s ease;will-change:transform}

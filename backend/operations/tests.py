@@ -599,6 +599,17 @@ class OperationsApiTests(TestCase):
         self.assertEqual(self.client.post('/api/assets/', base, format='json').status_code, 409)
         self.assertEqual(self.client.patch(f"/api/assets/{first.json()['id']}/", {'version': 1}, format='json').status_code, 400)
 
+    def test_asset_mutations_keep_3d_model_nodes_unique_and_normalized(self):
+        self.auth(self.admin)
+        base = {'code': 'TEMP-01', 'name': '温度模块', 'zone': 'UT-ZA', 'type': '环境测点', 'integrationStatus': Asset.IntegrationStatus.PENDING_VERIFICATION, 'locationSource': Asset.LocationSource.UNASSIGNED, 'mesh': 'mesh_temp_01'}
+        created = self.client.post('/api/assets/', base, format='json')
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.json()['mesh'], 'MESH_TEMP_01')
+        duplicate = self.client.post('/api/assets/', {**base, 'code': 'TEMP-02', 'mesh': 'MESH_TEMP_01'}, format='json')
+        self.assertEqual(duplicate.status_code, 400)
+        invalid = self.client.post('/api/assets/', {**base, 'code': 'TEMP-03', 'mesh': '模型 TEMP'}, format='json')
+        self.assertEqual(invalid.status_code, 400)
+
     def test_asset_deactivation_requires_clear_operations_and_admin_role(self):
         self.auth(self.operator)
         self.assertEqual(self.client.patch(f'/api/assets/{self.asset.pk}/', {'isActive': False, 'version': 1}, format='json').status_code, 403)

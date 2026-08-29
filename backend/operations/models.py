@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils import timezone
 
 
@@ -115,6 +116,11 @@ class Asset(models.Model):
                     | (models.Q(latitude__isnull=False, longitude__isnull=False) & ~models.Q(location_source='unassigned'))
                 ),
                 name='asset_location_source_consistent',
+            ),
+            models.UniqueConstraint(
+                Lower('mesh'),
+                condition=~models.Q(mesh=''),
+                name='asset_mesh_name_unique_ci',
             ),
         ]
 

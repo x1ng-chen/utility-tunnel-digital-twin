@@ -21,13 +21,22 @@ const raycaster = new Raycaster();
 const pointer = new Vector2();
 const assetObjects = new Map<string, Object3D>();
 const animatedObjects = new Map<string, Object3D>();
+const modelBoundCodes = new Set<string>();
+let modelRoot: Object3D | undefined;
+let fallbackSceneRoot: Group | undefined;
+let fallbackAssetRoot: Group | undefined;
+let modelLoadToken = 0;
 
 const colors: Record<TwinVisualState, number> = { normal: 0x4ee7c3, warning: 0xffbb62, alarm: 0xff536f, unknown: 0x6d87aa };
 
 function makeFallbackScene() {
   if (!scene) return;
+  if (fallbackSceneRoot) return;
+  fallbackSceneRoot = new Group();
+  fallbackSceneRoot.name = 'TUNNEL_FALLBACK';
+  scene.add(fallbackSceneRoot);
   const corridor = new Group();
-  corridor.name = 'TUNNEL_FALLBACK';
+  corridor.name = 'TUNNEL_FALLBACK_CORRIDOR';
   const floor = new Mesh(new BoxGeometry(32, .32, 18), new MeshStandardMaterial({ color: 0x102643, metalness: .5, roughness: .44 }));
   floor.position.y = -.2;
   corridor.add(floor);
@@ -48,7 +57,7 @@ function makeFallbackScene() {
     strip.position.copy(light.position);
     corridor.add(strip);
   }
-  scene.add(corridor);
+  fallbackSceneRoot.add(corridor);
   props.assets.forEach((asset) => addFallbackAsset(asset));
 }
 
@@ -58,6 +67,11 @@ function publishModelReport(mode: TwinModelBindingReport['mode'], boundCodes: It
 
 function addFallbackAsset(asset: Asset) {
   if (!scene || assetObjects.has(asset.code)) return;
+  if (!fallbackAssetRoot) {
+    fallbackAssetRoot = new Group();
+    fallbackAssetRoot.name = 'TWIN_FALLBACK_ASSETS';
+    scene.add(fallbackAssetRoot);
+  }
   const group = new Group();
   group.name = asset.mesh || asset.code;
   group.userData.assetCode = asset.code;
@@ -66,7 +80,7 @@ function addFallbackAsset(asset: Asset) {
   beacon.position.y = .55;
   group.add(box, beacon);
   group.position.set((Number(asset.position.x) / 100 - .5) * 27, .45, (Number(asset.position.y) / 100 - .5) * 14);
-  scene.add(group);
+  fallbackAssetRoot.add(group);
   assetObjects.set(asset.code, group);
   animatedObjects.set(asset.code, group);
 }
@@ -74,15 +88,37 @@ function addFallbackAsset(asset: Asset) {
 function bindModelAssets(root: Object3D) {
   const boundCodes: string[] = [];
   props.assets.forEach((asset) => {
+    if (modelBoundCodes.has(asset.code)) { boundCodes.push(asset.code); return; }
     const node = modelNodeNames(asset).map((name) => root.getObjectByName(name)).find(Boolean);
     if (!node) { addFallbackAsset(asset); return; }
     node.userData.assetCode = asset.code;
     node.traverse((child) => { child.userData.assetCode = asset.code; });
     assetObjects.set(asset.code, node);
     animatedObjects.set(asset.code, node);
+    modelBoundCodes.add(asset.code);
     boundCodes.push(asset.code);
   });
   return boundCodes;
+}
+
+function syncSceneAssets() {
+  if (modelRoot) publishModelReport('loaded', bindModelAssets(modelRoot));
+  else if (modelState.value === 'fallback') {
+    props.assets.forEach((asset) => addFallbackAsset(asset));
+    publishModelReport('fallback');
+  }
+}
+
+function clearLoadedModel() {
+  modelRoot?.removeFromParent();
+  fallbackSceneRoot?.removeFromParent();
+  fallbackAssetRoot?.removeFromParent();
+  modelRoot = undefined;
+  fallbackSceneRoot = undefined;
+  fallbackAssetRoot = undefined;
+  modelBoundCodes.clear();
+  assetObjects.clear();
+  animatedObjects.clear();
 }
 
 function colorObject(object: Object3D, state: TwinVisualState, selected = false) {
@@ -151,19 +187,31 @@ function animate() {
 
 function loadModel() {
   if (!scene) return;
+  const loadToken = ++modelLoadToken;
   new GLTFLoader().load(twinModelUrl, (gltf) => {
-    scene?.add(gltf.scene);
-    publishModelReport('loaded', bindModelAssets(gltf.scene));
+    if (loadToken !== modelLoadToken || !scene) return;
+    modelRoot = gltf.scene;
+    scene.add(modelRoot);
+    publishModelReport('loaded', bindModelAssets(modelRoot));
     modelState.value = 'loaded';
     modelMessage.value = '已加载实体三维模型';
     applyVisualState();
   }, undefined, () => {
+    if (loadToken !== modelLoadToken) return;
     makeFallbackScene();
     publishModelReport('fallback');
     modelState.value = 'fallback';
     modelMessage.value = '等待实体模型交付，当前为可交互预览场景';
     applyVisualState();
   });
+}
+
+function reloadModel() {
+  if (!scene) return;
+  clearLoadedModel();
+  modelState.value = 'loading';
+  modelMessage.value = '正在重新检测实体三维模型…';
+  loadModel();
 }
 
 onMounted(() => {
@@ -201,8 +249,9 @@ onMounted(() => {
   animate();
 });
 
-watch(() => [props.assets, props.alerts, props.selectedCode], () => { applyVisualState(); focusAsset(props.selectedCode); }, { deep: true });
+watch(() => [props.assets, props.alerts, props.selectedCode], () => { syncSceneAssets(); applyVisualState(); focusAsset(props.selectedCode); }, { deep: true });
 onBeforeUnmount(() => {
+  modelLoadToken += 1;
   window.cancelAnimationFrame(frame);
   resizeObserver?.disconnect();
   renderer?.domElement.removeEventListener('pointerdown', onCanvasPointerDown);
@@ -215,9 +264,10 @@ onBeforeUnmount(() => {
   });
   assetObjects.clear();
   animatedObjects.clear();
+  modelBoundCodes.clear();
 });
 
-defineExpose({ resetView, focusAsset, modelState, modelMessage });
+defineExpose({ resetView, focusAsset, reloadModel, modelState, modelMessage });
 </script>
 
 <template>

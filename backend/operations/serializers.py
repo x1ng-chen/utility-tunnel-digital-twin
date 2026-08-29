@@ -1,6 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 from math import isfinite
+import re
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -64,6 +65,20 @@ class AssetMutationSerializer(serializers.ModelSerializer):
 
     def validate_hardwareCode(self, value):
         return value or None
+
+    def validate_mesh(self, value):
+        """Keep model-node names deterministic and unambiguous for the 3D twin."""
+        normalized = value.strip().upper()
+        if not normalized:
+            return ''
+        if not re.fullmatch(r'[A-Z0-9][A-Z0-9_-]{1,79}', normalized):
+            raise serializers.ValidationError('Model node names use only uppercase letters, numbers, hyphens and underscores.')
+        conflicts = Asset.objects.filter(mesh__iexact=normalized)
+        if self.instance:
+            conflicts = conflicts.exclude(pk=self.instance.pk)
+        if conflicts.exists():
+            raise serializers.ValidationError('This model node name is already assigned to another asset.')
+        return normalized
 
     def validate_capabilities(self, value):
         normalized = [item.strip() for item in value if item.strip()]
