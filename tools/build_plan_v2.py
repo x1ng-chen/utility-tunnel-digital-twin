@@ -1150,8 +1150,8 @@ def build():
   firmware/       STM32CubeIDE工程、驱动、协议和固件发布
   hardware/       原理图、PCB、Gerber、接线图、结构加工文件
   model/          Blender、GLB、纹理和资产映射
-  apps/web/       Vue 3 + Three.js前端
-  services/api/   Node.js后端、MQTT接入、数据库迁移
+  frontend/       Vue 3 + Three.js前端
+  backend/        Django 后端、业务 API 与数据库迁移
   deploy/         Mosquitto、配置、启动/停止和备份脚本
   docs/           计划、需求、设计、接口、测试、部署、演示
   test/           测试数据、自动化脚本和验收证据索引

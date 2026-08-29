@@ -12,13 +12,13 @@
 面向教室桌面展示的综合管廊数字孪生运维样品，通过真实传感、STM32 现场控制、MQTT 数据链路和 Web 三维可视化，形成“监测—报警—联动—工单—处置—复核—归档”的完整运维闭环。
 
 > [!IMPORTANT]
-> 截至 2026-08-29，Vue 3 + Django 主栈、可信遥测与自动告警、资产/GIS 治理、账号审批、三维孪生及自动化质量门禁已经交付；STM32、ESP8266-01S、本地 MQTT 与华为云 IoTDA 的真实数据上行已经贯通。JDY-31 已退出项目，不再作为当前、备份或演示链路。启动日志、Broker记录与IoTDA截图仍需归档为正式验收附件。`apps/web` 与 `services/api` 仅作为旧版兼容基线保留。
+> 截至 2026-08-29，Vue 3 + Django 主栈、可信遥测与自动告警、资产/GIS 治理、账号审批、三维孪生及自动化质量门禁已经交付；STM32、ESP8266-01S、本地 MQTT 与华为云 IoTDA 的真实数据上行已经贯通。JDY-31 已退出项目，不再作为当前、备份或演示链路。启动日志、Broker记录与IoTDA截图仍需归档为正式验收附件。
 
 > [!NOTE]
 > 软件平台的实际功能、运行方式、质量门禁和后续 PostgreSQL 接入说明见 [软件平台说明](docs/software-platform.md)。本文状态已依据截至 2026-08-29 的主分支提交和可核查实施记录同步；“已实现”不等于“已完成真机或云端验收”。
 
 > [!TIP]
-> 当前新增的标准工程栈位于 `frontend/`（Vue 3）和 `backend/`（Django + DRF），可独立启动并连接 PostgreSQL；原有 `apps/web` 与 `services/api` 保持不动，迁移说明和运行命令见 [Vue 3 + Django 标准软件栈](docs/vue-django-stack.md)。
+> 正式工程栈位于 `frontend/`（Vue 3）和 `backend/`（Django + DRF），可独立启动并连接 PostgreSQL；运行说明见 [Vue 3 + Django 标准软件栈](docs/vue-django-stack.md)。
 
 ## 目录
 
@@ -187,9 +187,9 @@ flowchart TB
 | 主控制器 | STM32F103RCT6 + STM32CubeF1 HAL | 负责实时采集、控制、保护和现场联动 |
 | 通信模块 | ESP8266-01S 自定义 Arduino 固件 | 通过UART接收STM32的`ut.telemetry.v1` JSON并连接本地Wi-Fi/MQTT；真机上行至华为云IoTDA已验证，下行与稳定性测试待补 |
 | 消息协议 | MQTT 3.1.1 / Eclipse Mosquitto | 遥测使用 QoS 0；命令、报警与状态使用 QoS 1 |
-| 后端 | Django 4.2 + Django REST Framework | 当前主软件栈，提供 Token 认证、RBAC、业务状态机、审计和 API；Node.js 服务保留兼容 |
+| 后端 | Django 4.2 + Django REST Framework | 正式主软件栈，提供 Token 认证、RBAC、业务状态机、审计和 API |
 | 数据库 | PostgreSQL（正式）/ SQLite（本地开发回退） | 资产、遥测、告警、工单、配置与审计的唯一主数据库 |
-| 前端 | Vue 3 + TypeScript + Vite | 当前主软件栈，提供本地演示与 Django API 数据源切换；React 旧版保留兼容 |
+| 前端 | Vue 3 + TypeScript + Vite | 正式主软件栈，提供本地演示与 Django API 数据源切换 |
 | 数字孪生 | Vue 3 + Three.js / GLB，二维模型降级 | 已完成三维场景、资产绑定、状态联动、模型失败降级与绑定完整性校验；正式模型待交付验收 |
 | GIS | Leaflet 1.9.4 + WGS84 GeoJSON | 独立显示实物模块位置、坐标来源和固件接入状态；空间对象经导入、审核、发布与审计后进入运维地图，演示坐标与现场测绘严格区分 |
 | 资产主数据 | Vue 3 + Django 事务 API | 管理员维护设备身份、能力、孪生/GIS 坐标和生命周期；乐观锁、停用保护与审计留痕 |
@@ -207,7 +207,7 @@ flowchart TB
 | `ut/v1/ctrl-01/cmd_ack` | 设备 → 平台 | `1 / false` | 命令接收及执行回执 |
 | `ut/v1/ctrl-01/status` | 设备 → 平台 | `1 / true` | 在线状态及遗嘱消息 |
 
-实时接入：兼容 API 可订阅本地 MQTT、写入 PostgreSQL 后以认证 SSE 推送到旧版 React 前端；当前主入口为 Vue 3 + Django，报文格式与本地验证步骤见 [实时遥测接入说明](docs/实时遥测接入说明.md)。
+实时接入：正式平台由 Django API 统一管理业务数据，Vue 3 前端通过受控 API 读取状态；报文格式与本地验证步骤见 [实时遥测接入说明](docs/实时遥测接入说明.md)。
 
 ### 编码规范
 
@@ -234,9 +234,7 @@ utility-tunnel-digital-twin/
 ├── services/
 │   ├── iotda-gateway/        # 本地 MQTT 到华为云 IoTDA 安全转发
 │   ├── local-mqtt/           # 台架 Mosquitto 配置
-│   ├── serial-gateway/       # 已停用的历史蓝牙串口网关（不进入当前链路）
-│   └── api/                  # Fastify 兼容 API
-├── apps/web/                 # React 兼容前端
+│   └── serial-gateway/       # 已停用的历史蓝牙串口网关（不进入当前链路）
 ├── deploy/                   # 容器、Nginx、PostgreSQL与恢复资料
 ├── tools/                    # 质量扫描、E2E与文档工具
 ├── .github/workflows/        # 单测、构建、安全扫描与浏览器回归
@@ -251,8 +249,8 @@ utility-tunnel-digital-twin/
 ├── firmware/              # STM32CubeIDE 工程、驱动、协议和固件发布
 ├── hardware/              # 原理图、PCB、Gerber、接线图和结构加工文件
 ├── model/                 # Blender、GLB、纹理和资产映射
-├── apps/web/              # React/vinext 兼容前端（旧版入口）
-├── services/api/          # Node.js 后端、MQTT 接入和数据库迁移
+├── frontend/              # Vue 3 正式前端
+├── backend/               # Django 正式业务 API
 ├── deploy/                # Mosquitto、环境配置、启停和备份脚本
 ├── docs/                  # 需求、设计、接口、测试、部署和演示文档
 ├── test/                  # 测试数据、自动化脚本和验收证据索引
@@ -268,7 +266,7 @@ utility-tunnel-digital-twin/
 ```bash
 git clone https://github.com/x1ng-chen/utility-tunnel-digital-twin.git
 cd utility-tunnel-digital-twin
-cd apps/web
+cd frontend
 npm ci
 npm run dev
 ```

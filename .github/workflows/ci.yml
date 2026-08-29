@@ -1,83 +1,21 @@
-name: Verify software platform
+name: Verify firmware build
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/ci.yml'
 
 permissions:
   contents: read
 
 jobs:
-  web:
-    name: Web quality
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/web
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
-      - run: npm ci
-      - run: npm run check
-      - run: npm run test:coverage
-
-  api:
-    name: API and database quality
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_DB: utility_tunnel
-          POSTGRES_USER: ut_app
-          POSTGRES_PASSWORD: ci-only-password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U ut_app -d utility_tunnel"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-    defaults:
-      run:
-        working-directory: services/api
-    env:
-      DATABASE_URL: postgresql://ut_app:ci-only-password@127.0.0.1:5432/utility_tunnel
-      JWT_SECRET: ci-only-secret-that-is-longer-than-thirty-two-characters
-      WEB_ORIGIN: http://localhost:5173
-      NODE_ENV: test
-      SEED_ADMIN_EMAIL: admin@example.invalid
-      SEED_ADMIN_PASSWORD: ci-only-development-password
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: services/api/package-lock.json
-      - run: npm ci
-      - run: npm run migration:check
-      - run: npm run build
-      - run: npm run test:coverage
-      - run: npm run migrate
-      - run: npm run seed
-      - run: npm run start > api.log 2>&1 &
-      - run: |
-          for attempt in {1..20}; do
-            curl --fail --silent http://127.0.0.1:8080/v1/health && exit 0
-            sleep 1
-          done
-          cat api.log
-          exit 1
-      - name: Run API smoke test
-        run: node scripts/smoke.mjs || { cat api.log; exit 1; }
-
   firmware:
     name: Firmware build
     runs-on: ubuntu-latest

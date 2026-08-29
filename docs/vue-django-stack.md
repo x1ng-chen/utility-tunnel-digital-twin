@@ -4,7 +4,7 @@
 
 - `frontend/`：Vue 3、Vite、TypeScript、Pinia、Vue Router、Axios；支持本地演示和 Django API 两种数据源。
 - `backend/`：Django 4.2、Django REST Framework、Token Bearer 认证、RBAC、PostgreSQL（未配置时本地回退 SQLite）。
-- 原有 `apps/web/`、`services/api/`、`firmware/`、`deploy/` 和既有规划文档保持不变，便于平滑迁移和回滚。
+- `frontend/`、`backend/`、`firmware/`、`deploy/` 与既有规划文档构成当前交付基线；旧版 React/Node 兼容代码已归档移除，历史版本可通过 Git 提交记录追溯。
 
 ## 本地运行
 
