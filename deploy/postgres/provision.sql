@@ -7,7 +7,7 @@
 -- The migration/release identity must own schema changes. The Django API gets
 -- only the DML privileges required by backend/operations/views.py after
 -- migrations have completed. This file targets the Vue 3 + Django stack;
--- the legacy services/api schema is not granted by this policy.
+-- No legacy application schema is granted by this policy.
 
 -- Replace the placeholder in this guard and in CREATE ROLE below before
 -- executing the script. Leaving either occurrence unchanged aborts safely.

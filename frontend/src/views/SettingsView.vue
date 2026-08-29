@@ -17,6 +17,11 @@ const usersError = ref('');
 const applications = ref<RegistrationRequest[]>([]);
 const applicationsLoading = ref(false);
 const applicationsError = ref('');
+const reviewNotes = reactive<Record<number, string>>({});
+const passwordForm = reactive({ currentPassword: '', newPassword: '', confirmPassword: '' });
+const passwordMessage = ref('');
+const passwordError = ref('');
+const passwordSaving = ref(false);
 
 watch(() => store.thresholds.map((item) => ({ key: item.key, warning: item.warning, alarm: item.alarm })), (items) => {
   items.forEach((item) => {
@@ -79,10 +84,31 @@ async function loadApplications() {
 async function reviewApplication(application: RegistrationRequest, nextStatus: 'approved' | 'rejected') {
   applicationsError.value = '';
   try {
-    await api.reviewRegistrationRequest(application.id, { status: nextStatus });
+    const reviewNote = reviewNotes[application.id]?.trim() || '';
+    if (nextStatus === 'rejected' && !reviewNote) {
+      applicationsError.value = '不予批准时请填写原因，方便申请人了解后续处理方式。';
+      return;
+    }
+    await api.reviewRegistrationRequest(application.id, { status: nextStatus, reviewNote });
     applications.value = applications.value.filter((item) => item.id !== application.id);
+    delete reviewNotes[application.id];
     await loadUsers();
   } catch (cause: unknown) { applicationsError.value = cause instanceof Error ? cause.message : '账号申请处理失败'; }
+}
+
+async function changePassword() {
+  passwordMessage.value = ''; passwordError.value = '';
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    passwordError.value = '两次输入的新密码不一致。';
+    return;
+  }
+  passwordSaving.value = true;
+  try {
+    passwordMessage.value = await auth.changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+    passwordForm.currentPassword = ''; passwordForm.newPassword = ''; passwordForm.confirmPassword = '';
+  } catch (cause: unknown) {
+    passwordError.value = cause instanceof Error ? cause.message : '密码更新失败，请稍后重试。';
+  } finally { passwordSaving.value = false; }
 }
 
 function changeRole(user: AdminUser, event: Event) {
@@ -108,12 +134,24 @@ watch([() => store.source, () => auth.user?.role], () => { void loadUsers(); voi
       <p v-else-if="!canWrite" class="inline-message">查看者无权修改阈值。</p>
       <p v-else-if="message" class="inline-message" role="status">{{ message }}</p>
     </section>
+    <section class="settings-panel password-settings-panel">
+      <div class="settings-head"><span>账户安全</span><small>更新密码后，其他已登录设备会自动失效</small></div>
+      <form class="password-form" @submit.prevent="changePassword">
+        <label>当前密码<input v-model="passwordForm.currentPassword" :disabled="store.source !== 'api' || passwordSaving" required type="password" autocomplete="current-password" /></label>
+        <label>新密码<input v-model="passwordForm.newPassword" :disabled="store.source !== 'api' || passwordSaving" required minlength="8" type="password" autocomplete="new-password" placeholder="至少 8 位，避免使用常见密码" /></label>
+        <label>确认新密码<input v-model="passwordForm.confirmPassword" :disabled="store.source !== 'api' || passwordSaving" required minlength="8" type="password" autocomplete="new-password" /></label>
+        <button class="primary-button compact-button" :disabled="store.source !== 'api' || passwordSaving" type="submit">{{ passwordSaving ? '正在更新…' : '更新密码' }}</button>
+      </form>
+      <p v-if="store.source !== 'api'" class="inline-message">演示模式不保存真实账号；连接数据服务后可更新自己的登录密码。</p>
+      <p v-else-if="passwordError" class="inline-message error-message" role="alert">{{ passwordError }}</p>
+      <p v-else-if="passwordMessage" class="inline-message" role="status">{{ passwordMessage }}</p>
+    </section>
     <section v-if="auth.user?.role === 'administrator'" class="settings-panel user-settings-panel">
       <div class="settings-head"><span>账号申请审批</span><small>仅管理员可批准运维员和查看者账号</small></div>
       <div v-if="applicationsLoading" class="empty-state">正在加载账号申请…</div>
       <div v-else-if="applicationsError" class="inline-message error-message" role="alert">{{ applicationsError }}</div>
       <div v-else-if="!applications.length" class="empty-state">当前没有待审批的账号申请。</div>
-      <div v-for="application in applications" :key="application.id" class="registration-request-row"><div><b>{{ application.display_name }}</b><small>申请账号：{{ application.account }} · 申请时间：{{ new Date(application.createdAt).toLocaleString('zh-CN') }}</small></div><span :class="['role-badge', application.requestedRole]">{{ application.requestedRole === 'operator' ? '申请运维员' : '申请查看者' }}</span><div class="registration-actions"><button class="approve-button" @click="reviewApplication(application, 'approved')">批准并创建账号</button><button class="reject-button" @click="reviewApplication(application, 'rejected')">不予批准</button></div></div>
+      <div v-for="application in applications" :key="application.id" class="registration-request-row"><div><b>{{ application.display_name }}</b><small>申请账号：{{ application.account }} · 申请时间：{{ new Date(application.createdAt).toLocaleString('zh-CN') }}</small></div><span :class="['role-badge', application.requestedRole]">{{ application.requestedRole === 'operator' ? '申请运维员' : '申请查看者' }}</span><label class="review-note">审批说明（不予批准必填）<input v-model="reviewNotes[application.id]" maxlength="300" placeholder="例如：请使用单位分配的账号名称后重新申请" /></label><div class="registration-actions"><button class="approve-button" @click="reviewApplication(application, 'approved')">批准并创建账号</button><button class="reject-button" :disabled="!reviewNotes[application.id]?.trim()" @click="reviewApplication(application, 'rejected')">不予批准</button></div></div>
     </section>
     <section v-if="auth.user?.role === 'administrator'" class="settings-panel user-settings-panel">
       <div class="settings-head"><span>已开通账号</span><small>系统仅保留一个管理员账号</small></div>

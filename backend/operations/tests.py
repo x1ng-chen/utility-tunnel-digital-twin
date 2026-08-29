@@ -1,6 +1,6 @@
 import io
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from django.conf import settings
@@ -78,6 +78,24 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('accessToken', response.json())
 
+    def test_password_change_rotates_bearer_credential(self):
+        self.auth(self.operator)
+        previous_token = Token.objects.get(user=self.operator).key
+        response = self.client.post('/api/auth/password/', {
+            'currentPassword': 'demo-password',
+            'newPassword': 'Stronger-Operator-2026!',
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+        replacement_token = response.json()['accessToken']
+        self.assertNotEqual(replacement_token, previous_token)
+        self.assertFalse(Token.objects.filter(key=previous_token).exists())
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {replacement_token}')
+        self.assertEqual(self.client.get('/api/auth/me/').status_code, 200)
+        self.operator.refresh_from_db()
+        self.assertFalse(self.operator.check_password('demo-password'))
+        self.assertTrue(self.operator.check_password('Stronger-Operator-2026!'))
+        self.assertTrue(AuditLog.objects.filter(action='auth.password_changed', resource_id=str(self.operator.pk)).exists())
+
     def test_registration_request_needs_administrator_approval_before_login(self):
         application = self.client.post('/api/auth/registration-requests/', {
             'account': 'new.operator',
@@ -101,6 +119,38 @@ class OperationsApiTests(TestCase):
         login = self.client.post('/api/auth/login/', {'email': 'new.operator', 'password': 'NewOperator!2026'}, format='json')
         self.assertEqual(login.status_code, 200)
         self.assertTrue(AuditLog.objects.filter(action='registration.approved').exists())
+
+    def test_registration_rejects_a_numeric_weak_password(self):
+        response = self.client.post('/api/auth/registration-requests/', {
+            'account': 'weak-password.operator',
+            'displayName': '弱口令测试账号',
+            'role': Profile.Role.OPERATOR,
+            'password': '123456789',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['error'], 'invalid_request')
+        self.assertFalse(RegistrationRequest.objects.filter(account='weak-password.operator').exists())
+
+    def test_registration_rejection_requires_and_records_a_reason(self):
+        application = self.client.post('/api/auth/registration-requests/', {
+            'account': 'rejected.operator',
+            'displayName': '待驳回账号',
+            'role': Profile.Role.OPERATOR,
+            'password': 'Rejected-Operator-2026!',
+        }, format='json')
+        self.assertEqual(application.status_code, 201)
+        self.auth(self.admin)
+        application_id = application.json()['id']
+        missing_reason = self.client.patch(f'/api/admin/registration-requests/{application_id}/', {'status': 'rejected'}, format='json')
+        self.assertEqual(missing_reason.status_code, 400)
+        rejected = self.client.patch(f'/api/admin/registration-requests/{application_id}/', {
+            'status': 'rejected',
+            'reviewNote': '请使用单位分配的账号名称后重新申请。',
+        }, format='json')
+        self.assertEqual(rejected.status_code, 200)
+        self.assertEqual(rejected.json()['reviewNote'], '请使用单位分配的账号名称后重新申请。')
+        rejection_audit = AuditLog.objects.get(action='registration.rejected')
+        self.assertTrue(rejection_audit.detail['hasReviewNote'])
 
     def test_registration_cannot_create_or_promote_a_second_administrator(self):
         public = self.client.post('/api/auth/registration-requests/', {
@@ -168,6 +218,23 @@ class OperationsApiTests(TestCase):
         page = self.client.get('/api/assets/?page=1&pageSize=1').json()
         self.assertEqual(page['pageCount'], 1)
         self.assertFalse(page['hasNext'])
+
+    def test_twin_model_readiness_reports_only_the_asset_handoff_contract(self):
+        self.assertEqual(self.client.get('/api/twin/model-readiness/').status_code, 401)
+        self.auth(self.operator)
+        blocked = self.client.get('/api/twin/model-readiness/')
+        self.assertEqual(blocked.status_code, 200)
+        self.assertEqual(blocked.json()['status'], 'blocked')
+        self.assertEqual(blocked.json()['missingMeshCodes'], [self.asset.code])
+        self.assertFalse(blocked.json()['contract']['modelFileVerified'])
+
+        self.asset.mesh = 'MESH_FAN_01'
+        self.asset.save(update_fields=['mesh', 'updated_at'])
+        ready = self.client.get('/api/twin/model-readiness/')
+        self.assertEqual(ready.status_code, 200)
+        self.assertEqual(ready.json()['status'], 'ready')
+        self.assertEqual(ready.json()['summary'], {'activeAssetCount': 1, 'mappedAssetCount': 1, 'unmappedAssetCount': 0})
+        self.assertEqual(ready.json()['missingMeshCodes'], [])
 
     def test_dashboard_uses_the_latest_telemetry_reading(self):
         from .models import Telemetry
@@ -468,6 +535,20 @@ class OperationsApiTests(TestCase):
         changed = self.client.post('/api/work-orders/', {'assetCode': self.asset.code, 'title': '另一张工单', 'priority': 'normal'}, format='json', **headers)
         self.assertEqual(changed.status_code, 409)
 
+    def test_work_order_deadlines_follow_priority_sla(self):
+        self.auth(self.operator)
+        before = timezone.now()
+        manual = self.client.post('/api/work-orders/', {'assetCode': self.asset.code, 'title': '紧急处置', 'priority': 'urgent'}, format='json')
+        self.assertEqual(manual.status_code, 201)
+        urgent_due_at = datetime.fromisoformat(manual.json()['dueAt'].replace('Z', '+00:00'))
+        self.assertGreaterEqual(urgent_due_at, before + timedelta(hours=3, minutes=59))
+        self.assertLessEqual(urgent_due_at, before + timedelta(hours=4, minutes=1))
+        linked = self.client.post(f'/api/alerts/{self.alert.pk}/work-order/')
+        self.assertEqual(linked.status_code, 201)
+        high_due_at = datetime.fromisoformat(linked.json()['dueAt'].replace('Z', '+00:00'))
+        self.assertGreaterEqual(high_due_at, before + timedelta(hours=23, minutes=59))
+        self.assertLessEqual(high_due_at, before + timedelta(hours=24, minutes=1))
+
     def test_idempotency_key_is_validated(self):
         self.auth(self.operator)
         response = self.client.post('/api/work-orders/', {'assetCode': self.asset.code, 'title': '非法键'}, format='json', HTTP_IDEMPOTENCY_KEY='bad key')
@@ -535,6 +616,12 @@ class OperationsApiTests(TestCase):
         self.assertEqual(float(water.latitude), 31.230505)
         self.assertEqual(Asset.objects.filter(latitude__isnull=False, longitude__isnull=False).count(), 12)
 
+    def test_e2e_cleanup_removes_legacy_and_timestamped_twin_test_assets(self):
+        Asset.objects.create(code='ENV-E2E', name='旧版回归资产', zone='UT-ZA', asset_type='测试')
+        Asset.objects.create(code='ENV-E2E-12345678', name='新版回归资产', zone='UT-ZA', asset_type='测试')
+        call_command('seed_demo', '--clean-e2e-data', stdout=io.StringIO())
+        self.assertFalse(Asset.objects.filter(code__startswith='ENV-E2E').exists())
+
     def test_asset_gis_filters_and_serialization(self):
         self.asset.hardware_code = 'H-10'
         self.asset.integration_status = Asset.IntegrationStatus.PENDING_VERIFICATION
@@ -598,6 +685,17 @@ class OperationsApiTests(TestCase):
         self.assertEqual(first.status_code, 201)
         self.assertEqual(self.client.post('/api/assets/', base, format='json').status_code, 409)
         self.assertEqual(self.client.patch(f"/api/assets/{first.json()['id']}/", {'version': 1}, format='json').status_code, 400)
+
+    def test_asset_mutations_keep_3d_model_nodes_unique_and_normalized(self):
+        self.auth(self.admin)
+        base = {'code': 'TEMP-01', 'name': '温度模块', 'zone': 'UT-ZA', 'type': '环境测点', 'integrationStatus': Asset.IntegrationStatus.PENDING_VERIFICATION, 'locationSource': Asset.LocationSource.UNASSIGNED, 'mesh': 'mesh_temp_01'}
+        created = self.client.post('/api/assets/', base, format='json')
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.json()['mesh'], 'MESH_TEMP_01')
+        duplicate = self.client.post('/api/assets/', {**base, 'code': 'TEMP-02', 'mesh': 'MESH_TEMP_01'}, format='json')
+        self.assertEqual(duplicate.status_code, 400)
+        invalid = self.client.post('/api/assets/', {**base, 'code': 'TEMP-03', 'mesh': '模型 TEMP'}, format='json')
+        self.assertEqual(invalid.status_code, 400)
 
     def test_asset_deactivation_requires_clear_operations_and_admin_role(self):
         self.auth(self.operator)

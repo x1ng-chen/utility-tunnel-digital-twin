@@ -56,7 +56,10 @@ jobs:
           cd backend
           python manage.py migrate --noinput
           python manage.py seed_demo
-          python manage.py runserver 127.0.0.1:8000 --noreload > "$RUNNER_TEMP/django-e2e.log" 2>&1 &
+          # The browser suite intentionally performs many independent login
+          # journeys. Keep production's 10/min default untouched, while giving
+          # this isolated CI process a test-only allowance.
+          LOGIN_RATE_LIMIT=100/min python manage.py runserver 127.0.0.1:8000 --noreload > "$RUNNER_TEMP/django-e2e.log" 2>&1 &
           cd ../frontend
           npm run dev -- --host 127.0.0.1 --port 5173 --strictPort > "$RUNNER_TEMP/vue-e2e.log" 2>&1 &
           for attempt in {1..30}; do

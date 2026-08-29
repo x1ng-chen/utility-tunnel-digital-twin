@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import AppShell from '../components/AppShell.vue';
@@ -7,8 +8,10 @@ import { escapeMapText, hasValidLocation, integrationLabels, locationSourceLabel
 import { useOperationsStore } from '../stores/operations';
 import type { Asset, HardwareBindingStatus, IntegrationStatus, SpatialFeature, SpatialLayerType } from '../types';
 import '../assets/gis.css';
+import '../assets/operational-layout-polish.css';
 
 const store = useOperationsStore();
+const router = useRouter();
 const mapElement = ref<HTMLElement | null>(null);
 const selectedCode = ref('CTRL-01');
 const search = ref('');
@@ -85,6 +88,7 @@ function selectAsset(asset: Asset) {
   selectedCode.value = asset.code;
   if (map && hasValidLocation(asset)) map.flyTo([asset.latitude, asset.longitude], Math.max(map.getZoom(), 18), { duration: 0.65 });
 }
+function openTwin() { if (selectedAsset.value) void router.push({ path: '/twin-3d', query: { asset: selectedAsset.value.code } }); }
 
 onMounted(async () => {
   await nextTick();
@@ -159,6 +163,7 @@ onBeforeUnmount(() => {
         <div class="gis-capabilities"><small>当前能力</small><span v-for="capability in selectedAsset.capabilities" :key="capability">{{ capability }}</span></div>
         <div class="gis-note"><small>实物状态说明</small><p>{{ selectedAsset.installationNote }}</p></div>
         <div class="gis-binding"><small>硬件接入契约</small><template v-if="selectedBinding"><p><b :class="selectedBinding.status">{{ hardwareBindingLabels[selectedBinding.status] }}</b>{{ selectedBinding.protocol.toUpperCase() }} · {{ selectedBinding.deviceIdentifier }}</p><code>{{ selectedBinding.endpoint }}</code><em>期望心跳 {{ selectedBinding.expectedIntervalSeconds }} 秒；未收到真实心跳前不显示在线。</em></template><p v-else>尚未预留通信绑定。</p></div>
+        <button class="gis-twin-link" @click="openTwin">在三维中查看此设备 →</button>
       </aside>
     </section>
 

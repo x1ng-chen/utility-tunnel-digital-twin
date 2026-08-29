@@ -1,50 +1,8 @@
-# 软件平台 API 契约（P1）
+# 软件平台 API 契约（Vue 3 / Django）
 
-> 版本：v1.2 · 更新：2026-08-28
+> 版本：v1.3 · 更新：2026-08-29
 
-本文件同时保留旧版 Node API 与当前 Vue 3 / Django API 的边界，便于迁移期间按入口区分调用方。旧版业务代码不在本阶段修改。
-
-## 旧版 Node API（维护兼容）
-
-前端通过 `apps/web/app/lib/operations-api.ts` 调用 `services/api`。浏览器使用短时 JWT；令牌仅保留在页面内存，绝不写入 `localStorage`、导出文件或仓库。
-
-### 接入规则
-
-1. 前端可用 `NEXT_PUBLIC_API_BASE_URL` 提供默认 API 地址，也可在页面顶部切换到“API”后手动输入。
-2. API 必须在 `WEB_ORIGIN` 中允许前端的实际 Origin；开发环境默认 `http://localhost:5173`。
-3. 任何写操作由服务端再次校验 JWT、RBAC、输入和状态机；前端按钮不能视为授权依据。
-4. 前端写入后立即乐观更新，再从 API 完整回读；失败时恢复服务端状态并展示错误。
-
-### 接口清单
-
-| 接口 | 权限 | 前端用途 |
-| --- | --- | --- |
-| `POST /v1/auth/login` | 公开 | 获取 15 分钟访问令牌和用户角色 |
-| `GET /v1/dashboard/overview` | `dashboard.read` | 运行摘要与最新遥测 |
-| `GET /v1/assets?q=&zone=&status=` | `asset.read` | 台账、检索、孪生资产映射 |
-| `GET /v1/alerts` | `alert.read` | 告警清单 |
-| `POST /v1/alerts/:id/acknowledge` | `alert.acknowledge` | 确认告警 |
-| `POST /v1/alerts/:id/work-orders` | `work_order.write` | 从告警创建唯一来源工单 |
-| `GET /v1/work-orders` | `work_order.read` | 工单看板 |
-| `POST /v1/work-orders` | `work_order.write` | 新建手工工单 |
-| `POST /v1/work-orders/:id/transition` | `work_order.write`，完成时还需 `work_order.review` | 受控流转与告警闭环 |
-| `GET /v1/thresholds` | `setting.read` | 读取阈值 |
-| `PUT /v1/thresholds/:key` | `setting.write` | 更新阈值及版本号 |
-| `POST /v1/report-exports` | `dashboard.read` | 登记浏览器生成的 CSV/JSON 导出 |
-| `GET /v1/audit` | `audit.read` | 审计追踪 |
-
-### 核心写入约束
-
-- 同一来源告警只能创建一张关联工单（数据库唯一索引）。
-- 工单必须按 `待派发 → 处理中 → 待复核 → 已完成` 流转；完成来源工单时，服务端在同一事务中恢复其告警并在无活动告警时恢复资产状态。
-- 阈值请求必须携带当前 `version` 并满足 `0 ≤ warning < alarm`；数据库仅在版本一致时递增。未知阈值返回 `404`，并发修改返回 `409 version_conflict`，前端必须重新读取后再提交。
-- 报表文件由浏览器下载；API 只登记可审计的导出元数据，不接收用户下载内容。
-
----
-
-# Vue 3 / Django API 契约
-
-本文档是前端与后端的最小可执行契约。所有业务接口使用 `Bearer` Token，响应 JSON 使用 camelCase 字段。
+本文档是当前正式 Vue 3 前端与 Django API 的最小可执行契约。所有业务接口使用 `Bearer` Token，响应 JSON 使用 camelCase 字段。
 
 ## 通用约定
 
@@ -88,6 +46,7 @@
 | --- | --- | --- | --- |
 | `POST` | `/auth/login/` | 公开 | `{ email, password }`，返回 `accessToken`、`tokenType` 和 `user` |
 | `GET` | `/auth/me/` | 登录 | 返回当前用户及角色 |
+| `POST` | `/auth/password/` | 登录 | `{ currentPassword, newPassword }`；验证旧密码和密码强度后更新密码，撤销旧 Token 并返回当前会话的替换 Token |
 | `POST` | `/auth/logout/` | 登录 | 撤销当前用户 Token |
 | `GET` | `/admin/users/` | 管理员 | 用户检索和状态筛选 |
 | `POST` | `/admin/users/` | 管理员 | 创建用户和角色 |
@@ -99,7 +58,7 @@
 
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/dashboard/` | 登录 | 资产、健康度、告警、工单和最新遥测汇总 |
+| `GET` | `/dashboard/` | 登录 | 资产、健康度、告警、工单和最新遥测汇总；`workOrderSla` 提供已超时和 4 小时内到期工单数 |
 | `GET` | `/assets/` | 登录 | `search`、`status`、`zone`、`integrationStatus`、`hardwareCode`、`hasLocation=true\|false`、`isActive=true\|false`、`page`、`pageSize`；管理员可用 `isActive=all` 查询全部生命周期；返回硬件接入信息、WGS84 坐标、坐标来源和版本 |
 | `POST` | `/assets/` | 管理员 | 新建资产主数据；校验编码、硬件编号、能力去重、二维孪生坐标和成对 WGS84 坐标，成功后写入审计 |
 | `PATCH` | `/assets/{id}/` | 管理员 | 更新资产主数据，必须提交当前 `version`；并发过期返回 `409`，停用存在活动告警或工单的资产返回 `409` |
@@ -112,9 +71,9 @@
 | `PATCH` | `/hardware-bindings/{id}/` | 管理员 | 提交 `version` 更新端点、期望心跳或接入状态；资产绑定不可迁移 |
 | `GET` | `/alerts/` | 登录 | `status`、`severity`、`openedFrom`、`openedTo`、`page`、`pageSize` |
 | `POST` | `/alerts/{id}/acknowledge/` | 管理员/运维员 | 确认待处理告警 |
-| `POST` | `/alerts/{id}/work-order/` | 管理员/运维员 | 从告警创建关联工单 |
+| `POST` | `/alerts/{id}/work-order/` | 管理员/运维员 | 从告警创建关联工单；严重告警默认 4 小时、其他告警默认 24 小时处置时限 |
 | `GET` | `/work-orders/` | 登录 | `status`、`search`、`updatedFrom`、`updatedTo`、`page`、`pageSize` |
-| `POST` | `/work-orders/` | 管理员/运维员 | 新建 `{ assetCode, title, description?, priority? }`；可提供 `Idempotency-Key` 防止重试重复建单 |
+| `POST` | `/work-orders/` | 管理员/运维员 | 新建 `{ assetCode, title, description?, priority? }`；可提供 `Idempotency-Key` 防止重试重复建单。后端按优先级写入处置时限：低 72 小时、普通 48 小时、高 24 小时、紧急 4 小时 |
 | `POST` | `/work-orders/{id}/transition/` | 管理员/运维员 | 流转 `{ to, version? }`；提供 `version` 时启用乐观锁，完成工单必须管理员复核 |
 | `GET` | `/telemetry/` | 登录 | `assetCode`、`metricKey`、`quality`、`recordedFrom`、`recordedTo`、`page`、`pageSize`；按业务采集时间倒序返回 |
 | `GET` | `/telemetry/summary/` | 登录 | 复用遥测筛选条件，返回样本数、最小值、最大值、平均值、时间范围、质量分布和最新样本 |

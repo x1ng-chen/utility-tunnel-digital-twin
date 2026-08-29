@@ -126,6 +126,8 @@ def parse_origins(raw: str, default: str, setting_name: str) -> list[str]:
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 LANGUAGE_CODE = 'zh-hans'
 TIME_ZONE = 'Asia/Shanghai'
@@ -157,7 +159,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
     'DEFAULT_RENDERER_CLASSES': ['rest_framework.renderers.JSONRenderer'],
     'EXCEPTION_HANDLER': 'config.api.api_exception_handler',
-    'DEFAULT_THROTTLE_RATES': {'login': os.getenv('LOGIN_RATE_LIMIT', '10/min')},
+    'DEFAULT_THROTTLE_RATES': {
+        'login': os.getenv('LOGIN_RATE_LIMIT', '10/min'),
+        'password_change': os.getenv('PASSWORD_CHANGE_RATE_LIMIT', '5/hour'),
+    },
 }
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'

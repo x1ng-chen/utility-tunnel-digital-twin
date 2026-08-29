@@ -21,6 +21,14 @@ const bars = computed(() => {
   const span = Math.max(1, Math.max(...values) - minimum);
   return chronological.map((item) => ({ ...item, height: 18 + ((item.value - minimum) / span) * 76 }));
 });
+const trendPoints = computed(() => bars.value.map((item, index, all) => `${all.length === 1 ? 50 : index / (all.length - 1) * 100},${100 - item.height}`).join(' '));
+const qualityDonut = computed(() => {
+  const total = Math.max(1, store.telemetrySummary.sampleCount);
+  const good = store.telemetrySummary.qualityCounts.good / total * 100;
+  const suspect = good + store.telemetrySummary.qualityCounts.suspect / total * 100;
+  const bad = suspect + store.telemetrySummary.qualityCounts.bad / total * 100;
+  return { background: `conic-gradient(#55e3bd 0 ${good}%, #f2b064 ${good}% ${suspect}%, #ff7289 ${suspect}% ${bad}%, #7186a5 ${bad}% 100%)` };
+});
 
 function toIso(value: string): string | undefined {
   return value ? new Date(value).toISOString() : undefined;
@@ -77,11 +85,11 @@ onMounted(search);
     <section class="telemetry-layout">
       <article class="panel telemetry-chart-panel">
         <div class="panel-head"><div><span class="eyebrow">RECENT WINDOW</span><h2>最近 30 条趋势</h2></div><span class="insight-count">显示 {{ store.telemetryInsights.length }} / {{ store.telemetryInsightsTotal }}</span></div>
-        <div v-if="bars.length && store.telemetrySummary.comparable" class="telemetry-bars"><i v-for="bar in bars" :key="bar.id" :class="bar.quality" :style="{ height: `${bar.height}%` }" :title="`${bar.metric} ${bar.value}${bar.unit} · ${new Date(bar.recordedAt).toLocaleString('zh-CN')}`" /></div>
+        <div v-if="bars.length && store.telemetrySummary.comparable" class="telemetry-line-chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="`${store.telemetrySummary.latest?.metric || '遥测'}趋势图`"><defs><linearGradient id="trend-fill" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#7393ff" stop-opacity=".42" /><stop offset="1" stop-color="#7393ff" stop-opacity="0" /></linearGradient></defs><polygon :points="`0,100 ${trendPoints} 100,100`" fill="url(#trend-fill)" /><polyline :points="trendPoints" fill="none" stroke="#84a0ff" stroke-width="2" vector-effect="non-scaling-stroke" /></svg></div>
         <div v-else class="empty-state">{{ bars.length ? '混合指标不可直接比较，请选择单一指标后查看趋势。' : '当前条件下没有遥测趋势。' }}</div>
         <div class="quality-strip"><span><i class="good" />良好 {{ store.telemetrySummary.qualityCounts.good }}</span><span><i class="suspect" />可疑 {{ store.telemetrySummary.qualityCounts.suspect }}</span><span><i class="bad" />异常 {{ store.telemetrySummary.qualityCounts.bad }}</span><span><i class="missing" />缺失 {{ store.telemetrySummary.qualityCounts.missing }}</span></div>
       </article>
-      <article class="panel latest-reading-panel"><span class="eyebrow">LATEST SAMPLE</span><template v-if="store.telemetrySummary.latest"><strong>{{ store.telemetrySummary.latest.value }}<small>{{ store.telemetrySummary.latest.unit }}</small></strong><h2>{{ store.telemetrySummary.latest.metric }}</h2><p>{{ store.telemetrySummary.latest.assetCode }} · {{ store.telemetrySummary.latest.metricKey || '未定义指标键' }}</p><time>{{ new Date(store.telemetrySummary.latest.recordedAt).toLocaleString('zh-CN') }}</time><b :class="store.telemetrySummary.latest.quality">{{ store.telemetrySummary.latest.quality }}</b></template><div v-else class="empty-state">暂无最新样本。</div></article>
+      <article class="panel latest-reading-panel"><span class="eyebrow">LATEST SAMPLE</span><template v-if="store.telemetrySummary.latest"><strong>{{ store.telemetrySummary.latest.value }}<small>{{ store.telemetrySummary.latest.unit }}</small></strong><h2>{{ store.telemetrySummary.latest.metric }}</h2><p>{{ store.telemetrySummary.latest.assetCode }} · {{ store.telemetrySummary.latest.metricKey || '未定义指标键' }}</p><time>{{ new Date(store.telemetrySummary.latest.recordedAt).toLocaleString('zh-CN') }}</time><b :class="store.telemetrySummary.latest.quality">{{ store.telemetrySummary.latest.quality }}</b><div class="quality-donut" :style="qualityDonut"><span>{{ goodRate }}%</span><small>可信率</small></div></template><div v-else class="empty-state">暂无最新样本。</div></article>
     </section>
 
     <section class="table-panel telemetry-table">

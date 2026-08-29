@@ -19,6 +19,8 @@ const checks = [
   ['web build is configured for relative API routing', /VITE_API_BASE_URL=\/api/],
   ['Nginx forwards the API route', /location \/api\/[\s\S]*proxy_pass http:\/\/api:8000\/api\//],
   ['Nginx provides SPA fallback', /try_files \$uri \$uri\/ \/index\.html/],
+  ['Nginx supplies a restrictive browser content security policy', /Content-Security-Policy[\s\S]*default-src 'self';[\s\S]*object-src 'none';[\s\S]*script-src 'self'/],
+  ['Nginx applies response headers to SPA and API responses', /add_header Cache-Control "no-store" always;[\s\S]*location \/ \{[\s\S]*try_files \$uri \$uri\/ \/index\.html;[\s\S]*\}/],
   ['Compose uses a read-only API filesystem', /api:[\s\S]*read_only: true/],
   ['Compose supervises application child processes', /api:[\s\S]*init: true/],
   ['Compose requires production secrets at runtime', /DJANGO_SECRET_KEY: \$\{DJANGO_SECRET_KEY:\?set-in-secret-store\}/],

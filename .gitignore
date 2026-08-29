@@ -42,10 +42,16 @@ _qa*/
 page-*.png
 ~$*.docx
 *.tmp
+.playwright-cli/
+output/playwright/
+test-results/
 
 # Local repair and deployment artifacts
 Git-2.55.0.5-64-bit.exe
 ut-ops-site.tar.gz
+
+# PlatformIO generated artifacts
+firmware/**/.pio/
 
 # STM32/CMake generated artifacts
 firmware/**/build/

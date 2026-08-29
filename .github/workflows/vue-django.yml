@@ -13,6 +13,7 @@ on:
       - 'docs/software-quality-gates.md'
       - 'deploy/postgres/**'
       - 'deploy/containers/**'
+      - 'services/iotda-gateway/**'
       - 'tools/**'
       - '.github/workflows/vue-django.yml'
   pull_request:
@@ -27,6 +28,7 @@ on:
       - 'docs/software-quality-gates.md'
       - 'deploy/postgres/**'
       - 'deploy/containers/**'
+      - 'services/iotda-gateway/**'
       - 'tools/**'
       - '.github/workflows/vue-django.yml'
 

@@ -16,7 +16,7 @@ watch(() => auth.isAuthenticated, (isAuthenticated) => {
 watch(() => operations.notice, (notice) => {
   if (noticeTimer) window.clearTimeout(noticeTimer);
   if (!notice) return;
-  noticeTimer = window.setTimeout(() => { operations.notice = ''; }, 3000);
+  noticeTimer = window.setTimeout(() => { operations.notice = ''; }, 2000);
 });
 onMounted(() => { if (auth.isAuthenticated) void operations.refresh('api'); });
 onUnmounted(() => { if (noticeTimer) window.clearTimeout(noticeTimer); });
