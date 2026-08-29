@@ -169,6 +169,23 @@ class OperationsApiTests(TestCase):
         self.assertEqual(page['pageCount'], 1)
         self.assertFalse(page['hasNext'])
 
+    def test_twin_model_readiness_reports_only_the_asset_handoff_contract(self):
+        self.assertEqual(self.client.get('/api/twin/model-readiness/').status_code, 401)
+        self.auth(self.operator)
+        blocked = self.client.get('/api/twin/model-readiness/')
+        self.assertEqual(blocked.status_code, 200)
+        self.assertEqual(blocked.json()['status'], 'blocked')
+        self.assertEqual(blocked.json()['missingMeshCodes'], [self.asset.code])
+        self.assertFalse(blocked.json()['contract']['modelFileVerified'])
+
+        self.asset.mesh = 'MESH_FAN_01'
+        self.asset.save(update_fields=['mesh', 'updated_at'])
+        ready = self.client.get('/api/twin/model-readiness/')
+        self.assertEqual(ready.status_code, 200)
+        self.assertEqual(ready.json()['status'], 'ready')
+        self.assertEqual(ready.json()['summary'], {'activeAssetCount': 1, 'mappedAssetCount': 1, 'unmappedAssetCount': 0})
+        self.assertEqual(ready.json()['missingMeshCodes'], [])
+
     def test_dashboard_uses_the_latest_telemetry_reading(self):
         from .models import Telemetry
 
@@ -534,6 +551,12 @@ class OperationsApiTests(TestCase):
         self.assertEqual(water.integration_status, Asset.IntegrationStatus.CALIBRATION_REQUIRED)
         self.assertEqual(float(water.latitude), 31.230505)
         self.assertEqual(Asset.objects.filter(latitude__isnull=False, longitude__isnull=False).count(), 12)
+
+    def test_e2e_cleanup_removes_legacy_and_timestamped_twin_test_assets(self):
+        Asset.objects.create(code='ENV-E2E', name='旧版回归资产', zone='UT-ZA', asset_type='测试')
+        Asset.objects.create(code='ENV-E2E-12345678', name='新版回归资产', zone='UT-ZA', asset_type='测试')
+        call_command('seed_demo', '--clean-e2e-data', stdout=io.StringIO())
+        self.assertFalse(Asset.objects.filter(code__startswith='ENV-E2E').exists())
 
     def test_asset_gis_filters_and_serialization(self):
         self.asset.hardware_code = 'H-10'

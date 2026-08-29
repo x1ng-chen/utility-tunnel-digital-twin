@@ -59,6 +59,7 @@ export const api = {
   registrationRequests: (params?: Record<string, string | number>) => client.get('/admin/registration-requests/', { params }),
   reviewRegistrationRequest: (id: number, payload: { status: 'approved' | 'rejected'; reviewNote?: string }) => client.patch(`/admin/registration-requests/${id}/`, payload),
   dashboard: () => client.get('/dashboard/'),
+  twinModelReadiness: () => client.get('/twin/model-readiness/'),
   assets: (params?: Record<string, string | number>) => client.get('/assets/', { params }),
   createAsset: (payload: Record<string, unknown>) => client.post('/assets/', payload),
   updateAsset: (id: number, payload: Record<string, unknown>) => client.patch(`/assets/${id}/`, payload),

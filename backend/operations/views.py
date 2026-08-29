@@ -514,6 +514,38 @@ class DashboardView(APIView):
         })
 
 
+class TwinModelReadinessView(APIView):
+    """Read-only Blender handoff contract; it does not assert model-file existence."""
+    permission_classes = [AuthenticatedRead]
+
+    def get(self, request):
+        assets = Asset.objects.filter(is_active=True).only('code', 'mesh', 'updated_at').order_by('code')
+        active_assets = list(assets)
+        missing_mesh_codes = [asset.code for asset in active_assets if not asset.mesh]
+        invalid_mesh_codes = [
+            asset.code for asset in active_assets
+            if asset.mesh and not re.fullmatch(r'[A-Z0-9][A-Z0-9_-]{1,79}', asset.mesh)
+        ]
+        mapped_asset_count = len(active_assets) - len(missing_mesh_codes) - len(invalid_mesh_codes)
+        latest_update = max((asset.updated_at for asset in active_assets), default=None)
+        return Response({
+            'status': 'ready' if not missing_mesh_codes and not invalid_mesh_codes else 'blocked',
+            'summary': {
+                'activeAssetCount': len(active_assets),
+                'mappedAssetCount': mapped_asset_count,
+                'unmappedAssetCount': len(missing_mesh_codes) + len(invalid_mesh_codes),
+            },
+            'missingMeshCodes': missing_mesh_codes,
+            'invalidMeshCodes': invalid_mesh_codes,
+            'contract': {
+                'nodeNamePattern': 'A-Z, 0-9, hyphen and underscore',
+                'nodeNamesUnique': True,
+                'modelFileVerified': False,
+            },
+            'updatedAt': latest_update,
+        })
+
+
 class AssetListView(APIView):
     permission_classes = [AuthenticatedRead]
 

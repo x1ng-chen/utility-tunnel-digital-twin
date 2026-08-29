@@ -4,7 +4,8 @@ import { useRoute } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
 import TwinScene from '../components/TwinScene.vue';
 import { useOperationsStore } from '../stores/operations';
-import { resolveTwinVisualState, twinStateLabel, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
+import { api } from '../services/api';
+import { resolveTwinVisualState, summarizeTwinModelDelivery, twinStateLabel, type TwinModelBindingReport, type TwinModelReadinessResponse, type TwinVisualState } from '../services/twin3d';
 
 const store = useOperationsStore();
 const route = useRoute();
@@ -23,6 +24,7 @@ let pendingFullscreenPointer: PointerEvent | undefined;
 let fullscreenPointerFrame = 0;
 let fullscreenPulseTimer: number | undefined;
 const modelReport = ref<TwinModelBindingReport>({ mode: 'fallback', expectedCount: store.assets.length, boundCodes: [], missingCodes: store.assets.map((asset) => asset.code), isComplete: false });
+const serverModelReadiness = ref<TwinModelReadinessResponse | null>(null);
 const filterOptions: Array<{ value: 'all' | TwinVisualState; label: string }> = [
   { value: 'all', label: '全部' }, { value: 'alarm', label: '告警' }, { value: 'warning', label: '关注' }, { value: 'normal', label: '正常' }, { value: 'unknown', label: '待核验' },
 ];
@@ -36,8 +38,14 @@ const visibleAssets = computed(() => store.assets.filter((asset) => {
 }));
 const selectedAssetName = computed(() => selectedAsset.value?.name.replace(/\s*[（(][^（）()]{1,16}[）)]\s*$/, '') || '');
 const modelBindingText = computed(() => `${modelReport.value.boundCodes.length} / ${modelReport.value.expectedCount} 个设备已定位`);
+const localModelReadiness = computed(() => summarizeTwinModelDelivery(store.assets));
+const modelDeliveryReady = computed(() => serverModelReadiness.value ? serverModelReadiness.value.status === 'ready' : localModelReadiness.value.isReady);
+const modelDeliveryCount = computed(() => serverModelReadiness.value?.summary.mappedAssetCount ?? localModelReadiness.value.mappedAssetCount);
+const modelDeliveryTotal = computed(() => serverModelReadiness.value?.summary.activeAssetCount ?? localModelReadiness.value.activeAssetCount);
+const modelDeliveryLabel = computed(() => modelDeliveryReady.value ? '模型节点已就绪' : `待补齐 ${modelDeliveryTotal.value - modelDeliveryCount.value} 个节点`);
 const modelDeliveryHint = computed(() => {
-  if (modelReport.value.mode === 'fallback') return '当前为可交互预览场景；导入实体模型后会自动核验设备定位。';
+  if (!modelDeliveryReady.value) return '资产台账仍缺少标准节点名称，暂不建议交付实体模型。';
+  if (modelReport.value.mode === 'fallback') return `已完成 ${modelDeliveryCount.value} 个设备的节点准备；等待实体模型文件后可自动核验。`;
   if (modelReport.value.isComplete) return '实体模型已完成全部设备定位，可直接用于告警可视化。';
   return `实体模型已加载，仍有 ${modelReport.value.missingCodes.length} 个设备待补齐节点名称。`;
 });
@@ -46,6 +54,11 @@ function select(code: string) { selectedCode.value = code; scene.value?.focusAss
 function resetView() { scene.value?.resetView(); }
 function retryModel() { scene.value?.reloadModel(); }
 function receiveModelReport(report: TwinModelBindingReport) { modelReport.value = report; }
+async function refreshModelReadiness() {
+  if (store.source !== 'api' || store.offline) { serverModelReadiness.value = null; return; }
+  try { serverModelReadiness.value = (await api.twinModelReadiness()).data as TwinModelReadinessResponse; }
+  catch { serverModelReadiness.value = null; }
+}
 function updateFullscreenState() {
   fullscreenActive.value = document.fullscreenElement === stage.value;
   if (!fullscreenActive.value) { fullscreenPointer.active = false; fullscreenPointer.pressed = false; }
@@ -91,9 +104,11 @@ async function fullscreen() {
 function statusLabel(state: TwinVisualState) { return twinStateLabel(state); }
 function formatTime(value: string | null | undefined) { return value ? new Date(value).toLocaleString('zh-CN') : '暂无上报'; }
 watch(() => route.query.asset, (code) => { if (typeof code === 'string' && store.assets.some((asset) => asset.code === code)) select(code); });
+watch(() => [store.source, store.offline], () => { void refreshModelReadiness(); });
 onMounted(() => {
   finePointer.value = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   document.addEventListener('fullscreenchange', updateFullscreenState);
+  void refreshModelReadiness();
 });
 onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', updateFullscreenState);
@@ -106,7 +121,7 @@ onBeforeUnmount(() => {
   <AppShell>
     <section class="twin-title section-title">
       <div><span class="eyebrow light">THREE-DIMENSIONAL DIGITAL TWIN</span><h1>三维孪生中心</h1><p>以真实实体模型定位设备、告警与工单；三维状态与运行数据实时同步。</p></div>
-      <div class="twin-title-actions"><span class="twin-live"><i />三维数据联动</span><button v-if="modelReport.mode === 'fallback'" type="button" class="outline-button twin-model-retry-top" @click="retryModel">↻ 检测模型</button><button class="primary-button compact-button" @click="resetView">⌖ 重置视角</button><button class="outline-button" @click="fullscreen">⛶ 全屏查看</button></div>
+      <div class="twin-title-actions"><span :class="['twin-live', { blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><i />{{ modelDeliveryLabel }}</span><button v-if="modelReport.mode === 'fallback'" type="button" class="outline-button twin-model-retry-top" @click="retryModel">↻ 检测模型</button><button class="primary-button compact-button" @click="resetView">⌖ 重置视角</button><button class="outline-button" @click="fullscreen">⛶ 全屏查看</button></div>
     </section>
     <section class="twin-workspace">
       <article ref="stage" class="twin-stage-panel" @pointermove="onStagePointerMove" @pointerdown="onStagePointerDown" @pointerup="onStagePointerUp" @pointerleave="onStagePointerLeave">
@@ -125,6 +140,7 @@ onBeforeUnmount(() => {
         <template v-if="selectedAsset">
           <header><div><span class="eyebrow">SELECTED EQUIPMENT</span><h2 :title="selectedAsset.name">{{ selectedAssetName }}</h2><code>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</code></div><span :class="['twin-state-chip', resolveTwinVisualState(selectedAsset, store.alerts)]">{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span></header>
           <section :class="['twin-model-readiness', modelReport.mode]"><span>实体模型接入</span><div><b>{{ modelReport.mode === 'loaded' ? '模型已加载' : '预览场景' }}</b><strong>{{ modelBindingText }}</strong></div><p>{{ modelDeliveryHint }}</p><button v-if="modelReport.mode === 'fallback'" type="button" class="twin-model-retry" @click="retryModel">重新检测模型</button></section>
+          <section :class="['twin-model-contract', { ready: modelDeliveryReady, blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><span>模型交付检查</span><b>{{ modelDeliveryLabel }}</b><p>{{ modelDeliveryCount }} / {{ modelDeliveryTotal }} 个设备已具备标准节点名称</p></section>
           <div class="twin-inspector-grid"><div><span>所在区域</span><b>{{ selectedAsset.zone }}</b></div><div><span>实体模型</span><b>{{ selectedAsset.mesh || '待绑定' }}</b></div><div><span>最新上报</span><b>{{ formatTime(selectedAsset.lastSeenAt) }}</b></div><div><span>当前遥测</span><b>{{ selectedTelemetry ? `${selectedTelemetry.value} ${selectedTelemetry.unit}` : '暂无数据' }}</b></div></div>
           <section class="twin-detail-section"><span class="eyebrow">CURRENT ALERTS</span><p v-if="selectedAlerts.length" class="twin-alert-summary"><b>{{ selectedAlerts.length }} 项关联告警</b>{{ selectedAlerts[0].title }}</p><p v-else class="twin-empty">当前设备没有未关闭告警。</p></section>
           <section class="twin-detail-section"><span class="eyebrow">WORK ORDER STATUS</span><p v-if="selectedOrders.length" class="twin-order-summary"><b>{{ selectedOrders[0].code }}</b>{{ selectedOrders[0].title }}</p><p v-else class="twin-empty">当前设备没有关联工单。</p></section>

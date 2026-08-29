@@ -44,6 +44,16 @@
 .twin-model-retry:hover,.twin-model-retry:focus-visible{border-color:#79a7ff;background:#1c4b7d;outline:0;transform:translateY(-1px)}
 .twin-model-retry-top{border-color:#3a7193;background:#0e2b43;color:#a8f3df}
 .twin-model-retry-top:hover,.twin-model-retry-top:focus-visible{border-color:#61dfc2;background:#11465b;color:#effffb;outline:0}
+.twin-live.blocked{border-color:#795f35;color:#ffd38c}
+.twin-live.blocked i{background:#ffbc62;box-shadow:0 0 0 5px #ffbc6222;animation:none}
+.twin-model-contract{display:grid;gap:4px;margin-top:13px;padding:10px 12px;border:1px solid #315174;border-radius:11px;background:#0b1d31}
+.twin-model-contract span{color:#8ca8ca;font-size:8px;letter-spacing:.14em}
+.twin-model-contract b{color:#edf7ff;font-size:11px}
+.twin-model-contract p{margin:0;color:#91a9c6;font-size:9px;line-height:1.45}
+.twin-model-contract.ready{border-color:#2e746e;background:linear-gradient(135deg,#0e2c3b,#0a2030)}
+.twin-model-contract.ready b{color:#75e3c8}
+.twin-model-contract.blocked{border-color:#715837;background:linear-gradient(135deg,#2d251c,#17263b)}
+.twin-model-contract.blocked b{color:#ffd18d}
 
 /* Fullscreen is a browser top layer, so it carries its own pointer treatment. */
 .twin-fullscreen-fx{display:none;position:absolute;z-index:20;top:0;left:0;pointer-events:none;opacity:0;transition:opacity .16s ease;will-change:transform}

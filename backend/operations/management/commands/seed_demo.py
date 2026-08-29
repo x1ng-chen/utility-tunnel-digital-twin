@@ -25,7 +25,9 @@ class Command(BaseCommand):
             RegistrationRequest.objects.filter(account__startswith='e2e-operator-').delete()
             User.objects.filter(email__startswith='e2e-operator-').delete()
             SpatialFeature.objects.filter(code__startswith='SEG-E2E-').delete()
-            Asset.objects.filter(code__startswith='ENV-E2E-').delete()
+            # Older browser suites used ENV-E2E without a timestamp suffix;
+            # keep the reserved test namespace clean across suite versions.
+            Asset.objects.filter(code__startswith='ENV-E2E').delete()
             # The browser suite creates a linked order for this fixed demo
             # alert.  Remove it only in explicit E2E-clean mode so normal
             # demonstration data is never discarded by a regular seed.
