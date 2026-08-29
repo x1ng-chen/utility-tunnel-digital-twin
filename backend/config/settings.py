@@ -159,7 +159,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
     'DEFAULT_RENDERER_CLASSES': ['rest_framework.renderers.JSONRenderer'],
     'EXCEPTION_HANDLER': 'config.api.api_exception_handler',
-    'DEFAULT_THROTTLE_RATES': {'login': os.getenv('LOGIN_RATE_LIMIT', '10/min')},
+    'DEFAULT_THROTTLE_RATES': {
+        'login': os.getenv('LOGIN_RATE_LIMIT', '10/min'),
+        'password_change': os.getenv('PASSWORD_CHANGE_RATE_LIMIT', '5/hour'),
+    },
 }
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'

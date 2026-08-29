@@ -46,6 +46,7 @@
 | --- | --- | --- | --- |
 | `POST` | `/auth/login/` | 公开 | `{ email, password }`，返回 `accessToken`、`tokenType` 和 `user` |
 | `GET` | `/auth/me/` | 登录 | 返回当前用户及角色 |
+| `POST` | `/auth/password/` | 登录 | `{ currentPassword, newPassword }`；验证旧密码和密码强度后更新密码，撤销旧 Token 并返回当前会话的替换 Token |
 | `POST` | `/auth/logout/` | 登录 | 撤销当前用户 Token |
 | `GET` | `/admin/users/` | 管理员 | 用户检索和状态筛选 |
 | `POST` | `/admin/users/` | 管理员 | 创建用户和角色 |
@@ -57,7 +58,7 @@
 
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/dashboard/` | 登录 | 资产、健康度、告警、工单和最新遥测汇总 |
+| `GET` | `/dashboard/` | 登录 | 资产、健康度、告警、工单和最新遥测汇总；`workOrderSla` 提供已超时和 4 小时内到期工单数 |
 | `GET` | `/assets/` | 登录 | `search`、`status`、`zone`、`integrationStatus`、`hardwareCode`、`hasLocation=true\|false`、`isActive=true\|false`、`page`、`pageSize`；管理员可用 `isActive=all` 查询全部生命周期；返回硬件接入信息、WGS84 坐标、坐标来源和版本 |
 | `POST` | `/assets/` | 管理员 | 新建资产主数据；校验编码、硬件编号、能力去重、二维孪生坐标和成对 WGS84 坐标，成功后写入审计 |
 | `PATCH` | `/assets/{id}/` | 管理员 | 更新资产主数据，必须提交当前 `version`；并发过期返回 `409`，停用存在活动告警或工单的资产返回 `409` |
@@ -70,9 +71,9 @@
 | `PATCH` | `/hardware-bindings/{id}/` | 管理员 | 提交 `version` 更新端点、期望心跳或接入状态；资产绑定不可迁移 |
 | `GET` | `/alerts/` | 登录 | `status`、`severity`、`openedFrom`、`openedTo`、`page`、`pageSize` |
 | `POST` | `/alerts/{id}/acknowledge/` | 管理员/运维员 | 确认待处理告警 |
-| `POST` | `/alerts/{id}/work-order/` | 管理员/运维员 | 从告警创建关联工单 |
+| `POST` | `/alerts/{id}/work-order/` | 管理员/运维员 | 从告警创建关联工单；严重告警默认 4 小时、其他告警默认 24 小时处置时限 |
 | `GET` | `/work-orders/` | 登录 | `status`、`search`、`updatedFrom`、`updatedTo`、`page`、`pageSize` |
-| `POST` | `/work-orders/` | 管理员/运维员 | 新建 `{ assetCode, title, description?, priority? }`；可提供 `Idempotency-Key` 防止重试重复建单 |
+| `POST` | `/work-orders/` | 管理员/运维员 | 新建 `{ assetCode, title, description?, priority? }`；可提供 `Idempotency-Key` 防止重试重复建单。后端按优先级写入处置时限：低 72 小时、普通 48 小时、高 24 小时、紧急 4 小时 |
 | `POST` | `/work-orders/{id}/transition/` | 管理员/运维员 | 流转 `{ to, version? }`；提供 `version` 时启用乐观锁，完成工单必须管理员复核 |
 | `GET` | `/telemetry/` | 登录 | `assetCode`、`metricKey`、`quality`、`recordedFrom`、`recordedTo`、`page`、`pageSize`；按业务采集时间倒序返回 |
 | `GET` | `/telemetry/summary/` | 登录 | 复用遥测筛选条件，返回样本数、最小值、最大值、平均值、时间范围、质量分布和最新样本 |

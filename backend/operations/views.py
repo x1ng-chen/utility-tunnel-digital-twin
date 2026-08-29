@@ -26,7 +26,7 @@ from .permissions import AuthenticatedRead
 from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, HardwareBindingMutationSerializer, HardwareBindingSerializer, RegistrationRequestSerializer, ReportExportSerializer, SpatialFeatureMutationSerializer, SpatialFeatureSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, WorkOrderSerializer
 from .services import actor_name, audit
 from .telemetry_rules import evaluate_threshold
-from .throttling import LoginRateThrottle
+from .throttling import LoginRateThrottle, PasswordChangeRateThrottle
 
 
 def request_id(request) -> str:
@@ -92,6 +92,19 @@ def is_admin(request) -> bool:
 def work_order_code() -> str:
     """Generate a collision-resistant human-readable work-order code."""
     return f'WO-{timezone.now():%y%m%d}-{uuid4().hex[:6].upper()}'
+
+
+WORK_ORDER_SLA_HOURS = {
+    WorkOrder.Priority.LOW: 72,
+    WorkOrder.Priority.NORMAL: 48,
+    WorkOrder.Priority.HIGH: 24,
+    WorkOrder.Priority.URGENT: 4,
+}
+
+
+def work_order_due_at(priority: str):
+    """Return the consistent initial handling deadline for an order priority."""
+    return timezone.now() + timedelta(hours=WORK_ORDER_SLA_HOURS[priority])
 
 
 IDEMPOTENCY_KEY_PATTERN = re.compile(r'^[A-Za-z0-9._:-]{1,80}$')
@@ -302,6 +315,40 @@ class LogoutView(APIView):
         return Response(status=204)
 
 
+class PasswordChangeView(APIView):
+    """Rotate an authenticated user's password and bearer credential together."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [PasswordChangeRateThrottle]
+
+    def post(self, request):
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        current_password = payload.get('currentPassword')
+        new_password = payload.get('newPassword')
+        if not isinstance(current_password, str) or not isinstance(new_password, str):
+            return error_response('invalid_request', 'currentPassword and newPassword must be strings.', 400)
+        if not request.user.check_password(current_password):
+            return error_response('invalid_credentials', '当前密码不正确。', 401)
+        if current_password == new_password:
+            return error_response('invalid_request', '新密码不能与当前密码相同。', 400)
+        try:
+            validate_password(new_password, request.user)
+        except ValidationError:
+            return error_response('invalid_request', '密码强度不足，请使用更复杂的密码。', 400)
+        with transaction.atomic():
+            request.user.set_password(new_password)
+            request.user.save(update_fields=['password'])
+            # A password update invalidates the previous bearer credential.  The
+            # response contains one replacement token so the current, verified
+            # browser can continue without silently retaining an old credential.
+            Token.objects.filter(user=request.user).delete()
+            token = Token.objects.create(user=request.user)
+            audit(request.user, 'auth.password_changed', 'app_user', request.user.pk, request_id=request_id(request))
+        return Response({'accessToken': token.key, 'tokenType': 'Bearer', 'message': '密码已更新，其他会话已失效。'})
+
+
 class RegistrationRequestView(APIView):
     """Public account application endpoint; it never creates an active user."""
 
@@ -368,6 +415,8 @@ class AdminRegistrationRequestDetailView(APIView):
             return error_response('invalid_request', 'status must be approved or rejected.', 400)
         if not isinstance(review_note, str):
             return error_response('invalid_request', 'reviewNote must be a string.', 400)
+        if next_status == RegistrationRequest.Status.REJECTED and not review_note.strip():
+            return error_response('invalid_request', '不予批准时必须填写原因。', 400)
         with transaction.atomic():
             application = RegistrationRequest.objects.select_for_update().filter(pk=pk).first()
             if not application:
@@ -389,7 +438,11 @@ class AdminRegistrationRequestDetailView(APIView):
             else:
                 action = 'registration.rejected'
             application.save(update_fields=['status', 'review_note', 'reviewed_by', 'reviewed_at', 'created_user'])
-            audit(request.user, action, 'registration_request', application.pk, {'account': application.account, 'role': application.requested_role}, request_id(request))
+            audit(request.user, action, 'registration_request', application.pk, {
+                'account': application.account,
+                'role': application.requested_role,
+                'hasReviewNote': bool(application.review_note),
+            }, request_id(request))
         return Response(RegistrationRequestSerializer(application).data)
 
 
@@ -505,11 +558,17 @@ class DashboardView(APIView):
 
     def get(self, request):
         latest_telemetry = Telemetry.objects.select_related('asset').order_by('-recorded_at', '-id').first()
+        now = timezone.now()
+        active_orders = WorkOrder.objects.exclude(status__in=[WorkOrder.Status.COMPLETED, WorkOrder.Status.CANCELLED])
         return Response({
             'assets': {'total': Asset.objects.filter(is_active=True).count(), 'online': Asset.objects.filter(is_active=True, status__in=[Asset.Status.NORMAL, Asset.Status.WARNING, Asset.Status.ALARM]).count()},
             'health': {'value': 100 if not Asset.objects.filter(is_active=True, status=Asset.Status.ALARM).exists() else 72},
             'openAlerts': Alert.objects.filter(status=Alert.Status.OPEN).count(),
-            'activeWorkOrders': WorkOrder.objects.exclude(status__in=[WorkOrder.Status.COMPLETED, WorkOrder.Status.CANCELLED]).count(),
+            'activeWorkOrders': active_orders.count(),
+            'workOrderSla': {
+                'overdue': active_orders.filter(due_at__isnull=False, due_at__lt=now).count(),
+                'dueSoon': active_orders.filter(due_at__isnull=False, due_at__gte=now, due_at__lte=now + timedelta(hours=4)).count(),
+            },
             'telemetry': TelemetrySerializer(latest_telemetry).data if latest_telemetry else None,
         })
 
@@ -884,8 +943,9 @@ class AlertWorkOrderView(APIView):
                     return Response(WorkOrderSerializer(existing).data)
                 if alert.status not in {Alert.Status.OPEN, Alert.Status.ACKNOWLEDGED}:
                     return error_response('invalid_state', 'Alert is not eligible for a work order.', 409)
-                order = WorkOrder.objects.create(code=work_order_code(), source_alert=alert, asset=alert.asset, title=f'处置 {alert.code}：{alert.title}', priority=WorkOrder.Priority.URGENT if alert.severity == Alert.Severity.CRITICAL else WorkOrder.Priority.HIGH, created_by=request.user, due_at=timezone.now() + timedelta(hours=8))
-                audit(request.user, 'work_order.created_from_alert', 'work_order', order.pk, {'alertCode': alert.code}, request_id(request))
+                priority = WorkOrder.Priority.URGENT if alert.severity == Alert.Severity.CRITICAL else WorkOrder.Priority.HIGH
+                order = WorkOrder.objects.create(code=work_order_code(), source_alert=alert, asset=alert.asset, title=f'处置 {alert.code}：{alert.title}', priority=priority, created_by=request.user, due_at=work_order_due_at(priority))
+                audit(request.user, 'work_order.created_from_alert', 'work_order', order.pk, {'alertCode': alert.code, 'priority': priority, 'dueAt': order.due_at.isoformat()}, request_id(request))
         except IntegrityError:
             # A concurrent request may create the same linked order first.
             existing = WorkOrder.objects.select_related('asset', 'source_alert', 'assignee').filter(source_alert_id=pk).first()
@@ -957,8 +1017,8 @@ class WorkOrderListView(APIView):
             return error_response('invalid_request', 'A valid assetCode and title are required.', 400)
         try:
             with transaction.atomic():
-                order = WorkOrder.objects.create(code=work_order_code(), asset=asset, title=title, description=description_value.strip(), priority=priority, created_by=request.user, idempotency_key=request_key)
-                audit(request.user, 'work_order.created_manual', 'work_order', order.pk, {'assetCode': asset.code}, request_id(request))
+                order = WorkOrder.objects.create(code=work_order_code(), asset=asset, title=title, description=description_value.strip(), priority=priority, created_by=request.user, due_at=work_order_due_at(priority), idempotency_key=request_key)
+                audit(request.user, 'work_order.created_manual', 'work_order', order.pk, {'assetCode': asset.code, 'priority': priority, 'dueAt': order.due_at.isoformat()}, request_id(request))
         except IntegrityError:
             # A simultaneous retry may win the unique idempotency constraint.
             if request_key:

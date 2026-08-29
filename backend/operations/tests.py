@@ -1,6 +1,6 @@
 import io
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from django.conf import settings
@@ -78,6 +78,24 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('accessToken', response.json())
 
+    def test_password_change_rotates_bearer_credential(self):
+        self.auth(self.operator)
+        previous_token = Token.objects.get(user=self.operator).key
+        response = self.client.post('/api/auth/password/', {
+            'currentPassword': 'demo-password',
+            'newPassword': 'Stronger-Operator-2026!',
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+        replacement_token = response.json()['accessToken']
+        self.assertNotEqual(replacement_token, previous_token)
+        self.assertFalse(Token.objects.filter(key=previous_token).exists())
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {replacement_token}')
+        self.assertEqual(self.client.get('/api/auth/me/').status_code, 200)
+        self.operator.refresh_from_db()
+        self.assertFalse(self.operator.check_password('demo-password'))
+        self.assertTrue(self.operator.check_password('Stronger-Operator-2026!'))
+        self.assertTrue(AuditLog.objects.filter(action='auth.password_changed', resource_id=str(self.operator.pk)).exists())
+
     def test_registration_request_needs_administrator_approval_before_login(self):
         application = self.client.post('/api/auth/registration-requests/', {
             'account': 'new.operator',
@@ -112,6 +130,27 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['error'], 'invalid_request')
         self.assertFalse(RegistrationRequest.objects.filter(account='weak-password.operator').exists())
+
+    def test_registration_rejection_requires_and_records_a_reason(self):
+        application = self.client.post('/api/auth/registration-requests/', {
+            'account': 'rejected.operator',
+            'displayName': '待驳回账号',
+            'role': Profile.Role.OPERATOR,
+            'password': 'Rejected-Operator-2026!',
+        }, format='json')
+        self.assertEqual(application.status_code, 201)
+        self.auth(self.admin)
+        application_id = application.json()['id']
+        missing_reason = self.client.patch(f'/api/admin/registration-requests/{application_id}/', {'status': 'rejected'}, format='json')
+        self.assertEqual(missing_reason.status_code, 400)
+        rejected = self.client.patch(f'/api/admin/registration-requests/{application_id}/', {
+            'status': 'rejected',
+            'reviewNote': '请使用单位分配的账号名称后重新申请。',
+        }, format='json')
+        self.assertEqual(rejected.status_code, 200)
+        self.assertEqual(rejected.json()['reviewNote'], '请使用单位分配的账号名称后重新申请。')
+        rejection_audit = AuditLog.objects.get(action='registration.rejected')
+        self.assertTrue(rejection_audit.detail['hasReviewNote'])
 
     def test_registration_cannot_create_or_promote_a_second_administrator(self):
         public = self.client.post('/api/auth/registration-requests/', {
@@ -495,6 +534,20 @@ class OperationsApiTests(TestCase):
         self.assertEqual(WorkOrder.objects.filter(title='幂等工单').count(), 1)
         changed = self.client.post('/api/work-orders/', {'assetCode': self.asset.code, 'title': '另一张工单', 'priority': 'normal'}, format='json', **headers)
         self.assertEqual(changed.status_code, 409)
+
+    def test_work_order_deadlines_follow_priority_sla(self):
+        self.auth(self.operator)
+        before = timezone.now()
+        manual = self.client.post('/api/work-orders/', {'assetCode': self.asset.code, 'title': '紧急处置', 'priority': 'urgent'}, format='json')
+        self.assertEqual(manual.status_code, 201)
+        urgent_due_at = datetime.fromisoformat(manual.json()['dueAt'].replace('Z', '+00:00'))
+        self.assertGreaterEqual(urgent_due_at, before + timedelta(hours=3, minutes=59))
+        self.assertLessEqual(urgent_due_at, before + timedelta(hours=4, minutes=1))
+        linked = self.client.post(f'/api/alerts/{self.alert.pk}/work-order/')
+        self.assertEqual(linked.status_code, 201)
+        high_due_at = datetime.fromisoformat(linked.json()['dueAt'].replace('Z', '+00:00'))
+        self.assertGreaterEqual(high_due_at, before + timedelta(hours=23, minutes=59))
+        self.assertLessEqual(high_due_at, before + timedelta(hours=24, minutes=1))
 
     def test_idempotency_key_is_validated(self):
         self.auth(self.operator)

@@ -11,3 +11,14 @@ class LoginRateThrottle(SimpleRateThrottle):
         forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '') if settings.TRUST_PROXY_HEADERS else ''
         client = forwarded.split(',')[0].strip() if forwarded else request.META.get('REMOTE_ADDR', 'unknown')
         return self.cache_format % {'scope': self.scope, 'ident': client}
+
+
+class PasswordChangeRateThrottle(SimpleRateThrottle):
+    """Limit a signed-in user's password changes independently of login attempts."""
+
+    scope = 'password_change'
+
+    def get_cache_key(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return None
+        return self.cache_format % {'scope': self.scope, 'ident': request.user.pk}

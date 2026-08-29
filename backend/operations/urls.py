@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import AdminRegistrationRequestDetailView, AdminRegistrationRequestListView, AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, DashboardView, HardwareBindingDetailView, HardwareBindingListView, HealthView, LoginView, LogoutView, MeView, ReadyView, RegistrationRequestView, ReportExportView, SpatialFeatureDetailView, SpatialFeatureImportView, SpatialFeatureListView, TelemetryListView, TelemetrySummaryView, ThresholdDetailView, ThresholdListView, TwinModelReadinessView, WorkOrderListView, WorkOrderTransitionView
+from .views import AdminRegistrationRequestDetailView, AdminRegistrationRequestListView, AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, DashboardView, HardwareBindingDetailView, HardwareBindingListView, HealthView, LoginView, LogoutView, MeView, PasswordChangeView, ReadyView, RegistrationRequestView, ReportExportView, SpatialFeatureDetailView, SpatialFeatureImportView, SpatialFeatureListView, TelemetryListView, TelemetrySummaryView, ThresholdDetailView, ThresholdListView, TwinModelReadinessView, WorkOrderListView, WorkOrderTransitionView
 
 
 urlpatterns = [
@@ -9,6 +9,7 @@ urlpatterns = [
     path('auth/registration-requests/', RegistrationRequestView.as_view()),
     path('auth/me/', MeView.as_view()),
     path('auth/logout/', LogoutView.as_view()),
+    path('auth/password/', PasswordChangeView.as_view()),
     path('admin/users/', AdminUserListView.as_view()),
     path('admin/users/<int:pk>/', AdminUserDetailView.as_view()),
     path('admin/registration-requests/', AdminRegistrationRequestListView.as_view()),

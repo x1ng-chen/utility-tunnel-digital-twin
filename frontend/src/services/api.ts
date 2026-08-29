@@ -54,6 +54,7 @@ export const api = {
   requestRegistration: (payload: { account: string; displayName: string; role: 'operator' | 'viewer'; password: string }) => client.post('/auth/registration-requests/', payload),
   me: () => client.get('/auth/me/'),
   logout: () => client.post('/auth/logout/'),
+  changePassword: (payload: { currentPassword: string; newPassword: string }) => client.post('/auth/password/', payload),
   adminUsers: (params?: Record<string, string | number>) => client.get('/admin/users/', { params }),
   updateAdminUser: (id: number, payload: Record<string, unknown>) => client.patch(`/admin/users/${id}/`, payload),
   registrationRequests: (params?: Record<string, string | number>) => client.get('/admin/registration-requests/', { params }),

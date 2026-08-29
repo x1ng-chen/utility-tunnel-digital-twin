@@ -29,7 +29,7 @@ python manage.py seed_demo
 - `DJANGO_CSRF_TRUSTED_ORIGINS`：与前端 HTTPS Origin 精确匹配；生产环境不得使用开发机 Origin；
 - `DJANGO_SECURE_SSL_REDIRECT=true`、`DJANGO_ENABLE_HSTS=true` 与 `DJANGO_TRUST_PROXY_SSL=true`：本项目的 Nginx TLS 终止架构必须信任 `X-Forwarded-Proto`，避免 HTTPS 重定向循环；
 - `DATABASE_URL`：`ut_runtime` 的 PostgreSQL TLS 连接串；
-- `API_TOKEN_TTL_SECONDS` 与 `LOGIN_RATE_LIMIT`：按安全策略设置；
+- `API_TOKEN_TTL_SECONDS`、`LOGIN_RATE_LIMIT` 与 `PASSWORD_CHANGE_RATE_LIMIT`：按安全策略设置；登录和已认证改密分别限流，避免登录保护被日常改密操作消耗；
 - `DJANGO_MAX_REQUEST_BYTES` 与 `DJANGO_MAX_REQUEST_FIELDS`：限制单次请求体大小和字段数量，防止异常请求耗尽内存；
 - `DJANGO_CACHE_BACKEND` 与 `DJANGO_CACHE_LOCATION`：登录限流必须使用跨进程共享缓存；如果使用 Django 内置 `DatabaseCache`，迁移后执行一次 `python manage.py createcachetable <cache_table>`；
 - `SEED_ADMIN_*`：仅首次种子初始化使用，之后从运行环境移除。
