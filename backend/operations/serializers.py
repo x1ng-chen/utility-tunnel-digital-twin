@@ -387,12 +387,14 @@ class RegistrationRequestSerializer(serializers.ModelSerializer):
     requestedRole = serializers.CharField(source='requested_role', read_only=True)
     reviewNote = serializers.CharField(source='review_note', read_only=True)
     reviewedAt = serializers.DateTimeField(source='reviewed_at', read_only=True)
+    setupExpiresAt = serializers.DateTimeField(source='setup_expires_at', read_only=True)
+    passwordSetAt = serializers.DateTimeField(source='password_set_at', read_only=True)
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
     reviewerName = serializers.SerializerMethodField()
 
     class Meta:
         model = RegistrationRequest
-        fields = ['id', 'account', 'display_name', 'requestedRole', 'status', 'reviewNote', 'reviewerName', 'reviewedAt', 'createdAt']
+        fields = ['id', 'account', 'display_name', 'requestedRole', 'status', 'reviewNote', 'reviewerName', 'reviewedAt', 'setupExpiresAt', 'passwordSetAt', 'createdAt']
 
     def get_reviewerName(self, obj):
         if not obj.reviewed_by:

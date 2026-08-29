@@ -19,7 +19,9 @@ const environment = z.object({
   DJANGO_API_URL: z.string().url().optional(),
   DJANGO_INGEST_EMAIL: z.string().optional(),
   DJANGO_INGEST_PASSWORD: z.string().optional(),
+  DJANGO_INGEST_API_KEY: z.string().min(32).optional(),
   DJANGO_TIMEOUT_MS: z.coerce.number().int().min(500).max(60000).default(5000),
+  DJANGO_QUEUE_DB: z.string().min(1).default('./data/iotda-outbox.sqlite'),
 });
 
 const telemetrySchema = z.object({
@@ -51,7 +53,7 @@ if (iotdaEnabled) {
   if (!config.IOTDA_DEVICE_ID) missing.push('IOTDA_DEVICE_ID');
   if (!config.IOTDA_DEVICE_SECRET) missing.push('IOTDA_DEVICE_SECRET');
 }
-if (djangoEnabled && (!config.DJANGO_INGEST_EMAIL || !config.DJANGO_INGEST_PASSWORD)) {
+if (djangoEnabled && !config.DJANGO_INGEST_API_KEY && (!config.DJANGO_INGEST_EMAIL || !config.DJANGO_INGEST_PASSWORD)) {
   missing.push('DJANGO_INGEST_EMAIL', 'DJANGO_INGEST_PASSWORD');
 }
 if (!iotdaEnabled && !djangoEnabled) {
@@ -112,8 +114,10 @@ const django = djangoEnabled
     baseUrl: config.DJANGO_API_URL,
     email: config.DJANGO_INGEST_EMAIL,
     password: config.DJANGO_INGEST_PASSWORD,
+    apiKey: config.DJANGO_INGEST_API_KEY,
     deviceId: config.LOCAL_DEVICE_ID,
     timeoutMs: config.DJANGO_TIMEOUT_MS,
+    queueDbPath: config.DJANGO_QUEUE_DB,
   })
   : null;
 
@@ -153,7 +157,7 @@ for (const [name, client] of [['Local MQTT', local], ...(cloud ? [['IoTDA', clou
 }
 
 if (django) {
-  console.info(`Django ingestion target: ${config.DJANGO_API_URL} (service account ${config.DJANGO_INGEST_EMAIL}).`);
+  console.info(`Django ingestion target: ${config.DJANGO_API_URL} (${config.DJANGO_INGEST_API_KEY ? 'scoped ingest API key' : `legacy service account ${config.DJANGO_INGEST_EMAIL}`}).`);
 }
 
 const shutdown = () => {

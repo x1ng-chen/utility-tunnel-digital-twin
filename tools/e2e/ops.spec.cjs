@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const webUrl = process.env.E2E_WEB_URL || 'http://127.0.0.1:5173';
+const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'local-admin-password-2026';
 
 function trackConsoleErrors(page) {
   const errors = [];
@@ -22,7 +23,7 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
   await expect(page.getByRole('heading', { name: /让每一米管廊/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '演示工作区' })).toHaveCount(0);
   await page.getByLabel('账号或邮箱').fill('admin');
-  await page.getByLabel('密码').fill('123');
+  await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
   await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
 
@@ -45,7 +46,7 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
 test('三维孪生在模型交付前仍可定位设备并展示告警状态', async ({ page }) => {
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
-  await page.getByLabel('密码').fill('123');
+  await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
   await page.getByRole('button', { name: '三维孪生' }).click();
   await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
@@ -73,7 +74,7 @@ test('三维孪生在模型交付前仍可定位设备并展示告警状态', as
 test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续选择设备', async ({ page }) => {
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
-  await page.getByLabel('密码').fill('123');
+  await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
   await page.getByRole('button', { name: '三维孪生' }).click();
   await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
@@ -120,7 +121,7 @@ test('账号密码登录后可读取运行数据并写入审计', async ({ page 
 test('操作反馈在页面上方显示并在两秒内自动关闭', async ({ page }) => {
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
-  await page.getByLabel('密码').fill('123');
+  await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
   await page.getByRole('button', { name: '↓ 导出运行快照' }).click();
   const notice = page.getByRole('status').filter({ hasText: '报表已生成' });
@@ -185,16 +186,14 @@ test('注册申请须经管理员批准后才能登录使用', async ({ page }) 
   await page.getByRole('button', { name: /提交注册申请/ }).click();
   await page.getByLabel('姓名或称呼').fill('值班运维员');
   await page.getByLabel('申请账号').fill(account);
-  await page.getByLabel('设置密码').fill(password);
-  await page.getByLabel('确认密码').fill(password);
   await page.getByRole('button', { name: '提交注册申请' }).click();
-  await expect(page.getByText('申请已提交，请等待管理员审批。审批通过后即可使用该账号登录。')).toBeVisible();
+  await expect(page.getByText('申请已提交。管理员批准后会向你提供一次性密码设置链接。')).toBeVisible();
   await page.getByRole('button', { name: /返回登录/ }).click();
 
   const adminPage = await page.context().newPage();
   await adminPage.goto(webUrl);
   await adminPage.getByLabel('账号或邮箱').fill('admin');
-  await adminPage.getByLabel('密码').fill('123');
+  await adminPage.getByLabel('密码').fill(adminPassword);
   await adminPage.getByRole('button', { name: /安全登录/ }).click();
   await adminPage.locator('.governance-nav summary').click();
   await adminPage.getByRole('button', { name: '系统配置' }).click();
@@ -202,8 +201,16 @@ test('注册申请须经管理员批准后才能登录使用', async ({ page }) 
   await expect(applicationRow).toBeVisible();
   await applicationRow.getByRole('button', { name: '批准并创建账号' }).click();
   await expect(applicationRow).toHaveCount(0);
+  const setupLink = await adminPage.locator('.inline-message[role="status"] a').getAttribute('href');
+  expect(setupLink).toBeTruthy();
   await adminPage.close();
 
+  await page.goto(setupLink);
+  await page.getByLabel('新密码').fill(password);
+  await page.getByLabel('确认密码').fill(password);
+  await page.getByRole('button', { name: '设置密码' }).click();
+  await expect(page.getByText('密码设置成功，请返回登录。')).toBeVisible();
+  await page.getByRole('button', { name: '返回登录' }).click();
   await page.getByLabel('账号或邮箱').fill(account);
   await page.getByLabel('密码').fill(password);
   await page.getByRole('button', { name: /安全登录/ }).click();
@@ -217,7 +224,7 @@ test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }
   const featureCode = `SEG-E2E-${suffix}`;
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
-  await page.getByLabel('密码').fill('123');
+  await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
   await page.locator('.governance-nav summary').click();
   await page.getByRole('button', { name: '资产配置' }).click();

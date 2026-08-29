@@ -51,7 +51,8 @@ client.interceptors.request.use((config) => {
 
 export const api = {
   login: (payload: { email: string; password: string }) => client.post('/auth/login/', payload),
-  requestRegistration: (payload: { account: string; displayName: string; role: 'operator' | 'viewer'; password: string }) => client.post('/auth/registration-requests/', payload),
+  requestRegistration: (payload: { account: string; displayName: string; role: 'operator' | 'viewer' }) => client.post('/auth/registration-requests/', payload),
+  setupRegistrationPassword: (token: string, password: string) => client.post(`/auth/registration-requests/setup/${encodeURIComponent(token)}/`, { password }),
   me: () => client.get('/auth/me/'),
   logout: () => client.post('/auth/logout/'),
   adminUsers: (params?: Record<string, string | number>) => client.get('/admin/users/', { params }),
@@ -83,6 +84,7 @@ export const api = {
   updateThreshold: (key: string, payload: Record<string, unknown>) => client.put(`/thresholds/${key}/`, payload),
   audit: (params?: Record<string, string | number>) => client.get('/audit/', { params }),
   report: (report: string, idempotencyKey?: string) => client.post('/report-exports/', { report }, { headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined }),
+  downloadReport: (id: number) => client.get(`/report-exports/${id}/download/`, { responseType: 'blob' }),
 };
 
 export function setApiBaseUrl(baseUrl: string): void {

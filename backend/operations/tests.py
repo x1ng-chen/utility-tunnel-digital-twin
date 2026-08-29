@@ -7,7 +7,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
@@ -83,7 +83,6 @@ class OperationsApiTests(TestCase):
             'account': 'new.operator',
             'displayName': '新运维员',
             'role': Profile.Role.OPERATOR,
-            'password': 'NewOperator!2026',
         }, format='json')
         self.assertEqual(application.status_code, 201)
         self.assertFalse(User.objects.filter(email='new.operator').exists())
@@ -95,14 +94,31 @@ class OperationsApiTests(TestCase):
         approved = self.client.patch(f'/api/admin/registration-requests/{request_id}/', {'status': 'approved'}, format='json')
         self.assertEqual(approved.status_code, 200)
         self.assertEqual(approved.json()['status'], RegistrationRequest.Status.APPROVED)
+        self.assertIn('setupToken', approved.json())
         created = User.objects.get(email='new.operator')
         self.assertEqual(created.profile.role, Profile.Role.OPERATOR)
+        self.assertFalse(created.is_active)
+        self.assertFalse(created.has_usable_password())
         self.client.credentials()
+        before_setup = self.client.post('/api/auth/login/', {'email': 'new.operator', 'password': 'NewOperator!2026'}, format='json')
+        self.assertEqual(before_setup.status_code, 401)
+        setup = self.client.post(
+            f"/api/auth/registration-requests/setup/{approved.json()['setupToken']}/",
+            {'password': 'NewOperator!2026'},
+            format='json',
+        )
+        self.assertEqual(setup.status_code, 200)
         login = self.client.post('/api/auth/login/', {'email': 'new.operator', 'password': 'NewOperator!2026'}, format='json')
         self.assertEqual(login.status_code, 200)
+        reused = self.client.post(
+            f"/api/auth/registration-requests/setup/{approved.json()['setupToken']}/",
+            {'password': 'AnotherStrong!2026'},
+            format='json',
+        )
+        self.assertEqual(reused.status_code, 400)
         self.assertTrue(AuditLog.objects.filter(action='registration.approved').exists())
 
-    def test_registration_rejects_a_numeric_weak_password(self):
+    def test_registration_rejects_password_material(self):
         response = self.client.post('/api/auth/registration-requests/', {
             'account': 'weak-password.operator',
             'displayName': '弱口令测试账号',
@@ -128,6 +144,25 @@ class OperationsApiTests(TestCase):
         self.assertEqual(created.status_code, 409)
         promoted = self.client.patch(f'/api/admin/users/{self.operator.pk}/', {'role': Profile.Role.ADMINISTRATOR}, format='json')
         self.assertEqual(promoted.status_code, 409)
+
+    @override_settings(
+        INGEST_API_KEY='test-ingest-key-that-is-at-least-thirty-two-characters',
+        INGEST_PRINCIPAL_USERNAME='service-iotda-admin-boundary',
+    )
+    def test_machine_principal_is_not_managed_as_a_human_user(self):
+        call_command('configure_ingest_principal', verbosity=0)
+        principal = User.objects.get(username='service-iotda-admin-boundary')
+        self.auth(self.admin)
+        listing = self.client.get('/api/admin/users/?pageSize=100')
+        self.assertEqual(listing.status_code, 200)
+        self.assertNotIn(principal.pk, [item['id'] for item in listing.json()['items']])
+        self.assertEqual(self.client.patch(f'/api/admin/users/{principal.pk}/', {'isActive': False}, format='json').status_code, 403)
+        self.assertEqual(self.client.post('/api/admin/users/', {
+            'email': 'fake-ingest@example.com',
+            'displayName': '伪造机器账号',
+            'password': 'FakeIngestPassword!2026',
+            'role': Profile.Role.INGEST,
+        }, format='json').status_code, 400)
 
     def test_superuser_login_returns_administrator_role(self):
         superuser = User.objects.create_superuser(username='login-root@example.com', email='login-root@example.com', password='root-password-2026')
@@ -166,6 +201,10 @@ class OperationsApiTests(TestCase):
         report = self.client.post('/api/report-exports/', {'report': 'daily'}, format='json')
         self.assertEqual(report.status_code, 201)
         self.assertEqual(report.json()['reportType'], 'daily')
+        download = self.client.get(f"/api/report-exports/{report.json()['id']}/download/")
+        self.assertEqual(download.status_code, 200)
+        self.assertEqual(download['Content-Type'], 'text/csv; charset=utf-8')
+        self.assertIn('assets_total', download.content.decode('utf-8-sig'))
         self.assertEqual(self.client.get('/api/report-exports/').status_code, 200)
         self.assertEqual(self.client.get('/api/assets/?pageSize=not-a-number').status_code, 400)
         self.assertEqual(self.client.get('/api/assets/?status=broken').status_code, 400)
@@ -359,6 +398,33 @@ class OperationsApiTests(TestCase):
         self.auth(viewer)
         self.assertEqual(self.client.post('/api/telemetry/', {'readings': []}, format='json').status_code, 403)
         self.assertIn('idempotency-key', settings.CORS_ALLOW_HEADERS)
+
+    @override_settings(
+        INGEST_API_KEY='test-ingest-key-that-is-at-least-thirty-two-characters',
+        INGEST_PRINCIPAL_USERNAME='service-iotda-test',
+    )
+    def test_ingest_api_key_is_scoped_to_telemetry_post(self):
+        call_command('configure_ingest_principal', verbosity=0)
+        principal = User.objects.get(username='service-iotda-test')
+        self.assertFalse(principal.has_usable_password())
+        self.assertEqual(principal.profile.role, Profile.Role.INGEST)
+        reading = {
+            'eventId': 'evt-machine-principal',
+            'assetCode': self.asset.code,
+            'metricKey': 'vibration.alarm',
+            'metric': '振动锁存',
+            'value': 0,
+            'unit': 'bool',
+            'quality': 'good',
+            'recordedAt': timezone.now().isoformat(),
+        }
+        self.client.credentials(HTTP_X_INGEST_KEY=settings.INGEST_API_KEY)
+        created = self.client.post('/api/telemetry/', {'readings': [reading]}, format='json')
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(self.client.get('/api/telemetry/').status_code, 403)
+        self.assertEqual(self.client.get('/api/assets/').status_code, 403)
+        self.client.credentials(HTTP_X_INGEST_KEY='wrong-key')
+        self.assertEqual(self.client.post('/api/telemetry/', {'readings': [reading]}, format='json').status_code, 401)
 
     def test_malformed_object_payloads_return_400_instead_of_500(self):
         self.auth(self.operator)

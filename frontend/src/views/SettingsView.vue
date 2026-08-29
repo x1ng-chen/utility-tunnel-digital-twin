@@ -17,6 +17,7 @@ const usersError = ref('');
 const applications = ref<RegistrationRequest[]>([]);
 const applicationsLoading = ref(false);
 const applicationsError = ref('');
+const approvedSetupLink = ref('');
 
 watch(() => store.thresholds.map((item) => ({ key: item.key, warning: item.warning, alarm: item.alarm })), (items) => {
   items.forEach((item) => {
@@ -78,8 +79,12 @@ async function loadApplications() {
 
 async function reviewApplication(application: RegistrationRequest, nextStatus: 'approved' | 'rejected') {
   applicationsError.value = '';
+  approvedSetupLink.value = '';
   try {
-    await api.reviewRegistrationRequest(application.id, { status: nextStatus });
+    const response = await api.reviewRegistrationRequest(application.id, { status: nextStatus });
+    if (nextStatus === 'approved' && response.data.setupToken) {
+      approvedSetupLink.value = `${window.location.origin}/login?setupToken=${encodeURIComponent(response.data.setupToken)}`;
+    }
     applications.value = applications.value.filter((item) => item.id !== application.id);
     await loadUsers();
   } catch (cause: unknown) { applicationsError.value = cause instanceof Error ? cause.message : '账号申请处理失败'; }
@@ -110,6 +115,7 @@ watch([() => store.source, () => auth.user?.role], () => { void loadUsers(); voi
     </section>
     <section v-if="auth.user?.role === 'administrator'" class="settings-panel user-settings-panel">
       <div class="settings-head"><span>账号申请审批</span><small>仅管理员可批准运维员和查看者账号</small></div>
+      <div v-if="approvedSetupLink" class="inline-message" role="status">一次性密码设置链接（仅显示本次）：<a :href="approvedSetupLink">{{ approvedSetupLink }}</a></div>
       <div v-if="applicationsLoading" class="empty-state">正在加载账号申请…</div>
       <div v-else-if="applicationsError" class="inline-message error-message" role="alert">{{ applicationsError }}</div>
       <div v-else-if="!applications.length" class="empty-state">当前没有待审批的账号申请。</div>

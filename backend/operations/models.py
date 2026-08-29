@@ -9,6 +9,7 @@ class Profile(models.Model):
         ADMINISTRATOR = 'administrator', '管理员'
         OPERATOR = 'operator', '运维员'
         VIEWER = 'viewer', '查看者'
+        INGEST = 'ingest', '遥测接入服务'
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     display_name = models.CharField(max_length=80, blank=True)
@@ -19,7 +20,7 @@ class Profile(models.Model):
 
 
 class RegistrationRequest(models.Model):
-    """A password-hashed account application. Approval creates the actual user."""
+    """A password-free account application. Approval creates a setup invite."""
 
     class Status(models.TextChoices):
         PENDING = 'pending', '待审批'
@@ -32,7 +33,9 @@ class RegistrationRequest(models.Model):
         (Profile.Role.OPERATOR, '运维员'),
         (Profile.Role.VIEWER, '查看者'),
     ])
-    password_hash = models.CharField(max_length=128, editable=False)
+    setup_token_hash = models.CharField(max_length=64, blank=True, editable=False)
+    setup_expires_at = models.DateTimeField(null=True, blank=True, editable=False)
+    password_set_at = models.DateTimeField(null=True, blank=True, editable=False)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     review_note = models.CharField(max_length=300, blank=True)
     reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_registration_requests')

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createServer } from 'node:http';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createDjangoForwarder, DJANGO_UNIT_MAP, toDjangoBatch } from '../src/django.js';
+import { Outbox } from '../src/outbox.js';
 
 const RECEIVED_AT = new Date('2026-08-29T08:00:00Z');
 const EVENT_ID_PATTERN = /^[A-Za-z0-9._:-]{1,80}$/;
@@ -118,6 +122,14 @@ test('keeps eventIds inside the 80 character contract for long device ids', () =
   assert.match(batch.readings[0].eventId, EVENT_ID_PATTERN);
 });
 
+test('uses stable but collision-resistant eventIds for frames in the same millisecond', () => {
+  const first = toDjangoBatch(singleReading(1), { deviceId: 'CTRL-01', receivedAt: RECEIVED_AT });
+  const redelivery = toDjangoBatch(singleReading(1), { deviceId: 'CTRL-01', receivedAt: RECEIVED_AT });
+  const differentPayload = toDjangoBatch(singleReading(2), { deviceId: 'CTRL-01', receivedAt: RECEIVED_AT });
+  assert.equal(first.readings[0].eventId, redelivery.readings[0].eventId);
+  assert.notEqual(first.readings[0].eventId, differentPayload.readings[0].eventId);
+});
+
 test('delivers telemetry to the Django ingest API with a service account', async () => {
   const server = await startServer((record, response) => {
     if (record.url === '/api/auth/login/') {
@@ -142,6 +154,26 @@ test('delivers telemetry to the Django ingest API with a service account', async
     assert.equal(telemetryCalls[0].headers.authorization, 'Bearer token-1');
     assert.equal(telemetryCalls[0].body.readings.length, 4);
     assert.equal(forwarder.counters.queued, 0);
+    forwarder.close();
+  } finally {
+    server.server.close();
+  }
+});
+
+test('delivers telemetry with the scoped ingest API key without logging in', async () => {
+  const apiKey = 'test-ingest-key-that-is-longer-than-32-characters';
+  const server = await startServer((record, response) => {
+    assert.notEqual(record.url, '/api/auth/login/');
+    assert.equal(record.headers['x-ingest-key'], apiKey);
+    assert.equal(record.headers.authorization, undefined);
+    response.writeHead(201, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ items: [], created: record.body.readings.length, duplicates: 0, rules: {} }));
+  });
+  try {
+    const forwarder = createDjangoForwarder({ baseUrl: server.baseUrl, apiKey });
+    forwarder.forward(singleReading(22), RECEIVED_AT);
+    await waitFor(() => forwarder.counters.delivered === 1);
+    assert.equal(forwarder.counters.logins, 0);
     forwarder.close();
   } finally {
     server.server.close();
@@ -256,6 +288,33 @@ test('replays the same eventIds after a concurrency conflict', async () => {
   }
 });
 
+test('dead-letters an idempotency conflict instead of retrying forever', async () => {
+  const server = await startServer((record, response) => {
+    if (record.url === '/api/auth/login/') {
+      loginResponse(response, 'token-1');
+      return;
+    }
+    response.writeHead(409, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ error: 'idempotency_conflict', message: 'eventId belongs to another payload' }));
+  });
+  try {
+    const forwarder = createDjangoForwarder({
+      baseUrl: server.baseUrl,
+      email: 'gateway@example.com',
+      password: 'secret',
+      retryDelayMs: 10,
+      maxRetryDelayMs: 20,
+    });
+    forwarder.forward(singleReading(1), RECEIVED_AT);
+    await waitFor(() => forwarder.counters.deadLetters === 1 && forwarder.counters.queued === 0);
+    assert.equal(server.seen.filter((record) => record.url === '/api/telemetry/').length, 1);
+    assert.equal(forwarder.counters.retries, 0);
+    forwarder.close();
+  } finally {
+    server.server.close();
+  }
+});
+
 test('drops a batch rejected with a validation error and keeps the lane flowing', async () => {
   let rejected = true;
   const server = await startServer((record, response) => {
@@ -324,5 +383,43 @@ test('drops the oldest batch when the retry queue overflows', async () => {
     forwarder.close();
   } finally {
     server.server.close();
+  }
+});
+
+test('replays a durable SQLite outbox after a gateway restart', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ut-iotda-outbox-'));
+  const queueDbPath = join(directory, 'outbox.sqlite');
+  let available = false;
+  const server = await startServer((record, response) => {
+    if (record.url === '/api/auth/login/') {
+      loginResponse(response, 'token-1');
+      return;
+    }
+    if (!available) {
+      response.writeHead(503, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ error: 'unavailable' }));
+      return;
+    }
+    response.writeHead(201, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ items: [], created: record.body.readings.length, duplicates: 0, rules: {} }));
+  });
+  try {
+    const first = createDjangoForwarder({ baseUrl: server.baseUrl, email: 'gateway@example.com', password: 'secret', queueDbPath, retryDelayMs: 1000 });
+    first.forward(singleReading(31), RECEIVED_AT);
+    await waitFor(() => first.counters.queued === 1 && first.counters.retries === 1);
+    first.close();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const inspection = new Outbox(queueDbPath);
+    assert.equal(inspection.count(), 1);
+    inspection.close();
+
+    available = true;
+    const second = createDjangoForwarder({ baseUrl: server.baseUrl, email: 'gateway@example.com', password: 'secret', queueDbPath, retryDelayMs: 10 });
+    await waitFor(() => second.counters.delivered === 1 && second.counters.queued === 0);
+    second.close();
+  } finally {
+    server.server.close();
+    try { rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 }); } catch { /* Windows may retain a transient WAL handle. */ }
   }
 });

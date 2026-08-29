@@ -273,10 +273,15 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function createReport(report: ReportKind) {
-    if (source.value === 'api') await runApiMutation(() => api.report(report, requestKey('report')));
-    downloadReport(report);
-    if (source.value === 'demo') appendAudit('report.export', 'report_export', report, { report, format: 'csv' });
-    else await syncAudit();
+    if (source.value === 'api') {
+      const record = await runApiMutation(() => api.report(report, requestKey('report')));
+      const exported = await api.downloadReport(record.data.id);
+      downloadBlob(exported.data, record.data.fileName || `utility-tunnel-${report}.csv`);
+      await syncAudit();
+    } else {
+      downloadReport(report);
+      appendAudit('report.export', 'report_export', report, { report, format: 'csv' });
+    }
     notice.value = `${report} 报表已生成`;
   }
 
@@ -342,6 +347,13 @@ export const useOperationsStore = defineStore('operations', () => {
     const csv = `\uFEFF${[headers, ...rows.map((row) => headers.map((header) => row[header as keyof typeof row]))].map((row) => row.map((value) => csvCell(value)).join(',')).join('\r\n')}`;
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a'); link.href = url; link.download = `utility-tunnel-${report}-${new Date().toISOString().slice(0, 10)}.csv`; link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  function downloadBlob(blob: Blob, fileName: string) {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); link.href = url; link.download = fileName; link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 

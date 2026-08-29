@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { Outbox } from './outbox.js';
 
 // The STM32 reports units from the fixed device enum in the README
 // (degC, %RH, ...). Django thresholds store display units (°C), and a
@@ -35,7 +36,15 @@ function normalizeRecordedAt(telemetry, receivedAt) {
 
 export function toDjangoBatch(telemetry, { deviceId = 'CTRL-01', receivedAt = new Date() } = {}) {
   const recordedAt = normalizeRecordedAt(telemetry, receivedAt);
-  const idBase = `gw:${shortDeviceId(deviceId)}:${receivedAt.getTime()}`;
+  // A content-derived frame id is stable across MQTT redelivery while still
+  // distinguishing different payloads received in the same millisecond.
+  // Keep the digest compact so the per-reading suffix remains under Django's
+  // 80-character eventId contract.
+  const frameDigest = createHash('sha256')
+    .update(JSON.stringify({ deviceId, recordedAt, readings: telemetry.readings }))
+    .digest('hex')
+    .slice(0, 24);
+  const idBase = `gw:${shortDeviceId(deviceId)}:${frameDigest}`;
   const readings = [];
   const skipped = [];
   telemetry.readings.forEach((reading, index) => {
@@ -72,23 +81,27 @@ export function createDjangoForwarder({
   baseUrl,
   email,
   password,
+  apiKey,
   deviceId = 'CTRL-01',
   fetchImpl = fetch,
   timeoutMs = 5000,
   retryDelayMs = 2000,
   maxRetryDelayMs = 60000,
   queueMax = 150,
+  queueDbPath = ':memory:',
   log = console,
 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required.');
-  if (!email || !password) throw new Error('email and password are required.');
+  if (!apiKey && (!email || !password)) throw new Error('apiKey or email and password are required.');
 
+  const outbox = new Outbox(queueDbPath, queueMax);
   const state = {
     token: null,
-    queue: [],
     timer: null,
     flushing: false,
     stopped: false,
+    closePending: false,
+    currentItemId: null,
     retryDelay: retryDelayMs,
   };
   const counters = {
@@ -96,12 +109,14 @@ export function createDjangoForwarder({
     duplicates: 0,
     rulesTriggered: 0,
     dropped: 0,
-    queued: 0,
+    queued: outbox.count(),
     retries: 0,
     logins: 0,
+    deadLetters: 0,
   };
 
   async function login() {
+    if (apiKey) return;
     const response = await fetchImpl(`${baseUrl}/api/auth/login/`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -125,7 +140,7 @@ export function createDjangoForwarder({
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        authorization: `Bearer ${state.token}`,
+        ...(apiKey ? { 'x-ingest-key': apiKey } : { authorization: `Bearer ${state.token}` }),
       },
       body: JSON.stringify(batch),
       signal: AbortSignal.timeout(timeoutMs),
@@ -147,8 +162,9 @@ export function createDjangoForwarder({
   }
 
   function dropHead(reason) {
-    const item = state.queue.shift();
+    const item = outbox.peek();
     if (!item) return;
+    outbox.delete(item.id);
     counters.dropped += 1;
     log.error(`Django batch dropped (${reason}): ${JSON.stringify(item.batch.readings.map((reading) => `${reading.assetCode}/${reading.metricKey}`))}`);
   }
@@ -157,11 +173,13 @@ export function createDjangoForwarder({
     if (state.flushing || state.stopped) return;
     state.flushing = true;
     try {
-      while (state.queue.length && !state.stopped) {
-        const item = state.queue[0];
+      while (outbox.count() && !state.stopped) {
+        const item = outbox.peek();
+        if (!item) break;
+        state.currentItemId = item.id;
         let response;
         try {
-          if (!state.token) await login();
+          if (!apiKey && !state.token) await login();
           response = await postTelemetry(item.batch);
         } catch (error) {
           log.error(`Django request failed, will retry: ${error instanceof Error ? error.message : error}`);
@@ -169,7 +187,7 @@ export function createDjangoForwarder({
           break;
         }
 
-        if (response.status === 401) {
+        if (response.status === 401 && !apiKey) {
           // Token expired (platform TTL is 15 minutes by default): drop the
           // cached token, re-login and replay the same batch once.
           state.token = null;
@@ -189,7 +207,7 @@ export function createDjangoForwarder({
         }
 
         if (response.ok) {
-          state.queue.shift();
+          outbox.delete(item.id);
           resetBackoff();
           counters.delivered += item.batch.readings.length;
           const body = await response.json().catch(() => ({}));
@@ -200,14 +218,20 @@ export function createDjangoForwarder({
             : 0;
           counters.duplicates += duplicates;
           if (rules) counters.rulesTriggered += rules;
-          log.info(`Django stored ${created} reading(s) (duplicates ${duplicates}, queued ${state.queue.length}).`);
+          log.info(`Django stored ${created} reading(s) (duplicates ${duplicates}, queued ${outbox.count()}).`);
           continue;
         }
 
         if (response.status === 409) {
-          // Concurrent write conflict: replaying the same eventIds is safe
-          // because the platform treats them as duplicates.
-          log.warn('Django reported a conflict, will replay the same batch.');
+          const details = await response.json().catch(() => ({}));
+          if (details.error === 'idempotency_conflict') {
+            counters.deadLetters += 1;
+            dropHead(`idempotency conflict ${JSON.stringify(details).slice(0, 300)}`);
+            continue;
+          }
+          // A database concurrency conflict is safe to retry because the
+          // exact queued batch retains its original eventIds.
+          log.warn(`Django reported a transient conflict, will replay the same batch: ${JSON.stringify(details).slice(0, 300)}`);
           scheduleRetry();
           break;
         }
@@ -226,7 +250,9 @@ export function createDjangoForwarder({
       }
     } finally {
       state.flushing = false;
-      counters.queued = state.queue.length;
+      state.currentItemId = null;
+      counters.queued = outbox.count();
+      if (state.closePending) outbox.close();
     }
   }
 
@@ -237,11 +263,12 @@ export function createDjangoForwarder({
       log.warn(`Django reading skipped (${item.reason}): ${item.assetCode}/${item.metric}`);
     }
     if (!batch.readings.length) return;
-    state.queue.push({ batch, receivedAt: receivedAt.toISOString() });
-    while (state.queue.length > queueMax) {
-      dropHead('queue overflow');
+    const overflow = outbox.enqueue(batch, receivedAt.toISOString(), state.currentItemId);
+    for (const item of overflow) {
+      counters.dropped += 1;
+      log.error(`Django batch dropped (queue overflow): ${JSON.stringify(item.batch.readings.map((reading) => `${reading.assetCode}/${reading.metricKey}`))}`);
     }
-    counters.queued = state.queue.length;
+    counters.queued = outbox.count();
     void flush();
   }
 
@@ -251,7 +278,13 @@ export function createDjangoForwarder({
       clearTimeout(state.timer);
       state.timer = null;
     }
+    if (state.flushing) state.closePending = true;
+    else outbox.close();
   }
 
+  if (counters.queued) {
+    log.info(`Django outbox restored ${counters.queued} queued batch(es).`);
+    setTimeout(() => { void flush(); }, 0);
+  }
   return { forward, close, counters, toDjangoBatch: (telemetry, options) => toDjangoBatch(telemetry, { deviceId, ...options }) };
 }

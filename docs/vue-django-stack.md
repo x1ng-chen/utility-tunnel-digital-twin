@@ -2,7 +2,7 @@
 
 本仓库新增一套可独立部署的标准前后端实现，用于把软件平台从浏览器演示逐步切换为企业级应用：
 
-- `frontend/`：Vue 3、Vite、TypeScript、Pinia、Vue Router、Axios；支持本地演示和 Django API 两种数据源。
+- `frontend/`：Vue 3、Vite、TypeScript、Pinia、Vue Router、Axios；通过 `VITE_API_BASE_URL` 使用唯一的 Django API 数据源。
 - `backend/`：Django 4.2、Django REST Framework、Token Bearer 认证、RBAC、PostgreSQL（未配置时本地回退 SQLite）。
 - `frontend/`、`backend/`、`firmware/`、`deploy/` 与既有规划文档构成当前交付基线；旧版 React/Node 兼容代码已归档移除，历史版本可通过 Git 提交记录追溯。
 
@@ -14,18 +14,18 @@
 cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install --require-hashes -r requirements.lock
 Copy-Item .env.example .env
 python manage.py migrate
 python manage.py seed_demo
 python manage.py runserver 127.0.0.1:8000
 ```
 
-默认演示管理员由 `seed_demo` 创建，账号为 `admin`、密码为 `123`，仅可用于本地演示。生产环境必须替换密码、密钥、允许主机和 `DATABASE_URL`。
+`seed_demo` 创建的账号与口令只供隔离的本地演示和自动化回归使用，不得在可联网或生产环境执行该命令。生产账号应通过审批与一次性密码设置链接创建，密钥、允许主机和 `DATABASE_URL` 必须从受控环境注入。
 
 ### API 安全与运行检查
 
-- Bearer Token 默认有效期 15 分钟（`API_TOKEN_TTL_SECONDS`），过期令牌会被拒绝并在下一次登录时轮换；生产环境建议使用 5–15 分钟并配合网关刷新策略。
+- 人员账号的 Bearer Token 默认有效期 15 分钟（`API_TOKEN_TTL_SECONDS`），过期令牌会被拒绝并在下一次登录时轮换。IoTDA 网关改用仅限遥测写入的 `DJANGO_INGEST_API_KEY`，不持有人类账号密码。
 - 登录接口按客户端地址限流（`LOGIN_RATE_LIMIT`，默认每分钟 10 次），默认只使用 TCP 对端地址；仅在反向代理已覆盖并可信时设置 `DJANGO_TRUST_PROXY_HEADERS=true` 以读取 `X-Forwarded-For`。多实例部署时应把 Django 缓存切换到共享 DatabaseCache、Redis 或 Memcached，并在网关再设置一层限流。
 - `DJANGO_ENV` 只接受 `development`、`test` 或 `production`；生产环境会强制关闭调试、拒绝 SQLite 回退，并要求 PostgreSQL `sslmode=require`/`verify-ca`/`verify-full`，同时启用 HTTPS 重定向、HSTS 与安全 Cookie。生产环境的 `CORS_ALLOWED_ORIGINS`、`DJANGO_CSRF_TRUSTED_ORIGINS` 必须精确填写正式 HTTPS 前端 Origin，`DJANGO_ALLOWED_HOSTS` 不得使用通配符且共享缓存必须显式配置。
 - `DATABASE_URL` 必须包含 PostgreSQL 主机、用户名和数据库名；`DB_CONN_MAX_AGE` 必须为非负整数。配置不完整或格式错误时 Django 会在启动阶段 fail fast。
@@ -41,7 +41,7 @@ npm install
 npm run dev
 ```
 
-复制 `.env.example` 为 `.env.local` 后可设置 `VITE_API_BASE_URL=http://127.0.0.1:8000/api`。登录页可切换“演示工作区”和“Django API”；API 模式的令牌只用于当前本地会话存储，所有写操作仍由服务端 RBAC 再次校验。API 地址禁止内嵌账号密码、查询参数或片段；CSV 导出会中和公式前缀，避免电子表格公式注入。
+复制 `.env.example` 为 `.env.local` 后设置 `VITE_API_BASE_URL=http://127.0.0.1:8000/api`。登录页只连接该构建时地址；人员令牌保存在当前浏览器会话的 `sessionStorage`，所有写操作仍由服务端 RBAC 再次校验。服务端 CSV 导出会中和公式前缀并覆盖完整查询，不受页面分页限制。
 
 ## 质量门禁
 

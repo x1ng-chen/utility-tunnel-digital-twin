@@ -11,7 +11,7 @@
 
 ```bash
 cd backend
-python -m pip install -r requirements.txt
+python -m pip install --require-hashes -r requirements.lock
 python manage.py migrate
 python manage.py seed_demo
 ```
@@ -53,7 +53,7 @@ python manage.py production_preflight
 
 ## 3. 前端
 
-部署 `frontend` 后设置公开变量 `VITE_API_BASE_URL=https://<你的-api-domain>/api`；这只能是 API 地址，绝不能放入数据库 URL、密码或 Token。若未设置，站点默认使用本地演示模式。Django 的 `CORS_ALLOWED_ORIGINS` 必须精确允许该前端 Origin。
+构建 `frontend` 时设置公开变量 `VITE_API_BASE_URL=https://<你的-api-domain>/api`；这只能是 API 地址，绝不能放入数据库 URL、密码或 Token。未设置时仅回退到本机开发地址，不提供浏览器演示数据。Django 的 `CORS_ALLOWED_ORIGINS` 必须精确允许该前端 Origin。
 
 ### 容器化制品
 

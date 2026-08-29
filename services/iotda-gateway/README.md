@@ -3,14 +3,14 @@
 该服务订阅本地 `ut/v1/CTRL-01/telemetry`，校验 `ut.telemetry.v1` 报文后**双路输出**：
 
 1. **云端路**：通过 `mqtts://<IoTDA接入域名>:8883` 上报到华为云设备消息 Topic。IoTDA 下行消息和命令会转发到本地 `ut/v1/CTRL-01/cmd/iotda`。
-2. **平台路**：将同一条遥测映射为 Django 批量契约报文，用专用服务账号登录后 `POST /api/telemetry/` 幂等入库，由后端触发阈值告警、审计与工单闭环。适配器不绕过 API、不直接访问数据库。
+2. **平台路**：将同一条遥测映射为 Django 批量契约报文，使用仅限遥测写入的机器 API Key `POST /api/telemetry/` 幂等入库，由后端触发阈值告警、审计与工单闭环。适配器不绕过 API、不直接访问数据库。
 
 两路相互独立、可单独关闭（`IOTDA_ENABLED=false` 或不配置 `DJANGO_API_URL`），但至少要保留一路，否则启动即报错。
 
 ## 使用
 
 1. 在华为云 IoTDA 创建产品和密钥鉴权设备，记录设备 ID、设备密钥和实例“接入信息”中的设备接入域名。
-2. 为平台路创建一个**专用运维员服务账号**（如 `gateway@example.com`，通过管理员在「用户管理」中创建；不要复用个人账号）。运维员及以上角色才有遥测写入权限。
+2. 在 Django 端运行 `python manage.py configure_ingest_principal`，并从密钥管理系统向后端和网关注入同一个至少 32 字符的 `DJANGO_INGEST_API_KEY`。该机器身份不能读取平台数据或操作告警/工单。
 3. 将 `.env.example` 复制为 `.env` 并填写；`.env` 已被仓库忽略。
 4. 执行 `npm ci`，再执行 `npm start`。
 
@@ -21,10 +21,10 @@
 
 ## 平台路（Django 转发）细节
 
-- **认证**：服务账号调用 `/api/auth/login/` 获取 Bearer Token；平台令牌默认 15 分钟过期，网关遇到 401 会自动重新登录并重放当前批次。
+- **认证**：使用 `X-Ingest-Key` 机器凭据，权限仅覆盖 `POST /api/telemetry/`。邮箱/密码方式只作为迁移兼容，不应继续用于新部署。
 - **字段映射**：`assetCode` 大写归一化；`metric`（设备侧指标键）作为 `metricKey`；显示名与单位按固定映射表转换（如 `degC` → `°C`，`temperature` → `环境温度`），与 `seed_demo` 的阈值单位保持一致；设备未提供 `ts` 时使用网关接收时间作为 `recordedAt`。
-- **幂等**：每条读数的 `eventId` 形如 `gw:CTRL-01:<接收毫秒时间戳>:<序号>`，同一条 MQTT 消息重试复用同一编号；重放已入库事件只会增加 `duplicates`，不会重复写库。
-- **失败处理**：网络错误、5xx、429 和并发 409 进入有界重试队列（默认 150 批，指数退避，最多保留约 5 分钟的 2 秒周期数据，溢出丢弃最旧批次）；4xx 校验错误不会自愈，直接丢弃并记录错误，保证实时车道不被堵死。
+- **幂等**：每帧以设备 ID、业务时间和完整 readings 计算 SHA-256 摘要，再为各读数附加序号；同毫秒不同载荷不会碰撞，MQTT 重投同一载荷仍复用编号。
+- **失败处理**：批次先写入 `DJANGO_QUEUE_DB` 指定的 SQLite/WAL outbox；进程重启后会自动续传。网络错误、5xx、429 和普通并发 409 进入指数退避重试；`idempotency_conflict` 直接进入死信计数，不会无限阻塞队列；其他不可恢复 4xx 丢弃并记录错误。
 - **观察性**：每批成功/重试/丢弃都会输出日志；`Django stored N reading(s) (duplicates X, queued Y)` 即为平台路心跳。
 
 ## 联调冒烟

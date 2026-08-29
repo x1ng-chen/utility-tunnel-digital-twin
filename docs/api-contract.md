@@ -82,6 +82,7 @@
 | `GET` | `/audit/` | 登录 | `action`、`search`（动作、资源类型/编号或操作者邮箱）、`occurredFrom`、`occurredTo`、`page`、`pageSize` |
 | `GET` | `/report-exports/` | 登录 | 导出操作记录 |
 | `POST` | `/report-exports/` | 登录 | 创建 `{ report: alerts\|workOrders\|assets\|daily }`；可提供 `Idempotency-Key` 防止重复登记 |
+| `GET` | `/report-exports/{id}/download/` | 创建者/管理员 | 服务端对完整数据库查询生成 UTF-8 CSV；执行公式注入防护，不受前端分页限制 |
 
 ## 角色边界
 

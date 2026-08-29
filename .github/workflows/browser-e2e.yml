@@ -44,12 +44,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: backend/requirements.lock
       - name: Install application dependencies
         run: |
           npm ci --prefix frontend
           python -m pip install --upgrade pip
-          python -m pip install -r backend/requirements.txt
+          python -m pip install --require-hashes -r backend/requirements.lock
       - name: Start isolated test services
         shell: bash
         run: |

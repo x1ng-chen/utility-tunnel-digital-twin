@@ -189,7 +189,7 @@ flowchart TB
 | 消息协议 | MQTT 3.1.1 / Eclipse Mosquitto | 遥测使用 QoS 0；命令、报警与状态使用 QoS 1 |
 | 后端 | Django 4.2 + Django REST Framework | 正式主软件栈，提供 Token 认证、RBAC、业务状态机、审计和 API |
 | 数据库 | PostgreSQL（正式）/ SQLite（本地开发回退） | 资产、遥测、告警、工单、配置与审计的唯一主数据库 |
-| 前端 | Vue 3 + TypeScript + Vite | 正式主软件栈，提供本地演示与 Django API 数据源切换 |
+| 前端 | Vue 3 + TypeScript + Vite | 正式主软件栈，通过构建时 `VITE_API_BASE_URL` 连接 Django API |
 | 数字孪生 | Vue 3 + Three.js / GLB，二维模型降级 | 已完成三维场景、资产绑定、状态联动、模型失败降级与绑定完整性校验；正式模型待交付验收 |
 | GIS | Leaflet 1.9.4 + WGS84 GeoJSON | 独立显示实物模块位置、坐标来源和固件接入状态；空间对象经导入、审核、发布与审计后进入运维地图，演示坐标与现场测绘严格区分 |
 | 资产主数据 | Vue 3 + Django 事务 API | 管理员维护设备身份、能力、孪生/GIS 坐标和生命周期；乐观锁、停用保护与审计留痕 |
@@ -218,7 +218,7 @@ flowchart TB
 - 单位：`degC`、`%RH`、`%LEL`、`ppm`、`%VOL`、`rpm`、`A` 等固定枚举。
 - QoS 1 消息：使用 `eventId` 或 `cmdId` 去重。
 
-详细 JSON 报文、I/O 分配和数据库设计以 [V3.3 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.3_精简云数据架构版.docx)、[可信遥测接入说明](docs/实时遥测接入说明.md)与对应代码为准；文档冲突时以已验证代码和最新实施记录为准。
+详细 JSON 报文、I/O 分配和数据库设计以 [V3.4 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.4_当前进度与执行计划版.docx)、[可信遥测接入说明](docs/实时遥测接入说明.md)与对应代码为准；文档冲突时以已验证代码和最新实施记录为准。
 
 ## 项目结构
 
@@ -261,17 +261,30 @@ utility-tunnel-digital-twin/
 
 ## 快速开始
 
-### 软件演示（无需硬件）
+### 软件演示（无需硬件，需要本地 API）
 
 ```bash
 git clone https://github.com/x1ng-chen/utility-tunnel-digital-twin.git
 cd utility-tunnel-digital-twin
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install --require-hashes -r requirements.lock
+Copy-Item .env.example .env
+python manage.py migrate
+python manage.py seed_demo
+python manage.py runserver 127.0.0.1:8000
+```
+
+另开终端启动前端：
+
+```powershell
 cd frontend
 npm ci
 npm run dev
 ```
 
-浏览器打开终端提示的本地地址即可体验告警确认、工单闭环、设备筛选、数字孪生定位、角色权限、审计和 CSV/JSON 导出。演示模式数据仅保留在当前页面运行期；选择 Django API 模式后，业务数据统一由 Django 写入 PostgreSQL（本地开发可回退 SQLite）。详细配置见 [软件平台说明](docs/software-platform.md) 与 [API 契约](docs/api-contract.md)。
+浏览器打开终端提示的地址，使用 `seed_demo` 配置的本地账号登录。告警、工单、资产、审计与完整 CSV 报表均通过 Django API；本地开发默认使用 SQLite，生产环境强制 PostgreSQL。详细配置见 [软件平台说明](docs/software-platform.md) 与 [API 契约](docs/api-contract.md)。
 
 ### STM32 台架固件
 
@@ -280,7 +293,7 @@ npm run dev
 克隆后建议阅读：
 
 1. [软件平台说明](docs/software-platform.md)
-2. [V3.3 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.3_精简云数据架构版.docx)
+2. [V3.4 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.4_当前进度与执行计划版.docx)
 3. [STM32F103RCT6 台架固件说明](firmware/stm32f103rct6/README.md)
 4. 本 README 中的范围、安全要求和协作规范
 

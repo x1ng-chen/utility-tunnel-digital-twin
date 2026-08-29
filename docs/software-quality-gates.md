@@ -43,7 +43,7 @@ Django 运行日志为依赖无关的 JSON 结构，包含请求耗时和关联 
 
 `.github/workflows/browser-e2e.yml` 已在 GitHub Actions 中使用临时浏览器运行器执行真实浏览器回归，不向开发电脑或项目依赖写入浏览器包。该工作流会启动隔离的 Django 与 Vue 服务，并验证以下路径：
 
-1. 打开前端登录页，使用演示工作区进入运行总览。
+1. 启动本地 Django、执行 `seed_demo`，再从前端登录进入运行总览。
 2. 进入设备台账，确认四个空间节点渲染；点击 `SEEP-W01`，详情面板应显示 `关注`、坐标 `70, 68`、1 条待处置告警和 1 个关联工单。
 3. 搜索不存在的编码，确认地图节点和详情区进入空态；清空搜索后列表恢复。
 4. 退出，切换 Django API，使用 `operator@example.com / demo-password-2026` 登录；确认仪表盘显示 `Django API`、审计流出现 `auth.login`。

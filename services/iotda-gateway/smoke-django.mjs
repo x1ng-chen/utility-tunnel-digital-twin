@@ -1,14 +1,18 @@
 // End-to-end smoke: gateway forwarder -> Django ingest API -> PostgreSQL/SQLite.
 // Uses the seeded operator account and the exact STM32 reading shape.
-import { createDjangoForwarder } from './src/django.js';
+import { createDjangoForwarder, toDjangoBatch } from './src/django.js';
 
 const baseUrl = process.env.SMOKE_BASE_URL || 'http://127.0.0.1:8011';
+const ingestApiKey = process.env.DJANGO_INGEST_API_KEY;
+if (!ingestApiKey || ingestApiKey.length < 32) {
+  throw new Error('DJANGO_INGEST_API_KEY must be configured with at least 32 characters for the smoke test.');
+}
 
 function waitFor(predicate, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     const started = Date.now();
-    const check = () => {
-      if (predicate()) return resolve();
+    const check = async () => {
+      if (await predicate()) return resolve();
       if (Date.now() - started > timeoutMs) return reject(new Error('waitFor timed out'));
       setTimeout(check, 20);
     };
@@ -29,8 +33,7 @@ console.log('Django server is up at', baseUrl);
 
 const forwarder = createDjangoForwarder({
   baseUrl,
-  email: 'operator@example.com',
-  password: 'demo-password-2026',
+  apiKey: ingestApiKey,
   retryDelayMs: 500,
   maxRetryDelayMs: 2000,
 });
@@ -69,7 +72,7 @@ const headers = { authorization: `Bearer ${accessToken}` };
 const telemetry = await (await fetch(`${baseUrl}/api/telemetry/?assetCode=ENV-01&metricKey=temperature&pageSize=10`, { headers })).json();
 console.log('ENV-01 temperature rows:', telemetry.items.map((item) => ({ value: item.value, unit: item.unit, eventId: item.eventId, recordedAt: item.recordedAt })));
 assertRows: {
-  const expectedEventId = `gw:CTRL-01:${receivedAt.getTime()}:0`;
+  const expectedEventId = toDjangoBatch(message, { deviceId: 'CTRL-01', receivedAt }).readings[0].eventId;
   const row = telemetry.items.find((item) => item.eventId === expectedEventId);
   if (!row) throw new Error(`expected this run's row ${expectedEventId} in the telemetry list`);
   if (row.unit !== '°C' || row.value !== 29.5) throw new Error('gateway row unit/value mismatch');

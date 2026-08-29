@@ -153,9 +153,21 @@ CORS_ALLOW_HEADERS = [*default_headers, 'x-request-id', 'idempotency-key']
 API_TOKEN_TTL_SECONDS = int(os.getenv('API_TOKEN_TTL_SECONDS', '900'))
 if API_TOKEN_TTL_SECONDS <= 0:
     raise ValueError('API_TOKEN_TTL_SECONDS must be greater than zero.')
+INGEST_API_KEY = os.getenv('DJANGO_INGEST_API_KEY', '').strip()
+INGEST_PRINCIPAL_USERNAME = os.getenv('DJANGO_INGEST_PRINCIPAL_USERNAME', 'service-iotda-ingest').strip()
+if INGEST_API_KEY and len(INGEST_API_KEY) < 32:
+    raise ValueError('DJANGO_INGEST_API_KEY must contain at least 32 characters when configured.')
+if not INGEST_PRINCIPAL_USERNAME:
+    raise ValueError('DJANGO_INGEST_PRINCIPAL_USERNAME must not be empty.')
+REGISTRATION_SETUP_TTL_SECONDS = int(os.getenv('REGISTRATION_SETUP_TTL_SECONDS', '86400'))
+if REGISTRATION_SETUP_TTL_SECONDS <= 0:
+    raise ValueError('REGISTRATION_SETUP_TTL_SECONDS must be greater than zero.')
 TRUST_PROXY_HEADERS = os.getenv('DJANGO_TRUST_PROXY_HEADERS', 'false').lower() in {'1', 'true', 'yes'}
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': ['operations.authentication.BearerTokenAuthentication'],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'operations.authentication.IngestApiKeyAuthentication',
+        'operations.authentication.BearerTokenAuthentication',
+    ],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
     'DEFAULT_RENDERER_CLASSES': ['rest_framework.renderers.JSONRenderer'],
     'EXCEPTION_HANDLER': 'config.api.api_exception_handler',

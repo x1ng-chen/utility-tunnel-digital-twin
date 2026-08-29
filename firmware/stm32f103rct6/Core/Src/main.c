@@ -150,7 +150,7 @@ static uint8_t DHT11_Read(uint8_t *temperature, uint8_t *humidity)
   return 1;
 }
 
-static uint16_t Water_ReadRaw(void)
+static uint8_t Water_ReadRaw(uint16_t *water_raw)
 {
   uint32_t sum = 0;
   uint8_t valid_samples = 0;
@@ -172,13 +172,21 @@ static uint16_t Water_ReadRaw(void)
     HAL_ADC_Stop(&hadc1);
   }
 
-  return (valid_samples > 0U) ? (uint16_t)(sum / valid_samples) : 0U;
+  if (valid_samples == 0U)
+  {
+    *water_raw = 0U;
+    return 0U;
+  }
+
+  *water_raw = (uint16_t)(sum / valid_samples);
+  return 1U;
 }
 
 static void Bluetooth_SendTelemetry(uint8_t temperature,
                                     uint8_t humidity,
                                     uint16_t water_raw,
                                     uint8_t dht_ok,
+                                    uint8_t water_ok,
                                     uint8_t vibration_alarm)
 {
   char json[512];
@@ -193,13 +201,13 @@ static void Bluetooth_SendTelemetry(uint8_t temperature,
     "{\"assetCode\":\"ENV-01\",\"metric\":\"humidity\","
     "\"value\":%u,\"unit\":\"%%RH\",\"quality\":\"%s\"},"
     "{\"assetCode\":\"SEEP-W01\",\"metric\":\"water.raw\","
-    "\"value\":%u,\"unit\":\"adc\",\"quality\":\"good\"},"
+    "\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
     "{\"assetCode\":\"CTRL-01\",\"metric\":\"vibration.alarm\","
     "\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"}"
     "]}\r\n",
     temperature, dht_ok ? "good" : "bad",
     humidity, dht_ok ? "good" : "bad",
-    water_raw, vibration_alarm
+    water_raw, water_ok ? "good" : "missing", vibration_alarm
   );
 
   if ((length > 0) && (length < (int)sizeof(json)))
@@ -425,6 +433,7 @@ static void TFT_BacklightTest(void)
 
 static void LCD_ShowValues(uint8_t temperature, uint8_t humidity,
                            uint16_t water_raw, uint8_t dht_ok,
+                           uint8_t water_ok,
                            uint8_t vibration_alarm)
 {
   char temperature_text[] = {'T', ':', '0' + temperature / 10,
@@ -450,13 +459,19 @@ static void LCD_ShowValues(uint8_t temperature, uint8_t humidity,
     ST7735_DrawString(8, 40, "           ", LCD_BLACK, LCD_BLACK);
   }
 
-  ST7735_DrawString(8, 64, water_text, LCD_WHITE, LCD_BLACK);
-  if (water_raw >= WATER_ALARM_THRESHOLD)
+  if (!water_ok)
   {
+    ST7735_DrawString(8, 64, "W: SENSOR ERR", LCD_RED, LCD_BLACK);
+    ST7735_DrawString(8, 88, "WATER UNKNOWN", LCD_RED, LCD_BLACK);
+  }
+  else if (water_raw >= WATER_ALARM_THRESHOLD)
+  {
+    ST7735_DrawString(8, 64, water_text, LCD_WHITE, LCD_BLACK);
     ST7735_DrawString(8, 88, "WATER ALARM", LCD_RED, LCD_BLACK);
   }
   else
   {
+    ST7735_DrawString(8, 64, water_text, LCD_WHITE, LCD_BLACK);
     ST7735_DrawString(8, 88, "WATER OK   ", LCD_GREEN, LCD_BLACK);
   }
 
@@ -536,6 +551,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     uint16_t water_raw;
+    uint8_t water_ok;
     uint8_t vibration_alarm;
 
     if ((HAL_GetTick() - last_dht_read) >= 2000U)
@@ -548,14 +564,15 @@ int main(void)
       }
     }
 
-    water_raw = Water_ReadRaw();
+    water_ok = Water_ReadRaw(&water_raw);
     vibration_alarm = ((int32_t)(vibration_alarm_until - HAL_GetTick()) > 0) ? 1U : 0U;
-    LCD_ShowValues(temperature, humidity, water_raw, dht_ok, vibration_alarm);
+    LCD_ShowValues(temperature, humidity, water_raw, dht_ok, water_ok,
+                   vibration_alarm);
 
     if ((HAL_GetTick() - last_bluetooth_send) >= 2000U)
     {
       Bluetooth_SendTelemetry(temperature, humidity, water_raw,
-                              dht_ok, vibration_alarm);
+                              dht_ok, water_ok, vibration_alarm);
       last_bluetooth_send = HAL_GetTick();
     }
     HAL_Delay(200);
