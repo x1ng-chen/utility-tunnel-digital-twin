@@ -4,10 +4,10 @@ import { BoxGeometry, Color, DirectionalLight, Fog, Group, HemisphereLight, Mesh
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Alert, Asset } from '../types';
-import { modelNodeNames, resolveTwinVisualState, twinModelUrl, type TwinVisualState } from '../services/twin3d';
+import { modelNodeNames, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
 
 const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null }>();
-const emit = defineEmits<{ select: [code: string] }>();
+const emit = defineEmits<{ select: [code: string]; modelReport: [report: TwinModelBindingReport] }>();
 const host = ref<HTMLDivElement>();
 const modelState = ref<'loading' | 'loaded' | 'fallback'>('loading');
 const modelMessage = ref('正在加载三维模型…');
@@ -52,6 +52,10 @@ function makeFallbackScene() {
   props.assets.forEach((asset) => addFallbackAsset(asset));
 }
 
+function publishModelReport(mode: TwinModelBindingReport['mode'], boundCodes: Iterable<string> = []) {
+  emit('modelReport', { mode, ...summarizeTwinModelBindings(props.assets, boundCodes) });
+}
+
 function addFallbackAsset(asset: Asset) {
   if (!scene || assetObjects.has(asset.code)) return;
   const group = new Group();
@@ -68,6 +72,7 @@ function addFallbackAsset(asset: Asset) {
 }
 
 function bindModelAssets(root: Object3D) {
+  const boundCodes: string[] = [];
   props.assets.forEach((asset) => {
     const node = modelNodeNames(asset).map((name) => root.getObjectByName(name)).find(Boolean);
     if (!node) { addFallbackAsset(asset); return; }
@@ -75,7 +80,9 @@ function bindModelAssets(root: Object3D) {
     node.traverse((child) => { child.userData.assetCode = asset.code; });
     assetObjects.set(asset.code, node);
     animatedObjects.set(asset.code, node);
+    boundCodes.push(asset.code);
   });
+  return boundCodes;
 }
 
 function colorObject(object: Object3D, state: TwinVisualState, selected = false) {
@@ -146,12 +153,13 @@ function loadModel() {
   if (!scene) return;
   new GLTFLoader().load(twinModelUrl, (gltf) => {
     scene?.add(gltf.scene);
-    bindModelAssets(gltf.scene);
+    publishModelReport('loaded', bindModelAssets(gltf.scene));
     modelState.value = 'loaded';
     modelMessage.value = '已加载实体三维模型';
     applyVisualState();
   }, undefined, () => {
     makeFallbackScene();
+    publishModelReport('fallback');
     modelState.value = 'fallback';
     modelMessage.value = '等待实体模型交付，当前为可交互预览场景';
     applyVisualState();

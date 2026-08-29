@@ -1,28 +1,88 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
 import TwinScene from '../components/TwinScene.vue';
 import { useOperationsStore } from '../stores/operations';
-import { resolveTwinVisualState, twinStateLabel, type TwinVisualState } from '../services/twin3d';
+import { resolveTwinVisualState, twinStateLabel, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
 
 const store = useOperationsStore();
 const route = useRoute();
+const stage = ref<HTMLElement>();
 const requestedCode = typeof route.query.asset === 'string' ? route.query.asset : '';
 const selectedCode = ref(store.assets.some((asset) => asset.code === requestedCode) ? requestedCode : store.alerts.find((alert) => !['resolved', 'closed'].includes(alert.status))?.assetCode || store.assets[0]?.code || null);
 const scene = ref<InstanceType<typeof TwinScene>>();
 const query = ref('');
+const stateFilter = ref<'all' | TwinVisualState>('all');
+const finePointer = ref(false);
+const fullscreenActive = ref(false);
+const fullscreenPointer = reactive({ x: -80, y: -80, active: false, pressed: false });
+const fullscreenTrail = ref(Array.from({ length: 8 }, (_, index) => ({ x: -80, y: -80, opacity: 0.42 - index * 0.043, scale: 1 - index * 0.07 })));
+const fullscreenPulse = ref<{ key: number; x: number; y: number } | null>(null);
+let pendingFullscreenPointer: PointerEvent | undefined;
+let fullscreenPointerFrame = 0;
+let fullscreenPulseTimer: number | undefined;
+const modelReport = ref<TwinModelBindingReport>({ mode: 'fallback', expectedCount: store.assets.length, boundCodes: [], missingCodes: store.assets.map((asset) => asset.code), isComplete: false });
+const filterOptions: Array<{ value: 'all' | TwinVisualState; label: string }> = [
+  { value: 'all', label: '全部' }, { value: 'alarm', label: '告警' }, { value: 'warning', label: '关注' }, { value: 'normal', label: '正常' }, { value: 'unknown', label: '待核验' },
+];
 const selectedAsset = computed(() => store.assets.find((asset) => asset.code === selectedCode.value) || null);
 const selectedAlerts = computed(() => selectedAsset.value ? store.alerts.filter((alert) => alert.assetCode === selectedAsset.value?.code) : []);
 const selectedOrders = computed(() => selectedAsset.value ? store.workOrders.filter((order) => order.assetCode === selectedAsset.value?.code) : []);
 const selectedTelemetry = computed(() => selectedAsset.value ? store.telemetry.find((reading) => reading.assetCode === selectedAsset.value?.code) : null);
-const visibleAssets = computed(() => store.assets.filter((asset) => !query.value || `${asset.code} ${asset.name} ${asset.zone}`.toLowerCase().includes(query.value.toLowerCase())));
+const visibleAssets = computed(() => store.assets.filter((asset) => {
+  const matchesQuery = !query.value || `${asset.code} ${asset.name} ${asset.zone}`.toLowerCase().includes(query.value.toLowerCase());
+  return matchesQuery && (stateFilter.value === 'all' || resolveTwinVisualState(asset, store.alerts) === stateFilter.value);
+}));
 const selectedAssetName = computed(() => selectedAsset.value?.name.replace(/\s*[（(][^（）()]{1,16}[）)]\s*$/, '') || '');
+const modelBindingText = computed(() => `${modelReport.value.boundCodes.length} / ${modelReport.value.expectedCount} 个设备已定位`);
+const modelDeliveryHint = computed(() => {
+  if (modelReport.value.mode === 'fallback') return '当前为可交互预览场景；导入实体模型后会自动核验设备定位。';
+  if (modelReport.value.isComplete) return '实体模型已完成全部设备定位，可直接用于告警可视化。';
+  return `实体模型已加载，仍有 ${modelReport.value.missingCodes.length} 个设备待补齐节点名称。`;
+});
 
 function select(code: string) { selectedCode.value = code; scene.value?.focusAsset(code); }
 function resetView() { scene.value?.resetView(); }
+function receiveModelReport(report: TwinModelBindingReport) { modelReport.value = report; }
+function updateFullscreenState() {
+  fullscreenActive.value = document.fullscreenElement === stage.value;
+  if (!fullscreenActive.value) { fullscreenPointer.active = false; fullscreenPointer.pressed = false; }
+}
+function paintFullscreenPointer() {
+  fullscreenPointerFrame = 0;
+  const event = pendingFullscreenPointer;
+  pendingFullscreenPointer = undefined;
+  if (!event || !stage.value || !fullscreenActive.value) return;
+  const bounds = stage.value.getBoundingClientRect();
+  const x = event.clientX - bounds.left;
+  const y = event.clientY - bounds.top;
+  fullscreenPointer.x = x;
+  fullscreenPointer.y = y;
+  fullscreenPointer.active = true;
+  fullscreenTrail.value = fullscreenTrail.value.map((point, index, points) => {
+    const leader = index === 0 ? { x, y } : points[index - 1];
+    const easing = 0.45 - index * 0.028;
+    return { ...point, x: point.x + (leader.x - point.x) * easing, y: point.y + (leader.y - point.y) * easing };
+  });
+}
+function onStagePointerMove(event: PointerEvent) {
+  if (!finePointer.value || !fullscreenActive.value) return;
+  pendingFullscreenPointer = event;
+  if (!fullscreenPointerFrame) fullscreenPointerFrame = window.requestAnimationFrame(paintFullscreenPointer);
+}
+function onStagePointerDown(event: PointerEvent) {
+  if (!finePointer.value || !fullscreenActive.value || !stage.value) return;
+  const bounds = stage.value.getBoundingClientRect();
+  fullscreenPointer.pressed = true;
+  fullscreenPulse.value = { key: Date.now(), x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+  if (fullscreenPulseTimer) window.clearTimeout(fullscreenPulseTimer);
+  fullscreenPulseTimer = window.setTimeout(() => { fullscreenPulse.value = null; }, 700);
+}
+function onStagePointerUp() { fullscreenPointer.pressed = false; }
+function onStagePointerLeave() { fullscreenPointer.active = false; }
 async function fullscreen() {
-  const target = document.querySelector('.twin-stage-panel');
+  const target = stage.value;
   if (!target) return;
   if (document.fullscreenElement) await document.exitFullscreen();
   else await target.requestFullscreen();
@@ -30,6 +90,15 @@ async function fullscreen() {
 function statusLabel(state: TwinVisualState) { return twinStateLabel(state); }
 function formatTime(value: string | null | undefined) { return value ? new Date(value).toLocaleString('zh-CN') : '暂无上报'; }
 watch(() => route.query.asset, (code) => { if (typeof code === 'string' && store.assets.some((asset) => asset.code === code)) select(code); });
+onMounted(() => {
+  finePointer.value = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  document.addEventListener('fullscreenchange', updateFullscreenState);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener('fullscreenchange', updateFullscreenState);
+  if (fullscreenPointerFrame) window.cancelAnimationFrame(fullscreenPointerFrame);
+  if (fullscreenPulseTimer) window.clearTimeout(fullscreenPulseTimer);
+});
 </script>
 
 <template>
@@ -39,17 +108,22 @@ watch(() => route.query.asset, (code) => { if (typeof code === 'string' && store
       <div class="twin-title-actions"><span class="twin-live"><i />三维数据联动</span><button class="primary-button compact-button" @click="resetView">⌖ 重置视角</button><button class="outline-button" @click="fullscreen">⛶ 全屏查看</button></div>
     </section>
     <section class="twin-workspace">
-      <article class="twin-stage-panel">
-        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" @select="select" />
+      <article ref="stage" class="twin-stage-panel" @pointermove="onStagePointerMove" @pointerdown="onStagePointerDown" @pointerup="onStagePointerUp" @pointerleave="onStagePointerLeave">
+        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" @select="select" @model-report="receiveModelReport" />
         <div v-if="selectedAsset" class="twin-focus-status" aria-live="polite"><span :class="resolveTwinVisualState(selectedAsset, store.alerts)"><i />{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span><b :title="selectedAsset.name">{{ selectedAssetName }}</b><small>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</small></div>
         <nav class="twin-quick-switch" aria-label="场景内设备切换" @pointerdown.stop @mousedown.stop>
-          <div class="twin-quick-switch-heading"><span>设备快速切换</span><b>{{ selectedAssetName || '请选择设备' }}</b></div>
+          <div class="twin-quick-switch-tools"><div class="twin-quick-switch-heading"><span>设备快速切换 · {{ visibleAssets.length }}/{{ store.assets.length }}</span><b>{{ selectedAssetName || '请选择设备' }}</b></div><div class="twin-switch-filters" role="group" aria-label="按运行状态筛选设备"><button v-for="filter in filterOptions" :key="filter.value" :class="{ selected: stateFilter === filter.value }" type="button" @pointerdown.stop @click.stop="stateFilter = filter.value">{{ filter.label }}</button></div></div>
           <div class="twin-quick-switch-list"><button v-for="asset in visibleAssets" :key="asset.id" :class="[resolveTwinVisualState(asset, store.alerts), { selected: asset.code === selectedCode }]" :aria-label="`选择 ${asset.name}，设备编码 ${asset.code}`" :title="`${asset.name} · ${asset.zone}`" @pointerdown.stop @click.stop="select(asset.code)"><i /><span><b>{{ asset.code }}</b><small>{{ asset.name }}</small></span></button></div>
         </nav>
+        <div v-if="finePointer" class="twin-fullscreen-fx" :class="{ active: fullscreenPointer.active, pressed: fullscreenPointer.pressed }" aria-hidden="true" :style="{ transform: `translate3d(${fullscreenPointer.x}px, ${fullscreenPointer.y}px, 0)` }">
+          <i v-for="(point, index) in fullscreenTrail" :key="index" class="twin-fx-trail" :style="{ transform: `translate3d(${point.x - fullscreenPointer.x}px, ${point.y - fullscreenPointer.y}px, 0) scale(${point.scale})`, opacity: point.opacity }" />
+          <i class="twin-fx-ring" /><i class="twin-fx-dot" /><i v-if="fullscreenPulse" :key="fullscreenPulse.key" class="twin-fx-pulse" :style="{ '--twin-pulse-x': `${fullscreenPulse.x - fullscreenPointer.x}px`, '--twin-pulse-y': `${fullscreenPulse.y - fullscreenPointer.y}px` }" />
+        </div>
       </article>
       <aside class="twin-inspector" aria-live="polite">
         <template v-if="selectedAsset">
           <header><div><span class="eyebrow">SELECTED EQUIPMENT</span><h2 :title="selectedAsset.name">{{ selectedAssetName }}</h2><code>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</code></div><span :class="['twin-state-chip', resolveTwinVisualState(selectedAsset, store.alerts)]">{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span></header>
+          <section :class="['twin-model-readiness', modelReport.mode]"><span>实体模型接入</span><div><b>{{ modelReport.mode === 'loaded' ? '模型已加载' : '预览场景' }}</b><strong>{{ modelBindingText }}</strong></div><p>{{ modelDeliveryHint }}</p></section>
           <div class="twin-inspector-grid"><div><span>所在区域</span><b>{{ selectedAsset.zone }}</b></div><div><span>实体模型</span><b>{{ selectedAsset.mesh || '待绑定' }}</b></div><div><span>最新上报</span><b>{{ formatTime(selectedAsset.lastSeenAt) }}</b></div><div><span>当前遥测</span><b>{{ selectedTelemetry ? `${selectedTelemetry.value} ${selectedTelemetry.unit}` : '暂无数据' }}</b></div></div>
           <section class="twin-detail-section"><span class="eyebrow">CURRENT ALERTS</span><p v-if="selectedAlerts.length" class="twin-alert-summary"><b>{{ selectedAlerts.length }} 项关联告警</b>{{ selectedAlerts[0].title }}</p><p v-else class="twin-empty">当前设备没有未关闭告警。</p></section>
           <section class="twin-detail-section"><span class="eyebrow">WORK ORDER STATUS</span><p v-if="selectedOrders.length" class="twin-order-summary"><b>{{ selectedOrders[0].code }}</b>{{ selectedOrders[0].title }}</p><p v-else class="twin-empty">当前设备没有关联工单。</p></section>

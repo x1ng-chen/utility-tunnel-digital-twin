@@ -51,6 +51,12 @@ test('三维孪生在模型交付前仍可定位设备并展示告警状态', as
   await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
   await expect(page.getByRole('application', { name: '综合管廊三维数字孪生场景' })).toBeVisible();
   await expect(page.getByText('等待实体模型交付，当前为可交互预览场景')).toBeVisible();
+  const switcher = page.locator('.twin-quick-switch');
+  await expect(page.locator('.twin-model-readiness').getByText('预览场景', { exact: true })).toBeVisible();
+  await expect(page.locator('.twin-model-readiness').getByText(/0 \/ \d+ 个设备已定位/)).toBeVisible();
+  await switcher.getByRole('button', { name: '告警', exact: true }).click();
+  expect(await switcher.getByRole('button', { name: /选择 / }).count()).toBeGreaterThan(0);
+  await switcher.getByRole('button', { name: '全部', exact: true }).click();
   await page.getByRole('button', { name: 'ENV-01' }).click();
   const inspector = page.locator('.twin-inspector');
   await expect(inspector.getByText('MESH_ENV_01', { exact: true })).toBeVisible();
