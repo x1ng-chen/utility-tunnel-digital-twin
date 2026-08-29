@@ -90,3 +90,19 @@ jobs:
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test
       - run: python -m compileall -q config operations
+
+  gateway:
+    name: IoTDA gateway quality
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/iotda-gateway
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/iotda-gateway/package-lock.json
+      - run: npm ci
+      - run: npm test
