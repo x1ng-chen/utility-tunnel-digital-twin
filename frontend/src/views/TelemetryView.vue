@@ -54,7 +54,7 @@ onMounted(search);
   <AppShell>
     <section class="section-title telemetry-title">
       <div><span class="eyebrow light">TELEMETRY INTELLIGENCE</span><h1>数据洞察</h1><p>按采集时间追踪遥测趋势与质量，不承担告警处置或资产维护职责。</p></div>
-      <span class="insight-source">{{ store.source === 'api' ? 'POSTGRESQL HISTORY' : 'DEMO DATASET' }}</span>
+      <span class="insight-source">运行数据</span>
     </section>
 
     <form class="telemetry-filters" @submit.prevent="search">

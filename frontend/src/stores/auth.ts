@@ -76,5 +76,5 @@ export const useAuthStore = defineStore('auth', () => {
 
 function axiosMessage(cause: unknown): string {
   if (typeof cause === 'object' && cause && 'response' in cause) return String((cause as { response?: { data?: { message?: string } } }).response?.data?.message || '登录失败，请检查账号或服务地址。');
-  return 'API 暂不可用，请检查 Django 服务是否启动。';
+  return '登录服务暂不可用，请稍后重试。';
 }

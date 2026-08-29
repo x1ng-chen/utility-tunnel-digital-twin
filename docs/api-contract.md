@@ -103,6 +103,13 @@
 | `GET` | `/assets/` | 登录 | `search`、`status`、`zone`、`integrationStatus`、`hardwareCode`、`hasLocation=true\|false`、`isActive=true\|false`、`page`、`pageSize`；管理员可用 `isActive=all` 查询全部生命周期；返回硬件接入信息、WGS84 坐标、坐标来源和版本 |
 | `POST` | `/assets/` | 管理员 | 新建资产主数据；校验编码、硬件编号、能力去重、二维孪生坐标和成对 WGS84 坐标，成功后写入审计 |
 | `PATCH` | `/assets/{id}/` | 管理员 | 更新资产主数据，必须提交当前 `version`；并发过期返回 `409`，停用存在活动告警或工单的资产返回 `409` |
+| `GET` | `/gis/features/` | 登录 | 返回 WGS84 GeoJSON FeatureCollection；支持 `layerType`、`bbox=minLon,minLat,maxLon,maxLat`；默认仅 `published`，管理员可用 `status=all` |
+| `POST` | `/gis/features/` | 管理员 | 新建受控空间对象；仅接受 Point、LineString、Polygon 与 EPSG:4326，写审计 |
+| `PATCH` | `/gis/features/{id}/` | 管理员 | 提交 `version` 更新空间对象；发布必须同时具备 `verifiedAt` 与 `sourceReference` |
+| `POST` | `/gis/features/import/` | 管理员 | 原子导入 1–100 个 GeoJSON Feature；任一对象无效或编码冲突则整批回滚 |
+| `GET` | `/hardware-bindings/` | 登录 | 查询资产的硬件通信契约；支持 `assetCode`、分页 |
+| `POST` | `/hardware-bindings/` | 管理员 | 为活动资产预留 MQTT、HTTP、串口网关或人工登记接口，写审计 |
+| `PATCH` | `/hardware-bindings/{id}/` | 管理员 | 提交 `version` 更新端点、期望心跳或接入状态；资产绑定不可迁移 |
 | `GET` | `/alerts/` | 登录 | `status`、`severity`、`openedFrom`、`openedTo`、`page`、`pageSize` |
 | `POST` | `/alerts/{id}/acknowledge/` | 管理员/运维员 | 确认待处理告警 |
 | `POST` | `/alerts/{id}/work-order/` | 管理员/运维员 | 从告警创建关联工单 |
@@ -129,6 +136,8 @@
 | 完成工单复核 | ✓ | — | — |
 | 修改阈值 | ✓ | — | — |
 | 新建/修改/停用资产主数据 | ✓ | — | — |
+| 导入、审核与发布 GIS 空间对象 | ✓ | — | — |
+| 维护硬件通信绑定契约 | ✓ | — | — |
 | 导出报表 | ✓ | ✓ | ✓ |
 
 任何未列出的写操作默认拒绝，后端权限校验是最终边界，前端按钮隐藏仅用于改善使用体验。

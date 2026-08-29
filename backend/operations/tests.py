@@ -12,7 +12,7 @@ from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 from config.settings import parse_origins
-from .models import Alert, Asset, AuditLog, Profile, ReportExport, Telemetry, Threshold, WorkOrder
+from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
 
 
 class OperationsApiTests(TestCase):
@@ -77,6 +77,46 @@ class OperationsApiTests(TestCase):
         response = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'demo-password'}, format='json')
         self.assertEqual(response.status_code, 200)
         self.assertIn('accessToken', response.json())
+
+    def test_registration_request_needs_administrator_approval_before_login(self):
+        application = self.client.post('/api/auth/registration-requests/', {
+            'account': 'new.operator',
+            'displayName': '新运维员',
+            'role': Profile.Role.OPERATOR,
+            'password': 'NewOperator!2026',
+        }, format='json')
+        self.assertEqual(application.status_code, 201)
+        self.assertFalse(User.objects.filter(email='new.operator').exists())
+        request_id = application.json()['id']
+        self.auth(self.admin)
+        pending = self.client.get('/api/admin/registration-requests/?status=pending')
+        self.assertEqual(pending.status_code, 200)
+        self.assertEqual(pending.json()['total'], 1)
+        approved = self.client.patch(f'/api/admin/registration-requests/{request_id}/', {'status': 'approved'}, format='json')
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(approved.json()['status'], RegistrationRequest.Status.APPROVED)
+        created = User.objects.get(email='new.operator')
+        self.assertEqual(created.profile.role, Profile.Role.OPERATOR)
+        self.client.credentials()
+        login = self.client.post('/api/auth/login/', {'email': 'new.operator', 'password': 'NewOperator!2026'}, format='json')
+        self.assertEqual(login.status_code, 200)
+        self.assertTrue(AuditLog.objects.filter(action='registration.approved').exists())
+
+    def test_registration_cannot_create_or_promote_a_second_administrator(self):
+        public = self.client.post('/api/auth/registration-requests/', {
+            'account': 'another.admin',
+            'displayName': '第二管理员',
+            'role': Profile.Role.ADMINISTRATOR,
+            'password': 'AnotherAdmin!2026',
+        }, format='json')
+        self.assertEqual(public.status_code, 400)
+        self.auth(self.admin)
+        created = self.client.post('/api/admin/users/', {
+            'email': 'second-admin@example.com', 'displayName': '第二管理员', 'password': 'AnotherAdmin!2026', 'role': Profile.Role.ADMINISTRATOR,
+        }, format='json')
+        self.assertEqual(created.status_code, 409)
+        promoted = self.client.patch(f'/api/admin/users/{self.operator.pk}/', {'role': Profile.Role.ADMINISTRATOR}, format='json')
+        self.assertEqual(promoted.status_code, 409)
 
     def test_superuser_login_returns_administrator_role(self):
         superuser = User.objects.create_superuser(username='login-root@example.com', email='login-root@example.com', password='root-password-2026')
@@ -380,9 +420,12 @@ class OperationsApiTests(TestCase):
 
     def test_operator_can_acknowledge_alert(self):
         self.auth(self.operator)
-        response = self.client.post(f'/api/alerts/{self.alert.pk}/acknowledge/')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['status'], Alert.Status.ACKNOWLEDGED)
+        first = self.client.post(f'/api/alerts/{self.alert.pk}/acknowledge/')
+        repeated = self.client.post(f'/api/alerts/{self.alert.pk}/acknowledge/')
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(repeated.status_code, 200)
+        self.assertEqual(repeated.json()['status'], Alert.Status.ACKNOWLEDGED)
+        self.assertEqual(AuditLog.objects.filter(action='alert.acknowledged', resource_id=str(self.alert.pk)).count(), 1)
 
     def test_completed_work_order_requires_admin(self):
         order = WorkOrder.objects.create(code='WO-1', asset=self.asset, title='测试工单', status=WorkOrder.Status.PENDING_REVIEW, created_by=self.operator)
@@ -401,11 +444,11 @@ class OperationsApiTests(TestCase):
         self.assertEqual(order.status, WorkOrder.Status.OPEN)
 
     def test_linked_work_order_is_unique_per_alert(self):
-        WorkOrder.objects.create(code='WO-LINKED', source_alert=self.alert, asset=self.asset, title='已存在', created_by=self.operator)
+        existing = WorkOrder.objects.create(code='WO-LINKED', source_alert=self.alert, asset=self.asset, title='已存在', created_by=self.operator)
         self.auth(self.operator)
         response = self.client.post(f'/api/alerts/{self.alert.pk}/work-order/')
-        self.assertEqual(response.status_code, 409)
-        self.assertEqual(response.json()['error'], 'conflict')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['id'], existing.pk)
 
     def test_manual_work_order_rejects_unknown_priority(self):
         self.auth(self.operator)
@@ -593,6 +636,50 @@ class OperationsApiTests(TestCase):
             with transaction.atomic():
                 Asset.objects.create(code='BAD-COORD-2', name='错误坐标', zone='CTRL', asset_type='测试', latitude=91, longitude=121.4)
 
+    def test_gis_features_are_governed_geojson_with_review_and_bbox_boundaries(self):
+        self.auth(self.operator)
+        self.assertEqual(self.client.get('/api/gis/features/').status_code, 200)
+        self.assertEqual(self.client.post('/api/gis/features/', {}, format='json').status_code, 403)
+
+        self.auth(self.admin)
+        payload = {
+            'code': 'SEG-01', 'name': 'A 区管廊段', 'layerType': 'tunnel_segment',
+            'geometry': {'type': 'LineString', 'coordinates': [[121.473700, 31.230400], [121.473900, 31.230500]]},
+            'source': 'surveyed', 'sourceReference': '2026 测绘成果 #01', 'accuracyM': '0.250', 'status': 'draft',
+        }
+        created = self.client.post('/api/gis/features/', payload, format='json')
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(self.client.get('/api/gis/features/').json()['meta']['count'], 0)
+        # Neither endpoint is in this small viewport, but the line crosses it.
+        # Spatial filtering must not silently omit that feature.
+        all_features = self.client.get('/api/gis/features/?status=all&bbox=121.47379,31.23044,121.47381,31.23046')
+        self.assertEqual(all_features.status_code, 200)
+        self.assertEqual(all_features.json()['features'][0]['properties']['code'], 'SEG-01')
+        rejected_publish = self.client.patch(f"/api/gis/features/{created.json()['id']}/", {'status': 'published', 'version': 1}, format='json')
+        self.assertEqual(rejected_publish.status_code, 400)
+        published = self.client.patch(f"/api/gis/features/{created.json()['id']}/", {'status': 'published', 'verifiedAt': timezone.now().isoformat(), 'version': 1}, format='json')
+        self.assertEqual(published.status_code, 200)
+        self.assertEqual(self.client.get('/api/gis/features/?bbox=121.4736,31.2303,121.4740,31.2306').json()['meta']['count'], 1)
+        self.assertEqual(self.client.get('/api/gis/features/?bbox=121,31,120,32').status_code, 400)
+
+    def test_gis_import_is_atomic_and_hardware_bindings_reserve_future_interfaces(self):
+        self.auth(self.admin)
+        feature = {
+            'type': 'Feature', 'geometry': {'type': 'Point', 'coordinates': [121.4737, 31.2304]},
+            'properties': {'code': 'MH-01', 'name': '一号井口', 'layerType': 'manhole', 'source': 'cad_import', 'sourceReference': '管廊总图 V1', 'status': 'draft'},
+        }
+        imported = self.client.post('/api/gis/features/import/', {'type': 'FeatureCollection', 'features': [feature]}, format='json')
+        self.assertEqual(imported.status_code, 201)
+        self.assertEqual(SpatialFeature.objects.count(), 1)
+        conflict = self.client.post('/api/gis/features/import/', {'type': 'FeatureCollection', 'features': [feature, feature]}, format='json')
+        self.assertEqual(conflict.status_code, 409)
+        self.assertEqual(SpatialFeature.objects.count(), 1)
+        binding = self.client.post('/api/hardware-bindings/', {'assetCode': self.asset.code, 'protocol': 'mqtt', 'deviceIdentifier': 'ctrl-gateway-01', 'endpoint': 'ut/v1/fan-01/telemetry', 'expectedIntervalSeconds': 30, 'status': 'reserved'}, format='json')
+        self.assertEqual(binding.status_code, 201)
+        self.assertEqual(binding.json()['assetCode'], self.asset.code)
+        self.assertEqual(binding.json()['deviceIdentifier'], 'ctrl-gateway-01')
+        self.assertEqual(HardwareBinding.objects.get(asset=self.asset).status, HardwareBinding.Status.RESERVED)
+
     def test_seed_demo_resets_lifecycle_timestamps(self):
         call_command('seed_demo', stdout=io.StringIO())
         alert = Alert.objects.get(code='ALM-260826-003')
@@ -616,3 +703,4 @@ class OperationsApiTests(TestCase):
         self.assertIsNone(order.completed_at)
         self.assertIsNone(order.reviewed_by)
         self.assertEqual(order.version, 1)
+        self.assertEqual(HardwareBinding.objects.filter(status=HardwareBinding.Status.RESERVED).count(), 12)

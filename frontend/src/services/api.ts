@@ -9,13 +9,13 @@ const fallbackBaseUrl = typeof window !== 'undefined' && window.location.protoco
 export function resolveApiBaseUrl(baseUrl: string, allowSameOriginPath = false, sameOrigin = typeof window !== 'undefined' ? window.location.origin : ''): string {
   let normalized = baseUrl.trim().replace(/\/+$/, '');
   if (allowSameOriginPath && normalized.startsWith('/')) {
-    if (!sameOrigin) throw new Error('相对 API 地址只能在浏览器中使用。');
+    if (!sameOrigin) throw new Error('相对数据服务地址只能在浏览器中使用。');
     normalized = new URL(normalized, sameOrigin).toString().replace(/\/+$/, '');
   }
-  if (!/^https?:\/\//i.test(normalized)) throw new Error('API 地址必须使用 HTTP 或 HTTPS。');
+  if (!/^https?:\/\//i.test(normalized)) throw new Error('数据服务地址配置无效。');
   const parsed = new URL(normalized);
-  if (parsed.username || parsed.password) throw new Error('API 地址不得包含账号或密码。');
-  if (parsed.search || parsed.hash || !parsed.hostname) throw new Error('API 地址不得包含查询参数或片段。');
+  if (parsed.username || parsed.password) throw new Error('数据服务地址不得包含认证信息。');
+  if (parsed.search || parsed.hash || !parsed.hostname) throw new Error('数据服务地址不得包含无关参数。');
   if (typeof window !== 'undefined' && window.location.protocol === 'https:' && parsed.protocol !== 'https:') {
     throw new Error('HTTPS 页面只能连接 HTTPS API。');
   }
@@ -51,14 +51,24 @@ client.interceptors.request.use((config) => {
 
 export const api = {
   login: (payload: { email: string; password: string }) => client.post('/auth/login/', payload),
+  requestRegistration: (payload: { account: string; displayName: string; role: 'operator' | 'viewer'; password: string }) => client.post('/auth/registration-requests/', payload),
   me: () => client.get('/auth/me/'),
   logout: () => client.post('/auth/logout/'),
   adminUsers: (params?: Record<string, string | number>) => client.get('/admin/users/', { params }),
   updateAdminUser: (id: number, payload: Record<string, unknown>) => client.patch(`/admin/users/${id}/`, payload),
+  registrationRequests: (params?: Record<string, string | number>) => client.get('/admin/registration-requests/', { params }),
+  reviewRegistrationRequest: (id: number, payload: { status: 'approved' | 'rejected'; reviewNote?: string }) => client.patch(`/admin/registration-requests/${id}/`, payload),
   dashboard: () => client.get('/dashboard/'),
   assets: (params?: Record<string, string | number>) => client.get('/assets/', { params }),
   createAsset: (payload: Record<string, unknown>) => client.post('/assets/', payload),
   updateAsset: (id: number, payload: Record<string, unknown>) => client.patch(`/assets/${id}/`, payload),
+  gisFeatures: (params?: Record<string, string | number>) => client.get('/gis/features/', { params }),
+  createGisFeature: (payload: Record<string, unknown>) => client.post('/gis/features/', payload),
+  updateGisFeature: (id: number, payload: Record<string, unknown>) => client.patch(`/gis/features/${id}/`, payload),
+  importGisFeatures: (payload: Record<string, unknown>) => client.post('/gis/features/import/', payload),
+  hardwareBindings: (params?: Record<string, string | number>) => client.get('/hardware-bindings/', { params }),
+  createHardwareBinding: (payload: Record<string, unknown>) => client.post('/hardware-bindings/', payload),
+  updateHardwareBinding: (id: number, payload: Record<string, unknown>) => client.patch(`/hardware-bindings/${id}/`, payload),
   alerts: (params?: Record<string, string | number>) => client.get('/alerts/', { params }),
   acknowledge: (id: number) => client.post(`/alerts/${id}/acknowledge/`),
   createAlertWorkOrder: (id: number) => client.post(`/alerts/${id}/work-order/`),

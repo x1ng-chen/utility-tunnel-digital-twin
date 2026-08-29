@@ -2,23 +2,44 @@ from datetime import timedelta
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from operations.models import Alert, Asset, Profile, Telemetry, Threshold, WorkOrder
+from operations.models import Alert, Asset, HardwareBinding, Profile, RegistrationRequest, SpatialFeature, Telemetry, Threshold, WorkOrder
 
 
 class Command(BaseCommand):
     help = 'Create deterministic local demonstration data for the Vue 3 + Django stack.'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--clean-e2e-data',
+            action='store_true',
+            help='Remove only records created by the browser regression suite before seeding demo data.',
+        )
+
     def handle(self, *args, **options):
+        if options['clean_e2e_data']:
+            RegistrationRequest.objects.filter(account__startswith='e2e-operator-').delete()
+            User.objects.filter(email__startswith='e2e-operator-').delete()
+            SpatialFeature.objects.filter(code__startswith='SEG-E2E-').delete()
+            Asset.objects.filter(code__startswith='ENV-E2E-').delete()
+            # The browser suite creates a linked order for this fixed demo
+            # alert.  Remove it only in explicit E2E-clean mode so normal
+            # demonstration data is never discarded by a regular seed.
+            WorkOrder.objects.filter(source_alert__code='ALM-260826-001').delete()
         users = [
-            ('admin@example.com', '管理员', Profile.Role.ADMINISTRATOR),
-            ('operator@example.com', '运维员', Profile.Role.OPERATOR),
-            ('viewer@example.com', '查看者', Profile.Role.VIEWER),
+            ('admin', '管理员', Profile.Role.ADMINISTRATOR, '123'),
+            ('operator@example.com', '运维员', Profile.Role.OPERATOR, 'demo-password-2026'),
+            ('viewer@example.com', '查看者', Profile.Role.VIEWER, 'demo-password-2026'),
         ]
         created_users = {}
-        for email, display_name, role in users:
-            user, _ = User.objects.get_or_create(username=email, defaults={'email': email, 'first_name': display_name})
-            user.email = email
-            user.set_password('demo-password-2026')
+        for username, display_name, role, password in users:
+            legacy_username = 'admin@example.com' if username == 'admin' else username
+            user = User.objects.filter(username=username).first() or User.objects.filter(username=legacy_username).first()
+            if user is None:
+                user = User(username=username)
+            user.username = username
+            user.email = username
+            user.first_name = display_name
+            user.set_password(password)
             user.save()
             Profile.objects.update_or_create(user=user, defaults={'display_name': display_name, 'role': role})
             created_users[role] = user
@@ -48,6 +69,22 @@ class Command(BaseCommand):
             asset, _ = Asset.objects.update_or_create(code=code, defaults=defaults)
             asset_by_code[code] = asset
 
+        # These are integration contracts only. They reserve stable identifiers
+        # for future gateways and never claim that an unconnected module is online.
+        for code, asset in asset_by_code.items():
+            HardwareBinding.objects.update_or_create(
+                asset=asset,
+                defaults={
+                    'protocol': HardwareBinding.Protocol.MQTT,
+                    'device_identifier': f'ut-demo-{code.lower()}',
+                    'endpoint': f'ut/v1/{code.lower()}/telemetry',
+                    'expected_interval_seconds': 60,
+                    'status': HardwareBinding.Status.RESERVED,
+                    'last_heartbeat_at': None,
+                    'version': 1,
+                },
+            )
+
         alert_specs = [
             ('ALM-260826-003', 'SEEP-W01', Alert.Severity.WARNING, '水浸趋势', Alert.Status.OPEN, '水浸趋势异常', '渗水趋势上升，需确认现场情况并安排巡检。'),
             ('ALM-260826-002', 'FAN-01', Alert.Severity.CRITICAL, '设备反馈', Alert.Status.ACKNOWLEDGED, '风机反馈丢失', '执行反馈暂未返回，正在等待工单复核。'),
@@ -66,4 +103,4 @@ class Command(BaseCommand):
 
         for key, label, warning, alarm, unit in [('temperature', '环境温度', 28, 32, '°C'), ('humidity', '环境湿度', 75, 85, '%RH'), ('water', '水浸趋势', 20, 45, '秒')]:
             Threshold.objects.update_or_create(key=key, defaults={'label': label, 'warning': warning, 'alarm': alarm, 'unit': unit})
-        self.stdout.write(self.style.SUCCESS('Django demo data seeded. Users share password: demo-password-2026'))
+        self.stdout.write(self.style.SUCCESS('Django demo data seeded. Administrator: admin / 123'))

@@ -65,7 +65,7 @@ async function createOrder() {
         <button class="primary-button form-submit" type="submit" :disabled="creating || !canWrite">{{ creating ? '创建中…' : '创建工单' }}</button>
       </form>
     </section>
-    <p v-else-if="store.offline" class="inline-message">Django API 离线，当前快照只读；重新连接后可继续操作。</p>
+    <p v-else-if="store.offline" class="inline-message">数据服务离线，当前快照只读；重新连接后可继续操作。</p>
     <p v-else-if="!canWrite" class="inline-message">查看者无权新建或流转工单。</p>
     <section class="kanban">
       <article v-for="status in ['open','assigned','in_progress','pending_review','completed']" :key="status" class="kanban-column">

@@ -27,10 +27,29 @@ async function runAction(id: number, action: () => Promise<unknown>) {
   try {
     await action();
   } catch (cause) {
-    actionError.value = cause instanceof Error ? cause.message : '操作失败，请稍后重试。';
+    if (getResponseStatus(cause) === 409) {
+      await store.refresh('api');
+      actionError.value = '该告警的状态已更新，页面已同步为最新结果。';
+      return;
+    }
+    actionError.value = getUserFacingError(cause);
   } finally {
     busyId.value = null;
   }
+}
+
+function getResponseStatus(cause: unknown) {
+  if (typeof cause !== 'object' || cause === null || !('response' in cause)) return undefined;
+  const response = (cause as { response?: { status?: unknown } }).response;
+  return typeof response?.status === 'number' ? response.status : undefined;
+}
+
+function getUserFacingError(cause: unknown) {
+  if (typeof cause === 'object' && cause !== null && 'response' in cause) {
+    const data = (cause as { response?: { data?: { message?: unknown } } }).response?.data;
+    if (typeof data?.message === 'string' && data.message.trim()) return data.message;
+  }
+  return '操作未完成，请检查网络后重试。';
 }
 </script>
 
