@@ -24,8 +24,10 @@
 - **认证**：使用 `X-Ingest-Key` 机器凭据，权限仅覆盖 `POST /api/telemetry/`。邮箱/密码方式只作为迁移兼容，不应继续用于新部署。
 - **字段映射**：`assetCode` 大写归一化；`metric`（设备侧指标键）作为 `metricKey`；显示名与单位按固定映射表转换（如 `degC` → `°C`，`temperature` → `环境温度`），与 `seed_demo` 的阈值单位保持一致；设备未提供 `ts` 时使用网关接收时间作为 `recordedAt`。
 - **幂等**：每帧以设备 ID、业务时间和完整 readings 计算 SHA-256 摘要，再为各读数附加序号；同毫秒不同载荷不会碰撞，MQTT 重投同一载荷仍复用编号。
-- **失败处理**：批次先写入 `DJANGO_QUEUE_DB` 指定的 SQLite/WAL outbox；进程重启后会自动续传。网络错误、5xx、429 和普通并发 409 进入指数退避重试；`idempotency_conflict` 直接进入死信计数，不会无限阻塞队列；其他不可恢复 4xx 丢弃并记录错误。
+- **失败处理**：批次先写入 `DJANGO_QUEUE_DB` 指定的 SQLite/WAL outbox；进程重启后会自动续传。默认 `DJANGO_QUEUE_MAX=43200`，按 2 秒一帧约覆盖 24 小时，可按磁盘容量调整。网络错误、5xx、429 和普通并发 409 进入指数退避重试；`idempotency_conflict`、不可恢复 4xx 和队列溢出批次会原样转存同一 SQLite 文件的 `django_dead_letter` 表并记录原因，不再静默丢失。死信需经人工核验、修正后再重放或归档。
 - **观察性**：每批成功/重试/丢弃都会输出日志；`Django stored N reading(s) (duplicates X, queued Y)` 即为平台路心跳。
+
+ESP8266 会在保留状态主题 `ut/v1/<DEVICE_ID>/status` 发布 `online`，并以 LWT 发布 `offline`；STM32 帧含单调 `seq` 便于识别缺帧。ESP 侧使用固定内存的 8 帧短时缓冲，在 Wi-Fi/MQTT 恢复后顺序补发；网关收到帧后再由 SQLite outbox 提供重启续传。受 PubSubClient 发布能力限制，ESP→本地 Broker 当前仍是 QoS 0，因此这是“短时断线缓冲 + 可观测缺帧”，不是端到端 exactly-once；重要验收仍需执行断网和掉电测试。
 
 ## 联调冒烟
 

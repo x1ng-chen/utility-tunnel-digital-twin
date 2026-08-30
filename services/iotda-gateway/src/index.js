@@ -21,11 +21,13 @@ const environment = z.object({
   DJANGO_INGEST_PASSWORD: z.string().optional(),
   DJANGO_INGEST_API_KEY: z.string().min(32).optional(),
   DJANGO_TIMEOUT_MS: z.coerce.number().int().min(500).max(60000).default(5000),
+  DJANGO_QUEUE_MAX: z.coerce.number().int().min(1).max(500000).default(43200),
   DJANGO_QUEUE_DB: z.string().min(1).default('./data/iotda-outbox.sqlite'),
 });
 
 const telemetrySchema = z.object({
   schema: z.literal('ut.telemetry.v1'),
+  seq: z.number().int().nonnegative().optional(),
   ts: z.string().optional(),
   readings: z.array(z.object({
     assetCode: z.string(),
@@ -117,6 +119,7 @@ const django = djangoEnabled
     apiKey: config.DJANGO_INGEST_API_KEY,
     deviceId: config.LOCAL_DEVICE_ID,
     timeoutMs: config.DJANGO_TIMEOUT_MS,
+    queueMax: config.DJANGO_QUEUE_MAX,
     queueDbPath: config.DJANGO_QUEUE_DB,
   })
   : null;

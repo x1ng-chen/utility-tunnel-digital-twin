@@ -356,10 +356,12 @@ class ReportExportSerializer(serializers.ModelSerializer):
     fileName = serializers.CharField(source='file_name', read_only=True)
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
     completedAt = serializers.DateTimeField(source='completed_at', read_only=True)
+    contentSha256 = serializers.CharField(source='content_sha256', read_only=True)
+    rowCount = serializers.IntegerField(source='row_count', read_only=True)
 
     class Meta:
         model = ReportExport
-        fields = ['id', 'reportType', 'status', 'fileName', 'createdAt', 'completedAt']
+        fields = ['id', 'reportType', 'status', 'fileName', 'contentSha256', 'rowCount', 'createdAt', 'completedAt']
 
 
 class AdminUserSerializer(serializers.ModelSerializer):

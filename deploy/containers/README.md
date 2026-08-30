@@ -4,7 +4,7 @@
 
 ## 发布顺序
 
-1. 在 RDS 上以迁移身份执行 `python manage.py migrate` 与 `python manage.py seed_demo`（首次环境）。
+1. 在 RDS 上以迁移身份执行 `python manage.py migrate`；生产环境严禁执行 `seed_demo`，首个管理员使用受控终端运行 `python manage.py createsuperuser` 创建。
 2. 以数据库所有者执行 `deploy/postgres/provision.sql`，创建最小权限的 `ut_runtime`。
 3. 在 ECS 的受控环境设置 `DJANGO_SECRET_KEY`、`DATABASE_URL`、Origin、共享缓存及版本号。
 4. 构建并启动：`docker compose -f deploy/containers/docker-compose.production.yml up -d --build`。
@@ -14,6 +14,7 @@
 ## 运行边界
 
 - `web` 容器仅公开本地回环端口，Django API 仅加入容器内部网络。
+- `connectivity-monitor` 每 15 秒执行一次心跳巡检；超过硬件绑定约定周期会置离线并创建通信告警，遥测恢复后自动关闭告警。可通过 `DEVICE_OFFLINE_GRACE_MULTIPLIER`、`DEVICE_OFFLINE_MIN_GRACE_SECONDS` 和 `CONNECTIVITY_RECONCILE_INTERVAL_SECONDS` 调整。
 - API 使用非 root 用户、只读文件系统与临时 `/tmp`；数据库必须使用 TLS 与最小权限账号。
 - Compose 文件不会启动数据库，避免把真实 RDS 密码、备份或数据卷混入应用部署目录。
 - 容器镜像可在 GitHub Actions 构建验证；真实 ECS、RDS、证书、域名和密钥创建仍需要华为云账号权限。

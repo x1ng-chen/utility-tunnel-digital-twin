@@ -87,7 +87,7 @@ export function createDjangoForwarder({
   timeoutMs = 5000,
   retryDelayMs = 2000,
   maxRetryDelayMs = 60000,
-  queueMax = 150,
+  queueMax = 43200,
   queueDbPath = ':memory:',
   log = console,
 } = {}) {
@@ -112,7 +112,7 @@ export function createDjangoForwarder({
     queued: outbox.count(),
     retries: 0,
     logins: 0,
-    deadLetters: 0,
+    deadLetters: outbox.deadLetterCount(),
   };
 
   async function login() {
@@ -164,9 +164,10 @@ export function createDjangoForwarder({
   function dropHead(reason) {
     const item = outbox.peek();
     if (!item) return;
-    outbox.delete(item.id);
+    outbox.deadLetter(item.id, reason);
     counters.dropped += 1;
-    log.error(`Django batch dropped (${reason}): ${JSON.stringify(item.batch.readings.map((reading) => `${reading.assetCode}/${reading.metricKey}`))}`);
+    counters.deadLetters += 1;
+    log.error(`Django batch moved to persistent dead letter (${reason}): ${JSON.stringify(item.batch.readings.map((reading) => `${reading.assetCode}/${reading.metricKey}`))}`);
   }
 
   async function flush() {
@@ -225,7 +226,6 @@ export function createDjangoForwarder({
         if (response.status === 409) {
           const details = await response.json().catch(() => ({}));
           if (details.error === 'idempotency_conflict') {
-            counters.deadLetters += 1;
             dropHead(`idempotency conflict ${JSON.stringify(details).slice(0, 300)}`);
             continue;
           }
@@ -266,7 +266,8 @@ export function createDjangoForwarder({
     const overflow = outbox.enqueue(batch, receivedAt.toISOString(), state.currentItemId);
     for (const item of overflow) {
       counters.dropped += 1;
-      log.error(`Django batch dropped (queue overflow): ${JSON.stringify(item.batch.readings.map((reading) => `${reading.assetCode}/${reading.metricKey}`))}`);
+      counters.deadLetters += 1;
+      log.error(`Django batch moved to persistent dead letter (queue overflow): ${JSON.stringify(item.batch.readings.map((reading) => `${reading.assetCode}/${reading.metricKey}`))}`);
     }
     counters.queued = outbox.count();
     void flush();

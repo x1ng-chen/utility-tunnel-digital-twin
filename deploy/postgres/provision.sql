@@ -66,7 +66,10 @@ GRANT INSERT ON operations_workorder TO ut_runtime;
 GRANT UPDATE (status, assignee_id, completed_at, reviewed_by_id, version, updated_at)
   ON operations_workorder TO ut_runtime;
 GRANT UPDATE (warning, alarm, version, updated_at) ON operations_threshold TO ut_runtime;
-GRANT INSERT ON operations_auditlog, operations_reportexport TO ut_runtime;
+GRANT INSERT ON operations_auditlog TO ut_runtime;
+GRANT INSERT (report_type, status, file_name, idempotency_key, content,
+  content_sha256, row_count, requested_by_id, created_at, completed_at)
+  ON operations_reportexport TO ut_runtime;
 GRANT INSERT (account, display_name, requested_role, setup_token_hash,
   setup_expires_at, password_set_at, status, review_note, reviewed_by_id,
   reviewed_at, created_user_id, created_at)
@@ -95,7 +98,7 @@ GRANT USAGE, SELECT ON SEQUENCE operations_profile_id_seq,
   operations_reportexport_id_seq, operations_registrationrequest_id_seq,
   operations_spatialfeature_id_seq, operations_hardwarebinding_id_seq
   TO ut_runtime;
-GRANT USAGE, SELECT ON SEQUENCE auth_user_id_seq, authtoken_token_id_seq TO ut_runtime;
+GRANT USAGE, SELECT ON SEQUENCE auth_user_id_seq TO ut_runtime;
 
 -- DatabaseCache is optional. When DJANGO_CACHE_LOCATION points at the default
 -- django_cache table, grant only the row operations required by Django. The

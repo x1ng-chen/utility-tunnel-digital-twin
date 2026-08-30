@@ -38,10 +38,10 @@ async function report() {
       <div class="section-actions"><button class="primary-button compact-button" :disabled="store.loading" @click="sync">{{ store.loading ? '同步中…' : '↻ 刷新数据' }}</button><button class="primary-button" :disabled="exporting" @click="report">{{ exporting ? '正在生成…' : '↓ 导出运行快照' }}</button></div>
     </section>
     <section class="metric-grid">
-      <article class="metric-card accent-blue"><span>在线设备 <b>↗</b></span><strong>{{ store.dashboard.assets.online }}<small>/ {{ store.dashboard.assets.total }}</small></strong><em>100% 当前数据层</em></article>
+      <article class="metric-card accent-blue"><span>在线设备 <b>↗</b></span><strong>{{ store.dashboard.assets.online }}<small>/ {{ store.dashboard.assets.total }}</small></strong><em>按约定上报周期判定</em></article>
       <article class="metric-card accent-mint"><span>环境健康度 <b>↗</b></span><strong>{{ store.dashboard.health.value }}<small>%</small></strong><em>稳定运行</em></article>
       <article class="metric-card accent-amber"><span>待确认事件 <b>↗</b></span><strong>{{ String(store.openAlerts).padStart(2, '0') }}<small>项</small></strong><em>需关注</em></article>
-      <article class="metric-card accent-violet"><span>进行中工单 <b>↗</b></span><strong>{{ String(store.activeOrders).padStart(2, '0') }}<small>项</small></strong><em>状态可追踪</em></article>
+      <article class="metric-card accent-violet"><span>进行中工单 <b>↗</b></span><strong>{{ String(store.activeOrders).padStart(2, '0') }}<small>项</small></strong><em v-if="store.dashboard.workOrderSla?.overdue">{{ store.dashboard.workOrderSla.overdue }} 项已超时，优先处置</em><em v-else-if="store.dashboard.workOrderSla?.dueSoon">{{ store.dashboard.workOrderSla.dueSoon }} 项将在 4 小时内到期</em><em v-else>处理时限正常</em></article>
     </section>
     <section class="dashboard-grid">
       <article class="panel twin-panel"><div class="panel-head"><div><span class="eyebrow">TWIN PULSE</span><h2>管廊实时态势</h2></div><RouterLink to="/twin-3d">进入三维孪生 →</RouterLink></div><div class="tunnel-map"><div class="map-grid" /><div class="map-track track-one" /><div class="map-track track-two" /><div v-for="asset in store.assets" :key="asset.id" class="map-node" :class="asset.status" :style="{ left: `${asset.position.x}%`, top: `${asset.position.y}%` }"><i /><span>{{ asset.code }}</span></div><div class="map-legend"><span><i class="normal" />正常 {{ store.assets.filter((item) => item.status === 'normal').length }}</span><span><i class="warning" />关注 {{ store.assets.filter((item) => item.status !== 'normal').length }}</span></div></div></article>

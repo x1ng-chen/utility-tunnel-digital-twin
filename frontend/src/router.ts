@@ -24,7 +24,8 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const auth = useAuthStore();
-  if (to.meta.guest && auth.isAuthenticated) return '/dashboard';
+  const isPasswordSetup = to.path === '/login' && new URLSearchParams(to.hash.replace(/^#/, '')).has('setupToken');
+  if (to.meta.guest && auth.isAuthenticated && !isPasswordSetup) return '/dashboard';
   if (!to.meta.guest && !auth.isAuthenticated) return '/login';
   const roles = to.meta.roles as Role[] | undefined;
   if (roles?.length && (!auth.user || !roles.includes(auth.user.role))) return '/dashboard';

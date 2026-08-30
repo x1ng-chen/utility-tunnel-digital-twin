@@ -27,4 +27,4 @@ export interface TelemetryQuery { assetCode?: string; metricKey?: string; qualit
 export interface TelemetrySummary { sampleCount: number; comparable: boolean; minimum: number | null; maximum: number | null; average: number | null; startedAt: string | null; endedAt: string | null; qualityCounts: Record<Telemetry['quality'], number>; latest: Telemetry | null; }
 export interface Threshold { key: string; label: string; warning: number; alarm: number; unit: string; version: number; }
 export interface AuditEntry { id: number; actorName: string; action: string; resourceType: string; resourceId: string; detail: Record<string, unknown>; requestId: string; occurredAt: string; }
-export interface Dashboard { assets: { total: number; online: number }; health: { value: number }; openAlerts: number; activeWorkOrders: number; telemetry: Telemetry | null; }
+export interface Dashboard { assets: { total: number; online: number }; health: { value: number }; openAlerts: number; activeWorkOrders: number; workOrderSla?: { overdue: number; dueSoon: number }; telemetry: Telemetry | null; }

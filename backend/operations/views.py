@@ -2,6 +2,7 @@ from datetime import timedelta
 from collections.abc import Mapping
 import csv
 from hashlib import sha256
+import io
 import json
 from math import isfinite
 import re
@@ -19,18 +20,19 @@ from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import status
-from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .authentication import BearerTokenAuthentication, IngestApiKeyAuthentication
+from .connectivity import count_online_assets, mark_assets_connected
 from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
 from .permissions import AuthenticatedRead, TelemetryPermission
 from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, HardwareBindingMutationSerializer, HardwareBindingSerializer, RegistrationRequestSerializer, ReportExportSerializer, SpatialFeatureMutationSerializer, SpatialFeatureSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, WorkOrderSerializer
 from .services import actor_name, audit
 from .telemetry_rules import evaluate_threshold
-from .throttling import LoginRateThrottle
+from .throttling import LoginRateThrottle, PasswordChangeRateThrottle, PasswordSetupRateThrottle, RegistrationRateThrottle
 
 
 def request_id(request) -> str:
@@ -50,6 +52,13 @@ def validate_registration_account(value):
         return None
     account = value.strip().lower()
     return account if ACCOUNT_PATTERN.fullmatch(account) else None
+
+
+def issue_registration_setup_token(application):
+    token = token_urlsafe(32)
+    application.setup_token_hash = sha256(token.encode('utf-8')).hexdigest()
+    application.setup_expires_at = timezone.now() + timedelta(seconds=settings.REGISTRATION_SETUP_TTL_SECONDS)
+    return token
 
 
 def error_response(code: str, message: str, status_code: int, details=None):
@@ -86,7 +95,11 @@ def role(request) -> str:
 
 
 def can_write(request) -> bool:
-    return role(request) in {Profile.Role.ADMINISTRATOR, Profile.Role.OPERATOR, Profile.Role.INGEST}
+    return role(request) in {Profile.Role.ADMINISTRATOR, Profile.Role.OPERATOR}
+
+
+def can_ingest(request) -> bool:
+    return can_write(request) or role(request) == Profile.Role.INGEST
 
 
 def is_admin(request) -> bool:
@@ -96,6 +109,19 @@ def is_admin(request) -> bool:
 def work_order_code() -> str:
     """Generate a collision-resistant human-readable work-order code."""
     return f'WO-{timezone.now():%y%m%d}-{uuid4().hex[:6].upper()}'
+
+
+WORK_ORDER_SLA_HOURS = {
+    WorkOrder.Priority.LOW: 72,
+    WorkOrder.Priority.NORMAL: 48,
+    WorkOrder.Priority.HIGH: 24,
+    WorkOrder.Priority.URGENT: 4,
+}
+
+
+def work_order_due_at(priority: str):
+    """Return the consistent initial handling deadline for an order priority."""
+    return timezone.now() + timedelta(hours=WORK_ORDER_SLA_HOURS[priority])
 
 
 IDEMPOTENCY_KEY_PATTERN = re.compile(r'^[A-Za-z0-9._:-]{1,80}$')
@@ -306,12 +332,46 @@ class LogoutView(APIView):
         return Response(status=204)
 
 
+class PasswordChangeView(APIView):
+    """Rotate an authenticated user's password and bearer credential together."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [PasswordChangeRateThrottle]
+
+    def post(self, request):
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', 'A JSON object body is required.', 400)
+        current_password = payload.get('currentPassword')
+        new_password = payload.get('newPassword')
+        if not isinstance(current_password, str) or not isinstance(new_password, str):
+            return error_response('invalid_request', 'currentPassword and newPassword must be strings.', 400)
+        if not request.user.check_password(current_password):
+            return error_response('invalid_credentials', '当前密码不正确。', 401)
+        if current_password == new_password:
+            return error_response('invalid_request', '新密码不能与当前密码相同。', 400)
+        try:
+            validate_password(new_password, request.user)
+        except ValidationError:
+            return error_response('invalid_request', '密码强度不足，请使用更复杂的密码。', 400)
+        with transaction.atomic():
+            request.user.set_password(new_password)
+            request.user.save(update_fields=['password'])
+            # A password update invalidates the previous bearer credential.  The
+            # response contains one replacement token so the current, verified
+            # browser can continue without silently retaining an old credential.
+            Token.objects.filter(user=request.user).delete()
+            token = Token.objects.create(user=request.user)
+            audit(request.user, 'auth.password_changed', 'app_user', request.user.pk, request_id=request_id(request))
+        return Response({'accessToken': token.key, 'tokenType': 'Bearer', 'message': '密码已更新，其他会话已失效。'})
+
+
 class RegistrationRequestView(APIView):
     """Public account application endpoint; it never creates an active user."""
 
     permission_classes = [AllowAny]
     authentication_classes = []
-    throttle_classes = [LoginRateThrottle]
+    throttle_classes = [RegistrationRateThrottle]
 
     def post(self, request):
         payload = object_payload(request)
@@ -341,11 +401,14 @@ class RegistrationRequestView(APIView):
 class RegistrationPasswordSetupView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
-    throttle_classes = [LoginRateThrottle]
+    throttle_classes = [PasswordSetupRateThrottle]
 
-    def post(self, request, token):
+    def post(self, request):
         payload = object_payload(request)
+        token = payload.get('token') if payload else None
         password_value = payload.get('password') if payload else None
+        if not isinstance(token, str) or not token:
+            return error_response('invalid_request', '一次性密码设置凭据不能为空。', 400)
         if not isinstance(password_value, str) or len(password_value) < 12:
             return error_response('invalid_request', '密码至少需要 12 位。', 400)
         try:
@@ -354,7 +417,7 @@ class RegistrationPasswordSetupView(APIView):
             return error_response('invalid_request', '密码强度不足，请使用更复杂的密码。', 400)
         token_hash = sha256(token.encode('utf-8')).hexdigest()
         with transaction.atomic():
-            application = RegistrationRequest.objects.select_for_update().select_related('created_user').filter(
+            application = RegistrationRequest.objects.select_for_update(of=('self',)).select_related('created_user').filter(
                 setup_token_hash=token_hash,
                 status=RegistrationRequest.Status.APPROVED,
                 password_set_at__isnull=True,
@@ -367,7 +430,8 @@ class RegistrationPasswordSetupView(APIView):
             user.save(update_fields=['password', 'is_active'])
             application.password_set_at = timezone.now()
             application.setup_token_hash = ''
-            application.save(update_fields=['password_set_at', 'setup_token_hash'])
+            application.setup_expires_at = None
+            application.save(update_fields=['password_set_at', 'setup_token_hash', 'setup_expires_at'])
             audit(user, 'registration.password_set', 'registration_request', application.pk, request_id=request_id(request))
         return Response({'message': '密码设置成功，现在可以登录。'})
 
@@ -400,6 +464,8 @@ class AdminRegistrationRequestDetailView(APIView):
             return error_response('invalid_request', 'status must be approved or rejected.', 400)
         if not isinstance(review_note, str):
             return error_response('invalid_request', 'reviewNote must be a string.', 400)
+        if next_status == RegistrationRequest.Status.REJECTED and not review_note.strip():
+            return error_response('invalid_request', '不予批准时必须填写原因。', 400)
         with transaction.atomic():
             application = RegistrationRequest.objects.select_for_update().filter(pk=pk).first()
             if not application:
@@ -418,9 +484,7 @@ class AdminRegistrationRequestDetailView(APIView):
                 user.save()
                 Profile.objects.create(user=user, display_name=application.display_name, role=application.requested_role)
                 application.created_user = user
-                setup_token = token_urlsafe(32)
-                application.setup_token_hash = sha256(setup_token.encode('utf-8')).hexdigest()
-                application.setup_expires_at = timezone.now() + timedelta(seconds=settings.REGISTRATION_SETUP_TTL_SECONDS)
+                setup_token = issue_registration_setup_token(application)
                 action = 'registration.approved'
             else:
                 setup_token = None
@@ -428,11 +492,45 @@ class AdminRegistrationRequestDetailView(APIView):
                 application.setup_expires_at = None
                 action = 'registration.rejected'
             application.save(update_fields=['status', 'review_note', 'reviewed_by', 'reviewed_at', 'created_user', 'setup_token_hash', 'setup_expires_at'])
-            audit(request.user, action, 'registration_request', application.pk, {'account': application.account, 'role': application.requested_role}, request_id(request))
+            audit(request.user, action, 'registration_request', application.pk, {
+                'account': application.account,
+                'role': application.requested_role,
+                'hasReviewNote': bool(application.review_note),
+            }, request_id(request))
         response_data = RegistrationRequestSerializer(application).data
         if setup_token:
             response_data['setupToken'] = setup_token
             response_data['setupExpiresAt'] = application.setup_expires_at
+        return Response(response_data)
+
+
+class AdminRegistrationSetupTokenView(APIView):
+    """Rotate an unused account-setup credential without recreating the user."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not is_admin(request):
+            return error_response('forbidden', 'Administrator permission is required.', 403)
+        with transaction.atomic():
+            application = RegistrationRequest.objects.select_for_update(of=('self',)).select_related('created_user').filter(pk=pk).first()
+            if not application:
+                return error_response('not_found', 'Registration request not found.', 404)
+            if (
+                application.status != RegistrationRequest.Status.APPROVED
+                or application.password_set_at is not None
+                or not application.created_user
+                or application.created_user.is_active
+            ):
+                return error_response('invalid_state', '只有尚未设置密码的已批准账号可以重新签发链接。', 409)
+            setup_token = issue_registration_setup_token(application)
+            application.save(update_fields=['setup_token_hash', 'setup_expires_at'])
+            audit(request.user, 'registration.setup_token_reissued', 'registration_request', application.pk, {
+                'account': application.account,
+            }, request_id(request))
+        response_data = RegistrationRequestSerializer(application).data
+        response_data['setupToken'] = setup_token
+        response_data['setupExpiresAt'] = application.setup_expires_at
         return Response(response_data)
 
 
@@ -503,7 +601,7 @@ class AdminUserDetailView(APIView):
         if payload is None:
             return error_response('invalid_request', 'A JSON object body is required.', 400)
         with transaction.atomic():
-            user = User.objects.select_for_update().select_related('profile').filter(pk=pk).first()
+            user = User.objects.select_for_update(of=('self',)).select_related('profile').filter(pk=pk).first()
             if not user:
                 return error_response('not_found', 'User not found.', 404)
             default_role = Profile.Role.ADMINISTRATOR if user.is_superuser else Profile.Role.OPERATOR
@@ -552,11 +650,17 @@ class DashboardView(APIView):
 
     def get(self, request):
         latest_telemetry = Telemetry.objects.select_related('asset').order_by('-recorded_at', '-id').first()
+        now = timezone.now()
+        active_orders = WorkOrder.objects.exclude(status__in=[WorkOrder.Status.COMPLETED, WorkOrder.Status.CANCELLED])
         return Response({
-            'assets': {'total': Asset.objects.filter(is_active=True).count(), 'online': Asset.objects.filter(is_active=True, status__in=[Asset.Status.NORMAL, Asset.Status.WARNING, Asset.Status.ALARM]).count()},
+            'assets': {'total': Asset.objects.filter(is_active=True).count(), 'online': count_online_assets(now)},
             'health': {'value': 100 if not Asset.objects.filter(is_active=True, status=Asset.Status.ALARM).exists() else 72},
             'openAlerts': Alert.objects.filter(status=Alert.Status.OPEN).count(),
-            'activeWorkOrders': WorkOrder.objects.exclude(status__in=[WorkOrder.Status.COMPLETED, WorkOrder.Status.CANCELLED]).count(),
+            'activeWorkOrders': active_orders.count(),
+            'workOrderSla': {
+                'overdue': active_orders.filter(due_at__isnull=False, due_at__lt=now).count(),
+                'dueSoon': active_orders.filter(due_at__isnull=False, due_at__gte=now, due_at__lte=now + timedelta(hours=4)).count(),
+            },
             'telemetry': TelemetrySerializer(latest_telemetry).data if latest_telemetry else None,
         })
 
@@ -854,7 +958,7 @@ class HardwareBindingDetailView(APIView):
             return error_response('invalid_request', 'version and at least one hardware binding field are required.', 400)
         try:
             with transaction.atomic():
-                binding = HardwareBinding.objects.select_for_update().select_related('asset').filter(pk=pk).first()
+                binding = HardwareBinding.objects.select_for_update(of=('self',)).select_related('asset').filter(pk=pk).first()
                 if not binding:
                     return error_response('not_found', 'Hardware binding not found.', 404)
                 if binding.version != requested_version:
@@ -933,7 +1037,7 @@ class AlertWorkOrderView(APIView):
             return error_response('forbidden', 'Work order permission is required.', 403)
         try:
             with transaction.atomic():
-                alert = Alert.objects.select_for_update().select_related('asset').filter(pk=pk).first()
+                alert = Alert.objects.select_for_update(of=('self',)).select_related('asset').filter(pk=pk).first()
                 if not alert or not alert.asset:
                     return error_response('invalid_state', 'Alert is not eligible for a work order.', 409)
                 existing = WorkOrder.objects.select_related('asset', 'source_alert', 'assignee').filter(source_alert=alert).first()
@@ -941,8 +1045,9 @@ class AlertWorkOrderView(APIView):
                     return Response(WorkOrderSerializer(existing).data)
                 if alert.status not in {Alert.Status.OPEN, Alert.Status.ACKNOWLEDGED}:
                     return error_response('invalid_state', 'Alert is not eligible for a work order.', 409)
-                order = WorkOrder.objects.create(code=work_order_code(), source_alert=alert, asset=alert.asset, title=f'处置 {alert.code}：{alert.title}', priority=WorkOrder.Priority.URGENT if alert.severity == Alert.Severity.CRITICAL else WorkOrder.Priority.HIGH, created_by=request.user, due_at=timezone.now() + timedelta(hours=8))
-                audit(request.user, 'work_order.created_from_alert', 'work_order', order.pk, {'alertCode': alert.code}, request_id(request))
+                priority = WorkOrder.Priority.URGENT if alert.severity == Alert.Severity.CRITICAL else WorkOrder.Priority.HIGH
+                order = WorkOrder.objects.create(code=work_order_code(), source_alert=alert, asset=alert.asset, title=f'处置 {alert.code}：{alert.title}', priority=priority, created_by=request.user, due_at=work_order_due_at(priority))
+                audit(request.user, 'work_order.created_from_alert', 'work_order', order.pk, {'alertCode': alert.code, 'priority': priority, 'dueAt': order.due_at.isoformat()}, request_id(request))
         except IntegrityError:
             # A concurrent request may create the same linked order first.
             existing = WorkOrder.objects.select_related('asset', 'source_alert', 'assignee').filter(source_alert_id=pk).first()
@@ -1014,8 +1119,8 @@ class WorkOrderListView(APIView):
             return error_response('invalid_request', 'A valid assetCode and title are required.', 400)
         try:
             with transaction.atomic():
-                order = WorkOrder.objects.create(code=work_order_code(), asset=asset, title=title, description=description_value.strip(), priority=priority, created_by=request.user, idempotency_key=request_key)
-                audit(request.user, 'work_order.created_manual', 'work_order', order.pk, {'assetCode': asset.code}, request_id(request))
+                order = WorkOrder.objects.create(code=work_order_code(), asset=asset, title=title, description=description_value.strip(), priority=priority, created_by=request.user, due_at=work_order_due_at(priority), idempotency_key=request_key)
+                audit(request.user, 'work_order.created_manual', 'work_order', order.pk, {'assetCode': asset.code, 'priority': priority, 'dueAt': order.due_at.isoformat()}, request_id(request))
         except IntegrityError:
             # A simultaneous retry may win the unique idempotency constraint.
             if request_key:
@@ -1061,7 +1166,7 @@ class WorkOrderTransitionView(APIView):
             if requested_version < 1:
                 return error_response('invalid_request', 'version must be a positive number.', 400)
         with transaction.atomic():
-            order = WorkOrder.objects.select_for_update().select_related('source_alert', 'asset').filter(pk=pk).first()
+            order = WorkOrder.objects.select_for_update(of=('self',)).select_related('source_alert', 'asset').filter(pk=pk).first()
             if not order:
                 return error_response('not_found', 'Work order not found.', 404)
             if requested_version is not None and requested_version != order.version:
@@ -1093,6 +1198,7 @@ class WorkOrderTransitionView(APIView):
 
 
 class TelemetryListView(APIView):
+    authentication_classes = [IngestApiKeyAuthentication, BearerTokenAuthentication]
     permission_classes = [TelemetryPermission]
 
     def get(self, request):
@@ -1102,7 +1208,7 @@ class TelemetryListView(APIView):
         return paginated(queryset, TelemetrySerializer, request, ordering=('-recorded_at', '-id'))
 
     def post(self, request):
-        if not can_write(request):
+        if not can_ingest(request):
             return error_response('forbidden', 'Telemetry ingestion permission is required.', 403)
         payload = object_payload(request)
         if payload is None or not isinstance(payload.get('readings'), list):
@@ -1125,6 +1231,7 @@ class TelemetryListView(APIView):
                 invalid_assets = sorted(code for code in asset_codes if code not in assets or not assets[code].is_active)
                 if invalid_assets:
                     return error_response('validation_error', 'Telemetry references missing or inactive assets.', 400, {'assetCode': invalid_assets})
+                mark_assets_connected(assets.values(), request.user, request_id(request))
                 metric_keys = {item['metricKey'] for item in validated}
                 thresholds = Threshold.objects.filter(key__in=metric_keys).in_bulk(field_name='key')
                 unit_errors = sorted({item['metricKey'] for item in validated if item['metricKey'] in thresholds and item['unit'] != thresholds[item['metricKey']].unit})
@@ -1317,8 +1424,25 @@ class ReportExportView(APIView):
                 return Response(ReportExportSerializer(existing).data, status=200)
         try:
             with transaction.atomic():
-                record = ReportExport.objects.create(report_type=report_type, file_name=f'utility-tunnel-{report_type}-{timezone.now():%Y%m%d%H%M%S}.csv', requested_by=request.user, completed_at=timezone.now(), idempotency_key=request_key)
-                audit(request.user, 'report.export', 'report_export', record.pk, {'report': report_type}, request_id(request))
+                if connection.vendor == 'postgresql':
+                    with connection.cursor() as cursor:
+                        cursor.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')
+                content, row_count = _build_report_csv(report_type)
+                record = ReportExport.objects.create(
+                    report_type=report_type,
+                    file_name=f'utility-tunnel-{report_type}-{timezone.now():%Y%m%d%H%M%S}.csv',
+                    content=content,
+                    content_sha256=sha256(content).hexdigest(),
+                    row_count=row_count,
+                    requested_by=request.user,
+                    completed_at=timezone.now(),
+                    idempotency_key=request_key,
+                )
+                audit(request.user, 'report.export', 'report_export', record.pk, {
+                    'report': report_type,
+                    'rowCount': row_count,
+                    'contentSha256': record.content_sha256,
+                }, request_id(request))
         except IntegrityError:
             if request_key:
                 existing = ReportExport.objects.filter(idempotency_key=request_key).first()
@@ -1355,6 +1479,19 @@ def _report_rows(report_type):
     return fields, iter([row])
 
 
+def _build_report_csv(report_type):
+    output = io.StringIO(newline='')
+    output.write('\ufeff')
+    writer = csv.writer(output, lineterminator='\r\n')
+    headers, rows = _report_rows(report_type)
+    writer.writerow(headers)
+    row_count = 0
+    for row in rows:
+        writer.writerow([_csv_safe(value) for value in row])
+        row_count += 1
+    return output.getvalue().encode('utf-8'), row_count
+
+
 class ReportExportDownloadView(APIView):
     permission_classes = [AuthenticatedRead]
 
@@ -1364,12 +1501,12 @@ class ReportExportDownloadView(APIView):
             return error_response('not_found', 'Report export not found.', 404)
         if record.requested_by_id != request.user.pk and not is_admin(request):
             return error_response('forbidden', 'You cannot download another user\'s report.', 403)
-        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        if record.status != ReportExport.Status.COMPLETED or not record.content_sha256:
+            return error_response('export_unavailable', '该历史导出没有不可变快照，请重新创建报表。', 409)
+        content = bytes(record.content)
+        if sha256(content).hexdigest() != record.content_sha256:
+            return error_response('export_integrity_error', '报表快照完整性校验失败。', 500)
+        response = HttpResponse(content, content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="{record.file_name}"'
-        response.write('\ufeff')
-        writer = csv.writer(response, lineterminator='\r\n')
-        headers, rows = _report_rows(record.report_type)
-        writer.writerow(headers)
-        for row in rows:
-            writer.writerow([_csv_safe(value) for value in row])
+        response['X-Content-SHA256'] = record.content_sha256
         return response

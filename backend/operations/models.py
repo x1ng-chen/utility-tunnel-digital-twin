@@ -33,7 +33,7 @@ class RegistrationRequest(models.Model):
         (Profile.Role.OPERATOR, '运维员'),
         (Profile.Role.VIEWER, '查看者'),
     ])
-    setup_token_hash = models.CharField(max_length=64, blank=True, editable=False)
+    setup_token_hash = models.CharField(max_length=64, blank=True, editable=False, db_index=True)
     setup_expires_at = models.DateTimeField(null=True, blank=True, editable=False)
     password_set_at = models.DateTimeField(null=True, blank=True, editable=False)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
@@ -364,6 +364,9 @@ class ReportExport(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.COMPLETED)
     file_name = models.CharField(max_length=180)
     idempotency_key = models.CharField(max_length=80, unique=True, null=True, blank=True, editable=False)
+    content = models.BinaryField(default=b'', editable=False)
+    content_sha256 = models.CharField(max_length=64, blank=True, editable=False)
+    row_count = models.PositiveIntegerField(default=0, editable=False)
     requested_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='report_exports')
     created_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)

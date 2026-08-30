@@ -43,7 +43,7 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
   expect(consoleErrors).toEqual([]);
 });
 
-test('三维孪生在模型交付前仍可定位设备并展示告警状态', async ({ page }) => {
+test('三维孪生加载正式模型后仍可定位设备并展示告警状态', async ({ page }) => {
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
@@ -51,10 +51,10 @@ test('三维孪生在模型交付前仍可定位设备并展示告警状态', as
   await page.getByRole('button', { name: '三维孪生' }).click();
   await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
   await expect(page.getByRole('application', { name: '综合管廊三维数字孪生场景' })).toBeVisible();
-  await expect(page.getByText('等待实体模型交付，当前为可交互预览场景')).toBeVisible();
+  await expect(page.getByText('已加载实体三维模型')).toBeVisible();
   const switcher = page.locator('.twin-quick-switch');
-  await expect(page.locator('.twin-model-readiness').getByText('预览场景', { exact: true })).toBeVisible();
-  await expect(page.locator('.twin-model-readiness').getByText(/0 \/ \d+ 个设备已定位/)).toBeVisible();
+  await expect(page.locator('.twin-model-readiness').getByText('模型已加载', { exact: true })).toBeVisible();
+  await expect(page.locator('.twin-model-readiness').getByText(/\d+ \/ \d+ 个设备已定位/)).toBeVisible();
   await switcher.getByRole('button', { name: '告警', exact: true }).click();
   expect(await switcher.getByRole('button', { name: /选择 / }).count()).toBeGreaterThan(0);
   await switcher.getByRole('button', { name: '全部', exact: true }).click();

@@ -41,8 +41,8 @@ jobs:
     name: Repository safety scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
       - run: node tools/quality-scan.mjs
@@ -56,8 +56,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm
@@ -74,19 +74,22 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: pip
-          cache-dependency-path: backend/requirements.lock
+          cache-dependency-path: |
+            backend/requirements.lock
+            backend/requirements-audit.lock
       - name: Configure CI settings
         shell: bash
         run: |
           echo "DJANGO_ENV=test" >> "$GITHUB_ENV"
           echo "DJANGO_SECRET_KEY=ci-only-django-secret-that-is-longer-than-thirty-two-characters" >> "$GITHUB_ENV"
-      - run: python -m pip install --upgrade pip
       - run: pip install --require-hashes -r requirements.lock
+      - run: pip install --require-hashes -r requirements-audit.lock
+      - run: pip-audit --disable-pip --require-hashes -r requirements.lock
       - run: python manage.py check
       - run: python manage.py migrate --noinput
       - run: python manage.py production_preflight --allow-non-production
@@ -120,13 +123,12 @@ jobs:
       DJANGO_SECRET_KEY: ci-only-django-secret-that-is-longer-than-thirty-two-characters
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/utility_tunnel?sslmode=disable
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: pip
           cache-dependency-path: backend/requirements.lock
-      - run: python -m pip install --upgrade pip
       - run: pip install --require-hashes -r requirements.lock
       - run: python manage.py migrate --noinput
       - run: python manage.py seed_demo
@@ -143,10 +145,20 @@ jobs:
         run: >-
           DATABASE_URL="$CI_RUNTIME_URL" python manage.py shell -c
           "from django.contrib.auth.models import User;
-          from operations.models import Asset, ReportExport;
+          from rest_framework.test import APIClient;
+          from operations.models import Alert, Asset, ReportExport;
           assert Asset.objects.count() > 0;
           actor = User.objects.order_by('id').first();
-          ReportExport.objects.create(report_type='daily', file_name='ci-policy.csv', requested_by=actor)"
+          ReportExport.objects.create(report_type='daily', file_name='ci-policy.csv', requested_by=actor);
+          client = APIClient();
+          login = client.post('/api/auth/login/', {'email': 'operator@example.com', 'password': 'demo-password-2026'}, format='json', HTTP_HOST='localhost');
+          assert login.status_code == 200, login.content;
+          client.credentials(HTTP_AUTHORIZATION='Bearer ' + login.json()['accessToken']);
+          alert = Alert.objects.get(code='ALM-260826-001');
+          acknowledged = client.post(f'/api/alerts/{alert.pk}/acknowledge/', format='json', HTTP_HOST='localhost');
+          assert acknowledged.status_code == 200, acknowledged.content;
+          linked = client.post(f'/api/alerts/{alert.pk}/work-order/', format='json', HTTP_HOST='localhost');
+          assert linked.status_code in {200, 201}, linked.content"
       - name: Verify schema and destructive writes are denied
         shell: bash
         run: |
@@ -166,8 +178,8 @@ jobs:
       run:
         working-directory: services/iotda-gateway
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm

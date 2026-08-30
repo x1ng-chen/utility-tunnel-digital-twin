@@ -1,0 +1,11 @@
+{
+  "asset": "utility-tunnel-annular-v04",
+  "form": "sealed transparent annular utility-tunnel demonstrator",
+  "required_functional_paths": {
+    "safe_air": "AIR_IN_01 filter port -> sample manifold -> FAN_01 -> VENT_01 roof exhaust",
+    "water": "controlled nozzle -> raised B-zone tray -> wet probe/high-level float -> manual drain",
+    "gas_mock": "one closed orange G01 ring with simulated leak signal; no classroom toxic gas source"
+  },
+  "required_assets": ["A control/door/environment", "B drip/leak/high level", "C CH4/CO/O2/smoke/fan", "SIMBOX_01", "ALARM_01", "ESTOP_01"],
+  "review_questions": ["Is the annular silhouette visually dominant without hiding the hardware?", "Are the air, water and G01 mock paths clearly distinguishable?"]
+}

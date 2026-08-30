@@ -1,6 +1,6 @@
 # 软件平台 API 契约（Vue 3 / Django）
 
-> 版本：v1.3 · 更新：2026-08-29
+> 版本：v1.4 · 更新：2026-08-30
 
 本文档是当前正式 Vue 3 前端与 Django API 的最小可执行契约。所有业务接口使用 `Bearer` Token，响应 JSON 使用 camelCase 字段。
 
@@ -45,11 +45,17 @@
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
 | `POST` | `/auth/login/` | 公开 | `{ email, password }`，返回 `accessToken`、`tokenType` 和 `user` |
+| `POST` | `/auth/registration-requests/` | 公开 | 提交无密码账号申请 `{ account, displayName, role }` |
+| `POST` | `/auth/registration-requests/setup/` | 公开 | 在请求体提交 `{ token, password }` 完成一次性密码设置；凭据不进入路径、查询参数或访问日志 |
 | `GET` | `/auth/me/` | 登录 | 返回当前用户及角色 |
+| `POST` | `/auth/password/` | 登录 | `{ currentPassword, newPassword }`；验证旧密码和密码强度后更新密码，撤销旧 Token 并返回当前会话的替换 Token |
 | `POST` | `/auth/logout/` | 登录 | 撤销当前用户 Token |
 | `GET` | `/admin/users/` | 管理员 | 用户检索和状态筛选 |
 | `POST` | `/admin/users/` | 管理员 | 创建用户和角色 |
 | `PATCH` | `/admin/users/{id}/` | 管理员 | 修改显示名、角色、启停用状态或密码 |
+| `GET` | `/admin/registration-requests/` | 管理员 | 按 `pending\|approved\|rejected` 查询账号申请 |
+| `PATCH` | `/admin/registration-requests/{id}/` | 管理员 | 批准或驳回申请；驳回必须填写 `reviewNote` |
+| `POST` | `/admin/registration-requests/{id}/setup-token/` | 管理员 | 为已批准但尚未设置密码的停用账号轮换一次性凭据，使旧链接立即失效 |
 | `GET` | `/health/` | 公开 | 进程存活检查，返回版本和提交标识 |
 | `GET` | `/ready/` | 公开 | 数据库可用性检查，返回数据库状态和查询耗时 |
 
@@ -57,7 +63,7 @@
 
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/dashboard/` | 登录 | 资产、健康度、告警、工单和最新遥测汇总 |
+| `GET` | `/dashboard/` | 登录 | 资产、健康度、告警、工单和最新遥测汇总；在线数按硬件绑定期望上报间隔和最近心跳判定，`workOrderSla` 提供已超时和 4 小时内到期工单数 |
 | `GET` | `/assets/` | 登录 | `search`、`status`、`zone`、`integrationStatus`、`hardwareCode`、`hasLocation=true\|false`、`isActive=true\|false`、`page`、`pageSize`；管理员可用 `isActive=all` 查询全部生命周期；返回硬件接入信息、WGS84 坐标、坐标来源和版本 |
 | `POST` | `/assets/` | 管理员 | 新建资产主数据；校验编码、硬件编号、能力去重、二维孪生坐标和成对 WGS84 坐标，成功后写入审计 |
 | `PATCH` | `/assets/{id}/` | 管理员 | 更新资产主数据，必须提交当前 `version`；并发过期返回 `409`，停用存在活动告警或工单的资产返回 `409` |
@@ -70,19 +76,19 @@
 | `PATCH` | `/hardware-bindings/{id}/` | 管理员 | 提交 `version` 更新端点、期望心跳或接入状态；资产绑定不可迁移 |
 | `GET` | `/alerts/` | 登录 | `status`、`severity`、`openedFrom`、`openedTo`、`page`、`pageSize` |
 | `POST` | `/alerts/{id}/acknowledge/` | 管理员/运维员 | 确认待处理告警 |
-| `POST` | `/alerts/{id}/work-order/` | 管理员/运维员 | 从告警创建关联工单 |
+| `POST` | `/alerts/{id}/work-order/` | 管理员/运维员 | 从告警创建关联工单；严重告警默认 4 小时、其他告警默认 24 小时处置时限 |
 | `GET` | `/work-orders/` | 登录 | `status`、`search`、`updatedFrom`、`updatedTo`、`page`、`pageSize` |
-| `POST` | `/work-orders/` | 管理员/运维员 | 新建 `{ assetCode, title, description?, priority? }`；可提供 `Idempotency-Key` 防止重试重复建单 |
+| `POST` | `/work-orders/` | 管理员/运维员 | 新建 `{ assetCode, title, description?, priority? }`；可提供 `Idempotency-Key` 防止重试重复建单。后端按优先级写入处置时限：低 72 小时、普通 48 小时、高 24 小时、紧急 4 小时 |
 | `POST` | `/work-orders/{id}/transition/` | 管理员/运维员 | 流转 `{ to, version? }`；提供 `version` 时启用乐观锁，完成工单必须管理员复核 |
 | `GET` | `/telemetry/` | 登录 | `assetCode`、`metricKey`、`quality`、`recordedFrom`、`recordedTo`、`page`、`pageSize`；按业务采集时间倒序返回 |
 | `GET` | `/telemetry/summary/` | 登录 | 复用遥测筛选条件，返回样本数、最小值、最大值、平均值、时间范围、质量分布和最新样本 |
-| `POST` | `/telemetry/` | 管理员/运维员 | 批量写入 1–100 条可信遥测；按 `eventId` 幂等，驱动阈值告警和资产状态联动 |
+| `POST` | `/telemetry/` | 管理员/运维员/采集密钥 | 批量写入 1–100 条可信遥测；按 `eventId` 幂等，刷新通信心跳并驱动阈值告警和资产状态联动；`X-Ingest-Key` 仅在此端点启用 |
 | `GET` | `/thresholds/` | 登录 | 查询阈值策略 |
 | `PUT` | `/thresholds/{key}/` | 管理员 | 更新 `{ warning, alarm, version }`，使用乐观锁 |
 | `GET` | `/audit/` | 登录 | `action`、`search`（动作、资源类型/编号或操作者邮箱）、`occurredFrom`、`occurredTo`、`page`、`pageSize` |
 | `GET` | `/report-exports/` | 登录 | 导出操作记录 |
 | `POST` | `/report-exports/` | 登录 | 创建 `{ report: alerts\|workOrders\|assets\|daily }`；可提供 `Idempotency-Key` 防止重复登记 |
-| `GET` | `/report-exports/{id}/download/` | 创建者/管理员 | 服务端对完整数据库查询生成 UTF-8 CSV；执行公式注入防护，不受前端分页限制 |
+| `GET` | `/report-exports/{id}/download/` | 创建者/管理员 | 返回创建时固化的 UTF-8 CSV 不可变快照；响应含 SHA-256，执行公式注入防护且不受前端分页限制 |
 
 ## 角色边界
 
@@ -100,6 +106,8 @@
 | 导出报表 | ✓ | ✓ | ✓ |
 
 任何未列出的写操作默认拒绝，后端权限校验是最终边界，前端按钮隐藏仅用于改善使用体验。
+
+机器采集主体不属于人员角色：`X-Ingest-Key` 只在 `/telemetry/` 上安装认证器，只允许 `POST`，不能读取业务数据、确认告警、创建工单或访问管理接口。
 
 ## 遥测批量写入与自动规则
 

@@ -19,6 +19,7 @@ namespace {
 constexpr uint32_t kSerialBaud = 9600;
 constexpr uint32_t kReconnectIntervalMs = 5000;
 constexpr size_t kMaxSerialFrame = 768;
+constexpr uint8_t kPendingFrameCapacity = 8;
 constexpr uint8_t kLedPin = 2;
 
 WiFiClient networkClient;
@@ -26,14 +27,18 @@ PubSubClient mqtt(networkClient);
 String serialFrame;
 String telemetryTopic;
 String commandTopic;
+String statusTopic;
+char pendingFrames[kPendingFrameCapacity][kMaxSerialFrame + 1] = {};
+uint8_t pendingHead = 0;
+uint8_t pendingCount = 0;
 uint32_t lastWiFiAttempt = 0;
 uint32_t lastMqttAttempt = 0;
 
 void printStatus() {
-  Serial.printf("#STATUS wifi=%s ip=%s rssi=%d mqtt=%s heap=%u\r\n",
+  Serial.printf("#STATUS wifi=%s ip=%s rssi=%d mqtt=%s queued=%u heap=%u\r\n",
                 WiFi.status() == WL_CONNECTED ? "up" : "down",
                 WiFi.localIP().toString().c_str(), WiFi.RSSI(),
-                mqtt.connected() ? "up" : "down", ESP.getFreeHeap());
+                mqtt.connected() ? "up" : "down", pendingCount, ESP.getFreeHeap());
 }
 
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
@@ -64,14 +69,37 @@ void connectMqtt() {
       millis() - lastMqttAttempt < kReconnectIntervalMs) return;
   lastMqttAttempt = millis();
   const bool connected = strlen(MQTT_USERNAME) == 0
-                             ? mqtt.connect(DEVICE_ID)
-                             : mqtt.connect(DEVICE_ID, MQTT_USERNAME, MQTT_PASSWORD);
+                             ? mqtt.connect(DEVICE_ID, statusTopic.c_str(), 1, true, "offline")
+                             : mqtt.connect(DEVICE_ID, MQTT_USERNAME, MQTT_PASSWORD,
+                                            statusTopic.c_str(), 1, true, "offline", true);
   if (!connected) {
     Serial.printf("#MQTT connect_failed state=%d\r\n", mqtt.state());
     return;
   }
   mqtt.subscribe(commandTopic.c_str(), 1);
+  mqtt.publish(statusTopic.c_str(), "online", true);
   Serial.println("#MQTT connected");
+}
+
+void enqueueFrame(const String& line) {
+  if (pendingCount == kPendingFrameCapacity) {
+    pendingHead = (pendingHead + 1U) % kPendingFrameCapacity;
+    pendingCount--;
+    Serial.println("#ERROR telemetry_buffer_overflow_oldest_removed");
+  }
+  const uint8_t index = (pendingHead + pendingCount) % kPendingFrameCapacity;
+  line.toCharArray(pendingFrames[index], kMaxSerialFrame + 1);
+  pendingCount++;
+  Serial.printf("#QUEUED count=%u\r\n", pendingCount);
+}
+
+void flushPendingFrame() {
+  if (!mqtt.connected() || pendingCount == 0) return;
+  if (!mqtt.publish(telemetryTopic.c_str(), pendingFrames[pendingHead], false)) return;
+  pendingFrames[pendingHead][0] = '\0';
+  pendingHead = (pendingHead + 1U) % kPendingFrameCapacity;
+  pendingCount--;
+  Serial.printf("#PUBLISHED queued=%u\r\n", pendingCount);
 }
 
 void handleSerialLine(String line) {
@@ -86,13 +114,13 @@ void handleSerialLine(String line) {
     return;
   }
   if (!mqtt.connected()) {
-    Serial.println("#ERROR mqtt_offline");
+    enqueueFrame(line);
     return;
   }
   if (mqtt.publish(telemetryTopic.c_str(), line.c_str(), false)) {
     Serial.println("#PUBLISHED");
   } else {
-    Serial.println("#ERROR publish_failed");
+    enqueueFrame(line);
   }
 }
 
@@ -119,8 +147,10 @@ void setup() {
   digitalWrite(kLedPin, HIGH);
   Serial.begin(kSerialBaud);
   Serial.setTimeout(50);
+  serialFrame.reserve(kMaxSerialFrame);
   telemetryTopic = String("ut/v1/") + DEVICE_ID + "/telemetry";
   commandTopic = String("ut/v1/") + DEVICE_ID + "/cmd/#";
+  statusTopic = String("ut/v1/") + DEVICE_ID + "/status";
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setCallback(onMqttMessage);
   mqtt.setBufferSize(1024);
@@ -132,7 +162,10 @@ void setup() {
 void loop() {
   connectWiFi();
   connectMqtt();
-  if (mqtt.connected()) mqtt.loop();
+  if (mqtt.connected()) {
+    mqtt.loop();
+    flushPendingFrame();
+  }
   readSerial();
   digitalWrite(kLedPin, mqtt.connected() ? LOW : HIGH);
   delay(1);

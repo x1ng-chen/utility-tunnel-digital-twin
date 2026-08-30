@@ -11,7 +11,7 @@ DJANGO_ENV = os.getenv('DJANGO_ENV', 'development').strip().lower()
 if DJANGO_ENV not in {'development', 'test', 'production'}:
     raise ValueError('DJANGO_ENV must be development, test, or production.')
 IS_PRODUCTION = DJANGO_ENV == 'production'
-APP_VERSION = os.getenv('APP_VERSION', '0.5.0')
+APP_VERSION = os.getenv('APP_VERSION', '0.6.0')
 APP_COMMIT_SHA = os.getenv('APP_COMMIT_SHA', 'local')
 # Fail closed for deployments that do not explicitly provide a debug flag.
 # Local development can opt in through backend/.env.example.
@@ -162,16 +162,24 @@ if not INGEST_PRINCIPAL_USERNAME:
 REGISTRATION_SETUP_TTL_SECONDS = int(os.getenv('REGISTRATION_SETUP_TTL_SECONDS', '86400'))
 if REGISTRATION_SETUP_TTL_SECONDS <= 0:
     raise ValueError('REGISTRATION_SETUP_TTL_SECONDS must be greater than zero.')
+DEVICE_OFFLINE_GRACE_MULTIPLIER = int(os.getenv('DEVICE_OFFLINE_GRACE_MULTIPLIER', '3'))
+DEVICE_OFFLINE_MIN_GRACE_SECONDS = int(os.getenv('DEVICE_OFFLINE_MIN_GRACE_SECONDS', '15'))
+if DEVICE_OFFLINE_GRACE_MULTIPLIER < 2 or DEVICE_OFFLINE_MIN_GRACE_SECONDS <= 0:
+    raise ValueError('Device connectivity grace settings are invalid.')
 TRUST_PROXY_HEADERS = os.getenv('DJANGO_TRUST_PROXY_HEADERS', 'false').lower() in {'1', 'true', 'yes'}
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'operations.authentication.IngestApiKeyAuthentication',
         'operations.authentication.BearerTokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
     'DEFAULT_RENDERER_CLASSES': ['rest_framework.renderers.JSONRenderer'],
     'EXCEPTION_HANDLER': 'config.api.api_exception_handler',
-    'DEFAULT_THROTTLE_RATES': {'login': os.getenv('LOGIN_RATE_LIMIT', '10/min')},
+    'DEFAULT_THROTTLE_RATES': {
+        'login': os.getenv('LOGIN_RATE_LIMIT', '10/min'),
+        'registration': os.getenv('REGISTRATION_RATE_LIMIT', '5/hour'),
+        'password_setup': os.getenv('PASSWORD_SETUP_RATE_LIMIT', '10/min'),
+        'password_change': os.getenv('PASSWORD_CHANGE_RATE_LIMIT', '5/hour'),
+    },
 }
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'

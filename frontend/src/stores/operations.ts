@@ -57,6 +57,7 @@ export const useOperationsStore = defineStore('operations', () => {
   const notice = ref('');
   const openAlerts = computed(() => alerts.value.filter((item) => item.status === 'open').length);
   const activeOrders = computed(() => workOrders.value.filter((item) => !['completed', 'cancelled'].includes(item.status)).length);
+  let liveRefreshPromise: Promise<void> | null = null;
 
   function expireApiSession() {
     auth.expireSession();
@@ -102,6 +103,36 @@ export const useOperationsStore = defineStore('operations', () => {
       }
     }
     finally { loading.value = false; }
+  }
+
+  async function refreshLive() {
+    if (source.value !== 'api' || !auth.isAuthenticated) return;
+    if (liveRefreshPromise) return liveRefreshPromise;
+    liveRefreshPromise = (async () => {
+      try {
+        const listParams = { page: 1, pageSize: 100 };
+        const [dashboardResponse, assetsResponse, alertsResponse, ordersResponse, telemetryResponse] = await Promise.all([
+          api.dashboard(), api.assets(listParams), api.alerts(listParams), api.workOrders(listParams), api.telemetry(listParams),
+        ]);
+        dashboard.value = dashboardResponse.data;
+        assets.value = assetsResponse.data.items;
+        alerts.value = alertsResponse.data.items;
+        workOrders.value = ordersResponse.data.items;
+        telemetry.value = telemetryResponse.data.items;
+        offline.value = false;
+        syncError.value = '';
+        lastSyncedAt.value = new Date().toISOString();
+      } catch (cause: unknown) {
+        if (responseStatus(cause) === 401) expireApiSession();
+        else {
+          offline.value = true;
+          syncError.value = apiErrorMessage(cause);
+        }
+      } finally {
+        liveRefreshPromise = null;
+      }
+    })();
+    return liveRefreshPromise;
   }
 
   function tick() {
@@ -357,7 +388,7 @@ export const useOperationsStore = defineStore('operations', () => {
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
-  return { dashboard, assets, spatialFeatures, hardwareBindings, alerts, workOrders, thresholds, telemetry, telemetryInsights, telemetryInsightsTotal, telemetrySummary, telemetryInsightsLoading, telemetryInsightsError, audit, loading, source, offline, syncError, lastSyncedAt, notice, openAlerts, activeOrders, refresh, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, importGisFeatures, updateGisFeature, createHardwareBinding, transition, updateThreshold, createReport, ingestTelemetry, loadTelemetryInsights };
+  return { dashboard, assets, spatialFeatures, hardwareBindings, alerts, workOrders, thresholds, telemetry, telemetryInsights, telemetryInsightsTotal, telemetrySummary, telemetryInsightsLoading, telemetryInsightsError, audit, loading, source, offline, syncError, lastSyncedAt, notice, openAlerts, activeOrders, refresh, refreshLive, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, importGisFeatures, updateGisFeature, createHardwareBinding, transition, updateThreshold, createReport, ingestTelemetry, loadTelemetryInsights };
 });
 
 function telemetryMatchesQuery(item: Telemetry, query: TelemetryQuery): boolean {

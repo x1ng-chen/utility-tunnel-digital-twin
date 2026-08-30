@@ -340,6 +340,7 @@ test('drops a batch rejected with a validation error and keeps the lane flowing'
     });
     forwarder.forward(SAMPLE, RECEIVED_AT);
     await waitFor(() => forwarder.counters.dropped === 1 && forwarder.counters.queued === 0);
+    assert.equal(forwarder.counters.deadLetters, 1);
     rejected = false;
     forwarder.forward(singleReading(23), RECEIVED_AT);
     await waitFor(() => forwarder.counters.delivered === 1);
@@ -377,12 +378,34 @@ test('drops the oldest batch when the retry queue overflows', async () => {
     forwarder.forward(singleReading(2), RECEIVED_AT);
     forwarder.forward(singleReading(3), RECEIVED_AT);
     await waitFor(() => forwarder.counters.dropped === 1);
+    assert.equal(forwarder.counters.deadLetters, 1);
     released = true;
     await waitFor(() => forwarder.counters.delivered === 2);
     assert.equal(forwarder.counters.queued, 0);
     forwarder.close();
   } finally {
     server.server.close();
+  }
+});
+
+test('persists dead-letter payloads and reasons across restarts', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ut-iotda-dlq-'));
+  const queueDbPath = join(directory, 'outbox.sqlite');
+  try {
+    const first = new Outbox(queueDbPath, 1);
+    first.enqueue(toDjangoBatch(singleReading(1), { deviceId: 'CTRL-01', receivedAt: RECEIVED_AT }), RECEIVED_AT.toISOString());
+    first.enqueue(toDjangoBatch(singleReading(2), { deviceId: 'CTRL-01', receivedAt: RECEIVED_AT }), RECEIVED_AT.toISOString());
+    assert.equal(first.count(), 1);
+    assert.equal(first.deadLetterCount(), 1);
+    assert.equal(first.listDeadLetters()[0].reason, 'queue_overflow');
+    first.close();
+
+    const second = new Outbox(queueDbPath, 1);
+    assert.equal(second.deadLetterCount(), 1);
+    assert.equal(second.listDeadLetters()[0].batch.readings[0].value, 1);
+    second.close();
+  } finally {
+    try { rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 }); } catch { /* Windows may retain a transient WAL handle. */ }
   }
 });
 

@@ -191,10 +191,13 @@ static void Bluetooth_SendTelemetry(uint8_t temperature,
 {
   char json[512];
   int length;
+  static uint32_t telemetry_sequence = 0U;
+
+  telemetry_sequence++;
 
   length = snprintf(
     json, sizeof(json),
-    "{\"schema\":\"ut.telemetry.v1\","
+    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,"
     "\"readings\":["
     "{\"assetCode\":\"ENV-01\",\"metric\":\"temperature\","
     "\"value\":%u,\"unit\":\"degC\",\"quality\":\"%s\"},"
@@ -205,6 +208,7 @@ static void Bluetooth_SendTelemetry(uint8_t temperature,
     "{\"assetCode\":\"CTRL-01\",\"metric\":\"vibration.alarm\","
     "\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"}"
     "]}\r\n",
+    (unsigned long)telemetry_sequence,
     temperature, dht_ok ? "good" : "bad",
     humidity, dht_ok ? "good" : "bad",
     water_raw, water_ok ? "good" : "missing", vibration_alarm

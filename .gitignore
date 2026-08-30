@@ -57,6 +57,7 @@ ut-ops-site.tar.gz
 firmware/**/.pio/
 
 # STM32/CMake generated artifacts
+/build/
 firmware/**/build/
 firmware/**/build-*/
 firmware/**/*.elf

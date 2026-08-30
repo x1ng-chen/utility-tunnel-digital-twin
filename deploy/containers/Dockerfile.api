@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS runtime
+FROM python:3.12-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -9,8 +9,7 @@ WORKDIR /app
 RUN addgroup --system utilitytunnel && adduser --system --ingroup utilitytunnel utilitytunnel
 
 COPY backend/requirements.lock ./requirements.lock
-RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir --require-hashes -r requirements.lock
+RUN python -m pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY backend/ ./
 RUN chown -R utilitytunnel:utilitytunnel /app

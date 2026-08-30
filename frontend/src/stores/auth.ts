@@ -64,6 +64,22 @@ export const useAuthStore = defineStore('auth', () => {
     persist(null);
   }
 
+  async function changePassword(currentPassword: string, newPassword: string) {
+    loading.value = true;
+    error.value = '';
+    try {
+      const response = await api.changePassword({ currentPassword, newPassword });
+      storage?.setItem(tokenStorageKey, response.data.accessToken);
+      storage?.setItem(sessionModeKey, 'api');
+      return response.data.message as string;
+    } catch (cause: unknown) {
+      error.value = axiosMessage(cause);
+      throw cause;
+    } finally {
+      loading.value = false;
+    }
+  }
+
   function expireSession(message = '登录状态已过期，请重新登录。') {
     storage?.removeItem(tokenStorageKey);
     storage?.removeItem(sessionModeKey);
@@ -71,7 +87,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = message;
   }
 
-  return { user, loading, error, isAuthenticated, login, logout, expireSession, clearError: () => { error.value = ''; } };
+  return { user, loading, error, isAuthenticated, login, logout, changePassword, expireSession, clearError: () => { error.value = ''; } };
 });
 
 function axiosMessage(cause: unknown): string {

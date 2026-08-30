@@ -1,4 +1,14 @@
 services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.22
+    container_name: utility-tunnel-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1884:1883"
+    volumes:
+      - ./services/local-mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    read_only: true
+
   postgres:
     image: postgres:16-alpine
     container_name: utility-tunnel-postgres
