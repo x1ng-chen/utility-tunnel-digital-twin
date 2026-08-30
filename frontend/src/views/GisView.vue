@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import AppShell from '../components/AppShell.vue';
@@ -11,9 +11,11 @@ import '../assets/gis.css';
 import '../assets/operational-layout-polish.css';
 
 const store = useOperationsStore();
+const route = useRoute();
 const router = useRouter();
 const mapElement = ref<HTMLElement | null>(null);
-const selectedCode = ref('CTRL-01');
+const requestedCode = typeof route.query.asset === 'string' ? route.query.asset : '';
+const selectedCode = ref(store.assets.some((asset) => asset.code === requestedCode) ? requestedCode : 'CTRL-01');
 const search = ref('');
 const zone = ref('all');
 const integration = ref<'all' | IntegrationStatus>('all');
@@ -88,7 +90,7 @@ function selectAsset(asset: Asset) {
   selectedCode.value = asset.code;
   if (map && hasValidLocation(asset)) map.flyTo([asset.latitude, asset.longitude], Math.max(map.getZoom(), 18), { duration: 0.65 });
 }
-function openTwin() { if (selectedAsset.value) void router.push({ path: '/twin-3d', query: { asset: selectedAsset.value.code } }); }
+function openTwin() { if (selectedAsset.value) void router.push({ path: '/twin-3d', query: { asset: selectedAsset.value.code, source: 'gis' } }); }
 
 onMounted(async () => {
   await nextTick();
@@ -109,6 +111,12 @@ onMounted(async () => {
 watch(filteredAssets, () => {
   if (!filteredAssets.value.some((asset) => asset.code === selectedCode.value)) selectedCode.value = filteredAssets.value[0]?.code ?? '';
   renderMarkers();
+});
+
+watch(() => route.query.asset, (code) => {
+  if (typeof code !== 'string') return;
+  const asset = store.assets.find((item) => item.code === code);
+  if (asset) selectAsset(asset);
 });
 
 watch(visibleSpatialFeatures, renderSpatialFeatures);

@@ -32,9 +32,21 @@ export interface TwinModelReadinessResponse {
 
 export const twinModelUrl = (import.meta.env.VITE_TWIN_MODEL_URL || '/models/utility-tunnel.glb').trim();
 const modelNodeNamePattern = /^[A-Z0-9][A-Z0-9_-]{1,79}$/;
+const activeAlertStatuses = new Set<Alert['status']>(['open', 'acknowledged']);
+const severityRank: Record<Alert['severity'], number> = { info: 0, warning: 1, critical: 2 };
+
+export function activeTwinAlerts(assetCode: string, alerts: Alert[]) {
+  return alerts
+    .filter((alert) => alert.assetCode === assetCode && activeAlertStatuses.has(alert.status))
+    .sort((left, right) => severityRank[right.severity] - severityRank[left.severity] || left.openedAt.localeCompare(right.openedAt));
+}
+
+export function primaryTwinAlert(assetCode: string, alerts: Alert[]) {
+  return activeTwinAlerts(assetCode, alerts)[0] ?? null;
+}
 
 export function resolveTwinVisualState(asset: Asset, alerts: Alert[]): TwinVisualState {
-  if (alerts.some((alert) => alert.assetCode === asset.code && !['resolved', 'closed'].includes(alert.status))) return 'alarm';
+  if (activeTwinAlerts(asset.code, alerts).length) return 'alarm';
   if (asset.status === 'warning') return 'warning';
   if (asset.status === 'normal') return 'normal';
   return 'unknown';

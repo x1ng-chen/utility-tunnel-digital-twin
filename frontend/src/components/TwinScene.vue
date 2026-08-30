@@ -4,7 +4,7 @@ import { BoxGeometry, Color, DirectionalLight, Fog, Group, HemisphereLight, Mesh
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Alert, Asset } from '../types';
-import { modelNodeNames, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
+import { modelNodeNames, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
 
 const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null }>();
 const emit = defineEmits<{ select: [code: string]; modelReport: [report: TwinModelBindingReport] }>();
@@ -22,6 +22,7 @@ const pointer = new Vector2();
 const assetObjects = new Map<string, Object3D>();
 const animatedObjects = new Map<string, Object3D>();
 const modelBoundCodes = new Set<string>();
+const materialBaselines = new WeakMap<MeshStandardMaterial, { color: Color; emissive: Color }>();
 let modelRoot: Object3D | undefined;
 let fallbackSceneRoot: Group | undefined;
 let fallbackAssetRoot: Group | undefined;
@@ -92,7 +93,11 @@ function bindModelAssets(root: Object3D) {
     const node = modelNodeNames(asset).map((name) => root.getObjectByName(name)).find(Boolean);
     if (!node) { addFallbackAsset(asset); return; }
     node.userData.assetCode = asset.code;
-    node.traverse((child) => { child.userData.assetCode = asset.code; });
+    node.traverse((child) => {
+      child.userData.assetCode = asset.code;
+      if (!(child instanceof Mesh)) return;
+      child.material = Array.isArray(child.material) ? child.material.map((material) => material.clone()) : child.material.clone();
+    });
     assetObjects.set(asset.code, node);
     animatedObjects.set(asset.code, node);
     modelBoundCodes.add(asset.code);
@@ -121,16 +126,24 @@ function clearLoadedModel() {
   animatedObjects.clear();
 }
 
-function colorObject(object: Object3D, state: TwinVisualState, selected = false) {
-  const color = colors[state];
+function visualIntensity(state: TwinVisualState, selected: boolean, critical: boolean, now = 0) {
+  if (state === 'alarm') return (critical ? 2.1 : 1.55) + Math.sin(now * (critical ? 7 : 4.5)) * (critical ? .72 : .38) + (selected ? .55 : 0);
+  if (selected) return 2.25;
+  return state === 'warning' ? 1.08 : .42;
+}
+
+function colorObject(object: Object3D, state: TwinVisualState, selected = false, critical = false) {
+  const color = state === 'alarm' && critical ? 0xff3d66 : colors[state];
   object.traverse((child) => {
     if (!(child instanceof Mesh)) return;
     const materials = Array.isArray(child.material) ? child.material : [child.material];
     materials.forEach((material) => {
       if (!(material instanceof MeshStandardMaterial)) return;
-      material.emissive.setHex(color);
-      material.emissiveIntensity = selected ? 2.3 : state === 'alarm' ? 1.8 : state === 'warning' ? 1.1 : .42;
-      material.color.lerp(new Color(color), selected ? .27 : state === 'alarm' ? .18 : .05);
+      const baseline = materialBaselines.get(material) ?? { color: material.color.clone(), emissive: material.emissive.clone() };
+      materialBaselines.set(material, baseline);
+      material.color.copy(baseline.color).lerp(new Color(color), selected ? .31 : state === 'alarm' ? .22 : .06);
+      material.emissive.copy(baseline.emissive).lerp(new Color(color), state === 'alarm' ? .88 : state === 'warning' ? .52 : .26);
+      material.emissiveIntensity = visualIntensity(state, selected, critical);
     });
   });
 }
@@ -138,7 +151,8 @@ function colorObject(object: Object3D, state: TwinVisualState, selected = false)
 function applyVisualState() {
   props.assets.forEach((asset) => {
     const object = assetObjects.get(asset.code);
-    if (object) colorObject(object, resolveTwinVisualState(asset, props.alerts), props.selectedCode === asset.code);
+    const alert = primaryTwinAlert(asset.code, props.alerts);
+    if (object) colorObject(object, resolveTwinVisualState(asset, props.alerts), props.selectedCode === asset.code, alert?.severity === 'critical');
   });
 }
 
@@ -178,8 +192,14 @@ function animate() {
     const object = animatedObjects.get(asset.code);
     if (!object) return;
     const state = resolveTwinVisualState(asset, props.alerts);
-    const beacon = object.children.find((child) => child instanceof Mesh && child.geometry instanceof SphereGeometry) as Mesh | undefined;
-    if (beacon?.material instanceof MeshStandardMaterial) beacon.material.emissiveIntensity = state === 'alarm' ? 1.35 + Math.sin(now * 7) * .95 : state === 'warning' ? 1 + Math.sin(now * 3) * .35 : .65;
+    const critical = primaryTwinAlert(asset.code, props.alerts)?.severity === 'critical';
+    object.traverse((child) => {
+      if (!(child instanceof Mesh)) return;
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      materials.forEach((material) => {
+        if (material instanceof MeshStandardMaterial) material.emissiveIntensity = visualIntensity(state, props.selectedCode === asset.code, critical, now);
+      });
+    });
   });
   controls?.update();
   if (renderer && scene && camera) renderer.render(scene, camera);

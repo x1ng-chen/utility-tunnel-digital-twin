@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
 import TwinScene from '../components/TwinScene.vue';
 import { useOperationsStore } from '../stores/operations';
 import { api } from '../services/api';
-import { resolveTwinVisualState, summarizeTwinModelDelivery, twinStateLabel, type TwinModelBindingReport, type TwinModelReadinessResponse, type TwinVisualState } from '../services/twin3d';
+import { activeTwinAlerts, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelDelivery, twinStateLabel, type TwinModelBindingReport, type TwinModelReadinessResponse, type TwinVisualState } from '../services/twin3d';
 
 const store = useOperationsStore();
 const route = useRoute();
+const router = useRouter();
 const stage = ref<HTMLElement>();
 const requestedCode = typeof route.query.asset === 'string' ? route.query.asset : '';
 const selectedCode = ref(store.assets.some((asset) => asset.code === requestedCode) ? requestedCode : store.alerts.find((alert) => !['resolved', 'closed'].includes(alert.status))?.assetCode || store.assets[0]?.code || null);
@@ -29,13 +30,15 @@ const filterOptions: Array<{ value: 'all' | TwinVisualState; label: string }> = 
   { value: 'all', label: '全部' }, { value: 'alarm', label: '告警' }, { value: 'warning', label: '关注' }, { value: 'normal', label: '正常' }, { value: 'unknown', label: '待核验' },
 ];
 const selectedAsset = computed(() => store.assets.find((asset) => asset.code === selectedCode.value) || null);
-const selectedAlerts = computed(() => selectedAsset.value ? store.alerts.filter((alert) => alert.assetCode === selectedAsset.value?.code) : []);
+const selectedAlerts = computed(() => selectedAsset.value ? activeTwinAlerts(selectedAsset.value.code, store.alerts) : []);
+const primaryAlert = computed(() => selectedAsset.value ? primaryTwinAlert(selectedAsset.value.code, store.alerts) : null);
 const selectedOrders = computed(() => selectedAsset.value ? store.workOrders.filter((order) => order.assetCode === selectedAsset.value?.code) : []);
 const selectedTelemetry = computed(() => selectedAsset.value ? store.telemetry.find((reading) => reading.assetCode === selectedAsset.value?.code) : null);
 const visibleAssets = computed(() => store.assets.filter((asset) => {
   const matchesQuery = !query.value || `${asset.code} ${asset.name} ${asset.zone}`.toLowerCase().includes(query.value.toLowerCase());
   return matchesQuery && (stateFilter.value === 'all' || resolveTwinVisualState(asset, store.alerts) === stateFilter.value);
 }));
+const riskAssets = computed(() => store.assets.filter((asset) => ['alarm', 'warning'].includes(resolveTwinVisualState(asset, store.alerts))));
 const selectedAssetName = computed(() => selectedAsset.value?.name.replace(/\s*[（(][^（）()]{1,16}[）)]\s*$/, '') || '');
 const modelBindingText = computed(() => `${modelReport.value.boundCodes.length} / ${modelReport.value.expectedCount} 个设备已定位`);
 const localModelReadiness = computed(() => summarizeTwinModelDelivery(store.assets));
@@ -49,8 +52,25 @@ const modelDeliveryHint = computed(() => {
   if (modelReport.value.isComplete) return '实体模型已完成全部设备定位，可直接用于告警可视化。';
   return `实体模型已加载，仍有 ${modelReport.value.missingCodes.length} 个设备待补齐节点名称。`;
 });
+const navigationContext = computed(() => {
+  const source = typeof route.query.source === 'string' ? route.query.source : '';
+  const alertCode = typeof route.query.alert === 'string' ? route.query.alert : '';
+  if (source === 'alert' && alertCode) return `已从告警 ${alertCode} 定位到当前设备。`;
+  if (source === 'gis') return '已从 GIS 地图定位到当前设备。';
+  if (source === 'asset') return '已从设备台账定位到当前设备。';
+  return '';
+});
 
 function select(code: string) { selectedCode.value = code; scene.value?.focusAsset(code); }
+function inspectRisk(direction: 1 | -1) {
+  const assets = riskAssets.value;
+  if (!assets.length) return;
+  const current = assets.findIndex((asset) => asset.code === selectedCode.value);
+  const next = current < 0 ? (direction > 0 ? 0 : assets.length - 1) : (current + direction + assets.length) % assets.length;
+  select(assets[next].code);
+}
+function openGis() { if (selectedAsset.value) void router.push({ path: '/gis', query: { asset: selectedAsset.value.code, source: 'twin' } }); }
+function openAlertCenter() { if (primaryAlert.value) void router.push({ path: '/alerts', query: { focus: primaryAlert.value.code, source: 'twin' } }); }
 function resetView() { scene.value?.resetView(); }
 function retryModel() { scene.value?.reloadModel(); }
 function receiveModelReport(report: TwinModelBindingReport) { modelReport.value = report; }
@@ -110,13 +130,19 @@ function onStagePointerLeave(event?: PointerEvent) {
 function onQuickSwitchPointerDown(event: PointerEvent) {
   if (!finePointer.value || !fullscreenActive.value) return;
   const target = event.currentTarget;
-  if (target instanceof HTMLElement && event.pointerType !== 'touch') target.setPointerCapture(event.pointerId);
-  fullscreenPointer.draggingSwitcher = true;
+  const origin = event.target;
+  const isDeviceControl = origin instanceof Element && Boolean(origin.closest('button'));
+  // Capturing a pointer that began on a device button prevents browsers from
+  // dispatching its click after the pointer is released. Capture only rail drags.
+  if (!isDeviceControl && target instanceof HTMLElement && event.pointerType !== 'touch') target.setPointerCapture(event.pointerId);
+  fullscreenPointer.draggingSwitcher = !isDeviceControl;
   onStagePointerMove(event);
   onStagePointerDown(event);
 }
 function onQuickSwitchPointerMove(event: PointerEvent) {
-  if (!fullscreenPointer.draggingSwitcher) return;
+  // The quick switcher stops bubbling pointer events so WebGL never receives
+  // a drag intended for the horizontal device rail. Keep the fullscreen cursor
+  // in sync here for both hover and drag, not just after a press.
   onStagePointerMove(event);
 }
 function onQuickSwitchPointerEnd(event: PointerEvent) {
@@ -153,10 +179,10 @@ onBeforeUnmount(() => {
       <div class="twin-title-actions"><span :class="['twin-live', { blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><i />{{ modelDeliveryLabel }}</span><button v-if="modelReport.mode === 'fallback'" type="button" class="outline-button twin-model-retry-top" @click="retryModel">↻ 检测模型</button><button class="primary-button compact-button" @click="resetView">⌖ 重置视角</button><button class="outline-button" @click="fullscreen">⛶ 全屏查看</button></div>
     </section>
     <section class="twin-workspace">
-      <article ref="stage" class="twin-stage-panel" @pointermove="onStagePointerMove" @pointerdown="onStagePointerDown" @pointerup="onStagePointerUp" @pointerleave="onStagePointerLeave">
+      <article ref="stage" :class="['twin-stage-panel', { 'twin-fullscreen-active': fullscreenActive }]" @pointermove="onStagePointerMove" @pointerdown="onStagePointerDown" @pointerup="onStagePointerUp" @pointerleave="onStagePointerLeave">
         <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" @select="select" @model-report="receiveModelReport" />
-        <div v-if="selectedAsset" class="twin-focus-status" aria-live="polite"><span :class="resolveTwinVisualState(selectedAsset, store.alerts)"><i />{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span><b :title="selectedAsset.name">{{ selectedAssetName }}</b><small>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</small></div>
-        <nav class="twin-quick-switch" aria-label="场景内设备切换" @pointerdown.stop="onQuickSwitchPointerDown" @pointermove.stop="onQuickSwitchPointerMove" @pointerup.stop="onQuickSwitchPointerEnd" @pointercancel.stop="onQuickSwitchPointerEnd" @mousedown.stop>
+        <div v-if="selectedAsset" class="twin-focus-status" aria-live="polite"><span :class="resolveTwinVisualState(selectedAsset, store.alerts)"><i />{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span><b :title="selectedAsset.name">{{ selectedAssetName }}</b><small>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</small><div v-if="riskAssets.length" class="twin-risk-patrol"><button type="button" aria-label="巡检上一异常设备" @click="inspectRisk(-1)">← 上一异常</button><button type="button" aria-label="巡检下一异常设备" @click="inspectRisk(1)">下一异常 →</button></div></div>
+        <nav class="twin-quick-switch" aria-label="场景内设备切换" @pointerenter="onQuickSwitchPointerMove" @pointerdown.capture="onQuickSwitchPointerDown" @pointermove.capture="onQuickSwitchPointerMove" @pointerup.capture="onQuickSwitchPointerEnd" @pointercancel.capture="onQuickSwitchPointerEnd" @mousedown.stop>
           <div class="twin-quick-switch-tools"><div class="twin-quick-switch-heading"><span>设备快速切换 · {{ visibleAssets.length }}/{{ store.assets.length }}</span><b>{{ selectedAssetName || '请选择设备' }}</b></div><div class="twin-switch-filters" role="group" aria-label="按运行状态筛选设备"><button v-for="filter in filterOptions" :key="filter.value" :class="{ selected: stateFilter === filter.value }" type="button" @pointerdown.stop @click.stop="stateFilter = filter.value">{{ filter.label }}</button></div></div>
           <div class="twin-quick-switch-list"><button v-for="asset in visibleAssets" :key="asset.id" :class="[resolveTwinVisualState(asset, store.alerts), { selected: asset.code === selectedCode }]" :aria-label="`选择 ${asset.name}，设备编码 ${asset.code}`" :title="`${asset.name} · ${asset.zone}`" @pointerdown.stop @click.stop="select(asset.code)"><i /><span><b>{{ asset.code }}</b><small>{{ asset.name }}</small></span></button></div>
         </nav>
@@ -170,9 +196,12 @@ onBeforeUnmount(() => {
           <header><div><span class="eyebrow">SELECTED EQUIPMENT</span><h2 :title="selectedAsset.name">{{ selectedAssetName }}</h2><code>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</code></div><span :class="['twin-state-chip', resolveTwinVisualState(selectedAsset, store.alerts)]">{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span></header>
           <section :class="['twin-model-readiness', modelReport.mode]"><span>实体模型接入</span><div><b>{{ modelReport.mode === 'loaded' ? '模型已加载' : '预览场景' }}</b><strong>{{ modelBindingText }}</strong></div><p>{{ modelDeliveryHint }}</p><button v-if="modelReport.mode === 'fallback'" type="button" class="twin-model-retry" @click="retryModel">重新检测模型</button></section>
           <section :class="['twin-model-contract', { ready: modelDeliveryReady, blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><span>模型交付检查</span><b>{{ modelDeliveryLabel }}</b><p>{{ modelDeliveryCount }} / {{ modelDeliveryTotal }} 个设备已具备标准节点名称</p></section>
+          <details class="twin-model-binding-list"><summary>查看实体模型映射</summary><p v-if="modelReport.isComplete">模型中的设备节点已全部绑定，可进行状态高亮与点击定位。</p><p v-else>待补齐：{{ modelReport.missingCodes.join('、') }}</p><div><span v-for="code in modelReport.boundCodes" :key="code">{{ code }}</span></div></details>
+          <p v-if="navigationContext" class="twin-navigation-context" role="status">{{ navigationContext }}</p>
           <div class="twin-inspector-grid"><div><span>所在区域</span><b>{{ selectedAsset.zone }}</b></div><div><span>实体模型</span><b>{{ selectedAsset.mesh || '待绑定' }}</b></div><div><span>最新上报</span><b>{{ formatTime(selectedAsset.lastSeenAt) }}</b></div><div><span>当前遥测</span><b>{{ selectedTelemetry ? `${selectedTelemetry.value} ${selectedTelemetry.unit}` : '暂无数据' }}</b></div></div>
-          <section class="twin-detail-section"><span class="eyebrow">CURRENT ALERTS</span><p v-if="selectedAlerts.length" class="twin-alert-summary"><b>{{ selectedAlerts.length }} 项关联告警</b>{{ selectedAlerts[0].title }}</p><p v-else class="twin-empty">当前设备没有未关闭告警。</p></section>
+          <section class="twin-detail-section"><span class="eyebrow">CURRENT ALERTS</span><div v-if="primaryAlert" class="twin-alert-summary"><b>{{ primaryAlert.severity === 'critical' ? '严重告警' : primaryAlert.severity === 'warning' ? '待处置告警' : '提示告警' }} · {{ primaryAlert.code }}</b><strong>{{ primaryAlert.title }}</strong><p>{{ primaryAlert.detail }}</p><button type="button" class="twin-alert-action" @click="openAlertCenter">进入告警中心处置</button></div><p v-else class="twin-empty">当前设备没有未关闭告警。</p></section>
           <section class="twin-detail-section"><span class="eyebrow">WORK ORDER STATUS</span><p v-if="selectedOrders.length" class="twin-order-summary"><b>{{ selectedOrders[0].code }}</b>{{ selectedOrders[0].title }}</p><p v-else class="twin-empty">当前设备没有关联工单。</p></section>
+          <button class="twin-gis-link" type="button" @click="openGis">在 GIS 地图中查看</button>
           <p class="twin-install-note">{{ selectedAsset.installationNote }}</p>
         </template>
         <div v-else class="twin-empty-inspector">从三维场景或设备列表中选择一个设备。</div>
