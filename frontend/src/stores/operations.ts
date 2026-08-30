@@ -416,7 +416,10 @@ function seedHardwareBindings(): HardwareBinding[] {
     endpoint: `ut/v1/${assetCode.toLowerCase()}/telemetry`,
     expectedIntervalSeconds: 60,
     status: 'reserved',
+    connectivity: 'awaiting_data',
     lastHeartbeatAt: null,
+    heartbeatAgeSeconds: null,
+    heartbeatDueAt: null,
     version: 1,
   }));
 }

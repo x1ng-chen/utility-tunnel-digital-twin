@@ -15,5 +15,7 @@
 
 - `web` 容器仅公开本地回环端口，Django API 仅加入容器内部网络。
 - API 使用非 root 用户、只读文件系统与临时 `/tmp`；数据库必须使用 TLS 与最小权限账号。
+- 已校验的 GLB 模型保存在 `twin_model_media` 持久卷；部署迁移、备份和恢复时必须与 PostgreSQL 版本元数据保持同一恢复点。
+- Nginx 与 Django 默认允许最大 32 MB 的模型文件（代理层预留 34 MB 请求体）；调整 `TWIN_MODEL_MAX_BYTES` 时必须同步代理层上限。
 - Compose 文件不会启动数据库，避免把真实 RDS 密码、备份或数据卷混入应用部署目录。
 - 容器镜像可在 GitHub Actions 构建验证；真实 ECS、RDS、证书、域名和密钥创建仍需要华为云账号权限。

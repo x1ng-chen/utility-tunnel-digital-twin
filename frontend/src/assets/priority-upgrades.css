@@ -22,3 +22,25 @@
 @media(min-width:721px) and (max-width:1280px){.gis-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.gis-metrics article:last-child{grid-column:1 / -1}}
 @media(max-width:720px){.gis-metrics{grid-template-columns:1fr}.gis-metrics article:last-child{grid-column:auto}}
 .telemetry-line-chart{height:178px;margin:12px 21px 0;border-bottom:1px solid #203852;background:repeating-linear-gradient(0deg,transparent 0 43px,#7897b515 44px 45px)}.telemetry-line-chart svg{width:100%;height:100%;overflow:visible}.quality-donut{display:grid;place-content:center;width:76px;height:76px;margin:16px 0 0;border-radius:50%;box-shadow:inset 0 0 0 12px #11253c}.quality-donut span,.quality-donut small{display:block;text-align:center}.quality-donut span{color:#ecf4ff;font-size:14px;font-weight:900}.quality-donut small{color:#7f98b6;font-size:8px}.governance-nav{margin-top:12px;border-top:1px solid #233b58;padding-top:12px}.governance-nav summary{display:flex;align-items:center;justify-content:space-between;cursor:pointer;list-style:none;padding:0 15px 8px;color:#86a2c3;font-size:11px;font-weight:800;letter-spacing:.12em}.governance-nav summary::-webkit-details-marker{display:none}.governance-nav[open] summary span{transform:rotate(180deg)}.governance-item{margin-left:8px;width:calc(100% - 8px);font-size:12px}.login-orbit{position:absolute;z-index:0;width:360px;height:360px;border:1px solid #7192ff42;border-radius:50%;pointer-events:none}.login-orbit::after{content:'';position:absolute;top:20px;right:48px;width:9px;height:9px;border-radius:50%;background:#64e3c4;box-shadow:0 0 22px 5px #64e3c477}.orbit-one{top:10%;right:12%;animation:login-orbit 18s linear infinite}.orbit-two{bottom:2%;left:7%;width:210px;height:210px;border-color:#8975ff31;animation:login-orbit 12s linear infinite reverse}@keyframes login-orbit{to{transform:rotate(360deg)}}
+.model-release-panel{margin-top:17px}
+.model-upload-form{display:grid;grid-template-columns:minmax(150px,.6fr) minmax(220px,1fr) minmax(260px,1.4fr) auto;gap:14px;align-items:end;padding:17px 21px;border-top:1px solid #1d3652}
+.model-upload-form label{display:grid;gap:6px;color:#7f96b2;font-size:9px}
+.model-upload-form input{width:100%;height:36px;padding:0 10px;border:1px solid #2b4764;border-radius:8px;outline:0;background:#0a182b;color:#e4edff;font-size:10px}
+.model-upload-form input:focus{border-color:#6c8cff;box-shadow:0 0 0 4px #6c8cff18}
+.model-upload-form input[type=file]{padding:7px}
+.model-upload-form input[type=file]::file-selector-button{margin:-4px 9px -4px -4px;padding:6px 9px;border:0;border-radius:6px;background:#244278;color:#dfe8ff;font-size:9px;cursor:pointer}
+.model-release-list{display:grid;gap:9px;padding:16px 21px;border-top:1px solid #1d3652}
+.model-release-row{display:grid;grid-template-columns:minmax(230px,1fr) minmax(220px,1.25fr) 150px auto;gap:14px;align-items:center;padding:14px;border:1px solid #294562;border-radius:11px;background:#0b1a2d}
+.model-release-row.active{border-color:#328977;background:linear-gradient(100deg,#0d302f,#0d2033)}
+.model-release-row>div{display:grid;grid-template-columns:auto 1fr;gap:5px 8px;align-items:center}
+.model-release-row b{color:#eef5ff;font-size:12px}
+.model-release-row small{grid-column:1/-1;color:#8098b6;font-size:9px}
+.model-release-row p{margin:0;color:#9eb0c9;font-size:9px;line-height:1.55}
+.model-release-row code{overflow:hidden;color:#7791b2;font-size:8px;text-overflow:ellipsis;white-space:nowrap}
+.model-release-row button{min-height:34px;padding:0 10px;border:1px solid #49659b;border-radius:8px;background:#162c52;color:#c4d2ff;font-size:9px;font-weight:800}
+.model-release-status{width:max-content;padding:4px 7px;border-radius:999px;background:#33455f;color:#c5d2e5;font-size:8px;font-weight:800}
+.model-release-status.active{background:#18554a;color:#7ee8cb}
+.model-release-status.draft{background:#594324;color:#ffd393}
+.active-release-note{color:#69dfc2;font-size:9px;font-weight:800;text-align:right}
+@media(max-width:1100px){.model-upload-form{grid-template-columns:1fr 1fr}.model-notes{grid-column:1/-1}.model-upload-form button{justify-self:start}.model-release-row{grid-template-columns:1fr 1fr}.model-release-row button,.active-release-note{justify-self:end}}
+@media(max-width:720px){.model-upload-form,.model-release-row{grid-template-columns:1fr}.model-notes{grid-column:auto}.model-upload-form button{width:100%}.model-release-row button,.active-release-note{justify-self:stretch;text-align:center}}

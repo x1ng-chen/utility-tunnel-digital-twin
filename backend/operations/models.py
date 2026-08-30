@@ -2,6 +2,12 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
+from uuid import uuid4
+
+
+def twin_model_upload_path(instance, filename):
+    """Keep user supplied filenames out of the persistent storage path."""
+    return f'twin-models/{uuid4().hex}.glb'
 
 
 class Profile(models.Model):
@@ -336,6 +342,35 @@ class HardwareBinding(models.Model):
         ordering = ['asset__code']
         indexes = [models.Index(fields=['status', '-last_heartbeat_at'], name='binding_status_heartbeat_idx')]
         constraints = [models.CheckConstraint(check=models.Q(expected_interval_seconds__gte=1, expected_interval_seconds__lte=86400), name='binding_interval_range')]
+
+
+class TwinModelRelease(models.Model):
+    """Validated GLB release metadata used by the browser digital twin."""
+
+    class Status(models.TextChoices):
+        DRAFT = 'draft', '待启用'
+        ACTIVE = 'active', '使用中'
+        RETIRED = 'retired', '历史版本'
+
+    version = models.CharField(max_length=40, unique=True)
+    model_file = models.FileField(upload_to=twin_model_upload_path, max_length=180)
+    original_name = models.CharField(max_length=180)
+    sha256 = models.CharField(max_length=64, unique=True, editable=False)
+    size_bytes = models.PositiveBigIntegerField(editable=False)
+    notes = models.CharField(max_length=500, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    uploaded_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='uploaded_twin_models')
+    activated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='activated_twin_models')
+    activated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['status', '-created_at'], name='twin_release_status_idx')]
+        constraints = [
+            models.UniqueConstraint(fields=['status'], condition=models.Q(status='active'), name='twin_single_active_release'),
+            models.CheckConstraint(check=models.Q(size_bytes__gt=0), name='twin_release_size_positive'),
+        ]
 
 
 class AuditLog(models.Model):

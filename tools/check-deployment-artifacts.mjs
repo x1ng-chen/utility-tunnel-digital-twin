@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 
-const requirements = ['.dockerignore', 'deploy/containers/Dockerfile.api', 'deploy/containers/Dockerfile.web', 'deploy/containers/nginx.web.conf', 'deploy/containers/docker-compose.production.yml', 'deploy/containers/README.md'];
+const requirements = ['.dockerignore', 'deploy/containers/Dockerfile.api', 'deploy/containers/Dockerfile.web', 'deploy/containers/nginx.web.conf', 'deploy/containers/docker-compose.production.yml', 'deploy/containers/README.md', 'deploy/postgres/provision.sql'];
 const missing = requirements.filter((file) => !existsSync(file));
 if (missing.length) {
   console.error(`Deployment artifact check failed: missing ${missing.join(', ')}`);
@@ -11,7 +11,8 @@ const api = readFileSync('deploy/containers/Dockerfile.api', 'utf8');
 const web = readFileSync('deploy/containers/Dockerfile.web', 'utf8');
 const nginx = readFileSync('deploy/containers/nginx.web.conf', 'utf8');
 const compose = readFileSync('deploy/containers/docker-compose.production.yml', 'utf8');
-const combined = `${api}\n${web}\n${nginx}\n${compose}`;
+const grants = readFileSync('deploy/postgres/provision.sql', 'utf8');
+const combined = `${api}\n${web}\n${nginx}\n${compose}\n${grants}`;
 const checks = [
   ['API uses a non-root runtime user', /USER utilitytunnel/],
   ['API exposes a health probe', /HEALTHCHECK[\s\S]*\/api\/health\//],
@@ -27,6 +28,9 @@ const checks = [
   ['Compose keeps the API internal', /api:[\s\S]*expose:[\s\S]*"8000"/],
   ['Compose binds the web service to loopback only', /127\.0\.0\.1:8080:8080/],
   ['Compose probes the web service health endpoint', /web:[\s\S]*healthcheck:[\s\S]*\/healthz/],
+  ['Compose persists validated twin model releases', /twin_model_media:\/app\/media[\s\S]*volumes:[\s\S]*twin_model_media:/],
+  ['Nginx permits the governed GLB upload size', /client_max_body_size 34m/],
+  ['PostgreSQL runtime role can read and publish twin releases', /operations_twinmodelrelease[\s\S]*GRANT UPDATE \(status, activated_by_id, activated_at\)/],
 ];
 const failures = checks.filter(([, pattern]) => !pattern.test(combined)).map(([label]) => label);
 if (/postgres(?:ql)?:\/\/[^$\s]*:[^$\s]*@/i.test(combined) || /BEGIN (?:RSA|OPENSSH|EC) PRIVATE KEY/.test(combined)) {

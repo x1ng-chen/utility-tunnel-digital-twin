@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from operations.models import Alert, Asset, HardwareBinding, Profile, RegistrationRequest, SpatialFeature, Telemetry, Threshold, WorkOrder
+from operations.models import Alert, Asset, HardwareBinding, Profile, RegistrationRequest, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder
 
 
 class Command(BaseCommand):
@@ -22,9 +22,13 @@ class Command(BaseCommand):
             # local loopback address. Clear only that local test throttle key;
             # production rate limiting remains unchanged.
             cache.delete('throttle_login_127.0.0.1')
+            cache.delete('throttle_login_burst_127.0.0.1')
             RegistrationRequest.objects.filter(account__startswith='e2e-operator-').delete()
             User.objects.filter(email__startswith='e2e-operator-').delete()
             SpatialFeature.objects.filter(code__startswith='SEG-E2E-').delete()
+            for release in TwinModelRelease.objects.filter(version__startswith='e2e-model-'):
+                release.model_file.delete(save=False)
+                release.delete()
             # Older browser suites used ENV-E2E without a timestamp suffix;
             # keep the reserved test namespace clean across suite versions.
             Asset.objects.filter(code__startswith='ENV-E2E').delete()

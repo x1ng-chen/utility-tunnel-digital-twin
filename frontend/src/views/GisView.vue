@@ -6,7 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import AppShell from '../components/AppShell.vue';
 import { escapeMapText, hasValidLocation, integrationLabels, locationSourceLabels } from '../services/gis';
 import { useOperationsStore } from '../stores/operations';
-import type { Asset, HardwareBindingStatus, IntegrationStatus, SpatialFeature, SpatialLayerType } from '../types';
+import type { Asset, HardwareConnectivity, IntegrationStatus, SpatialFeature, SpatialLayerType } from '../types';
 import '../assets/gis.css';
 import '../assets/operational-layout-polish.css';
 
@@ -26,7 +26,7 @@ let markers: L.LayerGroup | null = null;
 let featureLayers: L.LayerGroup | null = null;
 
 const spatialLayerLabels: Record<SpatialLayerType, string> = { tunnel_segment: '管廊区段', chamber: '舱室', manhole: '井口', inspection_route: '巡检路线', risk_zone: '风险区域', installation_point: '安装点' };
-const hardwareBindingLabels: Record<HardwareBindingStatus, string> = { reserved: '接口已预留', connected: '已接入', inactive: '未启用', error: '接入异常' };
+const connectivityLabels: Record<HardwareConnectivity, string> = { online: '设备在线', offline: '心跳超时', awaiting_data: '等待首条数据', inactive: '接口未启用', error: '接入异常' };
 
 const zones = computed(() => [...new Set(store.assets.map((asset) => asset.zone))].sort());
 const filteredAssets = computed(() => {
@@ -170,7 +170,7 @@ onBeforeUnmount(() => {
         <dl><div><dt>硬件接口</dt><dd>{{ selectedAsset.interface || '未配置' }}</dd></div><div><dt>坐标来源</dt><dd>{{ locationSourceLabels[selectedAsset.locationSource] }}</dd></div><div><dt>纬度</dt><dd>{{ selectedAsset.latitude?.toFixed(6) ?? '未配置' }}</dd></div><div><dt>经度</dt><dd>{{ selectedAsset.longitude?.toFixed(6) ?? '未配置' }}</dd></div></dl>
         <div class="gis-capabilities"><small>当前能力</small><span v-for="capability in selectedAsset.capabilities" :key="capability">{{ capability }}</span></div>
         <div class="gis-note"><small>实物状态说明</small><p>{{ selectedAsset.installationNote }}</p></div>
-        <div class="gis-binding"><small>硬件接入契约</small><template v-if="selectedBinding"><p><b :class="selectedBinding.status">{{ hardwareBindingLabels[selectedBinding.status] }}</b>{{ selectedBinding.protocol.toUpperCase() }} · {{ selectedBinding.deviceIdentifier }}</p><code>{{ selectedBinding.endpoint }}</code><em>期望心跳 {{ selectedBinding.expectedIntervalSeconds }} 秒；未收到真实心跳前不显示在线。</em></template><p v-else>尚未预留通信绑定。</p></div>
+        <div class="gis-binding"><small>设备数据连接</small><template v-if="selectedBinding"><p><b :class="selectedBinding.connectivity">{{ connectivityLabels[selectedBinding.connectivity] }}</b>{{ selectedBinding.protocol.toUpperCase() }} · {{ selectedBinding.deviceIdentifier }}</p><code>{{ selectedBinding.endpoint }}</code><em v-if="selectedBinding.connectivity === 'online'">最近心跳 {{ selectedBinding.heartbeatAgeSeconds }} 秒前，连接正常。</em><em v-else-if="selectedBinding.connectivity === 'offline'">设备超过 {{ selectedBinding.expectedIntervalSeconds * 3 }} 秒未上报，请检查供电与网络。</em><em v-else>期望每 {{ selectedBinding.expectedIntervalSeconds }} 秒上报；收到真实数据后才显示在线。</em></template><p v-else>尚未登记设备数据接口。</p></div>
         <button class="gis-twin-link" @click="openTwin">在三维中查看此设备 →</button>
       </aside>
     </section>

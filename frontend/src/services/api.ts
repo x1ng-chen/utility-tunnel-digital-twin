@@ -42,6 +42,9 @@ function initialApiBaseUrl(): string {
 const defaultBaseUrl = initialApiBaseUrl();
 const client = axios.create({ baseURL: defaultBaseUrl, timeout: 8000, headers: { 'Content-Type': 'application/json' } });
 client.interceptors.request.use((config) => {
+  // The browser must generate the multipart boundary. Keeping the client's
+  // JSON default here makes Django see an empty request.FILES collection.
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) config.headers.delete('Content-Type');
   const token = sessionStorageRef?.getItem('ut-django-token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   const requestId = typeof globalThis.crypto?.randomUUID === 'function' ? globalThis.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -61,6 +64,10 @@ export const api = {
   reviewRegistrationRequest: (id: number, payload: { status: 'approved' | 'rejected'; reviewNote?: string }) => client.patch(`/admin/registration-requests/${id}/`, payload),
   dashboard: () => client.get('/dashboard/'),
   twinModelReadiness: () => client.get('/twin/model-readiness/'),
+  twinModels: (params?: Record<string, string | number>) => client.get('/twin/models/', { params }),
+  uploadTwinModel: (payload: FormData) => client.post('/twin/models/', payload, { timeout: 60000 }),
+  activateTwinModel: (id: number) => client.post(`/twin/models/${id}/activate/`),
+  twinModelFile: (releaseId: number) => client.get('/twin/model-file/', { params: { release: releaseId }, responseType: 'blob', timeout: 60000 }),
   assets: (params?: Record<string, string | number>) => client.get('/assets/', { params }),
   createAsset: (payload: Record<string, unknown>) => client.post('/assets/', payload),
   updateAsset: (id: number, payload: Record<string, unknown>) => client.patch(`/assets/${id}/`, payload),

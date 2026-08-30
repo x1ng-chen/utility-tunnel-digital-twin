@@ -17,7 +17,11 @@ const required = [
   ['automatic alert insert access', /grant insert \(code, asset_id, severity, category, status, title, detail, .*\) on operations_alert to ut_runtime/],
   ['alert rule update access', /grant update \(severity, status, detail, last_observed_value, acknowledged_at, acknowledged_by_id, resolved_at\) on operations_alert to ut_runtime/],
   ['telemetry insert access', /grant insert \(asset_id, event_id, metric_key, metric, value, unit, quality, recorded_at, ingested_at\) on operations_telemetry to ut_runtime/],
-  ['operational insert sequences', /grant usage, select on sequence operations_profile_id_seq, operations_asset_id_seq, operations_alert_id_seq, operations_telemetry_id_seq, operations_workorder_id_seq, operations_auditlog_id_seq, operations_reportexport_id_seq to ut_runtime/],
+  ['operational insert sequences', /grant usage, select on sequence operations_profile_id_seq, operations_asset_id_seq, operations_alert_id_seq, operations_telemetry_id_seq, operations_workorder_id_seq, operations_auditlog_id_seq, operations_reportexport_id_seq, operations_registrationrequest_id_seq, operations_spatialfeature_id_seq, operations_hardwarebinding_id_seq, operations_twinmodelrelease_id_seq to ut_runtime/],
+  ['registration approval access', /grant update \(status, review_note, reviewed_by_id, reviewed_at, created_user_id\) on operations_registrationrequest to ut_runtime/],
+  ['spatial governance access', /grant update \(name, layer_type, geometry, crs, source, source_reference, accuracy_m, captured_at, verified_at, status, description, version, updated_at\) on operations_spatialfeature to ut_runtime/],
+  ['hardware contract access', /grant update \(protocol, device_identifier, endpoint, expected_interval_seconds, status, last_heartbeat_at, version, updated_at\) on operations_hardwarebinding to ut_runtime/],
+  ['twin model publication access', /grant update \(status, activated_by_id, activated_at\) on operations_twinmodelrelease to ut_runtime/],
   ['user and token sequences', /grant usage, select on sequence auth_user_id_seq, authtoken_token_id_seq to ut_runtime/],
   ['placeholder guard', /replace the ut_runtime password placeholder before executing/],
 ];

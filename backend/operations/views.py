@@ -1,7 +1,10 @@
 from datetime import timedelta
 from collections.abc import Mapping
+import hashlib
+import json
 from math import isfinite
 import re
+import struct
 from uuid import uuid4
 from django.conf import settings
 from django.contrib.auth import authenticate
@@ -12,6 +15,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Avg, Count, Max, Min, Q
+from django.http import FileResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import status
@@ -21,12 +25,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
+from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder
 from .permissions import AuthenticatedRead
-from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, HardwareBindingMutationSerializer, HardwareBindingSerializer, RegistrationRequestSerializer, ReportExportSerializer, SpatialFeatureMutationSerializer, SpatialFeatureSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, WorkOrderSerializer
+from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, HardwareBindingMutationSerializer, HardwareBindingSerializer, RegistrationRequestSerializer, ReportExportSerializer, SpatialFeatureMutationSerializer, SpatialFeatureSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, TwinModelReleaseSerializer, WorkOrderSerializer, hardware_connectivity
 from .services import actor_name, audit
 from .telemetry_rules import evaluate_threshold
-from .throttling import LoginRateThrottle, PasswordChangeRateThrottle
+from .throttling import LoginBurstRateThrottle, LoginRateThrottle, PasswordChangeRateThrottle
 
 
 def request_id(request) -> str:
@@ -259,7 +263,7 @@ class ReadyView(APIView):
 class LoginView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
-    throttle_classes = [LoginRateThrottle]
+    throttle_classes = [LoginRateThrottle, LoginBurstRateThrottle]
 
     def post(self, request):
         payload = object_payload(request)
@@ -354,7 +358,7 @@ class RegistrationRequestView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
-    throttle_classes = [LoginRateThrottle]
+    throttle_classes = [LoginRateThrottle, LoginBurstRateThrottle]
 
     def post(self, request):
         payload = object_payload(request)
@@ -560,6 +564,8 @@ class DashboardView(APIView):
         latest_telemetry = Telemetry.objects.select_related('asset').order_by('-recorded_at', '-id').first()
         now = timezone.now()
         active_orders = WorkOrder.objects.exclude(status__in=[WorkOrder.Status.COMPLETED, WorkOrder.Status.CANCELLED])
+        bindings = list(HardwareBinding.objects.only('status', 'last_heartbeat_at', 'expected_interval_seconds'))
+        connectivity = [hardware_connectivity(binding) for binding in bindings]
         return Response({
             'assets': {'total': Asset.objects.filter(is_active=True).count(), 'online': Asset.objects.filter(is_active=True, status__in=[Asset.Status.NORMAL, Asset.Status.WARNING, Asset.Status.ALARM]).count()},
             'health': {'value': 100 if not Asset.objects.filter(is_active=True, status=Asset.Status.ALARM).exists() else 72},
@@ -569,12 +575,19 @@ class DashboardView(APIView):
                 'overdue': active_orders.filter(due_at__isnull=False, due_at__lt=now).count(),
                 'dueSoon': active_orders.filter(due_at__isnull=False, due_at__gte=now, due_at__lte=now + timedelta(hours=4)).count(),
             },
+            'connections': {
+                'total': len(connectivity),
+                'online': connectivity.count('online'),
+                'offline': connectivity.count('offline'),
+                'awaitingData': connectivity.count('awaiting_data'),
+                'error': connectivity.count('error'),
+            },
             'telemetry': TelemetrySerializer(latest_telemetry).data if latest_telemetry else None,
         })
 
 
 class TwinModelReadinessView(APIView):
-    """Read-only Blender handoff contract; it does not assert model-file existence."""
+    """Read-only Blender handoff contract and active validated GLB release."""
     permission_classes = [AuthenticatedRead]
 
     def get(self, request):
@@ -587,8 +600,9 @@ class TwinModelReadinessView(APIView):
         ]
         mapped_asset_count = len(active_assets) - len(missing_mesh_codes) - len(invalid_mesh_codes)
         latest_update = max((asset.updated_at for asset in active_assets), default=None)
+        active_release = TwinModelRelease.objects.select_related('uploaded_by', 'activated_by').filter(status=TwinModelRelease.Status.ACTIVE).first()
         return Response({
-            'status': 'ready' if not missing_mesh_codes and not invalid_mesh_codes else 'blocked',
+            'status': 'ready' if active_release and not missing_mesh_codes and not invalid_mesh_codes else 'blocked',
             'summary': {
                 'activeAssetCount': len(active_assets),
                 'mappedAssetCount': mapped_asset_count,
@@ -599,10 +613,156 @@ class TwinModelReadinessView(APIView):
             'contract': {
                 'nodeNamePattern': 'A-Z, 0-9, hyphen and underscore',
                 'nodeNamesUnique': True,
-                'modelFileVerified': False,
+                'modelFileVerified': bool(active_release),
             },
+            'activeRelease': TwinModelReleaseSerializer(active_release).data if active_release else None,
             'updatedAt': latest_update,
         })
+
+
+TWIN_MODEL_VERSION_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$')
+
+
+def validate_glb_upload(uploaded_file):
+    """Validate the GLB 2.0 container header and return its SHA-256 digest."""
+    if not uploaded_file or not uploaded_file.name.lower().endswith('.glb'):
+        return None, error_response('invalid_model', '请选择 Blender 导出的 GLB 2.0 文件。', 400)
+    if uploaded_file.size <= 12 or uploaded_file.size > settings.TWIN_MODEL_MAX_BYTES:
+        return None, error_response('invalid_model', f'模型文件必须小于 {settings.TWIN_MODEL_MAX_BYTES // (1024 * 1024)} MB。', 400)
+    uploaded_file.seek(0)
+    header = uploaded_file.read(12)
+    try:
+        magic, glb_version, declared_size = struct.unpack('<4sII', header)
+    except struct.error:
+        return None, error_response('invalid_model', '模型文件头不完整。', 400)
+    if magic != b'glTF' or glb_version != 2 or declared_size != uploaded_file.size:
+        return None, error_response('invalid_model', '文件不是有效的 GLB 2.0，或文件长度校验失败。', 400)
+    remaining = uploaded_file.size - 12
+    chunk_index = 0
+    scene_document = None
+    while remaining:
+        if remaining < 8:
+            return None, error_response('invalid_model', 'GLB 数据块头不完整。', 400)
+        chunk_header = uploaded_file.read(8)
+        chunk_length, chunk_type = struct.unpack('<I4s', chunk_header)
+        if chunk_length > remaining - 8 or chunk_length % 4:
+            return None, error_response('invalid_model', 'GLB 数据块长度校验失败。', 400)
+        if chunk_index == 0 and chunk_type != b'JSON':
+            return None, error_response('invalid_model', 'GLB 首个数据块必须为 JSON 场景描述。', 400)
+        if chunk_index > 0 and chunk_type != b'BIN\x00':
+            return None, error_response('invalid_model', 'GLB 仅允许一个 JSON 场景块和一个二进制资源块。', 400)
+        if chunk_index > 1:
+            return None, error_response('invalid_model', 'GLB 包含过多数据块。', 400)
+        chunk_payload = uploaded_file.read(chunk_length)
+        if len(chunk_payload) != chunk_length:
+            return None, error_response('invalid_model', 'GLB 数据块内容不完整。', 400)
+        if chunk_index == 0:
+            try:
+                scene_document = json.loads(chunk_payload.rstrip(b' \t\r\n\x00').decode('utf-8'))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                return None, error_response('invalid_model', 'GLB 场景描述不是有效的 UTF-8 JSON。', 400)
+        remaining -= 8 + chunk_length
+        chunk_index += 1
+    if chunk_index == 0:
+        return None, error_response('invalid_model', 'GLB 文件不包含场景数据。', 400)
+    asset_descriptor = scene_document.get('asset') if isinstance(scene_document, dict) else None
+    if not isinstance(asset_descriptor, dict) or str(asset_descriptor.get('version', '')) != '2.0':
+        return None, error_response('invalid_model', 'GLB 场景必须声明 glTF 2.0。', 400)
+    if not isinstance(scene_document.get('nodes'), list) or not scene_document['nodes']:
+        return None, error_response('invalid_model', 'GLB 场景不包含可显示的模型节点。', 400)
+    uploaded_file.seek(0)
+    digest = hashlib.sha256()
+    for chunk in uploaded_file.chunks():
+        digest.update(chunk)
+    uploaded_file.seek(0)
+    return digest.hexdigest(), None
+
+
+class TwinModelReleaseListView(APIView):
+    permission_classes = [AuthenticatedRead]
+
+    def get(self, request):
+        queryset = TwinModelRelease.objects.select_related('uploaded_by', 'activated_by')
+        return paginated(queryset, TwinModelReleaseSerializer, request, ordering=('-created_at', '-id'))
+
+    def post(self, request):
+        if not is_admin(request):
+            return error_response('forbidden', '仅管理员可以上传三维模型。', 403)
+        version = str(request.data.get('version', '')).strip()
+        notes = str(request.data.get('notes', '')).strip()
+        if not TWIN_MODEL_VERSION_PATTERN.fullmatch(version):
+            return error_response('invalid_request', '版本号只能包含字母、数字、点、短横线和下划线。', 400)
+        if len(notes) > 500:
+            return error_response('invalid_request', '版本说明不能超过 500 个字符。', 400)
+        uploaded_file = request.FILES.get('file')
+        digest, validation_error = validate_glb_upload(uploaded_file)
+        if validation_error:
+            return validation_error
+        if TwinModelRelease.objects.filter(Q(version__iexact=version) | Q(sha256=digest)).exists():
+            return error_response('conflict', '相同版本号或相同模型文件已经存在。', 409)
+        release = TwinModelRelease(
+            version=version,
+            model_file=uploaded_file,
+            original_name=uploaded_file.name[:180],
+            sha256=digest,
+            size_bytes=uploaded_file.size,
+            notes=notes,
+            uploaded_by=request.user,
+        )
+        try:
+            with transaction.atomic():
+                release.save()
+                audit(request.user, 'twin.model.uploaded', 'twin_model_release', release.pk, {'version': version, 'sha256': digest, 'sizeBytes': uploaded_file.size}, request_id(request))
+        except IntegrityError:
+            if release and release.model_file:
+                release.model_file.delete(save=False)
+            return error_response('conflict', '相同版本号或相同模型文件已经存在。', 409)
+        except Exception:
+            if release and release.model_file:
+                release.model_file.delete(save=False)
+            raise
+        return Response(TwinModelReleaseSerializer(release).data, status=201)
+
+
+class TwinModelReleaseActivateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not is_admin(request):
+            return error_response('forbidden', '仅管理员可以切换三维模型版本。', 403)
+        with transaction.atomic():
+            release = TwinModelRelease.objects.select_for_update().select_related('uploaded_by', 'activated_by').filter(pk=pk).first()
+            if not release:
+                return error_response('not_found', '模型版本不存在。', 404)
+            if release.status == TwinModelRelease.Status.ACTIVE:
+                return Response(TwinModelReleaseSerializer(release).data)
+            TwinModelRelease.objects.select_for_update().filter(status=TwinModelRelease.Status.ACTIVE).update(status=TwinModelRelease.Status.RETIRED)
+            release.status = TwinModelRelease.Status.ACTIVE
+            release.activated_by = request.user
+            release.activated_at = timezone.now()
+            release.save(update_fields=['status', 'activated_by', 'activated_at'])
+            audit(request.user, 'twin.model.activated', 'twin_model_release', release.pk, {'version': release.version, 'sha256': release.sha256}, request_id(request))
+        return Response(TwinModelReleaseSerializer(release).data)
+
+
+class TwinModelFileView(APIView):
+    permission_classes = [AuthenticatedRead]
+
+    def get(self, request):
+        release_id = request.query_params.get('release', '').strip()
+        release = TwinModelRelease.objects.filter(status=TwinModelRelease.Status.ACTIVE)
+        if release_id:
+            if not release_id.isdigit():
+                return error_response('invalid_request', '模型版本标识无效。', 400)
+            release = release.filter(pk=int(release_id))
+        release = release.first()
+        if not release or not release.model_file:
+            return error_response('not_found', '尚未启用可用的三维模型。', 404)
+        response = FileResponse(release.model_file.open('rb'), content_type='model/gltf-binary', as_attachment=False, filename='utility-tunnel.glb')
+        response['Content-Length'] = str(release.size_bytes)
+        response['ETag'] = f'"{release.sha256}"'
+        response['Cache-Control'] = 'private, max-age=300, immutable'
+        return response
 
 
 class AssetListView(APIView):
@@ -968,6 +1128,18 @@ class WorkOrderListView(APIView):
         if request.query_params.get('search'):
             search = request.query_params['search'].strip()
             queryset = queryset.filter(Q(code__icontains=search) | Q(title__icontains=search) | Q(asset__code__icontains=search))
+        sla = request.query_params.get('sla', '').strip()
+        if sla:
+            active_statuses = [WorkOrder.Status.DRAFT, WorkOrder.Status.OPEN, WorkOrder.Status.ASSIGNED, WorkOrder.Status.IN_PROGRESS, WorkOrder.Status.PENDING_REVIEW]
+            now = timezone.now()
+            if sla == 'overdue':
+                queryset = queryset.filter(status__in=active_statuses, due_at__lt=now)
+            elif sla == 'dueSoon':
+                queryset = queryset.filter(status__in=active_statuses, due_at__gte=now, due_at__lte=now + timedelta(hours=4))
+            elif sla == 'onTrack':
+                queryset = queryset.filter(status__in=active_statuses, due_at__gt=now + timedelta(hours=4))
+            else:
+                return error_response('invalid_request', 'sla must be overdue, dueSoon or onTrack.', 400)
         updated_from, error = datetime_filter(request, 'updatedFrom')
         if error:
             return error

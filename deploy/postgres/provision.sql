@@ -44,7 +44,9 @@ GRANT SELECT, INSERT, DELETE ON authtoken_token TO ut_runtime;
 -- Operational reads and the exact columns written by the Django API routes.
 GRANT SELECT ON operations_asset, operations_alert, operations_workorder,
   operations_telemetry, operations_threshold, operations_auditlog,
-  operations_reportexport TO ut_runtime;
+  operations_reportexport, operations_registrationrequest,
+  operations_spatialfeature, operations_hardwarebinding,
+  operations_twinmodelrelease TO ut_runtime;
 GRANT INSERT (code, name, zone, asset_type, status, hardware_code,
   integration_status, interface, capabilities, mesh, position, latitude,
   longitude, location_source, installation_note, is_active, version,
@@ -66,13 +68,38 @@ GRANT UPDATE (status, assignee_id, completed_at, reviewed_by_id, version, update
   ON operations_workorder TO ut_runtime;
 GRANT UPDATE (warning, alarm, version, updated_at) ON operations_threshold TO ut_runtime;
 GRANT INSERT ON operations_auditlog, operations_reportexport TO ut_runtime;
+GRANT INSERT (account, display_name, requested_role, password_hash, status,
+  review_note, reviewed_by_id, reviewed_at, created_user_id, created_at)
+  ON operations_registrationrequest TO ut_runtime;
+GRANT UPDATE (status, review_note, reviewed_by_id, reviewed_at, created_user_id)
+  ON operations_registrationrequest TO ut_runtime;
+GRANT INSERT (code, name, layer_type, geometry, crs, source,
+  source_reference, accuracy_m, captured_at, verified_at, status,
+  description, version, created_at, updated_at)
+  ON operations_spatialfeature TO ut_runtime;
+GRANT UPDATE (name, layer_type, geometry, crs, source, source_reference,
+  accuracy_m, captured_at, verified_at, status, description, version, updated_at)
+  ON operations_spatialfeature TO ut_runtime;
+GRANT INSERT (asset_id, protocol, device_identifier, endpoint,
+  expected_interval_seconds, status, last_heartbeat_at, version, created_at, updated_at)
+  ON operations_hardwarebinding TO ut_runtime;
+GRANT UPDATE (protocol, device_identifier, endpoint, expected_interval_seconds,
+  status, last_heartbeat_at, version, updated_at)
+  ON operations_hardwarebinding TO ut_runtime;
+GRANT INSERT (version, model_file, original_name, sha256, size_bytes, notes,
+  status, uploaded_by_id, activated_by_id, activated_at, created_at)
+  ON operations_twinmodelrelease TO ut_runtime;
+GRANT UPDATE (status, activated_by_id, activated_at)
+  ON operations_twinmodelrelease TO ut_runtime;
 
 -- BigAutoField-backed inserts need sequence usage, but the API must not be
 -- able to alter sequence ownership or create new schema objects.
 GRANT USAGE, SELECT ON SEQUENCE operations_profile_id_seq,
   operations_asset_id_seq, operations_alert_id_seq, operations_telemetry_id_seq,
   operations_workorder_id_seq, operations_auditlog_id_seq,
-  operations_reportexport_id_seq TO ut_runtime;
+  operations_reportexport_id_seq, operations_registrationrequest_id_seq,
+  operations_spatialfeature_id_seq, operations_hardwarebinding_id_seq,
+  operations_twinmodelrelease_id_seq TO ut_runtime;
 GRANT USAGE, SELECT ON SEQUENCE auth_user_id_seq, authtoken_token_id_seq TO ut_runtime;
 
 -- New tables must receive an explicit, reviewed grant in their release SQL.

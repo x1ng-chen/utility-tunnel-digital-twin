@@ -67,7 +67,7 @@ onMounted(search);
 
     <form class="telemetry-filters" @submit.prevent="search">
       <label>资产<select v-model="assetCode"><option value="">全部资产</option><option v-for="asset in store.assets" :key="asset.id" :value="asset.code">{{ asset.code }} · {{ asset.name }}</option></select></label>
-      <label>指标键<input v-model="metricKey" placeholder="例如 temperature" pattern="[a-z][a-z0-9_.-]{1,39}" /></label>
+      <label>指标键<input v-model="metricKey" placeholder="例如 temperature" pattern="[a-z][a-z0-9_.\x2D]{1,39}" /></label>
       <label>质量<select v-model="quality"><option value="">全部质量</option><option value="good">良好</option><option value="suspect">可疑</option><option value="bad">异常</option><option value="missing">缺失</option></select></label>
       <label>开始时间<input v-model="recordedFrom" type="datetime-local" /></label>
       <label>结束时间<input v-model="recordedTo" type="datetime-local" /></label>

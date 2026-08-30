@@ -8,6 +8,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    volumes:
+      - twin_model_media:/app/media
     environment:
       DJANGO_ENV: production
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set-in-secret-store}
@@ -22,6 +24,7 @@ services:
       DJANGO_TRUST_PROXY_SSL: "true"
       APP_VERSION: ${APP_VERSION:-0.5.0}
       APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
+      TWIN_MODEL_MAX_BYTES: ${TWIN_MODEL_MAX_BYTES:-33554432}
     expose:
       - "8000"
     deploy:
@@ -59,3 +62,6 @@ services:
         limits:
           cpus: "0.50"
           memory: 128M
+
+volumes:
+  twin_model_media:

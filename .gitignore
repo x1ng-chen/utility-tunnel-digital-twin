@@ -9,6 +9,7 @@ private.*
 __pycache__/
 *.py[cod]
 .venv/
+.test-python/
 
 # Node.js
 node_modules/
@@ -35,6 +36,7 @@ Thumbs.db
 deploy/postgres/backups/
 *.sha256
 data/
+backend/media/
 
 # Document render and temporary artifacts
 _qa*/

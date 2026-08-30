@@ -134,6 +134,8 @@ TIME_ZONE = 'Asia/Shanghai'
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = 'static/'
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 raw_cors_origins = os.getenv('CORS_ALLOWED_ORIGINS', '').strip()
@@ -161,6 +163,7 @@ REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'config.api.api_exception_handler',
     'DEFAULT_THROTTLE_RATES': {
         'login': os.getenv('LOGIN_RATE_LIMIT', '10/min'),
+        'login_burst': os.getenv('LOGIN_BURST_RATE_LIMIT', '60/min'),
         'password_change': os.getenv('PASSWORD_CHANGE_RATE_LIMIT', '5/hour'),
     },
 }
@@ -178,9 +181,10 @@ CSRF_COOKIE_SECURE = IS_PRODUCTION
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
-DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv('DJANGO_MAX_REQUEST_BYTES', str(2 * 1024 * 1024)))
+TWIN_MODEL_MAX_BYTES = int(os.getenv('TWIN_MODEL_MAX_BYTES', str(32 * 1024 * 1024)))
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv('DJANGO_MAX_REQUEST_BYTES', str(TWIN_MODEL_MAX_BYTES + 1024 * 1024)))
 DATA_UPLOAD_MAX_NUMBER_FIELDS = int(os.getenv('DJANGO_MAX_REQUEST_FIELDS', '1000'))
-if DATA_UPLOAD_MAX_MEMORY_SIZE <= 0 or DATA_UPLOAD_MAX_NUMBER_FIELDS <= 0:
+if TWIN_MODEL_MAX_BYTES <= 0 or DATA_UPLOAD_MAX_MEMORY_SIZE < TWIN_MODEL_MAX_BYTES or DATA_UPLOAD_MAX_NUMBER_FIELDS <= 0:
     raise ValueError('Django request limits must be greater than zero.')
 CACHE_BACKEND = os.getenv('DJANGO_CACHE_BACKEND', 'django.core.cache.backends.locmem.LocMemCache').strip()
 CACHE_LOCATION = os.getenv('DJANGO_CACHE_LOCATION', 'utility-tunnel-default-cache').strip()

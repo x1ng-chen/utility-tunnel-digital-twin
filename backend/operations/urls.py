@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import AdminRegistrationRequestDetailView, AdminRegistrationRequestListView, AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, DashboardView, HardwareBindingDetailView, HardwareBindingListView, HealthView, LoginView, LogoutView, MeView, PasswordChangeView, ReadyView, RegistrationRequestView, ReportExportView, SpatialFeatureDetailView, SpatialFeatureImportView, SpatialFeatureListView, TelemetryListView, TelemetrySummaryView, ThresholdDetailView, ThresholdListView, TwinModelReadinessView, WorkOrderListView, WorkOrderTransitionView
+from .views import AdminRegistrationRequestDetailView, AdminRegistrationRequestListView, AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, DashboardView, HardwareBindingDetailView, HardwareBindingListView, HealthView, LoginView, LogoutView, MeView, PasswordChangeView, ReadyView, RegistrationRequestView, ReportExportView, SpatialFeatureDetailView, SpatialFeatureImportView, SpatialFeatureListView, TelemetryListView, TelemetrySummaryView, ThresholdDetailView, ThresholdListView, TwinModelFileView, TwinModelReadinessView, TwinModelReleaseActivateView, TwinModelReleaseListView, WorkOrderListView, WorkOrderTransitionView
 
 
 urlpatterns = [
@@ -16,6 +16,9 @@ urlpatterns = [
     path('admin/registration-requests/<int:pk>/', AdminRegistrationRequestDetailView.as_view()),
     path('dashboard/', DashboardView.as_view()),
     path('twin/model-readiness/', TwinModelReadinessView.as_view()),
+    path('twin/models/', TwinModelReleaseListView.as_view()),
+    path('twin/models/<int:pk>/activate/', TwinModelReleaseActivateView.as_view()),
+    path('twin/model-file/', TwinModelFileView.as_view()),
     path('assets/', AssetListView.as_view()),
     path('assets/<int:pk>/', AssetDetailView.as_view()),
     path('gis/features/', SpatialFeatureListView.as_view()),
