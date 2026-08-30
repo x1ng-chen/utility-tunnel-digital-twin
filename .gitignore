@@ -19,6 +19,7 @@ dist/
 .wrangler/
 *.tsbuildinfo
 .firecrawl/
+/apps/**/next-env.d.ts
 
 # Editors and operating systems
 .idea/
