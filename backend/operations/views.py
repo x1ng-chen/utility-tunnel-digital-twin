@@ -298,7 +298,11 @@ class LoginView(APIView):
         if not authenticated:
             return error_response('invalid_credentials', 'Invalid email or password.', 401)
         with transaction.atomic():
-            token, created = Token.objects.select_for_update().get_or_create(user=authenticated)
+            # The token table has a unique user constraint, so get_or_create already
+            # resolves concurrent inserts without taking an UPDATE row lock. Avoiding
+            # SELECT ... FOR UPDATE keeps login compatible with the reviewed runtime
+            # role, which intentionally has no token UPDATE privilege.
+            token, created = Token.objects.get_or_create(user=authenticated)
             if not created and token.created + timedelta(seconds=settings.API_TOKEN_TTL_SECONDS) <= timezone.now():
                 token.delete()
                 token = Token.objects.create(user=authenticated)

@@ -10,7 +10,7 @@
 node tools/quality-scan.mjs
 ```
 
-该扫描检查所有 Git 跟踪及未忽略的工作区文本文件，拒绝提交真实 `.env`、私钥和常见云平台令牌；大体积二进制和依赖目录不会被读取。GitHub Actions 会在 Vue/Django 工作流中自动执行。
+该扫描检查所有 Git 跟踪及未忽略的工作区文本文件，拒绝提交真实 `.env`、本地 `secrets.*` 配置、私钥和常见云平台令牌；大体积二进制和依赖目录不会被读取。GitHub Actions 会在 Vue/Django 工作流中自动执行。
 
 ```powershell
 node tools/check-postgres-policy.mjs

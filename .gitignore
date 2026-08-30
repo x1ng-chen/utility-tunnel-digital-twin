@@ -4,6 +4,7 @@
 !.env.example
 secrets.*
 private.*
+firmware/esp8266-01s/include/secrets.h
 
 # Python
 __pycache__/

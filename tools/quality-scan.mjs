@@ -19,10 +19,19 @@ function isExampleEnv(file) {
   return /(^|[.])env[.]example$/i.test(basename(file));
 }
 
+function isCommittedSecretConfig(file) {
+  const name = basename(file).toLowerCase();
+  return /^secrets[.]/.test(name) && !/^secrets[.]example[.]/.test(name);
+}
+
 for (const file of tracked) {
   const lower = file.toLowerCase();
   if (lower.endsWith('.env') && !isExampleEnv(file)) {
     failures.push(`${file}: environment files must not be committed`);
+    continue;
+  }
+  if (isCommittedSecretConfig(file)) {
+    failures.push(`${file}: local secret configuration must not be committed`);
     continue;
   }
   let size;
