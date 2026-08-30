@@ -105,6 +105,11 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
   await page.getByRole('button', { name: '三维孪生' }).click();
   await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
 
+  const patrolCode = page.locator('.twin-focus-status small');
+  const beforePatrol = await patrolCode.textContent();
+  await page.getByRole('button', { name: '巡检下一异常设备' }).click();
+  await expect.poll(() => patrolCode.textContent()).not.toBe(beforePatrol);
+
   await page.getByRole('button', { name: '⛶ 全屏查看' }).click();
   await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
 
