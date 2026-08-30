@@ -54,6 +54,8 @@ test('三维孪生加载实体模型后仍可定位设备并展示告警状态',
   const modelReadiness = page.locator('.twin-model-readiness.loaded');
   await expect(modelReadiness.getByText('模型已加载', { exact: true })).toBeVisible();
   await expect(page.locator('.twin-model-contract').getByText(/\d+ \/ \d+ 个设备已具备标准节点名称/)).toBeVisible();
+  await page.getByText('查看实体模型映射', { exact: true }).click();
+  await expect(page.locator('.twin-model-binding-list').getByText('ENV-01', { exact: true })).toBeVisible();
   await switcher.getByRole('button', { name: '告警', exact: true }).click();
   expect(await switcher.getByRole('button', { name: /选择 / }).count()).toBeGreaterThan(0);
   await switcher.getByRole('button', { name: '全部', exact: true }).click();
@@ -90,6 +92,9 @@ test('告警可携带处置上下文直达三维实体模型', async ({ page }) 
   const inspector = page.locator('.twin-inspector');
   await expect(inspector.getByText('已从告警 ALM-260826-001 定位到当前设备。', { exact: true })).toBeVisible();
   await expect(inspector.getByText('MESH_CTRL_01', { exact: true })).toBeVisible();
+  await inspector.getByRole('button', { name: '进入告警中心处置' }).click();
+  await expect(page).toHaveURL(/\/alerts\?focus=ALM-260826-001/);
+  await expect(page.locator('.table-row.focused').getByText('ALM-260826-001', { exact: true })).toBeVisible();
 });
 
 test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续选择设备', async ({ page }) => {

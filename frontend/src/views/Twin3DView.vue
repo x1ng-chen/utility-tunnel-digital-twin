@@ -5,7 +5,7 @@ import AppShell from '../components/AppShell.vue';
 import TwinScene from '../components/TwinScene.vue';
 import { useOperationsStore } from '../stores/operations';
 import { api } from '../services/api';
-import { resolveTwinVisualState, summarizeTwinModelDelivery, twinStateLabel, type TwinModelBindingReport, type TwinModelReadinessResponse, type TwinVisualState } from '../services/twin3d';
+import { activeTwinAlerts, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelDelivery, twinStateLabel, type TwinModelBindingReport, type TwinModelReadinessResponse, type TwinVisualState } from '../services/twin3d';
 
 const store = useOperationsStore();
 const route = useRoute();
@@ -30,7 +30,8 @@ const filterOptions: Array<{ value: 'all' | TwinVisualState; label: string }> = 
   { value: 'all', label: '全部' }, { value: 'alarm', label: '告警' }, { value: 'warning', label: '关注' }, { value: 'normal', label: '正常' }, { value: 'unknown', label: '待核验' },
 ];
 const selectedAsset = computed(() => store.assets.find((asset) => asset.code === selectedCode.value) || null);
-const selectedAlerts = computed(() => selectedAsset.value ? store.alerts.filter((alert) => alert.assetCode === selectedAsset.value?.code) : []);
+const selectedAlerts = computed(() => selectedAsset.value ? activeTwinAlerts(selectedAsset.value.code, store.alerts) : []);
+const primaryAlert = computed(() => selectedAsset.value ? primaryTwinAlert(selectedAsset.value.code, store.alerts) : null);
 const selectedOrders = computed(() => selectedAsset.value ? store.workOrders.filter((order) => order.assetCode === selectedAsset.value?.code) : []);
 const selectedTelemetry = computed(() => selectedAsset.value ? store.telemetry.find((reading) => reading.assetCode === selectedAsset.value?.code) : null);
 const visibleAssets = computed(() => store.assets.filter((asset) => {
@@ -61,6 +62,7 @@ const navigationContext = computed(() => {
 
 function select(code: string) { selectedCode.value = code; scene.value?.focusAsset(code); }
 function openGis() { if (selectedAsset.value) void router.push({ path: '/gis', query: { asset: selectedAsset.value.code, source: 'twin' } }); }
+function openAlertCenter() { if (primaryAlert.value) void router.push({ path: '/alerts', query: { focus: primaryAlert.value.code, source: 'twin' } }); }
 function resetView() { scene.value?.resetView(); }
 function retryModel() { scene.value?.reloadModel(); }
 function receiveModelReport(report: TwinModelBindingReport) { modelReport.value = report; }
@@ -180,9 +182,10 @@ onBeforeUnmount(() => {
           <header><div><span class="eyebrow">SELECTED EQUIPMENT</span><h2 :title="selectedAsset.name">{{ selectedAssetName }}</h2><code>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</code></div><span :class="['twin-state-chip', resolveTwinVisualState(selectedAsset, store.alerts)]">{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span></header>
           <section :class="['twin-model-readiness', modelReport.mode]"><span>实体模型接入</span><div><b>{{ modelReport.mode === 'loaded' ? '模型已加载' : '预览场景' }}</b><strong>{{ modelBindingText }}</strong></div><p>{{ modelDeliveryHint }}</p><button v-if="modelReport.mode === 'fallback'" type="button" class="twin-model-retry" @click="retryModel">重新检测模型</button></section>
           <section :class="['twin-model-contract', { ready: modelDeliveryReady, blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><span>模型交付检查</span><b>{{ modelDeliveryLabel }}</b><p>{{ modelDeliveryCount }} / {{ modelDeliveryTotal }} 个设备已具备标准节点名称</p></section>
+          <details class="twin-model-binding-list"><summary>查看实体模型映射</summary><p v-if="modelReport.isComplete">模型中的设备节点已全部绑定，可进行状态高亮与点击定位。</p><p v-else>待补齐：{{ modelReport.missingCodes.join('、') }}</p><div><span v-for="code in modelReport.boundCodes" :key="code">{{ code }}</span></div></details>
           <p v-if="navigationContext" class="twin-navigation-context" role="status">{{ navigationContext }}</p>
           <div class="twin-inspector-grid"><div><span>所在区域</span><b>{{ selectedAsset.zone }}</b></div><div><span>实体模型</span><b>{{ selectedAsset.mesh || '待绑定' }}</b></div><div><span>最新上报</span><b>{{ formatTime(selectedAsset.lastSeenAt) }}</b></div><div><span>当前遥测</span><b>{{ selectedTelemetry ? `${selectedTelemetry.value} ${selectedTelemetry.unit}` : '暂无数据' }}</b></div></div>
-          <section class="twin-detail-section"><span class="eyebrow">CURRENT ALERTS</span><p v-if="selectedAlerts.length" class="twin-alert-summary"><b>{{ selectedAlerts.length }} 项关联告警</b>{{ selectedAlerts[0].title }}</p><p v-else class="twin-empty">当前设备没有未关闭告警。</p></section>
+          <section class="twin-detail-section"><span class="eyebrow">CURRENT ALERTS</span><div v-if="primaryAlert" class="twin-alert-summary"><b>{{ primaryAlert.severity === 'critical' ? '严重告警' : primaryAlert.severity === 'warning' ? '待处置告警' : '提示告警' }} · {{ primaryAlert.code }}</b><strong>{{ primaryAlert.title }}</strong><p>{{ primaryAlert.detail }}</p><button type="button" class="twin-alert-action" @click="openAlertCenter">进入告警中心处置</button></div><p v-else class="twin-empty">当前设备没有未关闭告警。</p></section>
           <section class="twin-detail-section"><span class="eyebrow">WORK ORDER STATUS</span><p v-if="selectedOrders.length" class="twin-order-summary"><b>{{ selectedOrders[0].code }}</b>{{ selectedOrders[0].title }}</p><p v-else class="twin-empty">当前设备没有关联工单。</p></section>
           <button class="twin-gis-link" type="button" @click="openGis">在 GIS 地图中查看</button>
           <p class="twin-install-note">{{ selectedAsset.installationNote }}</p>

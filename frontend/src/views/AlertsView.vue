@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
 import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
@@ -8,11 +8,13 @@ import type { Alert } from '../types';
 
 const store = useOperationsStore();
 const auth = useAuthStore();
+const route = useRoute();
 const router = useRouter();
 const filter = ref('all');
 const actionError = ref('');
 const busyId = ref<number | null>(null);
 const visible = computed(() => store.alerts.filter((item) => filter.value === 'all' || item.status === filter.value));
+const focusedCode = computed(() => typeof route.query.focus === 'string' ? route.query.focus : '');
 const canWrite = computed(() => !store.offline && (auth.user?.role === 'administrator' || auth.user?.role === 'operator'));
 
 async function acknowledge(alert: Alert) {
@@ -69,7 +71,7 @@ function getUserFacingError(cause: unknown) {
     <p v-if="actionError" class="inline-message error-message" role="alert">{{ actionError }}</p>
     <section class="table-panel">
       <div class="table-head"><span>告警编码</span><span>资产 / 事件</span><span>级别</span><span>状态</span><span>操作</span></div>
-      <div v-for="alert in visible" :key="alert.id" class="table-row">
+      <div v-for="alert in visible" :key="alert.id" :class="['table-row', { focused: alert.code === focusedCode }]">
         <div><b>{{ alert.code }}</b><small>{{ new Date(alert.openedAt).toLocaleString('zh-CN') }}</small></div>
         <div><strong>{{ alert.title }}</strong><small>{{ alert.assetCode || '未关联资产' }} · {{ alert.category }}<template v-if="alert.ruleKey"> · 自动规则 {{ alert.ruleKey }}<template v-if="alert.lastObservedValue != null">（最新值 {{ alert.lastObservedValue }}）</template></template></small></div>
         <span :class="['badge', alert.severity]">{{ alert.severity === 'critical' ? '严重' : alert.severity === 'warning' ? '警告' : '提示' }}</span>
