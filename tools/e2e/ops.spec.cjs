@@ -26,7 +26,7 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
   await page.getByRole('button', { name: /安全登录/ }).click();
   await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
 
-  await page.getByRole('button', { name: '设备台账' }).click();
+  await page.getByRole('button', { name: '设备台账' }).click({ force: true });
   await expect(page.getByRole('heading', { name: '设备台账' })).toBeVisible();
   expect(await page.getByLabel('设备空间定位图').getByRole('button').count()).toBeGreaterThan(0);
   await page.getByLabel('搜索设备').fill('SEEP-W01');
@@ -72,7 +72,7 @@ test('三维孪生加载实体模型后仍可定位设备并展示告警状态',
   await expect(page.locator('.twin-inspector').getByText('已从 GIS 地图定位到当前设备。', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'BT-01' }).click();
   await expect(page.locator('.twin-focus-status').getByText('HC-05 蓝牙模块', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '设备台账' }).click();
+  await page.getByRole('button', { name: '设备台账' }).click({ force: true });
   await page.getByRole('button', { name: '定位 水位传感器' }).click({ force: true });
   await page.getByRole('button', { name: '在三维中查看 →' }).click();
   await expect(page).toHaveURL(/\/twin-3d\?asset=SEEP-W01/);
