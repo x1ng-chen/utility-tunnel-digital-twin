@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
 import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
@@ -7,6 +8,7 @@ import type { Alert } from '../types';
 
 const store = useOperationsStore();
 const auth = useAuthStore();
+const router = useRouter();
 const filter = ref('all');
 const actionError = ref('');
 const busyId = ref<number | null>(null);
@@ -19,6 +21,11 @@ async function acknowledge(alert: Alert) {
 
 async function createWorkOrder(alert: Alert) {
   await runAction(alert.id, () => store.createAlertOrder(alert));
+}
+
+function openTwin(alert: Alert) {
+  if (!alert.assetCode) return;
+  void router.push({ path: '/twin-3d', query: { asset: alert.assetCode, source: 'alert', alert: alert.code } });
 }
 
 async function runAction(id: number, action: () => Promise<unknown>) {
@@ -68,6 +75,7 @@ function getUserFacingError(cause: unknown) {
         <span :class="['badge', alert.severity]">{{ alert.severity === 'critical' ? '严重' : alert.severity === 'warning' ? '警告' : '提示' }}</span>
         <span :data-testid="`alert-status-${alert.code}`" :class="['status-text', alert.status]">{{ alert.status === 'open' ? '待确认' : alert.status === 'acknowledged' ? '已确认' : alert.status === 'resolved' ? '已解决' : '已关闭' }}</span>
         <div class="row-actions">
+          <button v-if="alert.assetCode" class="alert-locate-button" type="button" @click="openTwin(alert)">三维定位</button>
           <template v-if="canWrite">
             <button v-if="alert.status === 'open'" :disabled="busyId === alert.id" @click="acknowledge(alert)">{{ busyId === alert.id ? '处理中…' : '确认' }}</button>
             <button v-if="!store.workOrders.some((item) => item.sourceAlertId === alert.id)" :disabled="busyId === alert.id" @click="createWorkOrder(alert)">转工单</button>

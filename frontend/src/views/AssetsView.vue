@@ -23,7 +23,8 @@ watch(visible, (items) => {
 }, { immediate: true });
 
 function selectAsset(asset: Asset) { selectedCode.value = asset.code; }
-function openTwin(asset: Asset) { void router.push({ path: '/twin-3d', query: { asset: asset.code } }); }
+function openTwin(asset: Asset) { void router.push({ path: '/twin-3d', query: { asset: asset.code, source: 'asset' } }); }
+function openGis(asset: Asset) { void router.push({ path: '/gis', query: { asset: asset.code, source: 'asset' } }); }
 
 function positionStyle(asset: Asset) {
   const x = Math.min(95, Math.max(5, Number(asset.position?.x) || 50));
@@ -62,7 +63,7 @@ function formatTime(value?: string | null) {
       </div>
 
       <aside v-if="selectedAsset" class="asset-detail-panel" aria-live="polite">
-        <div class="detail-heading"><div><span class="eyebrow">SELECTED NODE</span><h2>{{ selectedAsset.name }}</h2><b>{{ selectedAsset.code }}</b></div><div class="asset-detail-actions"><span :class="['asset-status', selectedAsset.status]">{{ statusLabel(selectedAsset.status) }}</span><button class="asset-twin-link" @click="openTwin(selectedAsset)">在三维中查看 →</button></div></div>
+        <div class="detail-heading"><div><span class="eyebrow">SELECTED NODE</span><h2>{{ selectedAsset.name }}</h2><b>{{ selectedAsset.code }}</b></div><div class="asset-detail-actions"><span :class="['asset-status', selectedAsset.status]">{{ statusLabel(selectedAsset.status) }}</span><button class="asset-twin-link" @click="openTwin(selectedAsset)">在三维中查看 →</button><button class="asset-gis-link" @click="openGis(selectedAsset)">在地图中查看 →</button></div></div>
         <div class="detail-grid"><div><small>硬件编号</small><strong>{{ selectedAsset.hardwareCode || '未分配' }}</strong></div><div><small>接入状态</small><strong>{{ integrationLabel(selectedAsset.integrationStatus) }}</strong></div><div><small>接口</small><strong>{{ selectedAsset.interface || '未配置' }}</strong></div><div><small>最近上报</small><strong>{{ formatTime(selectedAsset.lastSeenAt) }}</strong></div></div>
         <div class="detail-block"><span class="eyebrow">ACTUAL HARDWARE</span><p class="detail-list">{{ selectedAsset.installationNote }}</p><div class="capability-tags"><span v-for="capability in selectedAsset.capabilities" :key="capability">{{ capability }}</span></div></div>
         <div class="detail-block"><span class="eyebrow">TELEMETRY</span><div v-if="selectedTelemetry" class="detail-reading"><strong>{{ selectedTelemetry.value }}</strong><span>{{ selectedTelemetry.unit }}</span><small>{{ selectedTelemetry.metric }} · {{ selectedTelemetry.quality }}</small></div><p v-else class="detail-empty">暂无遥测数据</p></div>

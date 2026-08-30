@@ -61,6 +61,13 @@ test('三维孪生加载实体模型后仍可定位设备并展示告警状态',
   const inspector = page.locator('.twin-inspector');
   await expect(inspector.getByText('MESH_ENV_01', { exact: true })).toBeVisible();
   await expect(inspector.getByText('运行正常', { exact: true })).toBeVisible();
+  await inspector.getByRole('button', { name: '在 GIS 地图中查看' }).click();
+  await expect(page).toHaveURL(/\/gis\?asset=ENV-01/);
+  await expect(page.getByRole('heading', { name: 'GIS 空间运维总览' })).toBeVisible();
+  await expect(page.locator('.gis-inspector').getByText('ENV-01 ·', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: '在三维中查看此设备 →' }).click();
+  await expect(page).toHaveURL(/\/twin-3d\?asset=ENV-01/);
+  await expect(page.locator('.twin-inspector').getByText('已从 GIS 地图定位到当前设备。', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'BT-01' }).click();
   await expect(page.locator('.twin-focus-status').getByText('HC-05 蓝牙模块', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '设备台账' }).click();
@@ -68,6 +75,21 @@ test('三维孪生加载实体模型后仍可定位设备并展示告警状态',
   await page.getByRole('button', { name: '在三维中查看 →' }).click();
   await expect(page).toHaveURL(/\/twin-3d\?asset=SEEP-W01/);
   await expect(page.locator('.twin-inspector').getByText('MESH_SEEP_W01', { exact: true })).toBeVisible();
+});
+
+test('告警可携带处置上下文直达三维实体模型', async ({ page }) => {
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码').fill('123');
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await page.getByRole('button', { name: '告警中心' }).click();
+  const firstAlert = page.locator('.table-row').first();
+  await expect(firstAlert.getByText('ALM-260826-001', { exact: true })).toBeVisible();
+  await firstAlert.getByRole('button', { name: '三维定位' }).click();
+  await expect(page).toHaveURL(/\/twin-3d\?asset=CTRL-01/);
+  const inspector = page.locator('.twin-inspector');
+  await expect(inspector.getByText('已从告警 ALM-260826-001 定位到当前设备。', { exact: true })).toBeVisible();
+  await expect(inspector.getByText('MESH_CTRL_01', { exact: true })).toBeVisible();
 });
 
 test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续选择设备', async ({ page }) => {

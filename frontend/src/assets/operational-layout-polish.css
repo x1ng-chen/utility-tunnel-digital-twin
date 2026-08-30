@@ -87,3 +87,5 @@
 }
 
 @media (prefers-reduced-motion:reduce){.twin-fullscreen-fx{display:none!important}}
+
+.twin-navigation-context{margin:13px 0 -5px;padding:9px 10px;border:1px solid #35627c;border-radius:8px;background:#112b43;color:#9ed3e6;font-size:9px;line-height:1.5}.twin-gis-link{width:100%;height:35px;margin-top:13px;border:1px solid #397b78;border-radius:8px;background:#103b42;color:#9de8d8;font-size:9px;font-weight:800;transition:.2s}.twin-gis-link:hover{transform:translateY(-1px);border-color:#6adfca;background:#16554f;color:#fff}.alert-locate-button{border-color:#397b78!important;background:#103b42!important;color:#9de8d8!important}.alert-locate-button:hover{border-color:#6adfca!important;background:#16554f!important;color:#fff!important}
