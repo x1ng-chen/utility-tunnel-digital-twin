@@ -84,6 +84,10 @@
 @media (hover:hover) and (pointer:fine){
   .twin-stage-panel:fullscreen,.twin-stage-panel:fullscreen *{cursor:none!important}
   .twin-stage-panel:fullscreen .twin-fullscreen-fx{display:block}
+  /* Keep the custom cursor active in every fullscreen child, including the
+     selector rail where events are intentionally captured by the UI. */
+  .twin-stage-panel.twin-fullscreen-active,.twin-stage-panel.twin-fullscreen-active *{cursor:none!important}
+  .twin-stage-panel.twin-fullscreen-active .twin-fullscreen-fx{display:block}
 }
 
 @media (prefers-reduced-motion:reduce){.twin-fullscreen-fx{display:none!important}}

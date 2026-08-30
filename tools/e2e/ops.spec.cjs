@@ -112,6 +112,7 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
   const box = await switcher.boundingBox();
   expect(box).not.toBeNull();
   await page.mouse.move(box.x + 36, box.y + 18);
+  await expect(page.locator('.twin-fullscreen-fx.active')).toHaveCount(1);
   await page.mouse.down();
   await page.mouse.move(box.x + 220, box.y + 18, { steps: 5 });
   // Headless Chromium does not expose `(hover: hover) and (pointer: fine)`, so
