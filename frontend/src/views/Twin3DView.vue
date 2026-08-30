@@ -122,8 +122,12 @@ function onStagePointerLeave(event?: PointerEvent) {
 function onQuickSwitchPointerDown(event: PointerEvent) {
   if (!finePointer.value || !fullscreenActive.value) return;
   const target = event.currentTarget;
-  if (target instanceof HTMLElement && event.pointerType !== 'touch') target.setPointerCapture(event.pointerId);
-  fullscreenPointer.draggingSwitcher = true;
+  const origin = event.target;
+  const isDeviceControl = origin instanceof Element && Boolean(origin.closest('button'));
+  // Capturing a pointer that began on a device button prevents browsers from
+  // dispatching its click after the pointer is released. Capture only rail drags.
+  if (!isDeviceControl && target instanceof HTMLElement && event.pointerType !== 'touch') target.setPointerCapture(event.pointerId);
+  fullscreenPointer.draggingSwitcher = !isDeviceControl;
   onStagePointerMove(event);
   onStagePointerDown(event);
 }
