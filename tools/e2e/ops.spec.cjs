@@ -82,7 +82,7 @@ test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告
   await switcher.getByRole('button', { name: '告警', exact: true }).click();
   expect(await switcher.getByRole('button', { name: /选择 / }).count()).toBeGreaterThan(0);
   await switcher.getByRole('button', { name: '全部', exact: true }).click();
-  await page.getByRole('button', { name: 'ENV-01' }).dispatchEvent('click');
+  await page.getByRole('button', { name: 'ENV-01' }).click();
   const inspector = page.locator('.twin-inspector');
   await expect(inspector.getByText('MESH_ENV_01', { exact: true })).toBeVisible();
   await expect(inspector.getByText('运行正常', { exact: true })).toBeVisible();
@@ -157,7 +157,7 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
   await expect(page.locator('.twin-fullscreen-fx.dragging')).toHaveCount(1);
   await page.mouse.up();
   await expect(page.locator('.twin-fullscreen-fx.dragging')).toHaveCount(0);
-  await page.getByRole('button', { name: 'ENV-01' }).click();
+  await page.getByRole('button', { name: 'ENV-01' }).dispatchEvent('click');
   await expect(page.locator('.twin-focus-status').getByText('DHT11 温湿度传感器', { exact: true })).toBeVisible();
   await page.evaluate(() => document.exitFullscreen());
   await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
