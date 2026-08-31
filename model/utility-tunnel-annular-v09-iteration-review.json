@@ -1,0 +1,40 @@
+{
+  "asset": "utility-tunnel-annular-v09",
+  "candidate": "utility-tunnel-annular-v08",
+  "candidate_evidence": [
+    "model/previews/utility-tunnel-annular-v08-hero.png",
+    "model/previews/utility-tunnel-annular-v08-functional.png",
+    "model/previews/utility-tunnel-annular-v08-flow-detail.png"
+  ],
+  "requirement_ledger": {
+    "independent_low_volume_water_demo_tray": "pass: removable inner pan and shallow 50 mL fill surface",
+    "water_level_and_high_level_indication": "pass: sight gauge, float, maximum ring and discrete high-level flag",
+    "manual_drain_without_recirculation": "pass: isolated valve, quarter-turn lever, cap and short drain lead",
+    "wet_dry_electrical_separation": "pass: partition gasket and fasteners at B-to-A boundary",
+    "aggregate_dimensions_mm": "pass: 1000 x 500 x 420",
+    "fresh_glb_import": "pass",
+    "glb_triangle_budget": "pass: 80852 <= 200000"
+  },
+  "selected_defect": "V08 retained the basic water tray but did not yet make its safe fill limit, independent drainage and dry/wet separation legible for physical fabrication.",
+  "source_repair": [
+    "Add a three-sided removable inner catch pan, shallow level surface and physical maximum-fill marker.",
+    "Add a clear sight gauge, float, high-level flag and manual drain valve with cap; no recirculation route is created.",
+    "Add a mechanical gasket and bolts at the B-zone partition."
+  ],
+  "invariants": {
+    "world_low_m": [-0.5, -0.25, 0.0],
+    "world_high_m": [0.5, 0.25, 0.42],
+    "world_size_m": [1.0, 0.5, 0.42],
+    "required_missing": [],
+    "invalid_transforms": []
+  },
+  "final_evidence": [
+    "model/previews/utility-tunnel-annular-v09-hero.png",
+    "model/previews/utility-tunnel-annular-v09-functional.png",
+    "model/previews/utility-tunnel-annular-v09-water-detail.png",
+    "model/utility-tunnel-annular-v09.blend",
+    "model/utility-tunnel-annular-v09.glb"
+  ],
+  "decision": "retain_repair",
+  "next_stage": "Refine the A-zone electrical enclosure, service access and low-voltage wire management before preparing drawings and web bindings."
+}
