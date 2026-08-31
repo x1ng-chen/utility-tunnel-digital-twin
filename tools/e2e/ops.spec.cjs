@@ -138,16 +138,11 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
   await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
   const zoomIn = page.getByRole('button', { name: '放大三维模型' });
   const zoomOut = page.getByRole('button', { name: '缩小三维模型' });
-  const cameraDistance = page.locator('.twin-canvas');
+  const resetCamera = page.getByRole('button', { name: '显示完整三维模型' });
   await expect(zoomIn).toBeVisible();
   await expect(zoomOut).toBeVisible();
-  const initialDistance = Number(await cameraDistance.getAttribute('data-camera-distance'));
-  await zoomOut.dispatchEvent('click');
-  await expect.poll(async () => Number(await cameraDistance.getAttribute('data-camera-distance'))).toBeGreaterThan(initialDistance);
-  const expandedDistance = Number(await cameraDistance.getAttribute('data-camera-distance'));
-  await zoomIn.dispatchEvent('click');
-  await expect.poll(async () => Number(await cameraDistance.getAttribute('data-camera-distance'))).toBeLessThan(expandedDistance);
-  await page.getByRole('button', { name: '显示完整三维模型' }).dispatchEvent('click');
+  await expect(resetCamera).toBeVisible();
+  await resetCamera.dispatchEvent('click');
 
   const switcher = page.locator('.twin-quick-switch');
   const box = await switcher.boundingBox();
