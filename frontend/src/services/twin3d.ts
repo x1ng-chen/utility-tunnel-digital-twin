@@ -36,6 +36,10 @@ const modelNodeNamePattern = /^[A-Z0-9][A-Z0-9_-]{1,79}$/;
 const activeAlertStatuses = new Set<Alert['status']>(['open', 'acknowledged']);
 const severityRank: Record<Alert['severity'], number> = { info: 0, warning: 1, critical: 2 };
 
+export function nextTwinCameraDistance(currentDistance: number, scale: number, minDistance: number, maxDistance: number) {
+  return Math.min(maxDistance, Math.max(minDistance, Math.max(currentDistance, .001) * scale));
+}
+
 export function activeTwinAlerts(assetCode: string, alerts: Alert[]) {
   return alerts
     .filter((alert) => alert.assetCode === assetCode && activeAlertStatuses.has(alert.status))

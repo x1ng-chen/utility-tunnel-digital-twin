@@ -4,7 +4,7 @@ import { Box3, BoxGeometry, Color, DirectionalLight, Fog, Group, HemisphereLight
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Alert, Asset } from '../types';
-import { modelNodeNames, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
+import { modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
 
 const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string }>();
 const emit = defineEmits<{ select: [code: string]; modelReport: [report: TwinModelBindingReport] }>();
@@ -213,7 +213,7 @@ function zoomBy(scale: number) {
   if (!camera || !controls) return;
   const offset = camera.position.clone().sub(controls.target);
   const currentDistance = Math.max(offset.length(), .001);
-  const nextDistance = Math.min(controls.maxDistance, Math.max(controls.minDistance, currentDistance * scale));
+  const nextDistance = nextTwinCameraDistance(currentDistance, scale, controls.minDistance, controls.maxDistance);
   camera.position.copy(controls.target.clone().add(offset.normalize().multiplyScalar(nextDistance)));
   camera.near = Math.max(.0002, nextDistance / 1000);
   camera.updateProjectionMatrix();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeTwinAlerts, modelNodeNames, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, summarizeTwinModelDelivery } from './twin3d';
+import { activeTwinAlerts, modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, summarizeTwinModelDelivery } from './twin3d';
 import type { Alert, Asset } from '../types';
 
 const asset = { id: 1, code: 'ENV-01', mesh: 'MESH_ENV_01', status: 'normal' } as Asset;
@@ -47,5 +47,12 @@ describe('3D twin binding rules', () => {
       invalidMeshCodes: ['ENV-01'],
       isReady: false,
     });
+  });
+
+  it('zooms in and out without crossing the camera safety bounds', () => {
+    expect(nextTwinCameraDistance(10, .62, 2, 20)).toBe(6.2);
+    expect(nextTwinCameraDistance(10, 1.55, 2, 20)).toBe(15.5);
+    expect(nextTwinCameraDistance(2, .62, 2, 20)).toBe(2);
+    expect(nextTwinCameraDistance(20, 1.55, 2, 20)).toBe(20);
   });
 });
