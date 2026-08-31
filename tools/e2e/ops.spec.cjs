@@ -86,7 +86,7 @@ test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告
 test('告警可携带处置上下文直达三维实体模型', async ({ page }) => {
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
-  await page.getByLabel('密码').fill('123');
+  await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
   await page.getByRole('button', { name: '告警中心' }).click();
   const firstAlert = page.locator('.table-row').first();

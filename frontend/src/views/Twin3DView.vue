@@ -105,12 +105,17 @@ function paintFullscreenPointer() {
   });
 }
 function onStagePointerMove(event: PointerEvent) {
-  if (!finePointer.value || !fullscreenActive.value) return;
+  if (!fullscreenActive.value || (event.pointerType !== 'mouse' && !finePointer.value)) return;
+  // Some desktop/headless Chromium builds report an imprecise media query even
+  // when a real mouse pointer is active. Trust the actual pointer event so the
+  // fullscreen interaction layer remains usable on those browsers.
+  if (event.pointerType === 'mouse') finePointer.value = true;
   pendingFullscreenPointer = event;
   if (!fullscreenPointerFrame) fullscreenPointerFrame = window.requestAnimationFrame(paintFullscreenPointer);
 }
 function onStagePointerDown(event: PointerEvent) {
-  if (!finePointer.value || !fullscreenActive.value || !stage.value) return;
+  if (!fullscreenActive.value || !stage.value || (event.pointerType !== 'mouse' && !finePointer.value)) return;
+  if (event.pointerType === 'mouse') finePointer.value = true;
   const bounds = stage.value.getBoundingClientRect();
   fullscreenPointer.pressed = true;
   fullscreenPulse.value = { key: Date.now(), x: event.clientX - bounds.left, y: event.clientY - bounds.top };
@@ -128,7 +133,8 @@ function onStagePointerLeave(event?: PointerEvent) {
   fullscreenPointer.draggingSwitcher = false;
 }
 function onQuickSwitchPointerDown(event: PointerEvent) {
-  if (!finePointer.value || !fullscreenActive.value) return;
+  if (!fullscreenActive.value || (event.pointerType !== 'mouse' && !finePointer.value)) return;
+  if (event.pointerType === 'mouse') finePointer.value = true;
   const target = event.currentTarget;
   const origin = event.target;
   const isDeviceControl = origin instanceof Element && Boolean(origin.closest('button'));
