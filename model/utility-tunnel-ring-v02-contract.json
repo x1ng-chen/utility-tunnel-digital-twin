@@ -1,0 +1,32 @@
+{
+  "asset": "utility-tunnel-ring-v02",
+  "purpose": "1.4 m classroom utility-tunnel digital-twin physical demonstrator",
+  "required_parts": [
+    "transparent acrylic tunnel with A/B/C zones and service access",
+    "sealed annular G01 monitored gas-pipeline object, plus a separate C-zone ventilation route with readable flow arrows",
+    "CH4, CO and O2 sample modules; smoke detector; three zone temperature modules",
+    "controlled drip point, isolated water tray, leak probe and independent high-level float",
+    "door and door-magnetic contact, control cabinet, network module, emergency stop",
+    "fan tachometer/current-feedback modules, lighting and sound-light alarm"
+  ],
+  "relations": [
+    "fan is visibly in series with the separate C-zone ventilation route, not the monitored gas pipe",
+    "G01 is visibly sealed and does not imply an unsafe classroom gas-flow experiment",
+    "drip point leads only to the raised isolated tray, never to the control bay",
+    "each interactive core asset has a readable code label and semantic mesh name"
+  ],
+  "style": ["polished educational engineering model", "transparent acrylic", "low-voltage demonstrator"],
+  "finish": {
+    "profile": "polished_smooth",
+    "low_poly_explicitly_requested": false,
+    "surface_targets": ["clear system separation", "manufacturable supports", "legible labels", "no misleading gas-flow overlap"]
+  },
+  "limits": {"maximum_extent_m": 1.5, "target_glb_mb": 15, "triangle_ceiling": 200000},
+  "stages": ["requirements_audit", "flow-layout-repair", "functional-detail", "presentation-polish", "export-validation"],
+  "deliverables": ["Blender source", "GLB", "hero preview", "topology preview", "asset map"],
+  "review_questions": [
+    "Can a reviewer distinguish the sealed monitored pipe from the safe ventilation route?",
+    "Are all required sensing, feedback and safety functions visible and individually identifiable?",
+    "Are the inner parts readable through the acrylic enclosure?"
+  ]
+}

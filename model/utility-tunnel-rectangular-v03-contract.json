@@ -1,0 +1,7 @@
+{
+  "asset": "utility-tunnel-rectangular-v03",
+  "dimensions_mm": [1400, 650, 550],
+  "required_parts": ["2020 aluminium frame", "transparent removable acrylic panels", "A control and access zone", "B isolated drip tray", "C sealed annular G01 pipe", "CH4/CO/O2 high-mid-low sensors", "independent ventilation fan and roof exhaust", "simulation box and alarm"],
+  "hard_relations": ["orange G01 is a single closed loop and is not the ventilation route", "cyan duct routes fan air to roof exhaust", "water tray is partitioned from controls", "all gas modules remain visually readable through acrylic"],
+  "deliverables": [".py", ".blend", ".glb", "hero png", "cutaway png"]
+}

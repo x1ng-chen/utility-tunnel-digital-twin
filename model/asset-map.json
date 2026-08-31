@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.1",
+  "units": "mm",
+  "origin": "base center, floor level",
+  "model": "utility-tunnel-ring-v02.glb",
+  "assets": [
+    {"assetId":"ENV-01","zoneId":"UT-ZA","meshNames":["MESH_ENV_01"],"telemetryKeys":["ENV-01.temperature","ENV-01.humidity"]},
+    {"assetId":"TEMP-A01","zoneId":"UT-ZA","meshNames":["MESH_TEMP_A01"],"telemetryKeys":["TEMP-A01.degC"]},
+    {"assetId":"TEMP-B01","zoneId":"UT-ZB","meshNames":["MESH_TEMP_B01"],"telemetryKeys":["TEMP-B01.degC"]},
+    {"assetId":"TEMP-C01","zoneId":"UT-ZC","meshNames":["MESH_TEMP_C01"],"telemetryKeys":["TEMP-C01.degC"]},
+    {"assetId":"HEAT-01","zoneId":"UT-ZB","meshNames":["MESH_HEATER_01"],"telemetryKeys":["HEAT-01.state"]},
+    {"assetId":"DOOR-01","zoneId":"UT-ZA","meshNames":["MESH_DOOR_01","MESH_DOOR_CONTACT_01"],"telemetryKeys":["DOOR-01.state"]},
+    {"assetId":"SEEP-W01","zoneId":"UT-ZB","meshNames":["MESH_SEEP_W01","MESH_LEAK_W01","MESH_DRIP_W01"],"telemetryKeys":["SEEP-W01.state"]},
+    {"assetId":"LEVEL-01","zoneId":"UT-ZB","meshNames":["MESH_LEVEL_01","MESH_WATER_TRAY","MESH_WATER_SURFACE"],"telemetryKeys":["LEVEL-01.state"]},
+    {"assetId":"HILEVEL-01","zoneId":"UT-ZB","meshNames":["MESH_HILEVEL_01"],"telemetryKeys":["HILEVEL-01.state"]},
+    {"assetId":"PIPE-G01","zoneId":"UT-ZC","meshNames":["MESH_PIPE_G01","MESH_G01_SERVICE_CAP_A","MESH_G01_SERVICE_CAP_B"],"telemetryKeys":[]},
+    {"assetId":"LEAK-G01","zoneId":"UT-ZC","meshNames":["MESH_LEAK_G01","MESH_PIPE_G01"],"telemetryKeys":["GAS-CH4-01.lel"]},
+    {"assetId":"GAS-CH4-01","zoneId":"UT-ZC","meshNames":["MESH_GAS_CH4_01"],"telemetryKeys":["GAS-CH4-01.lel"]},
+    {"assetId":"GAS-CO-01","zoneId":"UT-ZC","meshNames":["MESH_GAS_CO_01"],"telemetryKeys":["GAS-CO-01.ppm"]},
+    {"assetId":"GAS-O2-01","zoneId":"UT-ZC","meshNames":["MESH_GAS_O2_01"],"telemetryKeys":["GAS-O2-01.percent"]},
+    {"assetId":"SMOKE-01","zoneId":"UT-ZC","meshNames":["MESH_SMOKE_01"],"telemetryKeys":["SMOKE-01.state"]},
+    {"assetId":"FAN-01","zoneId":"UT-ZC","meshNames":["MESH_FAN_01","MESH_FAN_TACH_01","MESH_FAN_CURR_01","MESH_VENT_01"],"telemetryKeys":["FAN-01.rpm","FAN-01.currentA"]},
+    {"assetId":"CTRL-01","zoneId":"UT-ZA","meshNames":["MESH_CTRL_01","MESH_CTRL_DRY_BAY","MESH_PCB_01","MESH_RELAY_01"],"telemetryKeys":["CTRL-01.online"]},
+    {"assetId":"NET-01","zoneId":"UT-ZA","meshNames":["MESH_NET_01","MESH_BT_01"],"telemetryKeys":["NET-01.online"]},
+    {"assetId":"SIMBOX-01","zoneId":"UT-ZA","meshNames":["MESH_SIMBOX_01"],"telemetryKeys":["SIMBOX-01.state"]},
+    {"assetId":"ALARM-01","zoneId":"UT-ZA","meshNames":["MESH_ALARM_01","MESH_BUZZ_01","MESH_LED_01"],"telemetryKeys":["ALARM-01.state"]},
+    {"assetId":"ESTOP-01","zoneId":"UT-ZA","meshNames":["MESH_ESTOP_01"],"telemetryKeys":["ESTOP-01.state"]}
+  ]
+}

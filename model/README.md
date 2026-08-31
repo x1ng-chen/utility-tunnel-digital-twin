@@ -42,3 +42,11 @@
 V10 已检查 `PIPE-G01` 为闭合曲线；关键资产无缺失；GLB 已重新导入验证，
 整体尺寸为 `1000 × 500 × 420 mm`，最低点为 `Z=0`，文件约 3.8 MB、
 约 84,608 三角面。
+
+### 历史归档
+
+`utility-tunnel-ring-v01`、`utility-tunnel-ring-v02`、
+`utility-tunnel-rectangular-v03` 与 `utility-tunnel-annular-v04` 保留为建模
+演进证据，不作为网页运行时模型。对应的三视图、预览、资产映射和
+`fabrication/utility-tunnel-ring-build-pack-v01.md` 用于追溯早期结构与
+制作讨论；涉及尺寸、气路或部件配置时，以 V10 说明和最新项目安全边界为准。

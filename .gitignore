@@ -31,6 +31,10 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Blender automatic recovery files and local scratch scenes
+*.blend1
+cube.blend
+
 # Logs, databases and runtime data
 *.log
 *.db

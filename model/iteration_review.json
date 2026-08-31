@@ -1,0 +1,58 @@
+{
+  "asset": "utility-tunnel-ring-v01",
+  "iteration": 2,
+  "contract": {
+    "transparent_acrylic_ring_enclosure": "pass",
+    "closed_annular_G01_gas_main_with_external_inlet_and_outlet": "pass",
+    "three_readable_distributed_gas_sensing_points": "pass",
+    "one_metre_demonstration_scale_and_existing_water_control_semantics": "preserved",
+    "blend_glb_and_preview_delivered": "pass"
+  },
+  "candidate": {
+    "blend": "D:\\shixi\\model\\utility-tunnel-ring-v01-annular-candidate-backup.blend",
+    "preview": "D:\\shixi\\model\\previews\\utility-tunnel-ring-v01-before-detail.png"
+  },
+  "initial_ledger": [
+    {
+      "criterion": "G01 is an actual closed annular pipe",
+      "status": "pass",
+      "evidence": "cyclic curve with 76 points"
+    },
+    {
+      "criterion": "three sensor locations are distinguishable",
+      "status": "pass",
+      "evidence": "separate CH4, CO and O2 device objects"
+    },
+    {
+      "criterion": "flow split/merge and replaceable sampling path read clearly",
+      "status": "needs_repair",
+      "evidence": "candidate lacked explicit tee, flow-control and sampling-chamber hardware"
+    }
+  ],
+  "selected_defect": "The ring's inlet/outlet relationship and its sensor sampling interfaces were too implicit for fabrication discussion and visual review.",
+  "repair": [
+    "Added inlet and outlet tee/manifold blocks at the annular main.",
+    "Added a downstream flow-control body and valve handle.",
+    "Added three collar-banded, removable-looking sample chambers and four structural stanchions.",
+    "Staggered CH4, CO and O2 sensor heights to 305 mm, 270 mm and 235 mm in model coordinates for immediate visual differentiation."
+  ],
+  "final_validation": {
+    "all_required_objects_present": true,
+    "G01_cyclic_closed": true,
+    "G01_points": 76,
+    "sensor_centres": {
+      "CH4": [-0.155, -0.124, 0.305],
+      "CO": [0.155, -0.124, 0.27],
+      "O2": [0.355, 0.0, 0.235]
+    },
+    "artifact_paths_exist": true,
+    "scene_mesh_objects": 137,
+    "scene_polygons": 5548
+  },
+  "final_evidence": {
+    "blend": "D:\\shixi\\model\\utility-tunnel-ring-v01.blend",
+    "glb": "D:\\shixi\\model\\utility-tunnel-ring-v01.glb",
+    "preview": "D:\\shixi\\model\\previews\\utility-tunnel-ring-v01-hero.png"
+  },
+  "decision": "retain_repair"
+}
