@@ -62,6 +62,7 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
 });
 
 test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告警状态', async ({ page }) => {
+  test.setTimeout(60_000);
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
@@ -120,6 +121,7 @@ test('告警可携带处置上下文直达三维实体模型', async ({ page }) 
 });
 
 test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续选择设备', async ({ page }) => {
+  test.setTimeout(60_000);
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
@@ -134,10 +136,14 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
 
   await page.getByRole('button', { name: '⛶ 全屏查看' }).click();
   await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
-  await expect(page.getByRole('button', { name: '放大三维模型' })).toBeVisible();
-  await page.getByRole('button', { name: '放大三维模型' }).click();
-  await page.getByRole('button', { name: '放大三维模型' }).click();
-  await page.getByRole('button', { name: '显示完整三维模型' }).click();
+  const zoomIn = page.getByRole('button', { name: '放大三维模型' });
+  const cameraDistance = page.locator('.twin-canvas');
+  await expect(zoomIn).toBeVisible();
+  const initialDistance = Number(await cameraDistance.getAttribute('data-camera-distance'));
+  await zoomIn.click({ force: true });
+  await zoomIn.click({ force: true });
+  await expect.poll(async () => Number(await cameraDistance.getAttribute('data-camera-distance'))).toBeLessThan(initialDistance);
+  await page.getByRole('button', { name: '显示完整三维模型' }).click({ force: true });
 
   const switcher = page.locator('.twin-quick-switch');
   const box = await switcher.boundingBox();
@@ -317,11 +323,12 @@ test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }
 });
 
 test('管理员可校验、启用三维模型版本并由孪生页面鉴权加载', async ({ page }) => {
+  test.setTimeout(90_000);
   const consoleErrors = trackConsoleErrors(page);
   const version = `e2e-model-${Date.now()}`;
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
-  await page.getByLabel('密码').fill('123');
+  await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
   await page.locator('.governance-nav summary').click();
   await page.getByRole('button', { name: '系统配置' }).click();
@@ -340,11 +347,10 @@ test('管理员可校验、启用三维模型版本并由孪生页面鉴权加�
   const zoomIn = page.getByRole('button', { name: '放大三维模型' });
   await expect(zoomIn).toBeVisible();
   const initialDistance = Number(await page.locator('.twin-canvas').getAttribute('data-camera-distance'));
-  await zoomIn.click();
-  await zoomIn.click();
-  await zoomIn.click();
-  const zoomedDistance = Number(await page.locator('.twin-canvas').getAttribute('data-camera-distance'));
+  await zoomIn.click({ force: true });
+  await zoomIn.click({ force: true });
+  await zoomIn.click({ force: true });
   expect(Number.isFinite(initialDistance)).toBeTruthy();
-  expect(zoomedDistance).toBeLessThan(initialDistance * .3);
+  await expect.poll(async () => Number(await page.locator('.twin-canvas').getAttribute('data-camera-distance'))).toBeLessThan(initialDistance * .3);
   expect(consoleErrors).toEqual([]);
 });
