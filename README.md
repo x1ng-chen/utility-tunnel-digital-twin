@@ -2,7 +2,7 @@
 
 # 综合管廊数字孪生运维实体样品
 
-[![Version](https://img.shields.io/badge/version-V3.4-2E74B5)](docs/综合管廊数字孪生运维实体样品项目计划书_V3.4_当前进度与执行计划版.docx)
+[![Version](https://img.shields.io/badge/version-V3.5-2E74B5)](docs/综合管廊数字孪生运维实体样品项目计划书_V3.5_硬件数量与型号冻结版.docx)
 ![Status](https://img.shields.io/badge/status-%E9%80%9A%E4%BF%A1%E4%B8%8E%E4%B8%89%E7%BB%B4%E9%9B%86%E6%88%90%E9%98%B6%E6%AE%B5-F0AD4E)
 ![Visibility](https://img.shields.io/badge/visibility-private-6C757D)
 ![Safety](https://img.shields.io/badge/safety-low--voltage-success)
@@ -43,7 +43,7 @@
 | 项目属性 | 内容 |
 | --- | --- |
 | 项目名称 | 综合管廊数字孪生运维实体样品 |
-| 规划版本 | V3.4（当前进度、可靠性加固与后续执行计划版） |
+| 规划版本 | V3.5（硬件数量与型号冻结版） |
 | 计划周期 | 2026-08-25 至 2026-09-30 |
 | 阶段目标 | 2026-09-10 前完成 MVP；2026-09-30 前完成全部交付 |
 | 现场主控 | STM32F103RCT6 |
@@ -218,7 +218,7 @@ flowchart TB
 - 单位：`degC`、`%RH`、`%LEL`、`ppm`、`%VOL`、`rpm`、`A` 等固定枚举。
 - QoS 1 消息：使用 `eventId` 或 `cmdId` 去重。
 
-详细 JSON 报文、I/O 分配和数据库设计以 [V3.4 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.4_当前进度与执行计划版.docx)、[可信遥测接入说明](docs/实时遥测接入说明.md)与对应代码为准；文档冲突时以已验证代码和最新实施记录为准。
+详细 JSON 报文、I/O 分配和数据库设计以 [V3.5 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.5_硬件数量与型号冻结版.docx)、[可信遥测接入说明](docs/实时遥测接入说明.md)与对应代码为准；文档冲突时以已验证代码和最新实施记录为准。
 
 ## 项目结构
 
@@ -293,7 +293,7 @@ npm run dev
 克隆后建议阅读：
 
 1. [软件平台说明](docs/software-platform.md)
-2. [V3.4 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.4_当前进度与执行计划版.docx)
+2. [V3.5 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.5_硬件数量与型号冻结版.docx)
 3. [STM32F103RCT6 台架固件说明](firmware/stm32f103rct6/README.md)
 4. 本 README 中的范围、安全要求和协作规范
 
@@ -405,4 +405,4 @@ chore(deploy): add mosquitto local configuration
 
 ---
 
-**文档基线：** V3.4 · **最后更新：** 2026-08-30 · **维护方：** 综合管廊数字孪生项目组
+**文档基线：** V3.5 · **最后更新：** 2026-08-31 · **维护方：** 综合管廊数字孪生项目组
