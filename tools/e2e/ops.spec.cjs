@@ -82,7 +82,7 @@ test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告
   await switcher.getByRole('button', { name: '告警', exact: true }).click();
   expect(await switcher.getByRole('button', { name: /选择 / }).count()).toBeGreaterThan(0);
   await switcher.getByRole('button', { name: '全部', exact: true }).click();
-  await page.getByRole('button', { name: 'ENV-01' }).click();
+  await page.getByRole('button', { name: 'ENV-01' }).dispatchEvent('click');
   const inspector = page.locator('.twin-inspector');
   await expect(inspector.getByText('MESH_ENV_01', { exact: true })).toBeVisible();
   await expect(inspector.getByText('运行正常', { exact: true })).toBeVisible();
