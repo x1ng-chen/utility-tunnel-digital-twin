@@ -19,10 +19,19 @@ function isExampleEnv(file) {
   return /(^|[.])env[.]example$/i.test(basename(file));
 }
 
+function isCommittedSecretConfig(file) {
+  const name = basename(file).toLowerCase();
+  return /^secrets[.]/.test(name) && !/^secrets[.]example[.]/.test(name);
+}
+
 for (const file of tracked) {
   const lower = file.toLowerCase();
   if (lower.endsWith('.env') && !isExampleEnv(file)) {
     failures.push(`${file}: environment files must not be committed`);
+    continue;
+  }
+  if (isCommittedSecretConfig(file)) {
+    failures.push(`${file}: local secret configuration must not be committed`);
     continue;
   }
   let size;
@@ -43,6 +52,16 @@ for (const file of tracked) {
   }
   if (/gh[pousr]_[A-Za-z0-9_]{30,}/.test(text)) {
     failures.push(`${file}: GitHub token pattern detected`);
+  }
+  if (basename(file) === 'package-lock.json' && /registry[.]npmmirror[.]com/i.test(text)) {
+    failures.push(`${file}: dependency tarballs must resolve from the canonical npm registry`);
+  }
+  if (lower.startsWith('.github/workflows/')) {
+    for (const match of text.matchAll(/\buses:\s*["']?([^@\s"']+)@([^\s#"']+)/g)) {
+      if (!/^[0-9a-f]{40}$/i.test(match[2])) {
+        failures.push(`${file}: third-party action ${match[1]} must be pinned to a full commit SHA`);
+      }
+    }
   }
 }
 

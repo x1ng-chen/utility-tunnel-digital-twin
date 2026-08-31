@@ -2,7 +2,7 @@
 
 # 综合管廊数字孪生运维实体样品
 
-[![Version](https://img.shields.io/badge/version-V3.3-2E74B5)](docs/综合管廊数字孪生运维实体样品项目计划书_V3.3_精简云数据架构版.docx)
+[![Version](https://img.shields.io/badge/version-V3.4-2E74B5)](docs/综合管廊数字孪生运维实体样品项目计划书_V3.4_当前进度与执行计划版.docx)
 ![Status](https://img.shields.io/badge/status-%E9%80%9A%E4%BF%A1%E4%B8%8E%E4%B8%89%E7%BB%B4%E9%9B%86%E6%88%90%E9%98%B6%E6%AE%B5-F0AD4E)
 ![Visibility](https://img.shields.io/badge/visibility-private-6C757D)
 ![Safety](https://img.shields.io/badge/safety-low--voltage-success)
@@ -12,10 +12,10 @@
 面向教室桌面展示的综合管廊数字孪生运维样品，通过真实传感、STM32 现场控制、MQTT 数据链路和 Web 三维可视化，形成“监测—报警—联动—工单—处置—复核—归档”的完整运维闭环。
 
 > [!IMPORTANT]
-> 截至 2026-08-29，Vue 3 + Django 主栈、可信遥测与自动告警、资产/GIS 治理、账号审批、三维孪生及自动化质量门禁已经交付；STM32、ESP8266-01S、本地 MQTT 与华为云 IoTDA 的真实数据上行已经贯通。JDY-31 已退出项目，不再作为当前、备份或演示链路。启动日志、Broker记录与IoTDA截图仍需归档为正式验收附件。
+> 截至 2026-08-30，Vue 3 + Django 5.2 LTS 主栈、可信遥测与自动告警、资产/GIS 治理、账号审批、正式环形 V04 GLB 三维孪生及自动化质量门禁已经交付；STM32、ESP8266-01S、本地 MQTT 与华为云 IoTDA 的真实数据上行已经贯通；IoTDA 网关支持双路输出（IoTDA + Django API）、持久 outbox 和死信留存，平台路已通过本地端到端冒烟。JDY-31 已退出项目。STM32→网关→Django 真机入库、断网/连续运行、模型节点全量映射，以及启动日志、Broker 记录与 IoTDA 截图仍需形成正式验收证据。
 
 > [!NOTE]
-> 软件平台的实际功能、运行方式、质量门禁和后续 PostgreSQL 接入说明见 [软件平台说明](docs/software-platform.md)。本文状态已依据截至 2026-08-29 的主分支提交和可核查实施记录同步；“已实现”不等于“已完成真机或云端验收”。
+> 软件平台的实际功能、运行方式、质量门禁和 PostgreSQL 接入说明见 [软件平台说明](docs/software-platform.md)。本文状态已依据截至 2026-08-30 的分支代码和可核查实施记录同步；“已实现”不等于“已完成真机或云端验收”。
 
 > [!TIP]
 > 正式工程栈位于 `frontend/`（Vue 3）和 `backend/`（Django + DRF），可独立启动并连接 PostgreSQL；运行说明见 [Vue 3 + Django 标准软件栈](docs/vue-django-stack.md)。
@@ -43,13 +43,13 @@
 | 项目属性 | 内容 |
 | --- | --- |
 | 项目名称 | 综合管廊数字孪生运维实体样品 |
-| 规划版本 | V3.3（ESP8266通信基线、视觉智能扩展与精简云数据架构版） |
+| 规划版本 | V3.4（当前进度、可靠性加固与后续执行计划版） |
 | 计划周期 | 2026-08-25 至 2026-09-30 |
 | 阶段目标 | 2026-09-10 前完成 MVP；2026-09-30 前完成全部交付 |
 | 现场主控 | STM32F103RCT6 |
 | 部署方式 | 展示电脑本地服务 + 局域网热点或路由器 |
 | 运行原则 | 核心功能不依赖公网，断网时现场保护与局域网业务仍可运行 |
-| 当前状态 | 软件、GIS与三维主栈已交付；STM32→ESP8266→本地MQTT→IoTDA真实数据上行已贯通；正式主栈入库闭环待完成 |
+| 当前状态 | 软件、GIS与三维主栈已交付；STM32→ESP8266→本地MQTT→IoTDA真实数据上行已贯通；网关双路输出（IoTDA+Django API）已实现并通过本地冒烟，真机入库验收待执行 |
 
 项目的成功标准包括：实体与三维对象编码一致、真实采集与真实控制、异常事件全流程留痕、局域网连续稳定运行，以及代码、硬件、模型、部署和测试资料可复现。
 
@@ -59,9 +59,9 @@
 | --- | --- | --- |
 | STM32 台架 | DHT11、水位 ADC、SW-420、TFT 与 `ut.telemetry.v1` 串口遥测已实现；USART2已固定连接ESP8266-01S | 蜂鸣器、风机、继电器联动和传感器标定仍待完成 |
 | ESP8266 | ESP-01S Arduino固件已烧录并与STM32真机连接，真实采集数据已通过MQTT链路上行 | 断网恢复、长时间连续运行和验收日志仍需归档 |
-| 云端链路 | 本地MQTT → IoTDA MQTTS转发已实测，华为云能够收到STM32真实采集数据 | Django/Vue主栈入库闭环、下行命令、持续运行及故障恢复仍待验收 |
+| 云端链路 | 本地MQTT → IoTDA MQTTS转发已实测；网关双路输出已实现，平台路经 `POST /api/telemetry/` 幂等入库并触发阈值告警（本地冒烟验证通过） | STM32→网关→Django 真机端到端入库、下行命令、持续运行及故障恢复仍待验收 |
 | 软件平台 | Vue 3 + Django 主栈完成 RBAC、资产、遥测、告警、工单、审计、数据洞察和运行检查 | 托管 PostgreSQL、域名、证书、容量和恢复演练依赖部署环境 |
-| GIS 与三维 | WGS84 空间治理、硬件绑定、GLB/Three.js 三维场景、资产绑定完整性和二维降级已完成 | 真实测绘坐标、正式 GLB 模型和现场映射验收待提供 |
+| GIS 与三维 | WGS84 空间治理、硬件绑定、正式环形 V04 GLB、Three.js 三维场景、资产绑定完整性和二维降级已完成 | 真实测绘坐标和正式模型节点全量映射仍待现场验收 |
 | 通信基线 | JDY-31已停用；ESP8266-01S是唯一无线通信模块 | 不再维护或验收蓝牙SPP链路 |
 
 > [!CAUTION]
@@ -187,10 +187,10 @@ flowchart TB
 | 主控制器 | STM32F103RCT6 + STM32CubeF1 HAL | 负责实时采集、控制、保护和现场联动 |
 | 通信模块 | ESP8266-01S 自定义 Arduino 固件 | 通过UART接收STM32的`ut.telemetry.v1` JSON并连接本地Wi-Fi/MQTT；真机上行至华为云IoTDA已验证，下行与稳定性测试待补 |
 | 消息协议 | MQTT 3.1.1 / Eclipse Mosquitto | 遥测使用 QoS 0；命令、报警与状态使用 QoS 1 |
-| 后端 | Django 4.2 + Django REST Framework | 正式主软件栈，提供 Token 认证、RBAC、业务状态机、审计和 API |
+| 后端 | Django 5.2 LTS + Django REST Framework | 正式主软件栈，提供 Token 认证、RBAC、业务状态机、审计和 API；Python 依赖执行哈希锁定与漏洞审计 |
 | 数据库 | PostgreSQL（正式）/ SQLite（本地开发回退） | 资产、遥测、告警、工单、配置与审计的唯一主数据库 |
-| 前端 | Vue 3 + TypeScript + Vite | 正式主软件栈，提供本地演示与 Django API 数据源切换 |
-| 数字孪生 | Vue 3 + Three.js / GLB，二维模型降级 | 已完成三维场景、资产绑定、状态联动、模型失败降级与绑定完整性校验；正式模型待交付验收 |
+| 前端 | Vue 3 + TypeScript + Vite | 正式主软件栈，通过构建时 `VITE_API_BASE_URL` 连接 Django API |
+| 数字孪生 | Vue 3 + Three.js / GLB，二维模型降级 | 环形 V04 正式模型已交付并接入默认 Web 路径；仍需完成所有资产节点的现场映射验收 |
 | GIS | Leaflet 1.9.4 + WGS84 GeoJSON | 独立显示实物模块位置、坐标来源和固件接入状态；空间对象经导入、审核、发布与审计后进入运维地图，演示坐标与现场测绘严格区分 |
 | 资产主数据 | Vue 3 + Django 事务 API | 管理员维护设备身份、能力、孪生/GIS 坐标和生命周期；乐观锁、停用保护与审计留痕 |
 
@@ -218,7 +218,7 @@ flowchart TB
 - 单位：`degC`、`%RH`、`%LEL`、`ppm`、`%VOL`、`rpm`、`A` 等固定枚举。
 - QoS 1 消息：使用 `eventId` 或 `cmdId` 去重。
 
-详细 JSON 报文、I/O 分配和数据库设计以 [V3.3 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.3_精简云数据架构版.docx)、[可信遥测接入说明](docs/实时遥测接入说明.md)与对应代码为准；文档冲突时以已验证代码和最新实施记录为准。
+详细 JSON 报文、I/O 分配和数据库设计以 [V3.4 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.4_当前进度与执行计划版.docx)、[可信遥测接入说明](docs/实时遥测接入说明.md)与对应代码为准；文档冲突时以已验证代码和最新实施记录为准。
 
 ## 项目结构
 
@@ -261,17 +261,30 @@ utility-tunnel-digital-twin/
 
 ## 快速开始
 
-### 软件演示（无需硬件）
+### 软件演示（无需硬件，需要本地 API）
 
 ```bash
 git clone https://github.com/x1ng-chen/utility-tunnel-digital-twin.git
 cd utility-tunnel-digital-twin
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install --require-hashes -r requirements.lock
+Copy-Item .env.example .env
+python manage.py migrate
+python manage.py seed_demo
+python manage.py runserver 127.0.0.1:8000
+```
+
+另开终端启动前端：
+
+```powershell
 cd frontend
 npm ci
 npm run dev
 ```
 
-浏览器打开终端提示的本地地址即可体验告警确认、工单闭环、设备筛选、数字孪生定位、角色权限、审计和 CSV/JSON 导出。演示模式数据仅保留在当前页面运行期；选择 Django API 模式后，业务数据统一由 Django 写入 PostgreSQL（本地开发可回退 SQLite）。详细配置见 [软件平台说明](docs/software-platform.md) 与 [API 契约](docs/api-contract.md)。
+浏览器打开终端提示的地址，使用 `seed_demo` 配置的本地账号登录。告警、工单、资产、审计与完整 CSV 报表均通过 Django API；本地开发默认使用 SQLite，生产环境强制 PostgreSQL。详细配置见 [软件平台说明](docs/software-platform.md) 与 [API 契约](docs/api-contract.md)。
 
 ### STM32 台架固件
 
@@ -280,7 +293,7 @@ npm run dev
 克隆后建议阅读：
 
 1. [软件平台说明](docs/software-platform.md)
-2. [V3.3 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.3_精简云数据架构版.docx)
+2. [V3.4 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.4_当前进度与执行计划版.docx)
 3. [STM32F103RCT6 台架固件说明](firmware/stm32f103rct6/README.md)
 4. 本 README 中的范围、安全要求和协作规范
 
@@ -335,7 +348,7 @@ P0 阻断和 P1 严重缺陷在最终验收前必须清零。测试记录至少�
 
 | 协作者 | 已核查交付 |
 | --- | --- |
-| 车晨星（`x1ng-chen`） | STM32→ESP8266→华为云IoTDA真实数据上行；ESP8266 MQTT串口桥与IoTDA安全网关；模块引脚资料、实体三视图与V3.3计划书更新 |
+| 车晨星（`x1ng-chen`） | STM32→ESP8266→华为云IoTDA真实数据上行；ESP8266 MQTT串口桥与IoTDA安全网关；模块引脚资料、实体三视图与V3.3/V3.4计划资料更新 |
 | 胡雨皓（`liar-ac`） | Vue 3/Django 主栈；RBAC、资产、遥测、告警、工单与审计；GIS/空间数据治理；三维孪生与资产绑定加固；测试、CI、部署与质量门禁 |
 
 其他成员的实际交付在获得代码提交、图纸、测试记录、照片或评审记录后再补充，避免将岗位职责误写成已完成工作。
@@ -369,7 +382,8 @@ chore(deploy): add mosquitto local configuration
 
 | 文档 | 说明 |
 | --- | --- |
-| [V3.3 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.3_精简云数据架构版.docx) | 当前需求、ESP8266通信基线、精简云数据架构、视觉智能扩展、计划、风险与验收 |
+| [V3.4 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.4_当前进度与执行计划版.docx) | 当前可核查进度、剩余工作、可靠性风险、执行顺序与验收计划 |
+| [V3.3 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.3_精简云数据架构版.docx) | 历史需求、ESP8266通信基线、精简云数据架构与视觉智能扩展 |
 | [硬件现状与接入设计](docs/%E7%A1%AC%E4%BB%B6%E7%8E%B0%E7%8A%B6%E4%B8%8E%E6%8E%A5%E5%85%A5%E8%AE%BE%E8%AE%A1.md) | 实物照片索引、用途、接入边界、待核验项和采购缺口 |
 | [GIS 设备位置模块](docs/GIS%E8%AE%BE%E5%A4%87%E4%BD%8D%E7%BD%AE%E6%A8%A1%E5%9D%97.md) | 实物模块映射、坐标真实性、GeoJSON 审核发布、硬件接口预留、底图配置与降级边界 |
 | [项目实施日志](docs/%E9%A1%B9%E7%9B%AE%E5%AE%9E%E6%96%BD%E6%97%A5%E5%BF%97.md) | 每日任务、实际完成、证据、风险、变更和周度汇总 |
@@ -391,4 +405,4 @@ chore(deploy): add mosquitto local configuration
 
 ---
 
-**文档基线：** V3.3 · **最后更新：** 2026-08-29 · **维护方：** 综合管廊数字孪生项目组
+**文档基线：** V3.4 · **最后更新：** 2026-08-30 · **维护方：** 综合管廊数字孪生项目组

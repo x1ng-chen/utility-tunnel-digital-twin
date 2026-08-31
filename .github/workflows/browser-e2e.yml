@@ -24,7 +24,7 @@ jobs:
     name: Production container build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Build Django API image
         run: docker build --file deploy/containers/Dockerfile.api --tag utility-tunnel-api:ci .
       - name: Build Vue web image
@@ -34,22 +34,21 @@ jobs:
     name: Vue3 and Django browser regression
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: backend/requirements.lock
       - name: Install application dependencies
         run: |
           npm ci --prefix frontend
-          python -m pip install --upgrade pip
-          python -m pip install -r backend/requirements.txt
+          python -m pip install --require-hashes -r backend/requirements.lock
       - name: Start isolated test services
         shell: bash
         run: |
@@ -81,7 +80,7 @@ jobs:
           "$RUNNER_TEMP/ut-playwright/node_modules/.bin/playwright" test "$GITHUB_WORKSPACE/tools/e2e/ops.spec.cjs" --reporter=line --timeout=60000
       - name: Upload service logs when a regression fails
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: browser-e2e-logs
           path: |

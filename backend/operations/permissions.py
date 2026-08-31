@@ -15,4 +15,17 @@ class RolePermission(BasePermission):
 
 class AuthenticatedRead(RolePermission):
     def has_permission(self, request, view) -> bool:
-        return bool(request.user and request.user.is_authenticated)
+        if not request.user or not request.user.is_authenticated:
+            return False
+        profile = getattr(request.user, 'profile', None)
+        return not profile or profile.role != 'ingest'
+
+
+class TelemetryPermission(BasePermission):
+    def has_permission(self, request, view) -> bool:
+        if not request.user or not request.user.is_authenticated:
+            return False
+        profile = getattr(request.user, 'profile', None)
+        if profile and profile.role == 'ingest':
+            return request.method == 'POST'
+        return True

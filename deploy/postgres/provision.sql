@@ -67,24 +67,28 @@ GRANT INSERT ON operations_workorder TO ut_runtime;
 GRANT UPDATE (status, assignee_id, completed_at, reviewed_by_id, version, updated_at)
   ON operations_workorder TO ut_runtime;
 GRANT UPDATE (warning, alarm, version, updated_at) ON operations_threshold TO ut_runtime;
-GRANT INSERT ON operations_auditlog, operations_reportexport TO ut_runtime;
-GRANT INSERT (account, display_name, requested_role, password_hash, status,
-  review_note, reviewed_by_id, reviewed_at, created_user_id, created_at)
+GRANT INSERT ON operations_auditlog TO ut_runtime;
+GRANT INSERT (report_type, status, file_name, idempotency_key, content,
+  content_sha256, row_count, requested_by_id, created_at, completed_at)
+  ON operations_reportexport TO ut_runtime;
+GRANT INSERT (account, display_name, requested_role, setup_token_hash,
+  setup_expires_at, password_set_at, status, review_note, reviewed_by_id,
+  reviewed_at, created_user_id, created_at)
   ON operations_registrationrequest TO ut_runtime;
-GRANT UPDATE (status, review_note, reviewed_by_id, reviewed_at, created_user_id)
+GRANT UPDATE (status, review_note, reviewed_by_id, reviewed_at, created_user_id,
+  setup_token_hash, setup_expires_at, password_set_at)
   ON operations_registrationrequest TO ut_runtime;
-GRANT INSERT (code, name, layer_type, geometry, crs, source,
-  source_reference, accuracy_m, captured_at, verified_at, status,
-  description, version, created_at, updated_at)
-  ON operations_spatialfeature TO ut_runtime;
-GRANT UPDATE (name, layer_type, geometry, crs, source, source_reference,
+GRANT INSERT (code, name, layer_type, geometry, crs, source, source_reference,
+  accuracy_m, captured_at, verified_at, status, description, version, created_at,
+  updated_at) ON operations_spatialfeature TO ut_runtime;
+GRANT UPDATE (code, name, layer_type, geometry, crs, source, source_reference,
   accuracy_m, captured_at, verified_at, status, description, version, updated_at)
   ON operations_spatialfeature TO ut_runtime;
 GRANT INSERT (asset_id, protocol, device_identifier, endpoint,
-  expected_interval_seconds, status, last_heartbeat_at, version, created_at, updated_at)
-  ON operations_hardwarebinding TO ut_runtime;
-GRANT UPDATE (protocol, device_identifier, endpoint, expected_interval_seconds,
-  status, last_heartbeat_at, version, updated_at)
+  expected_interval_seconds, status, last_heartbeat_at, version, created_at,
+  updated_at) ON operations_hardwarebinding TO ut_runtime;
+GRANT UPDATE (asset_id, protocol, device_identifier, endpoint,
+  expected_interval_seconds, status, last_heartbeat_at, version, updated_at)
   ON operations_hardwarebinding TO ut_runtime;
 GRANT INSERT (version, model_file, original_name, sha256, size_bytes, notes,
   status, uploaded_by_id, activated_by_id, activated_at, created_at)
@@ -99,8 +103,22 @@ GRANT USAGE, SELECT ON SEQUENCE operations_profile_id_seq,
   operations_workorder_id_seq, operations_auditlog_id_seq,
   operations_reportexport_id_seq, operations_registrationrequest_id_seq,
   operations_spatialfeature_id_seq, operations_hardwarebinding_id_seq,
-  operations_twinmodelrelease_id_seq TO ut_runtime;
-GRANT USAGE, SELECT ON SEQUENCE auth_user_id_seq, authtoken_token_id_seq TO ut_runtime;
+  operations_twinmodelrelease_id_seq
+  TO ut_runtime;
+GRANT USAGE, SELECT ON SEQUENCE auth_user_id_seq TO ut_runtime;
+
+-- DatabaseCache is optional. When DJANGO_CACHE_LOCATION points at the default
+-- django_cache table, grant only the row operations required by Django. The
+-- conditional keeps Redis/Memcached deployments valid when no cache table was
+-- created. Deployments using a custom cache table must grant that exact table
+-- explicitly in their release SQL.
+DO $$
+BEGIN
+  IF to_regclass('public.django_cache') IS NOT NULL THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON django_cache TO ut_runtime;
+  END IF;
+END
+$$;
 
 -- New tables must receive an explicit, reviewed grant in their release SQL.
 -- Do not use ALTER DEFAULT PRIVILEGES here: it would silently widen API access.

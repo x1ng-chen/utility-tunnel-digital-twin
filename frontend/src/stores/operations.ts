@@ -57,6 +57,7 @@ export const useOperationsStore = defineStore('operations', () => {
   const notice = ref('');
   const openAlerts = computed(() => alerts.value.filter((item) => item.status === 'open').length);
   const activeOrders = computed(() => workOrders.value.filter((item) => !['completed', 'cancelled'].includes(item.status)).length);
+  let liveRefreshPromise: Promise<void> | null = null;
 
   function expireApiSession() {
     auth.expireSession();
@@ -102,6 +103,36 @@ export const useOperationsStore = defineStore('operations', () => {
       }
     }
     finally { loading.value = false; }
+  }
+
+  async function refreshLive() {
+    if (source.value !== 'api' || !auth.isAuthenticated) return;
+    if (liveRefreshPromise) return liveRefreshPromise;
+    liveRefreshPromise = (async () => {
+      try {
+        const listParams = { page: 1, pageSize: 100 };
+        const [dashboardResponse, assetsResponse, alertsResponse, ordersResponse, telemetryResponse] = await Promise.all([
+          api.dashboard(), api.assets(listParams), api.alerts(listParams), api.workOrders(listParams), api.telemetry(listParams),
+        ]);
+        dashboard.value = dashboardResponse.data;
+        assets.value = assetsResponse.data.items;
+        alerts.value = alertsResponse.data.items;
+        workOrders.value = ordersResponse.data.items;
+        telemetry.value = telemetryResponse.data.items;
+        offline.value = false;
+        syncError.value = '';
+        lastSyncedAt.value = new Date().toISOString();
+      } catch (cause: unknown) {
+        if (responseStatus(cause) === 401) expireApiSession();
+        else {
+          offline.value = true;
+          syncError.value = apiErrorMessage(cause);
+        }
+      } finally {
+        liveRefreshPromise = null;
+      }
+    })();
+    return liveRefreshPromise;
   }
 
   function tick() {
@@ -273,10 +304,15 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function createReport(report: ReportKind) {
-    if (source.value === 'api') await runApiMutation(() => api.report(report, requestKey('report')));
-    downloadReport(report);
-    if (source.value === 'demo') appendAudit('report.export', 'report_export', report, { report, format: 'csv' });
-    else await syncAudit();
+    if (source.value === 'api') {
+      const record = await runApiMutation(() => api.report(report, requestKey('report')));
+      const exported = await api.downloadReport(record.data.id);
+      downloadBlob(exported.data, record.data.fileName || `utility-tunnel-${report}.csv`);
+      await syncAudit();
+    } else {
+      downloadReport(report);
+      appendAudit('report.export', 'report_export', report, { report, format: 'csv' });
+    }
     notice.value = `${report} 报表已生成`;
   }
 
@@ -345,7 +381,14 @@ export const useOperationsStore = defineStore('operations', () => {
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
-  return { dashboard, assets, spatialFeatures, hardwareBindings, alerts, workOrders, thresholds, telemetry, telemetryInsights, telemetryInsightsTotal, telemetrySummary, telemetryInsightsLoading, telemetryInsightsError, audit, loading, source, offline, syncError, lastSyncedAt, notice, openAlerts, activeOrders, refresh, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, importGisFeatures, updateGisFeature, createHardwareBinding, transition, updateThreshold, createReport, ingestTelemetry, loadTelemetryInsights };
+  function downloadBlob(blob: Blob, fileName: string) {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); link.href = url; link.download = fileName; link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  return { dashboard, assets, spatialFeatures, hardwareBindings, alerts, workOrders, thresholds, telemetry, telemetryInsights, telemetryInsightsTotal, telemetrySummary, telemetryInsightsLoading, telemetryInsightsError, audit, loading, source, offline, syncError, lastSyncedAt, notice, openAlerts, activeOrders, refresh, refreshLive, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, importGisFeatures, updateGisFeature, createHardwareBinding, transition, updateThreshold, createReport, ingestTelemetry, loadTelemetryInsights };
 });
 
 function telemetryMatchesQuery(item: Telemetry, query: TelemetryQuery): boolean {

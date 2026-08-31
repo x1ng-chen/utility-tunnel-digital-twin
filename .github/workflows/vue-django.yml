@@ -16,6 +16,7 @@ on:
       - 'services/iotda-gateway/**'
       - 'tools/**'
       - '.github/workflows/vue-django.yml'
+
   pull_request:
     paths:
       - 'frontend/**'
@@ -32,13 +33,16 @@ on:
       - 'tools/**'
       - '.github/workflows/vue-django.yml'
 
+permissions:
+  contents: read
+
 jobs:
   repository-safety:
     name: Repository safety scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
       - run: node tools/quality-scan.mjs
@@ -52,8 +56,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm
@@ -70,19 +74,22 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.lock
+            backend/requirements-audit.lock
       - name: Configure CI settings
         shell: bash
         run: |
           echo "DJANGO_ENV=test" >> "$GITHUB_ENV"
           echo "DJANGO_SECRET_KEY=ci-only-django-secret-that-is-longer-than-thirty-two-characters" >> "$GITHUB_ENV"
-      - run: python -m pip install --upgrade pip
-      - run: pip install -r requirements.txt
+      - run: pip install --require-hashes -r requirements.lock
+      - run: pip install --require-hashes -r requirements-audit.lock
+      - run: pip-audit --disable-pip --require-hashes -r requirements.lock
       - run: python manage.py check
       - run: python manage.py migrate --noinput
       - run: python manage.py production_preflight --allow-non-production
@@ -90,3 +97,92 @@ jobs:
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test
       - run: python -m compileall -q config operations
+
+  postgres-policy-integration:
+    name: PostgreSQL runtime policy
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: utility_tunnel
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d utility_tunnel"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DJANGO_ENV: test
+      DJANGO_SECRET_KEY: ci-only-django-secret-that-is-longer-than-thirty-two-characters
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/utility_tunnel?sslmode=disable
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.lock
+      - run: pip install --require-hashes -r requirements.lock
+      - run: python manage.py migrate --noinput
+      - run: python manage.py seed_demo
+      - name: Apply reviewed runtime grants
+        shell: bash
+        run: |
+          runtime_password="$(openssl rand -hex 24)"
+          echo "::add-mask::$runtime_password"
+          sed "s/\[GENERATE_A_UNIQUE_SECRET\]/$runtime_password/g" ../deploy/postgres/provision.sql > "$RUNNER_TEMP/provision.sql"
+          PGPASSWORD=postgres psql --host=127.0.0.1 --username=postgres --dbname=utility_tunnel --set=ON_ERROR_STOP=1 --file="$RUNNER_TEMP/provision.sql"
+          echo "CI_RUNTIME_URL=postgresql://ut_runtime:$runtime_password@127.0.0.1:5432/utility_tunnel?sslmode=disable" >> "$GITHUB_ENV"
+      - name: Verify allowed runtime operations
+        shell: bash
+        run: >-
+          DATABASE_URL="$CI_RUNTIME_URL" python manage.py shell -c
+          "from django.contrib.auth.models import User;
+          from rest_framework.test import APIClient;
+          from operations.models import Alert, Asset, ReportExport;
+          assert Asset.objects.count() > 0;
+          actor = User.objects.order_by('id').first();
+          ReportExport.objects.create(report_type='daily', file_name='ci-policy.csv', requested_by=actor);
+          client = APIClient();
+          login = client.post('/api/auth/login/', {'email': 'operator@example.com', 'password': 'demo-password-2026'}, format='json', HTTP_HOST='localhost');
+          assert login.status_code == 200, login.content;
+          client.credentials(HTTP_AUTHORIZATION='Bearer ' + login.json()['accessToken']);
+          alert = Alert.objects.get(code='ALM-260826-001');
+          acknowledged = client.post(f'/api/alerts/{alert.pk}/acknowledge/', format='json', HTTP_HOST='localhost');
+          assert acknowledged.status_code == 200, acknowledged.content;
+          linked = client.post(f'/api/alerts/{alert.pk}/work-order/', format='json', HTTP_HOST='localhost');
+          assert linked.status_code in {200, 201}, linked.content"
+      - name: Verify schema and destructive writes are denied
+        shell: bash
+        run: |
+          if psql "$CI_RUNTIME_URL" --set=ON_ERROR_STOP=1 --command="CREATE TABLE runtime_must_not_create (id integer)"; then
+            echo "runtime identity unexpectedly created a table" >&2
+            exit 1
+          fi
+          if psql "$CI_RUNTIME_URL" --set=ON_ERROR_STOP=1 --command="DELETE FROM operations_asset"; then
+            echo "runtime identity unexpectedly deleted asset rows" >&2
+            exit 1
+          fi
+
+  gateway:
+    name: IoTDA gateway quality
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/iotda-gateway
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/iotda-gateway/package-lock.json
+      - run: npm ci
+      - run: npm test

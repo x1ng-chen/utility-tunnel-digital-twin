@@ -1,11 +1,21 @@
-from rest_framework.throttling import SimpleRateThrottle
-from django.conf import settings
 import hashlib
+
+from django.conf import settings
+from rest_framework.throttling import SimpleRateThrottle
 
 
 def client_address(request):
+    """Resolve the client address without trusting proxy headers by default."""
+
     forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '') if settings.TRUST_PROXY_HEADERS else ''
     return forwarded.split(',')[0].strip() if forwarded else request.META.get('REMOTE_ADDR', 'unknown')
+
+
+class ClientAddressRateThrottle(SimpleRateThrottle):
+    """Build an IP-keyed throttle for public endpoints."""
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {'scope': self.scope, 'ident': client_address(request)}
 
 
 class LoginRateThrottle(SimpleRateThrottle):
@@ -21,13 +31,22 @@ class LoginRateThrottle(SimpleRateThrottle):
         return self.cache_format % {'scope': self.scope, 'ident': digest}
 
 
-class LoginBurstRateThrottle(SimpleRateThrottle):
+class LoginBurstRateThrottle(ClientAddressRateThrottle):
     """Retain an IP-wide ceiling so rotating account names cannot bypass protection."""
 
     scope = 'login_burst'
 
-    def get_cache_key(self, request, view):
-        return self.cache_format % {'scope': self.scope, 'ident': client_address(request)}
+
+class RegistrationRateThrottle(ClientAddressRateThrottle):
+    """Keep public account applications from consuming the login budget."""
+
+    scope = 'registration'
+
+
+class PasswordSetupRateThrottle(ClientAddressRateThrottle):
+    """Limit one-time password setup attempts independently of login."""
+
+    scope = 'password_setup'
 
 
 class PasswordChangeRateThrottle(SimpleRateThrottle):

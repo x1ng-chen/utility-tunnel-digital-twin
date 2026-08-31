@@ -21,6 +21,7 @@ from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, Registrati
 
 class OperationsApiTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.client = APIClient()
         self.operator = User.objects.create_user(username='operator@example.com', email='operator@example.com', password='demo-password')
         self.admin = User.objects.create_user(username='admin@example.com', email='admin@example.com', password='demo-password')
@@ -105,7 +106,6 @@ class OperationsApiTests(TestCase):
             'account': 'new.operator',
             'displayName': '新运维员',
             'role': Profile.Role.OPERATOR,
-            'password': 'NewOperator!2026',
         }, format='json')
         self.assertEqual(application.status_code, 201)
         self.assertFalse(User.objects.filter(email='new.operator').exists())
@@ -117,14 +117,74 @@ class OperationsApiTests(TestCase):
         approved = self.client.patch(f'/api/admin/registration-requests/{request_id}/', {'status': 'approved'}, format='json')
         self.assertEqual(approved.status_code, 200)
         self.assertEqual(approved.json()['status'], RegistrationRequest.Status.APPROVED)
+        self.assertIn('setupToken', approved.json())
         created = User.objects.get(email='new.operator')
         self.assertEqual(created.profile.role, Profile.Role.OPERATOR)
+        self.assertFalse(created.is_active)
+        self.assertFalse(created.has_usable_password())
         self.client.credentials()
+        before_setup = self.client.post('/api/auth/login/', {'email': 'new.operator', 'password': 'NewOperator!2026'}, format='json')
+        self.assertEqual(before_setup.status_code, 401)
+        setup = self.client.post(
+            '/api/auth/registration-requests/setup/',
+            {'token': approved.json()['setupToken'], 'password': 'NewOperator!2026'},
+            format='json',
+        )
+        self.assertEqual(setup.status_code, 200)
         login = self.client.post('/api/auth/login/', {'email': 'new.operator', 'password': 'NewOperator!2026'}, format='json')
         self.assertEqual(login.status_code, 200)
+        reused = self.client.post(
+            '/api/auth/registration-requests/setup/',
+            {'token': approved.json()['setupToken'], 'password': 'AnotherStrong!2026'},
+            format='json',
+        )
+        self.assertEqual(reused.status_code, 400)
+        request_record = RegistrationRequest.objects.get(pk=request_id)
+        self.assertEqual(request_record.setup_token_hash, '')
+        self.assertIsNone(request_record.setup_expires_at)
         self.assertTrue(AuditLog.objects.filter(action='registration.approved').exists())
 
-    def test_registration_rejects_a_numeric_weak_password(self):
+    def test_administrator_can_reissue_an_expired_unused_setup_link(self):
+        application = self.client.post('/api/auth/registration-requests/', {
+            'account': 'expired.operator',
+            'displayName': '过期链接运维员',
+            'role': Profile.Role.OPERATOR,
+        }, format='json')
+        self.auth(self.admin)
+        approved = self.client.patch(
+            f"/api/admin/registration-requests/{application.json()['id']}/",
+            {'status': 'approved'},
+            format='json',
+        )
+        old_token = approved.json()['setupToken']
+        record = RegistrationRequest.objects.get(pk=application.json()['id'])
+        record.setup_expires_at = timezone.now() - timedelta(seconds=1)
+        record.save(update_fields=['setup_expires_at'])
+        self.client.credentials()
+        expired = self.client.post('/api/auth/registration-requests/setup/', {
+            'token': old_token,
+            'password': 'ExpiredOperator!2026',
+        }, format='json')
+        self.assertEqual(expired.status_code, 400)
+
+        self.auth(self.admin)
+        reissued = self.client.post(f'/api/admin/registration-requests/{record.pk}/setup-token/')
+        self.assertEqual(reissued.status_code, 200)
+        self.assertNotEqual(reissued.json()['setupToken'], old_token)
+        self.assertTrue(AuditLog.objects.filter(action='registration.setup_token_reissued', resource_id=str(record.pk)).exists())
+
+        self.client.credentials()
+        self.assertEqual(self.client.post('/api/auth/registration-requests/setup/', {
+            'token': old_token,
+            'password': 'ExpiredOperator!2026',
+        }, format='json').status_code, 400)
+        completed = self.client.post('/api/auth/registration-requests/setup/', {
+            'token': reissued.json()['setupToken'],
+            'password': 'ExpiredOperator!2026',
+        }, format='json')
+        self.assertEqual(completed.status_code, 200)
+
+    def test_registration_rejects_password_material(self):
         response = self.client.post('/api/auth/registration-requests/', {
             'account': 'weak-password.operator',
             'displayName': '弱口令测试账号',
@@ -140,7 +200,6 @@ class OperationsApiTests(TestCase):
             'account': 'rejected.operator',
             'displayName': '待驳回账号',
             'role': Profile.Role.OPERATOR,
-            'password': 'Rejected-Operator-2026!',
         }, format='json')
         self.assertEqual(application.status_code, 201)
         self.auth(self.admin)
@@ -171,6 +230,25 @@ class OperationsApiTests(TestCase):
         self.assertEqual(created.status_code, 409)
         promoted = self.client.patch(f'/api/admin/users/{self.operator.pk}/', {'role': Profile.Role.ADMINISTRATOR}, format='json')
         self.assertEqual(promoted.status_code, 409)
+
+    @override_settings(
+        INGEST_API_KEY='test-ingest-key-that-is-at-least-thirty-two-characters',
+        INGEST_PRINCIPAL_USERNAME='service-iotda-admin-boundary',
+    )
+    def test_machine_principal_is_not_managed_as_a_human_user(self):
+        call_command('configure_ingest_principal', verbosity=0)
+        principal = User.objects.get(username='service-iotda-admin-boundary')
+        self.auth(self.admin)
+        listing = self.client.get('/api/admin/users/?pageSize=100')
+        self.assertEqual(listing.status_code, 200)
+        self.assertNotIn(principal.pk, [item['id'] for item in listing.json()['items']])
+        self.assertEqual(self.client.patch(f'/api/admin/users/{principal.pk}/', {'isActive': False}, format='json').status_code, 403)
+        self.assertEqual(self.client.post('/api/admin/users/', {
+            'email': 'fake-ingest@example.com',
+            'displayName': '伪造机器账号',
+            'password': 'FakeIngestPassword!2026',
+            'role': Profile.Role.INGEST,
+        }, format='json').status_code, 400)
 
     def test_superuser_login_returns_administrator_role(self):
         superuser = User.objects.create_superuser(username='login-root@example.com', email='login-root@example.com', password='root-password-2026')
@@ -222,6 +300,16 @@ class OperationsApiTests(TestCase):
         report = self.client.post('/api/report-exports/', {'report': 'daily'}, format='json')
         self.assertEqual(report.status_code, 201)
         self.assertEqual(report.json()['reportType'], 'daily')
+        download = self.client.get(f"/api/report-exports/{report.json()['id']}/download/")
+        self.assertEqual(download.status_code, 200)
+        self.assertEqual(download['Content-Type'], 'text/csv; charset=utf-8')
+        self.assertIn('assets_total', download.content.decode('utf-8-sig'))
+        self.assertEqual(report.json()['rowCount'], 1)
+        self.assertEqual(download['X-Content-SHA256'], report.json()['contentSha256'])
+        original_snapshot = download.content
+        Asset.objects.create(code='SNAPSHOT-LATER', name='导出后新增资产', zone='UT-ZA', asset_type='测试')
+        repeated_download = self.client.get(f"/api/report-exports/{report.json()['id']}/download/")
+        self.assertEqual(repeated_download.content, original_snapshot)
         self.assertEqual(self.client.get('/api/report-exports/').status_code, 200)
         self.assertEqual(self.client.get('/api/assets/?pageSize=not-a-number').status_code, 400)
         self.assertEqual(self.client.get('/api/assets/?status=broken').status_code, 400)
@@ -233,8 +321,8 @@ class OperationsApiTests(TestCase):
         self.assertEqual(self.client.get('/api/alerts/?openedFrom=2026-08-27T00:00:00Z&openedTo=2026-08-26T00:00:00Z').status_code, 400)
         self.assertEqual(self.client.get('/api/work-orders/?updatedFrom=not-a-date').status_code, 400)
         page = self.client.get('/api/assets/?page=1&pageSize=1').json()
-        self.assertEqual(page['pageCount'], 1)
-        self.assertFalse(page['hasNext'])
+        self.assertEqual(page['pageCount'], 2)
+        self.assertTrue(page['hasNext'])
 
     def test_twin_model_readiness_requires_asset_mapping_and_an_active_release(self):
         self.assertEqual(self.client.get('/api/twin/model-readiness/').status_code, 401)
@@ -323,6 +411,47 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['telemetry']['id'], latest.id)
 
+    def test_connectivity_uses_heartbeat_freshness_and_recovers_on_ingest(self):
+        binding = HardwareBinding.objects.create(
+            asset=self.asset,
+            protocol=HardwareBinding.Protocol.MQTT,
+            device_identifier='ut-fan-01',
+            endpoint='ut/v1/fan-01/telemetry',
+            expected_interval_seconds=10,
+            status=HardwareBinding.Status.CONNECTED,
+            last_heartbeat_at=timezone.now(),
+        )
+        self.auth(self.operator)
+        self.assertEqual(self.client.get('/api/dashboard/').json()['assets']['online'], 1)
+
+        binding.last_heartbeat_at = timezone.now() - timedelta(minutes=2)
+        binding.save(update_fields=['last_heartbeat_at'])
+        self.assertEqual(self.client.get('/api/dashboard/').json()['assets']['online'], 0)
+        command_output = io.StringIO()
+        call_command('reconcile_connectivity', stdout=command_output)
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.status, Asset.Status.OFFLINE)
+        communication_alert = Alert.objects.get(asset=self.asset, rule_key='connectivity.offline')
+        self.assertEqual(communication_alert.status, Alert.Status.OPEN)
+
+        ingested = self.client.post('/api/telemetry/', {'readings': [{
+            'eventId': 'connectivity-recovery-1',
+            'assetCode': self.asset.code,
+            'metricKey': 'fan.feedback',
+            'metric': '风机反馈',
+            'value': 1,
+            'unit': 'bool',
+            'quality': 'good',
+            'recordedAt': timezone.now().isoformat(),
+        }]}, format='json')
+        self.assertEqual(ingested.status_code, 201)
+        binding.refresh_from_db()
+        communication_alert.refresh_from_db()
+        self.asset.refresh_from_db()
+        self.assertEqual(binding.status, HardwareBinding.Status.CONNECTED)
+        self.assertIsNotNone(binding.last_heartbeat_at)
+        self.assertEqual(communication_alert.status, Alert.Status.RESOLVED)
+        self.assertNotEqual(self.asset.status, Asset.Status.OFFLINE)
     def test_hardware_connectivity_uses_a_three_interval_heartbeat_grace_period(self):
         binding = HardwareBinding.objects.create(
             asset=self.asset,
@@ -515,6 +644,42 @@ class OperationsApiTests(TestCase):
         self.auth(viewer)
         self.assertEqual(self.client.post('/api/telemetry/', {'readings': []}, format='json').status_code, 403)
         self.assertIn('idempotency-key', settings.CORS_ALLOW_HEADERS)
+
+    @override_settings(
+        INGEST_API_KEY='test-ingest-key-that-is-at-least-thirty-two-characters',
+        INGEST_PRINCIPAL_USERNAME='service-iotda-test',
+    )
+    def test_ingest_api_key_is_scoped_to_telemetry_post(self):
+        call_command('configure_ingest_principal', verbosity=0)
+        principal = User.objects.get(username='service-iotda-test')
+        self.assertFalse(principal.has_usable_password())
+        self.assertEqual(principal.profile.role, Profile.Role.INGEST)
+        reading = {
+            'eventId': 'evt-machine-principal',
+            'assetCode': self.asset.code,
+            'metricKey': 'vibration.alarm',
+            'metric': '振动锁存',
+            'value': 0,
+            'unit': 'bool',
+            'quality': 'good',
+            'recordedAt': timezone.now().isoformat(),
+        }
+        self.client.credentials(HTTP_X_INGEST_KEY=settings.INGEST_API_KEY)
+        created = self.client.post('/api/telemetry/', {'readings': [reading]}, format='json')
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(self.client.get('/api/telemetry/').status_code, 403)
+        # The machine credential is installed only on the telemetry endpoint;
+        # it must never become a human API session or reach mutation handlers.
+        self.assertEqual(self.client.get('/api/auth/me/').status_code, 401)
+        self.assertEqual(self.client.get('/api/assets/').status_code, 401)
+        self.assertEqual(self.client.post(f'/api/alerts/{self.alert.pk}/acknowledge/').status_code, 401)
+        self.assertEqual(self.client.post('/api/work-orders/', {
+            'assetCode': self.asset.code,
+            'title': '机器密钥不得创建工单',
+        }, format='json').status_code, 401)
+        self.assertEqual(self.client.get('/api/admin/users/').status_code, 401)
+        self.client.credentials(HTTP_X_INGEST_KEY='wrong-key')
+        self.assertEqual(self.client.post('/api/telemetry/', {'readings': [reading]}, format='json').status_code, 401)
 
     def test_malformed_object_payloads_return_400_instead_of_500(self):
         self.auth(self.operator)

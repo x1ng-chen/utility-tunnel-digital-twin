@@ -4,6 +4,7 @@
 !.env.example
 secrets.*
 private.*
+firmware/esp8266-01s/include/secrets.h
 
 # Python
 __pycache__/
@@ -15,8 +16,12 @@ __pycache__/
 node_modules/
 dist/
 .vite/
+.next/
+.vinext/
+.wrangler/
 *.tsbuildinfo
 .firecrawl/
+/apps/**/next-env.d.ts
 
 # Editors and operating systems
 .idea/
@@ -56,6 +61,7 @@ ut-ops-site.tar.gz
 firmware/**/.pio/
 
 # STM32/CMake generated artifacts
+/build/
 firmware/**/build/
 firmware/**/build-*/
 firmware/**/*.elf

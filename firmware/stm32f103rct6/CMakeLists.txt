@@ -45,6 +45,15 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_menu.c"
+)
+
+# The display driver sends every pixel over software SPI. Keep the rest of
+# Debug easy to inspect, but optimize the two display-critical source files.
+set_source_files_properties(
+    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_menu.c"
+    PROPERTIES COMPILE_OPTIONS "-O3"
 )
 
 # Add include paths

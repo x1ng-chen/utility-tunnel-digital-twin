@@ -426,10 +426,12 @@ class ReportExportSerializer(serializers.ModelSerializer):
     fileName = serializers.CharField(source='file_name', read_only=True)
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
     completedAt = serializers.DateTimeField(source='completed_at', read_only=True)
+    contentSha256 = serializers.CharField(source='content_sha256', read_only=True)
+    rowCount = serializers.IntegerField(source='row_count', read_only=True)
 
     class Meta:
         model = ReportExport
-        fields = ['id', 'reportType', 'status', 'fileName', 'createdAt', 'completedAt']
+        fields = ['id', 'reportType', 'status', 'fileName', 'contentSha256', 'rowCount', 'createdAt', 'completedAt']
 
 
 class AdminUserSerializer(serializers.ModelSerializer):
@@ -457,12 +459,14 @@ class RegistrationRequestSerializer(serializers.ModelSerializer):
     requestedRole = serializers.CharField(source='requested_role', read_only=True)
     reviewNote = serializers.CharField(source='review_note', read_only=True)
     reviewedAt = serializers.DateTimeField(source='reviewed_at', read_only=True)
+    setupExpiresAt = serializers.DateTimeField(source='setup_expires_at', read_only=True)
+    passwordSetAt = serializers.DateTimeField(source='password_set_at', read_only=True)
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
     reviewerName = serializers.SerializerMethodField()
 
     class Meta:
         model = RegistrationRequest
-        fields = ['id', 'account', 'display_name', 'requestedRole', 'status', 'reviewNote', 'reviewerName', 'reviewedAt', 'createdAt']
+        fields = ['id', 'account', 'display_name', 'requestedRole', 'status', 'reviewNote', 'reviewerName', 'reviewedAt', 'setupExpiresAt', 'passwordSetAt', 'createdAt']
 
     def get_reviewerName(self, obj):
         if not obj.reviewed_by:

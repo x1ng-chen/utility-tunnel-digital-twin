@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import AdminRegistrationRequestDetailView, AdminRegistrationRequestListView, AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, DashboardView, HardwareBindingDetailView, HardwareBindingListView, HealthView, LoginView, LogoutView, MeView, PasswordChangeView, ReadyView, RegistrationRequestView, ReportExportView, SpatialFeatureDetailView, SpatialFeatureImportView, SpatialFeatureListView, TelemetryListView, TelemetrySummaryView, ThresholdDetailView, ThresholdListView, TwinModelFileView, TwinModelReadinessView, TwinModelReleaseActivateView, TwinModelReleaseListView, WorkOrderListView, WorkOrderTransitionView
+from .views import AdminRegistrationRequestDetailView, AdminRegistrationRequestListView, AdminRegistrationSetupTokenView, AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, DashboardView, HardwareBindingDetailView, HardwareBindingListView, HealthView, LoginView, LogoutView, MeView, PasswordChangeView, ReadyView, RegistrationPasswordSetupView, RegistrationRequestView, ReportExportDownloadView, ReportExportView, SpatialFeatureDetailView, SpatialFeatureImportView, SpatialFeatureListView, TelemetryListView, TelemetrySummaryView, ThresholdDetailView, ThresholdListView, TwinModelFileView, TwinModelReadinessView, TwinModelReleaseActivateView, TwinModelReleaseListView, WorkOrderListView, WorkOrderTransitionView
 
 
 urlpatterns = [
@@ -7,6 +7,7 @@ urlpatterns = [
     path('ready/', ReadyView.as_view()),
     path('auth/login/', LoginView.as_view()),
     path('auth/registration-requests/', RegistrationRequestView.as_view()),
+    path('auth/registration-requests/setup/', RegistrationPasswordSetupView.as_view()),
     path('auth/me/', MeView.as_view()),
     path('auth/logout/', LogoutView.as_view()),
     path('auth/password/', PasswordChangeView.as_view()),
@@ -14,6 +15,7 @@ urlpatterns = [
     path('admin/users/<int:pk>/', AdminUserDetailView.as_view()),
     path('admin/registration-requests/', AdminRegistrationRequestListView.as_view()),
     path('admin/registration-requests/<int:pk>/', AdminRegistrationRequestDetailView.as_view()),
+    path('admin/registration-requests/<int:pk>/setup-token/', AdminRegistrationSetupTokenView.as_view()),
     path('dashboard/', DashboardView.as_view()),
     path('twin/model-readiness/', TwinModelReadinessView.as_view()),
     path('twin/models/', TwinModelReleaseListView.as_view()),
@@ -37,4 +39,5 @@ urlpatterns = [
     path('thresholds/<str:key>/', ThresholdDetailView.as_view()),
     path('audit/', AuditListView.as_view()),
     path('report-exports/', ReportExportView.as_view()),
+    path('report-exports/<int:pk>/download/', ReportExportDownloadView.as_view()),
 ]

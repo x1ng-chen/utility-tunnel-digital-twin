@@ -1,7 +1,9 @@
 from datetime import timedelta
+import os
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 from operations.models import Alert, Asset, HardwareBinding, Profile, RegistrationRequest, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder
 
@@ -17,6 +19,12 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        if settings.IS_PRODUCTION:
+            raise CommandError('seed_demo is disabled in production environments.')
+        admin_account = os.getenv('SEED_ADMIN_EMAIL', 'admin').strip() or 'admin'
+        admin_password = os.getenv('SEED_ADMIN_PASSWORD', 'local-admin-password-2026')
+        if len(admin_password) < 12:
+            raise CommandError('SEED_ADMIN_PASSWORD must contain at least 12 characters.')
         if options['clean_e2e_data']:
             # Browser regression performs many legitimate logins from the
             # local loopback address. Clear only that local test throttle key;
@@ -37,7 +45,7 @@ class Command(BaseCommand):
             # demonstration data is never discarded by a regular seed.
             WorkOrder.objects.filter(source_alert__code='ALM-260826-001').delete()
         users = [
-            ('admin', '管理员', Profile.Role.ADMINISTRATOR, '123'),
+            (admin_account, '管理员', Profile.Role.ADMINISTRATOR, admin_password),
             ('operator@example.com', '运维员', Profile.Role.OPERATOR, 'demo-password-2026'),
             ('viewer@example.com', '查看者', Profile.Role.VIEWER, 'demo-password-2026'),
         ]
@@ -114,4 +122,4 @@ class Command(BaseCommand):
 
         for key, label, warning, alarm, unit in [('temperature', '环境温度', 28, 32, '°C'), ('humidity', '环境湿度', 75, 85, '%RH'), ('water', '水浸趋势', 20, 45, '秒')]:
             Threshold.objects.update_or_create(key=key, defaults={'label': label, 'warning': warning, 'alarm': alarm, 'unit': unit})
-        self.stdout.write(self.style.SUCCESS('Django demo data seeded. Administrator: admin / 123'))
+        self.stdout.write(self.style.SUCCESS(f'Django demo data seeded. Administrator account: {admin_account}; password read from SEED_ADMIN_PASSWORD.'))

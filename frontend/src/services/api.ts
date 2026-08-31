@@ -54,7 +54,8 @@ client.interceptors.request.use((config) => {
 
 export const api = {
   login: (payload: { email: string; password: string }) => client.post('/auth/login/', payload),
-  requestRegistration: (payload: { account: string; displayName: string; role: 'operator' | 'viewer'; password: string }) => client.post('/auth/registration-requests/', payload),
+  requestRegistration: (payload: { account: string; displayName: string; role: 'operator' | 'viewer' }) => client.post('/auth/registration-requests/', payload),
+  setupRegistrationPassword: (token: string, password: string) => client.post('/auth/registration-requests/setup/', { token, password }),
   me: () => client.get('/auth/me/'),
   logout: () => client.post('/auth/logout/'),
   changePassword: (payload: { currentPassword: string; newPassword: string }) => client.post('/auth/password/', payload),
@@ -62,6 +63,7 @@ export const api = {
   updateAdminUser: (id: number, payload: Record<string, unknown>) => client.patch(`/admin/users/${id}/`, payload),
   registrationRequests: (params?: Record<string, string | number>) => client.get('/admin/registration-requests/', { params }),
   reviewRegistrationRequest: (id: number, payload: { status: 'approved' | 'rejected'; reviewNote?: string }) => client.patch(`/admin/registration-requests/${id}/`, payload),
+  reissueRegistrationSetupToken: (id: number) => client.post(`/admin/registration-requests/${id}/setup-token/`),
   dashboard: () => client.get('/dashboard/'),
   twinModelReadiness: () => client.get('/twin/model-readiness/'),
   twinModels: (params?: Record<string, string | number>) => client.get('/twin/models/', { params }),
@@ -91,6 +93,7 @@ export const api = {
   updateThreshold: (key: string, payload: Record<string, unknown>) => client.put(`/thresholds/${key}/`, payload),
   audit: (params?: Record<string, string | number>) => client.get('/audit/', { params }),
   report: (report: string, idempotencyKey?: string) => client.post('/report-exports/', { report }, { headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined }),
+  downloadReport: (id: number) => client.get(`/report-exports/${id}/download/`, { responseType: 'blob' }),
 };
 
 export function setApiBaseUrl(baseUrl: string): void {

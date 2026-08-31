@@ -1,11 +1,11 @@
 # 软件平台说明
 
-## 已交付的软件演示
+## 已交付的软件平台
 
-当前标准软件栈位于 `frontend/`（Vue 3）与 `backend/`（Django + DRF），同时支持两种明确的数据源：默认的浏览器本地演示模式，以及登录后使用 Django API 的正式数据模式。两种模式共用同一套业务对象和页面，避免分别维护互相矛盾的功能。
+当前标准软件栈位于 `frontend/`（Vue 3）与 `backend/`（Django + DRF），只使用 Django API 作为业务数据源。开发环境可由 Django 回退 SQLite，生产环境强制 PostgreSQL；浏览器不再维护另一套可写演示数据。
 
-- **本地演示模式**：不接硬件、不开数据库即可运行；业务模拟数据只保存在当前页面会话内，刷新后重新加载安全种子数据，不会把演示记录上传或写入项目文件。
-- **API 模式**：登录页选择“Django API”，输入已部署 API 的地址与账号。访问令牌只保存在当前浏览器会话的 `sessionStorage`，过期会自动清理身份并返回登录页；资产、告警、工单、阈值、遥测、导出登记和审计由 Django API 读取或写入 PostgreSQL（本地开发可回退 SQLite）。
+- **本地开发**：运行 Django、执行迁移和 `seed_demo` 后启动 Vue；数据由本地 Django 数据库持久化。
+- **生产部署**：前端构建时固定 `VITE_API_BASE_URL`；访问令牌只保存在当前浏览器会话的 `sessionStorage`，过期会自动清理身份并返回登录页。
 
 | 模块 | 单一职责 | 已实现能力 |
 | --- | --- | --- |
@@ -42,7 +42,7 @@
 | 运维员 | 告警、工单、导出 |
 | 查看者 | 浏览和导出 |
 
-本地模式下登录页可以选择演示角色；该角色只用于当前页面会话，不会上传。API 模式下角色来自服务端登录响应，服务端会再次执行权限校验，不能依赖前端做授权。
+角色来自服务端登录响应，服务端会再次执行权限校验，不能依赖前端做授权。遥测网关使用独立 `ingest` 机器角色，只允许写入遥测。
 
 ## 运行与质量检查
 
@@ -77,7 +77,7 @@ GitHub Actions 对 Vue 3 前端执行测试、类型检查、生产构建和高�
 
 GIS 使用项目内 Leaflet 依赖。开发底图可使用 OpenStreetMap 并保留署名；其公共服务不提供生产 SLA，正式环境必须通过 `VITE_GIS_TILE_URL` 和 `VITE_GIS_ATTRIBUTION` 接入获批或自建瓦片服务。空间对象采用 PostgreSQL 中受控的 WGS84 GeoJSON：管理员导入草稿、登记来源并审核发布，普通运维地图只读取已发布对象。当前资产种子坐标均标记为演示锚点，不代表现场 GPS 或测绘结果，详见 [GIS 设备位置模块](GIS设备位置模块.md)。
 
-## 从演示数据迁移到 PostgreSQL
+## 从本地开发迁移到 PostgreSQL
 
 `backend` 已包含 Django 迁移、Token Bearer 认证、RBAC、资产、可信遥测批量写入、阈值自动告警、工单、审计、阈值和导出记录。Vue 前端已经实现 API 客户端、登录、分页回读、显式刷新与同步时间、会话过期清理和失败降级；不需要替换页面或重写业务对象。
 
@@ -92,7 +92,7 @@ python manage.py seed_demo
 python manage.py runserver 127.0.0.1:8000
 ```
 
-随后可在 `frontend/.env.local` 设置 `VITE_API_BASE_URL`，或直接在界面中输入 API 地址。部署时必须把前端的真实站点地址加入 API 的 `CORS_ALLOWED_ORIGINS`。
+随后在 `frontend/.env.local` 设置 `VITE_API_BASE_URL`。部署时必须把前端的真实站点地址加入 API 的 `CORS_ALLOWED_ORIGINS`。
 
 不应把数据库连接串、Django 密钥或真实账号提交到仓库。使用 `backend/.env.example` 创建本地 `.env`，并由托管数据库平台提供连接字符串。
 

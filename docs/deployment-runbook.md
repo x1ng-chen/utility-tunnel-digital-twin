@@ -11,7 +11,7 @@
 
 ```bash
 cd backend
-python -m pip install -r requirements.txt
+python -m pip install --require-hashes -r requirements.lock
 python manage.py migrate
 python manage.py seed_demo
 ```
@@ -29,7 +29,7 @@ python manage.py seed_demo
 - `DJANGO_CSRF_TRUSTED_ORIGINS`：与前端 HTTPS Origin 精确匹配；生产环境不得使用开发机 Origin；
 - `DJANGO_SECURE_SSL_REDIRECT=true`、`DJANGO_ENABLE_HSTS=true` 与 `DJANGO_TRUST_PROXY_SSL=true`：本项目的 Nginx TLS 终止架构必须信任 `X-Forwarded-Proto`，避免 HTTPS 重定向循环；
 - `DATABASE_URL`：`ut_runtime` 的 PostgreSQL TLS 连接串；
-- `API_TOKEN_TTL_SECONDS`、`LOGIN_RATE_LIMIT` 与 `PASSWORD_CHANGE_RATE_LIMIT`：按安全策略设置；登录和已认证改密分别限流，避免登录保护被日常改密操作消耗；
+- `API_TOKEN_TTL_SECONDS`、`LOGIN_RATE_LIMIT`、`REGISTRATION_RATE_LIMIT`、`PASSWORD_SETUP_RATE_LIMIT` 与 `PASSWORD_CHANGE_RATE_LIMIT`：按安全策略设置；登录、注册申请、一次性密码设置和已认证改密分别限流，避免不同入口互相消耗安全预算；
 - `DJANGO_MAX_REQUEST_BYTES` 与 `DJANGO_MAX_REQUEST_FIELDS`：限制单次请求体大小和字段数量，防止异常请求耗尽内存；
 - `TWIN_MODEL_MAX_BYTES`：三维 GLB 上传上限，默认 32 MB；反向代理请求体上限必须不小于该值；
 - `DJANGO_CACHE_BACKEND` 与 `DJANGO_CACHE_LOCATION`：登录限流必须使用跨进程共享缓存；如果使用 Django 内置 `DatabaseCache`，迁移后执行一次 `python manage.py createcachetable <cache_table>`；
@@ -54,11 +54,11 @@ python manage.py production_preflight
 
 ## 3. 前端
 
-部署 `frontend` 后设置公开变量 `VITE_API_BASE_URL=https://<你的-api-domain>/api`；这只能是 API 地址，绝不能放入数据库 URL、密码或 Token。若未设置，站点默认使用本地演示模式。Django 的 `CORS_ALLOWED_ORIGINS` 必须精确允许该前端 Origin。
+构建 `frontend` 时设置公开变量 `VITE_API_BASE_URL=https://<你的-api-domain>/api`；这只能是 API 地址，绝不能放入数据库 URL、密码或 Token。未设置时仅回退到本机开发地址，不提供浏览器演示数据。Django 的 `CORS_ALLOWED_ORIGINS` 必须精确允许该前端 Origin。
 
 ### 容器化制品
 
-仓库提供无需在开发电脑额外安装服务的部署制品：`deploy/containers/Dockerfile.api`、`Dockerfile.web` 与 `docker-compose.production.yml`。它们以非 root API 用户、只读文件系统、内部 API 网络和回环 Web 端口为默认安全边界；真实 RDS 始终由外部托管，不会被 Compose 以数据卷方式创建。
+仓库提供无需在开发电脑额外安装服务的部署制品：`deploy/containers/Dockerfile.api`、`Dockerfile.web` 与 `docker-compose.production.yml`。它们以非 root API 用户、只读文件系统、内部 API 网络和回环 Web 端口为默认安全边界；真实 RDS 始终由外部托管，不会被 Compose 以数据卷方式创建。编排中的 `connectivity-monitor` 默认每 15 秒运行心跳巡检，把超时绑定转为离线状态和通信告警；它与 API 使用同一最小权限数据库身份。
 
 在具备 Docker 和华为云环境变量的 ECS 上，按 [容器部署说明](../deploy/containers/README.md) 执行。构建完成后必须在 API 容器内运行：
 

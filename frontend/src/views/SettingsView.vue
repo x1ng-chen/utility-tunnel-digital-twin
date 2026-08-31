@@ -17,6 +17,7 @@ const usersError = ref('');
 const applications = ref<RegistrationRequest[]>([]);
 const applicationsLoading = ref(false);
 const applicationsError = ref('');
+const approvedSetupLink = ref('');
 const reviewNotes = reactive<Record<number, string>>({});
 const passwordForm = reactive({ currentPassword: '', newPassword: '', confirmPassword: '' });
 const passwordMessage = ref('');
@@ -83,24 +84,46 @@ async function updateUser(user: AdminUser, changes: Record<string, unknown>) {
 async function loadApplications() {
   if (!canManageUsers.value) { applications.value = []; return; }
   applicationsLoading.value = true; applicationsError.value = '';
-  try { applications.value = (await api.registrationRequests({ page: 1, pageSize: 100, status: 'pending' })).data.items; }
+  try {
+    const [pending, approved] = await Promise.all([
+      api.registrationRequests({ page: 1, pageSize: 100, status: 'pending' }),
+      api.registrationRequests({ page: 1, pageSize: 100, status: 'approved' }),
+    ]);
+    applications.value = [...pending.data.items, ...approved.data.items.filter((item: RegistrationRequest) => !item.passwordSetAt)];
+  }
   catch (cause: unknown) { applicationsError.value = cause instanceof Error ? cause.message : '账号申请加载失败'; }
   finally { applicationsLoading.value = false; }
 }
 
 async function reviewApplication(application: RegistrationRequest, nextStatus: 'approved' | 'rejected') {
   applicationsError.value = '';
+  approvedSetupLink.value = '';
   try {
     const reviewNote = reviewNotes[application.id]?.trim() || '';
     if (nextStatus === 'rejected' && !reviewNote) {
       applicationsError.value = '不予批准时请填写原因，方便申请人了解后续处理方式。';
       return;
     }
-    await api.reviewRegistrationRequest(application.id, { status: nextStatus, reviewNote });
+    const response = await api.reviewRegistrationRequest(application.id, { status: nextStatus, reviewNote });
+    if (nextStatus === 'approved' && response.data.setupToken) {
+      approvedSetupLink.value = `${window.location.origin}/login#setupToken=${encodeURIComponent(response.data.setupToken)}`;
+    }
     applications.value = applications.value.filter((item) => item.id !== application.id);
     delete reviewNotes[application.id];
     await loadUsers();
   } catch (cause: unknown) { applicationsError.value = cause instanceof Error ? cause.message : '账号申请处理失败'; }
+}
+
+async function reissueSetupLink(application: RegistrationRequest) {
+  applicationsError.value = '';
+  approvedSetupLink.value = '';
+  try {
+    const response = await api.reissueRegistrationSetupToken(application.id);
+    approvedSetupLink.value = `${window.location.origin}/login#setupToken=${encodeURIComponent(response.data.setupToken)}`;
+    Object.assign(application, response.data);
+  } catch (cause: unknown) {
+    applicationsError.value = cause instanceof Error ? cause.message : '一次性链接重新签发失败';
+  }
 }
 
 async function changePassword() {
@@ -204,10 +227,11 @@ watch([() => store.source, () => auth.user?.role], () => { void loadUsers(); voi
     </section>
     <section v-if="auth.user?.role === 'administrator'" class="settings-panel user-settings-panel">
       <div class="settings-head"><span>账号申请审批</span><small>仅管理员可批准运维员和查看者账号</small></div>
+      <div v-if="approvedSetupLink" class="inline-message" role="status">一次性密码设置链接（仅显示本次）：<a :href="approvedSetupLink">{{ approvedSetupLink }}</a></div>
       <div v-if="applicationsLoading" class="empty-state">正在加载账号申请…</div>
       <div v-else-if="applicationsError" class="inline-message error-message" role="alert">{{ applicationsError }}</div>
-      <div v-else-if="!applications.length" class="empty-state">当前没有待审批的账号申请。</div>
-      <div v-for="application in applications" :key="application.id" class="registration-request-row"><div><b>{{ application.display_name }}</b><small>申请账号：{{ application.account }} · 申请时间：{{ new Date(application.createdAt).toLocaleString('zh-CN') }}</small></div><span :class="['role-badge', application.requestedRole]">{{ application.requestedRole === 'operator' ? '申请运维员' : '申请查看者' }}</span><label class="review-note">审批说明（不予批准必填）<input v-model="reviewNotes[application.id]" maxlength="300" placeholder="例如：请使用单位分配的账号名称后重新申请" /></label><div class="registration-actions"><button class="approve-button" @click="reviewApplication(application, 'approved')">批准并创建账号</button><button class="reject-button" :disabled="!reviewNotes[application.id]?.trim()" @click="reviewApplication(application, 'rejected')">不予批准</button></div></div>
+      <div v-else-if="!applications.length" class="empty-state">当前没有待审批或待设置密码的账号申请。</div>
+      <div v-for="application in applications" :key="application.id" class="registration-request-row"><div><b>{{ application.display_name }}</b><small>申请账号：{{ application.account }} · 申请时间：{{ new Date(application.createdAt).toLocaleString('zh-CN') }}</small></div><span :class="['role-badge', application.requestedRole]">{{ application.requestedRole === 'operator' ? '申请运维员' : '申请查看者' }}</span><template v-if="application.status === 'pending'"><label class="review-note">审批说明（不予批准必填）<input v-model="reviewNotes[application.id]" maxlength="300" placeholder="例如：请使用单位分配的账号名称后重新申请" /></label><div class="registration-actions"><button class="approve-button" @click="reviewApplication(application, 'approved')">批准并创建账号</button><button class="reject-button" :disabled="!reviewNotes[application.id]?.trim()" @click="reviewApplication(application, 'rejected')">不予批准</button></div></template><template v-else><p class="inline-message">账号已批准但尚未设置密码。{{ application.setupExpiresAt && new Date(application.setupExpiresAt) <= new Date() ? '原链接已过期。' : '可重新签发一次性链接。' }}</p><div class="registration-actions"><button class="approve-button" @click="reissueSetupLink(application)">重新签发密码设置链接</button></div></template></div>
     </section>
     <section v-if="auth.user?.role === 'administrator'" class="settings-panel model-release-panel">
       <div class="settings-head"><span>三维模型版本</span><small>上传 GLB、完整性校验、启用和历史版本回滚</small></div>
