@@ -1,4 +1,6 @@
 const { test, expect } = require('@playwright/test');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const webUrl = process.env.E2E_WEB_URL || 'http://127.0.0.1:5173';
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'local-admin-password-2026';
@@ -10,6 +12,22 @@ function trackConsoleErrors(page) {
   });
   page.on('pageerror', (error) => errors.push(error.message));
   return errors;
+}
+
+function modelUploadFor(version) {
+  const original = fs.readFileSync(path.resolve(__dirname, '../../frontend/public/models/utility-tunnel.glb'));
+  const jsonLength = original.readUInt32LE(12);
+  const document = JSON.parse(original.subarray(20, 20 + jsonLength).toString('utf8').trimEnd());
+  document.extras = { ...(document.extras || {}), regressionVersion: version };
+  const encoded = Buffer.from(JSON.stringify(document), 'utf8');
+  const padded = Buffer.concat([encoded, Buffer.alloc((4 - encoded.length % 4) % 4, 0x20)]);
+  const jsonHeader = Buffer.alloc(8);
+  jsonHeader.writeUInt32LE(padded.length, 0);
+  jsonHeader.write('JSON', 4, 4, 'ascii');
+  const remainingChunks = original.subarray(20 + jsonLength);
+  const header = Buffer.from(original.subarray(0, 12));
+  header.writeUInt32LE(12 + jsonHeader.length + padded.length + remainingChunks.length, 8);
+  return { name: 'utility-tunnel.glb', mimeType: 'model/gltf-binary', buffer: Buffer.concat([header, jsonHeader, padded, remainingChunks]) };
 }
 
 test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page }) => {
@@ -116,6 +134,10 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
 
   await page.getByRole('button', { name: '⛶ 全屏查看' }).click();
   await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+  await expect(page.getByRole('button', { name: '放大三维模型' })).toBeVisible();
+  await page.getByRole('button', { name: '放大三维模型' }).click();
+  await page.getByRole('button', { name: '放大三维模型' }).click();
+  await page.getByRole('button', { name: '显示完整三维模型' }).click();
 
   const switcher = page.locator('.twin-quick-switch');
   const box = await switcher.boundingBox();
@@ -291,5 +313,38 @@ test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }
   await expect(page.getByText(`${featureCode} 已通过审核并发布到运维地图。`)).toBeVisible();
   await page.getByRole('button', { name: 'GIS 总览' }).click();
   await expect(page.getByText(/个已发布空间对象/)).toBeVisible();
+  expect(consoleErrors).toEqual([]);
+});
+
+test('管理员可校验、启用三维模型版本并由孪生页面鉴权加载', async ({ page }) => {
+  const consoleErrors = trackConsoleErrors(page);
+  const version = `e2e-model-${Date.now()}`;
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码').fill('123');
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await page.locator('.governance-nav summary').click();
+  await page.getByRole('button', { name: '系统配置' }).click();
+  await expect(page.getByText('三维模型版本', { exact: true })).toBeVisible();
+  await page.getByLabel('版本号').fill(version);
+  await page.getByLabel('GLB 模型').setInputFiles(modelUploadFor(version));
+  await page.getByLabel('版本说明').fill('浏览器回归验证模型发布与鉴权加载');
+  await page.getByRole('button', { name: '上传并校验' }).click();
+  await expect(page.getByText('模型已通过 GLB 2.0 与完整性校验，启用后即可用于三维孪生。')).toBeVisible({ timeout: 60_000 });
+  const release = page.locator('.model-release-row').filter({ hasText: version });
+  await expect(release).toBeVisible();
+  await release.getByRole('button', { name: '启用此版本' }).click();
+  await expect(release.getByText('当前使用', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '三维孪生' }).click();
+  await expect(page.locator('.twin-model-readiness.loaded').getByText('模型已加载', { exact: true })).toBeVisible({ timeout: 60_000 });
+  const zoomIn = page.getByRole('button', { name: '放大三维模型' });
+  await expect(zoomIn).toBeVisible();
+  const initialDistance = Number(await page.locator('.twin-canvas').getAttribute('data-camera-distance'));
+  await zoomIn.click();
+  await zoomIn.click();
+  await zoomIn.click();
+  const zoomedDistance = Number(await page.locator('.twin-canvas').getAttribute('data-camera-distance'));
+  expect(Number.isFinite(initialDistance)).toBeTruthy();
+  expect(zoomedDistance).toBeLessThan(initialDistance * .3);
   expect(consoleErrors).toEqual([]);
 });

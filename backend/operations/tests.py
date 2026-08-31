@@ -1,5 +1,7 @@
 import io
 import json
+import struct
+import tempfile
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
@@ -7,13 +9,14 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.core.management import call_command
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 from config.settings import parse_origins
-from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
+from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder
 
 
 class OperationsApiTests(TestCase):
@@ -275,6 +278,19 @@ class OperationsApiTests(TestCase):
         self.assertEqual(login.status_code, 200)
         self.assertNotEqual(login.json()['accessToken'], token.key)
 
+    def test_login_throttle_is_account_scoped_with_an_ip_wide_ceiling(self):
+        cache.clear()
+        try:
+            for _ in range(10):
+                response = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'wrong-password'}, format='json')
+                self.assertEqual(response.status_code, 401)
+            limited = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'wrong-password'}, format='json')
+            self.assertEqual(limited.status_code, 429)
+            other_account = self.client.post('/api/auth/login/', {'email': 'another-user@example.com', 'password': 'wrong-password'}, format='json')
+            self.assertEqual(other_account.status_code, 401)
+        finally:
+            cache.clear()
+
     def test_read_api_contract_and_report_export(self):
         threshold = Threshold.objects.create(key='temperature', label='温度', warning=28, alarm=32, unit='°C')
         self.auth(self.operator)
@@ -308,7 +324,7 @@ class OperationsApiTests(TestCase):
         self.assertEqual(page['pageCount'], 2)
         self.assertTrue(page['hasNext'])
 
-    def test_twin_model_readiness_reports_only_the_asset_handoff_contract(self):
+    def test_twin_model_readiness_requires_asset_mapping_and_an_active_release(self):
         self.assertEqual(self.client.get('/api/twin/model-readiness/').status_code, 401)
         self.auth(self.operator)
         blocked = self.client.get('/api/twin/model-readiness/')
@@ -321,9 +337,67 @@ class OperationsApiTests(TestCase):
         self.asset.save(update_fields=['mesh', 'updated_at'])
         ready = self.client.get('/api/twin/model-readiness/')
         self.assertEqual(ready.status_code, 200)
-        self.assertEqual(ready.json()['status'], 'ready')
+        self.assertEqual(ready.json()['status'], 'blocked')
         self.assertEqual(ready.json()['summary'], {'activeAssetCount': 1, 'mappedAssetCount': 1, 'unmappedAssetCount': 0})
         self.assertEqual(ready.json()['missingMeshCodes'], [])
+        self.assertIsNone(ready.json()['activeRelease'])
+
+    @staticmethod
+    def glb_upload(name='utility-tunnel.glb', payload=b'{"asset":{"version":"2.0"},"nodes":[{}]}'):
+        payload += b' ' * (-len(payload) % 4)
+        body = struct.pack('<I4s', len(payload), b'JSON') + payload
+        content = struct.pack('<4sII', b'glTF', 2, 12 + len(body)) + body
+        return SimpleUploadedFile(name, content, content_type='model/gltf-binary')
+
+    def test_administrator_can_upload_activate_and_roll_back_validated_glb_releases(self):
+        self.asset.mesh = 'MESH_FAN_01'
+        self.asset.save(update_fields=['mesh', 'updated_at'])
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            self.auth(self.operator)
+            forbidden = self.client.post('/api/twin/models/', {'version': 'r1', 'file': self.glb_upload()}, format='multipart')
+            self.assertEqual(forbidden.status_code, 403)
+
+            self.auth(self.admin)
+            invalid = self.client.post('/api/twin/models/', {'version': 'r1', 'file': SimpleUploadedFile('bad.glb', b'not-a-glb')}, format='multipart')
+            self.assertEqual(invalid.status_code, 400)
+            malformed_scene = self.client.post('/api/twin/models/', {'version': 'broken-json', 'file': self.glb_upload(payload=b'{broken-json')}, format='multipart')
+            self.assertEqual(malformed_scene.status_code, 400)
+            empty_scene = self.client.post('/api/twin/models/', {'version': 'empty-scene', 'file': self.glb_upload(payload=b'{"asset":{"version":"2.0"},"nodes":[]}')}, format='multipart')
+            self.assertEqual(empty_scene.status_code, 400)
+            first = self.client.post('/api/twin/models/', {'version': 'r1', 'notes': '首次交付', 'file': self.glb_upload()}, format='multipart')
+            self.assertEqual(first.status_code, 201)
+            self.assertEqual(first.json()['status'], 'draft')
+            self.assertEqual(len(first.json()['sha256']), 64)
+            self.assertTrue(AuditLog.objects.filter(action='twin.model.uploaded', resource_id=str(first.json()['id'])).exists())
+
+            duplicate = self.client.post('/api/twin/models/', {'version': 'r1-copy', 'file': self.glb_upload()}, format='multipart')
+            self.assertEqual(duplicate.status_code, 409)
+            activated = self.client.post(f"/api/twin/models/{first.json()['id']}/activate/")
+            self.assertEqual(activated.status_code, 200)
+            self.assertEqual(activated.json()['status'], 'active')
+            first_file_url = activated.json()['fileUrl']
+            self.client.credentials()
+            self.assertEqual(self.client.get(first_file_url).status_code, 401)
+            self.auth(self.admin)
+            readiness = self.client.get('/api/twin/model-readiness/').json()
+            self.assertEqual(readiness['status'], 'ready')
+            self.assertTrue(readiness['contract']['modelFileVerified'])
+            self.assertEqual(readiness['activeRelease']['version'], 'r1')
+            model_file = self.client.get('/api/twin/model-file/')
+            self.assertEqual(model_file.status_code, 200)
+            self.assertEqual(b''.join(model_file.streaming_content)[:4], b'glTF')
+            self.assertTrue(model_file.headers['ETag'].startswith('"'))
+
+            second = self.client.post('/api/twin/models/', {'version': 'r2', 'notes': '材质更新', 'file': self.glb_upload(payload=b'{"asset":{"version":"2.0"},"nodes":[{},{}]}')}, format='multipart')
+            self.assertEqual(second.status_code, 201)
+            self.assertEqual(self.client.post(f"/api/twin/models/{second.json()['id']}/activate/").status_code, 200)
+            self.assertEqual(self.client.get(first_file_url).status_code, 404)
+            first_release = TwinModelRelease.objects.get(pk=first.json()['id'])
+            self.assertEqual(first_release.status, TwinModelRelease.Status.RETIRED)
+            rollback = self.client.post(f"/api/twin/models/{first_release.pk}/activate/")
+            self.assertEqual(rollback.status_code, 200)
+            self.assertEqual(rollback.json()['status'], 'active')
+            self.assertEqual(TwinModelRelease.objects.filter(status=TwinModelRelease.Status.ACTIVE).count(), 1)
 
     def test_dashboard_uses_the_latest_telemetry_reading(self):
         from .models import Telemetry
@@ -378,6 +452,47 @@ class OperationsApiTests(TestCase):
         self.assertIsNotNone(binding.last_heartbeat_at)
         self.assertEqual(communication_alert.status, Alert.Status.RESOLVED)
         self.assertNotEqual(self.asset.status, Asset.Status.OFFLINE)
+    def test_hardware_connectivity_uses_a_three_interval_heartbeat_grace_period(self):
+        binding = HardwareBinding.objects.create(
+            asset=self.asset,
+            protocol=HardwareBinding.Protocol.MQTT,
+            device_identifier='fan-controller-01',
+            endpoint='ut/v1/fan-01/telemetry',
+            expected_interval_seconds=60,
+            status=HardwareBinding.Status.CONNECTED,
+            last_heartbeat_at=timezone.now() - timedelta(seconds=90),
+        )
+        self.auth(self.operator)
+        online = self.client.get('/api/hardware-bindings/').json()['items'][0]
+        self.assertEqual(online['connectivity'], 'online')
+        self.assertGreaterEqual(online['heartbeatAgeSeconds'], 89)
+        self.assertIsNotNone(online['heartbeatDueAt'])
+        self.assertEqual(self.client.get('/api/dashboard/').json()['connections']['online'], 1)
+
+        binding.last_heartbeat_at = timezone.now() - timedelta(seconds=181)
+        binding.save(update_fields=['last_heartbeat_at'])
+        offline = self.client.get('/api/hardware-bindings/').json()['items'][0]
+        self.assertEqual(offline['connectivity'], 'offline')
+        dashboard = self.client.get('/api/dashboard/').json()['connections']
+        self.assertEqual(dashboard['online'], 0)
+        self.assertEqual(dashboard['offline'], 1)
+
+    def test_work_order_sla_status_and_filters_are_consistent(self):
+        now = timezone.now()
+        overdue = WorkOrder.objects.create(code='WO-SLA-OVERDUE', asset=self.asset, title='超时工单', priority=WorkOrder.Priority.HIGH, status=WorkOrder.Status.IN_PROGRESS, due_at=now - timedelta(minutes=15), created_by=self.operator)
+        due_soon = WorkOrder.objects.create(code='WO-SLA-SOON', asset=self.asset, title='临期工单', priority=WorkOrder.Priority.URGENT, status=WorkOrder.Status.OPEN, due_at=now + timedelta(hours=2), created_by=self.operator)
+        WorkOrder.objects.create(code='WO-SLA-TRACK', asset=self.asset, title='正常工单', priority=WorkOrder.Priority.NORMAL, status=WorkOrder.Status.OPEN, due_at=now + timedelta(hours=12), created_by=self.operator)
+        self.auth(self.operator)
+
+        items = {item['id']: item for item in self.client.get('/api/work-orders/?pageSize=10').json()['items']}
+        self.assertEqual(items[overdue.id]['slaStatus'], 'overdue')
+        self.assertLess(items[overdue.id]['remainingMinutes'], 0)
+        self.assertEqual(items[due_soon.id]['slaStatus'], 'due_soon')
+        self.assertGreater(items[due_soon.id]['remainingMinutes'], 0)
+        self.assertEqual(self.client.get('/api/work-orders/?sla=overdue').json()['total'], 1)
+        self.assertEqual(self.client.get('/api/work-orders/?sla=dueSoon').json()['total'], 1)
+        self.assertEqual(self.client.get('/api/work-orders/?sla=onTrack').json()['total'], 1)
+        self.assertEqual(self.client.get('/api/work-orders/?sla=invalid').status_code, 400)
 
     def test_telemetry_history_filters_by_business_time_and_summarizes_quality(self):
         now = timezone.now()

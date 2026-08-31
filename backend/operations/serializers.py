@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, WorkOrder
+from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder
 
 
 class AssetSerializer(serializers.ModelSerializer):
@@ -214,10 +214,38 @@ class HardwareBindingSerializer(serializers.ModelSerializer):
     deviceIdentifier = serializers.CharField(source='device_identifier', read_only=True)
     lastHeartbeatAt = serializers.DateTimeField(source='last_heartbeat_at', allow_null=True, read_only=True)
     expectedIntervalSeconds = serializers.IntegerField(source='expected_interval_seconds', read_only=True)
+    connectivity = serializers.SerializerMethodField()
+    heartbeatAgeSeconds = serializers.SerializerMethodField()
+    heartbeatDueAt = serializers.SerializerMethodField()
 
     class Meta:
         model = HardwareBinding
-        fields = ['id', 'assetCode', 'protocol', 'deviceIdentifier', 'endpoint', 'expectedIntervalSeconds', 'status', 'lastHeartbeatAt', 'version', 'created_at', 'updated_at']
+        fields = ['id', 'assetCode', 'protocol', 'deviceIdentifier', 'endpoint', 'expectedIntervalSeconds', 'status', 'connectivity', 'lastHeartbeatAt', 'heartbeatAgeSeconds', 'heartbeatDueAt', 'version', 'created_at', 'updated_at']
+
+    def get_connectivity(self, obj):
+        return hardware_connectivity(obj)
+
+    def get_heartbeatAgeSeconds(self, obj):
+        if not obj.last_heartbeat_at:
+            return None
+        return max(0, int((timezone.now() - obj.last_heartbeat_at).total_seconds()))
+
+    def get_heartbeatDueAt(self, obj):
+        if not obj.last_heartbeat_at or obj.status != HardwareBinding.Status.CONNECTED:
+            return None
+        return obj.last_heartbeat_at + timedelta(seconds=obj.expected_interval_seconds * 3)
+
+
+def hardware_connectivity(binding):
+    """Derive truthful runtime connectivity without mutating contract state on reads."""
+    if binding.status == HardwareBinding.Status.ERROR:
+        return 'error'
+    if binding.status == HardwareBinding.Status.INACTIVE:
+        return 'inactive'
+    if binding.status == HardwareBinding.Status.RESERVED or not binding.last_heartbeat_at:
+        return 'awaiting_data'
+    grace_seconds = max(1, binding.expected_interval_seconds) * 3
+    return 'online' if timezone.now() <= binding.last_heartbeat_at + timedelta(seconds=grace_seconds) else 'offline'
 
 
 class HardwareBindingMutationSerializer(serializers.ModelSerializer):
@@ -285,13 +313,30 @@ class WorkOrderSerializer(serializers.ModelSerializer):
     updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
     dueAt = serializers.DateTimeField(source='due_at', allow_null=True, read_only=True)
     completedAt = serializers.DateTimeField(source='completed_at', allow_null=True, read_only=True)
+    slaStatus = serializers.SerializerMethodField()
+    remainingMinutes = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkOrder
-        fields = ['id', 'code', 'sourceAlertId', 'assetCode', 'title', 'description', 'priority', 'status', 'assigneeName', 'dueAt', 'completedAt', 'createdAt', 'updatedAt', 'version']
+        fields = ['id', 'code', 'sourceAlertId', 'assetCode', 'title', 'description', 'priority', 'status', 'assigneeName', 'dueAt', 'completedAt', 'slaStatus', 'remainingMinutes', 'createdAt', 'updatedAt', 'version']
 
     def get_assigneeName(self, obj):
         return obj.assignee.get_full_name() or obj.assignee.email if obj.assignee else None
+
+    def get_slaStatus(self, obj):
+        if obj.status in {WorkOrder.Status.COMPLETED, WorkOrder.Status.CANCELLED}:
+            return 'closed'
+        if not obj.due_at:
+            return 'not_set'
+        remaining = obj.due_at - timezone.now()
+        if remaining.total_seconds() < 0:
+            return 'overdue'
+        return 'due_soon' if remaining <= timedelta(hours=4) else 'on_track'
+
+    def get_remainingMinutes(self, obj):
+        if not obj.due_at or obj.status in {WorkOrder.Status.COMPLETED, WorkOrder.Status.CANCELLED}:
+            return None
+        return int((obj.due_at - timezone.now()).total_seconds() / 60)
 
 
 class TelemetrySerializer(serializers.ModelSerializer):
@@ -334,6 +379,31 @@ class ThresholdSerializer(serializers.ModelSerializer):
     class Meta:
         model = Threshold
         fields = ['key', 'label', 'warning', 'alarm', 'unit', 'version']
+
+
+class TwinModelReleaseSerializer(serializers.ModelSerializer):
+    originalName = serializers.CharField(source='original_name', read_only=True)
+    sizeBytes = serializers.IntegerField(source='size_bytes', read_only=True)
+    uploadedBy = serializers.SerializerMethodField()
+    activatedBy = serializers.SerializerMethodField()
+    activatedAt = serializers.DateTimeField(source='activated_at', allow_null=True, read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    fileUrl = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TwinModelRelease
+        fields = ['id', 'version', 'originalName', 'sha256', 'sizeBytes', 'notes', 'status', 'uploadedBy', 'activatedBy', 'activatedAt', 'createdAt', 'fileUrl']
+
+    def get_uploadedBy(self, obj):
+        return obj.uploaded_by.get_full_name() or getattr(getattr(obj.uploaded_by, 'profile', None), 'display_name', '') or obj.uploaded_by.email
+
+    def get_activatedBy(self, obj):
+        if not obj.activated_by:
+            return None
+        return obj.activated_by.get_full_name() or getattr(getattr(obj.activated_by, 'profile', None), 'display_name', '') or obj.activated_by.email
+
+    def get_fileUrl(self, obj):
+        return f'/api/twin/model-file/?release={obj.pk}&sha={obj.sha256[:12]}' if obj.status == TwinModelRelease.Status.ACTIVE else None
 
 
 class AuditSerializer(serializers.ModelSerializer):

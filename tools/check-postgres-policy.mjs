@@ -13,6 +13,7 @@ const requiredOperationalTables = [
   'operations_registrationrequest',
   'operations_spatialfeature',
   'operations_hardwarebinding',
+  'operations_twinmodelrelease',
 ];
 const requiredInsertSequences = [
   'operations_profile_id_seq',
@@ -25,6 +26,7 @@ const requiredInsertSequences = [
   'operations_registrationrequest_id_seq',
   'operations_spatialfeature_id_seq',
   'operations_hardwarebinding_id_seq',
+  'operations_twinmodelrelease_id_seq',
 ];
 const required = [
   ['runtime role is non-superuser', /create role ut_runtime login password .* nosuperuser/],
@@ -48,6 +50,8 @@ const required = [
   ['spatial feature limited updates', /grant update \(code, name, layer_type, geometry, crs, source, source_reference, accuracy_m, captured_at, verified_at, status, description, version, updated_at\) on operations_spatialfeature to ut_runtime/],
   ['hardware binding insert access', /grant insert \(asset_id, protocol, device_identifier, endpoint, expected_interval_seconds, status, last_heartbeat_at, version, created_at, updated_at\) on operations_hardwarebinding to ut_runtime/],
   ['hardware binding limited updates', /grant update \(asset_id, protocol, device_identifier, endpoint, expected_interval_seconds, status, last_heartbeat_at, version, updated_at\) on operations_hardwarebinding to ut_runtime/],
+  ['twin model insert access', /grant insert \(version, model_file, original_name, sha256, size_bytes, notes, status, uploaded_by_id, activated_by_id, activated_at, created_at\) on operations_twinmodelrelease to ut_runtime/],
+  ['twin model publication access', /grant update \(status, activated_by_id, activated_at\) on operations_twinmodelrelease to ut_runtime/],
   ['optional DatabaseCache least privilege', /if to_regclass\('public\.django_cache'\) is not null then grant select, insert, update, delete on django_cache to ut_runtime/],
   ['auth user sequence', /grant usage, select on sequence auth_user_id_seq to ut_runtime/],
   ['placeholder guard', /replace the ut_runtime password placeholder before executing/],

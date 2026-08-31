@@ -26,6 +26,9 @@ let fullscreenPointerFrame = 0;
 let fullscreenPulseTimer: number | undefined;
 const modelReport = ref<TwinModelBindingReport>({ mode: 'fallback', expectedCount: store.assets.length, boundCodes: [], missingCodes: store.assets.map((asset) => asset.code), isComplete: false });
 const serverModelReadiness = ref<TwinModelReadinessResponse | null>(null);
+const activeModelUrl = ref<string>();
+let modelRequestToken = 0;
+let modelObjectUrl: string | undefined;
 const filterOptions: Array<{ value: 'all' | TwinVisualState; label: string }> = [
   { value: 'all', label: '全部' }, { value: 'alarm', label: '告警' }, { value: 'warning', label: '关注' }, { value: 'normal', label: '正常' }, { value: 'unknown', label: '待核验' },
 ];
@@ -45,8 +48,14 @@ const localModelReadiness = computed(() => summarizeTwinModelDelivery(store.asse
 const modelDeliveryReady = computed(() => serverModelReadiness.value ? serverModelReadiness.value.status === 'ready' : localModelReadiness.value.isReady);
 const modelDeliveryCount = computed(() => serverModelReadiness.value?.summary.mappedAssetCount ?? localModelReadiness.value.mappedAssetCount);
 const modelDeliveryTotal = computed(() => serverModelReadiness.value?.summary.activeAssetCount ?? localModelReadiness.value.activeAssetCount);
-const modelDeliveryLabel = computed(() => modelDeliveryReady.value ? '模型节点已就绪' : `待补齐 ${modelDeliveryTotal.value - modelDeliveryCount.value} 个节点`);
+const nodeMappingsComplete = computed(() => modelDeliveryCount.value >= modelDeliveryTotal.value && modelDeliveryTotal.value > 0);
+const modelDeliveryLabel = computed(() => {
+  if (modelDeliveryReady.value) return '模型节点已就绪';
+  if (nodeMappingsComplete.value && !serverModelReadiness.value?.activeRelease) return '等待启用模型版本';
+  return `待补齐 ${Math.max(modelDeliveryTotal.value - modelDeliveryCount.value, 0)} 个节点`;
+});
 const modelDeliveryHint = computed(() => {
+  if (!modelDeliveryReady.value && nodeMappingsComplete.value && !serverModelReadiness.value?.activeRelease) return '设备节点名称已准备完成，请由管理员上传并启用经过校验的 GLB 模型。';
   if (!modelDeliveryReady.value) return '资产台账仍缺少标准节点名称，暂不建议交付实体模型。';
   if (modelReport.value.mode === 'fallback') return `已完成 ${modelDeliveryCount.value} 个设备的节点准备；等待实体模型文件后可自动核验。`;
   if (modelReport.value.isComplete) return '实体模型已完成全部设备定位，可直接用于告警可视化。';
@@ -75,9 +84,24 @@ function resetView() { scene.value?.resetView(); }
 function retryModel() { scene.value?.reloadModel(); }
 function receiveModelReport(report: TwinModelBindingReport) { modelReport.value = report; }
 async function refreshModelReadiness() {
-  if (store.source !== 'api' || store.offline) { serverModelReadiness.value = null; return; }
-  try { serverModelReadiness.value = (await api.twinModelReadiness()).data as TwinModelReadinessResponse; }
-  catch { serverModelReadiness.value = null; }
+  const requestToken = ++modelRequestToken;
+  if (store.source !== 'api' || store.offline) { serverModelReadiness.value = null; releaseModelObjectUrl(); return; }
+  try {
+    const readiness = (await api.twinModelReadiness()).data as TwinModelReadinessResponse;
+    if (requestToken !== modelRequestToken) return;
+    serverModelReadiness.value = readiness;
+    if (!readiness.activeRelease) { releaseModelObjectUrl(); return; }
+    const response = await api.twinModelFile(readiness.activeRelease.id);
+    if (requestToken !== modelRequestToken) return;
+    releaseModelObjectUrl();
+    modelObjectUrl = URL.createObjectURL(response.data as Blob);
+    activeModelUrl.value = modelObjectUrl;
+  } catch { if (requestToken === modelRequestToken) { serverModelReadiness.value = null; releaseModelObjectUrl(); } }
+}
+function releaseModelObjectUrl() {
+  if (modelObjectUrl) URL.revokeObjectURL(modelObjectUrl);
+  modelObjectUrl = undefined;
+  activeModelUrl.value = undefined;
 }
 function updateFullscreenState() {
   fullscreenActive.value = document.fullscreenElement === stage.value;
@@ -172,6 +196,8 @@ onMounted(() => {
   void refreshModelReadiness();
 });
 onBeforeUnmount(() => {
+  modelRequestToken += 1;
+  releaseModelObjectUrl();
   document.removeEventListener('fullscreenchange', updateFullscreenState);
   if (fullscreenPointerFrame) window.cancelAnimationFrame(fullscreenPointerFrame);
   if (fullscreenPulseTimer) window.clearTimeout(fullscreenPulseTimer);
@@ -186,7 +212,7 @@ onBeforeUnmount(() => {
     </section>
     <section class="twin-workspace">
       <article ref="stage" :class="['twin-stage-panel', { 'twin-fullscreen-active': fullscreenActive }]" @pointermove="onStagePointerMove" @pointerdown="onStagePointerDown" @pointerup="onStagePointerUp" @pointerleave="onStagePointerLeave">
-        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" @select="select" @model-report="receiveModelReport" />
+        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" :model-url="activeModelUrl" @select="select" @model-report="receiveModelReport" />
         <div v-if="selectedAsset" class="twin-focus-status" aria-live="polite"><span :class="resolveTwinVisualState(selectedAsset, store.alerts)"><i />{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span><b :title="selectedAsset.name">{{ selectedAssetName }}</b><small>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</small><div v-if="riskAssets.length" class="twin-risk-patrol"><button type="button" aria-label="巡检上一异常设备" @click="inspectRisk(-1)">← 上一异常</button><button type="button" aria-label="巡检下一异常设备" @click="inspectRisk(1)">下一异常 →</button></div></div>
         <nav class="twin-quick-switch" aria-label="场景内设备切换" @pointerenter="onQuickSwitchPointerMove" @pointerdown.capture="onQuickSwitchPointerDown" @pointermove.capture="onQuickSwitchPointerMove" @pointerup.capture="onQuickSwitchPointerEnd" @pointercancel.capture="onQuickSwitchPointerEnd" @mousedown.stop>
           <div class="twin-quick-switch-tools"><div class="twin-quick-switch-heading"><span>设备快速切换 · {{ visibleAssets.length }}/{{ store.assets.length }}</span><b>{{ selectedAssetName || '请选择设备' }}</b></div><div class="twin-switch-filters" role="group" aria-label="按运行状态筛选设备"><button v-for="filter in filterOptions" :key="filter.value" :class="{ selected: stateFilter === filter.value }" type="button" @pointerdown.stop @click.stop="stateFilter = filter.value">{{ filter.label }}</button></div></div>

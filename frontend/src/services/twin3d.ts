@@ -1,4 +1,4 @@
-import type { Alert, Asset } from '../types';
+import type { Alert, Asset, TwinModelRelease } from '../types';
 
 export type TwinVisualState = 'normal' | 'warning' | 'alarm' | 'unknown';
 
@@ -27,6 +27,7 @@ export interface TwinModelReadinessResponse {
   missingMeshCodes: string[];
   invalidMeshCodes: string[];
   contract: { nodeNamePattern: string; nodeNamesUnique: boolean; modelFileVerified: boolean };
+  activeRelease: TwinModelRelease | null;
   updatedAt: string | null;
 }
 

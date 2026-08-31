@@ -31,6 +31,7 @@ python manage.py seed_demo
 - `DATABASE_URL`：`ut_runtime` 的 PostgreSQL TLS 连接串；
 - `API_TOKEN_TTL_SECONDS`、`LOGIN_RATE_LIMIT`、`REGISTRATION_RATE_LIMIT`、`PASSWORD_SETUP_RATE_LIMIT` 与 `PASSWORD_CHANGE_RATE_LIMIT`：按安全策略设置；登录、注册申请、一次性密码设置和已认证改密分别限流，避免不同入口互相消耗安全预算；
 - `DJANGO_MAX_REQUEST_BYTES` 与 `DJANGO_MAX_REQUEST_FIELDS`：限制单次请求体大小和字段数量，防止异常请求耗尽内存；
+- `TWIN_MODEL_MAX_BYTES`：三维 GLB 上传上限，默认 32 MB；反向代理请求体上限必须不小于该值；
 - `DJANGO_CACHE_BACKEND` 与 `DJANGO_CACHE_LOCATION`：登录限流必须使用跨进程共享缓存；如果使用 Django 内置 `DatabaseCache`，迁移后执行一次 `python manage.py createcachetable <cache_table>`；
 - `SEED_ADMIN_*`：仅首次种子初始化使用，之后从运行环境移除。
 
@@ -74,6 +75,8 @@ python manage.py data_governance_report --format=json
 - 发布前：记录当前迁移版本 `SELECT app, name, applied FROM django_migrations ORDER BY applied;`。
 - 手动导出（在装有 PostgreSQL 客户端的受控发布机）：`pg_dump --format=custom --no-owner --file=utility_tunnel.backup "$DATABASE_URL"`。
 - 恢复演练：先恢复到**隔离的新实例**，用迁移身份运行 `python manage.py migrate`，再用运行时账号访问 `/api/ready/` 和执行只读验证。不得在未验证备份的生产库上直接恢复。
+
+三维模型文件保存在容器持久卷 `twin_model_media`。模型卷与 PostgreSQL 必须作为同一恢复点备份，恢复后抽查数据库中使用中版本的 SHA-256 与文件是否一致。详细交付步骤见[三维模型发布与交付规范](./三维模型发布与交付.md)。
 
 ### Django API 数据库
 

@@ -18,6 +18,16 @@ const form = reactive({ assetCode: '', title: '', description: '', priority: 'no
 const formOpen = ref(false);
 const creating = ref(false);
 
+function slaLabel(order: WorkOrder) {
+  if (order.slaStatus === 'closed') return '已按流程关闭';
+  if (!order.dueAt || order.slaStatus === 'not_set') return '未设置处理时限';
+  const minutes = Math.abs(order.remainingMinutes ?? Math.trunc((new Date(order.dueAt).getTime() - Date.now()) / 60_000));
+  const readable = minutes >= 60 ? `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分` : `${minutes} 分钟`;
+  if (order.slaStatus === 'overdue') return `已超时 ${readable}`;
+  if (order.slaStatus === 'due_soon') return `即将到期 · 剩余 ${readable}`;
+  return `时限正常 · 剩余 ${readable}`;
+}
+
 async function advance(order: WorkOrder) {
   const target = nextStatus[order.status];
   if (!target) return;
@@ -70,7 +80,7 @@ async function createOrder() {
     <section class="kanban">
       <article v-for="status in ['open','assigned','in_progress','pending_review','completed']" :key="status" class="kanban-column">
         <header><span>{{ status === 'open' ? '待分派' : status === 'assigned' ? '已分派' : status === 'in_progress' ? '处理中' : status === 'pending_review' ? '待复核' : '已完成' }}</span><b>{{ visible.filter((item) => item.status === status).length }}</b></header>
-        <div v-for="order in visible.filter((item) => item.status === status)" :key="order.id" class="order-card"><span :class="['badge', order.priority]">{{ order.priority === 'urgent' ? '紧急' : order.priority === 'high' ? '高' : order.priority === 'low' ? '低' : '普通' }}</span><b>{{ order.code }}</b><h3>{{ order.title }}</h3><small>{{ order.assetCode }} · {{ order.assigneeName || '待分配' }}</small><small v-if="order.dueAt" :class="['due-time', { overdue: new Date(order.dueAt).getTime() < Date.now() && !['completed', 'cancelled'].includes(order.status) }]">处理时限：{{ new Date(order.dueAt).toLocaleString('zh-CN') }}</small><button v-if="nextStatus[order.status] && (nextStatus[order.status] !== 'completed' || canComplete)" :disabled="busyId === order.id" @click="advance(order)">{{ busyId === order.id ? '处理中…' : `推进至 ${nextStatus[order.status] === 'assigned' ? '已分派' : nextStatus[order.status] === 'in_progress' ? '处理中' : nextStatus[order.status] === 'pending_review' ? '待复核' : '已完成'}` }}</button></div>
+        <div v-for="order in visible.filter((item) => item.status === status)" :key="order.id" class="order-card"><span :class="['badge', order.priority]">{{ order.priority === 'urgent' ? '紧急' : order.priority === 'high' ? '高' : order.priority === 'low' ? '低' : '普通' }}</span><b>{{ order.code }}</b><h3>{{ order.title }}</h3><small>{{ order.assetCode }} · {{ order.assigneeName || '待分配' }}</small><small :class="['due-time', `sla-${order.slaStatus || 'not_set'}`]">{{ slaLabel(order) }}</small><small v-if="order.dueAt" class="due-deadline">截止 {{ new Date(order.dueAt).toLocaleString('zh-CN') }}</small><button v-if="nextStatus[order.status] && (nextStatus[order.status] !== 'completed' || canComplete)" :disabled="busyId === order.id" @click="advance(order)">{{ busyId === order.id ? '处理中…' : `推进至 ${nextStatus[order.status] === 'assigned' ? '已分派' : nextStatus[order.status] === 'in_progress' ? '处理中' : nextStatus[order.status] === 'pending_review' ? '待复核' : '已完成'}` }}</button></div>
       </article>
     </section>
   </AppShell>
