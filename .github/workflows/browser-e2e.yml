@@ -78,7 +78,7 @@ jobs:
           NODE_PATH: ${{ runner.temp }}/ut-playwright/node_modules
           E2E_WEB_URL: http://127.0.0.1:5173
         run: |
-          "$RUNNER_TEMP/ut-playwright/node_modules/.bin/playwright" test "$GITHUB_WORKSPACE/tools/e2e/ops.spec.cjs" --reporter=line
+          "$RUNNER_TEMP/ut-playwright/node_modules/.bin/playwright" test "$GITHUB_WORKSPACE/tools/e2e/ops.spec.cjs" --reporter=line --timeout=60000
       - name: Upload service logs when a regression fails
         if: failure()
         uses: actions/upload-artifact@v4

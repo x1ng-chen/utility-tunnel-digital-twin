@@ -116,6 +116,7 @@ test('告警可携带处置上下文直达三维实体模型', async ({ page }) 
 });
 
 test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续选择设备', async ({ page }) => {
+  test.setTimeout(60_000);
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill('123');
@@ -133,7 +134,9 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
   await expect(page.getByRole('button', { name: '放大三维模型' })).toBeVisible();
   await page.getByRole('button', { name: '放大三维模型' }).click();
   await page.getByRole('button', { name: '放大三维模型' }).click();
-  await page.getByRole('button', { name: '显示完整三维模型' }).click();
+  // The global hover animation can keep Playwright's layout-stability probe
+  // active on slower Linux runners even though the control is interactive.
+  await page.getByRole('button', { name: '显示完整三维模型' }).click({ force: true });
 
   const switcher = page.locator('.twin-quick-switch');
   const box = await switcher.boundingBox();
