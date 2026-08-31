@@ -58,7 +58,7 @@ jobs:
           # The browser suite intentionally performs many independent login
           # journeys. Keep production's 10/min default untouched, while giving
           # this isolated CI process a test-only allowance.
-          LOGIN_RATE_LIMIT=100/min python manage.py runserver 127.0.0.1:8000 --noreload > "$RUNNER_TEMP/django-e2e.log" 2>&1 &
+          LOGIN_RATE_LIMIT=100/min REGISTRATION_RATE_LIMIT=100/hour PASSWORD_SETUP_RATE_LIMIT=100/min python manage.py runserver 127.0.0.1:8000 --noreload > "$RUNNER_TEMP/django-e2e.log" 2>&1 &
           cd ../frontend
           npm run dev -- --host 127.0.0.1 --port 5173 --strictPort > "$RUNNER_TEMP/vue-e2e.log" 2>&1 &
           for attempt in {1..30}; do
@@ -77,7 +77,7 @@ jobs:
           NODE_PATH: ${{ runner.temp }}/ut-playwright/node_modules
           E2E_WEB_URL: http://127.0.0.1:5173
         run: |
-          "$RUNNER_TEMP/ut-playwright/node_modules/.bin/playwright" test "$GITHUB_WORKSPACE/tools/e2e/ops.spec.cjs" --reporter=line --timeout=60000
+          "$RUNNER_TEMP/ut-playwright/node_modules/.bin/playwright" test --config "$GITHUB_WORKSPACE/tools/e2e/playwright.config.cjs" --reporter=line --timeout=60000
       - name: Upload service logs when a regression fails
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

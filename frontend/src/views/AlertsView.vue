@@ -22,7 +22,12 @@ async function acknowledge(alert: Alert) {
 }
 
 async function createWorkOrder(alert: Alert) {
-  await runAction(alert.id, () => store.createAlertOrder(alert));
+  let orderCode = '';
+  await runAction(alert.id, async () => {
+    const order = await store.createAlertOrder(alert);
+    orderCode = order.code;
+  });
+  if (orderCode) await router.push({ path: '/work-orders', query: { focus: orderCode, source: 'alert', alert: alert.code } });
 }
 
 function openTwin(alert: Alert) {

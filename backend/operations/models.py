@@ -363,6 +363,8 @@ class TwinModelRelease(models.Model):
     node_count = models.PositiveIntegerField(default=0, editable=False)
     mesh_count = models.PositiveIntegerField(default=0, editable=False)
     named_node_count = models.PositiveIntegerField(default=0, editable=False)
+    node_names = models.JSONField(default=list, blank=True, editable=False)
+    node_inventory_available = models.BooleanField(default=False, editable=False)
     duplicate_node_names = models.JSONField(default=list, blank=True, editable=False)
     missing_asset_codes = models.JSONField(default=list, blank=True, editable=False)
     is_compatible = models.BooleanField(default=False, editable=False)

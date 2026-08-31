@@ -5,7 +5,7 @@ type TrailPoint = { x: number; y: number; opacity: number; scale: number };
 
 const finePointer = ref(false);
 const cursor = reactive({ x: -80, y: -80, active: false, pressed: false });
-const trail = ref<TrailPoint[]>(Array.from({ length: 10 }, (_, index) => ({ x: -80, y: -80, opacity: 0.42 - index * 0.035, scale: 1 - index * 0.065 })));
+const trail = ref<TrailPoint[]>(Array.from({ length: 6 }, (_, index) => ({ x: -80, y: -80, opacity: 0.34 - index * 0.045, scale: 1 - index * 0.1 })));
 let pendingPointer: PointerEvent | undefined;
 let animationFrame = 0;
 
@@ -27,7 +27,7 @@ function paintPointer() {
   document.body.dataset.pointerMode = interactiveTarget(event.target) ? 'interactive' : 'default';
   trail.value = trail.value.map((point, index, points) => {
     const leader = index === 0 ? { x: event.clientX, y: event.clientY } : points[index - 1];
-    const easing = 0.46 - index * 0.025;
+    const easing = 0.78 - index * 0.055;
     return { ...point, x: point.x + (leader.x - point.x) * easing, y: point.y + (leader.y - point.y) * easing };
   });
 }

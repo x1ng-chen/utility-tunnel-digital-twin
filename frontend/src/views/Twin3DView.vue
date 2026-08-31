@@ -19,7 +19,7 @@ const stateFilter = ref<'all' | TwinVisualState>('all');
 const finePointer = ref(false);
 const fullscreenActive = ref(false);
 const fullscreenPointer = reactive({ x: -80, y: -80, active: false, pressed: false, draggingSwitcher: false });
-const fullscreenTrail = ref(Array.from({ length: 8 }, (_, index) => ({ x: -80, y: -80, opacity: 0.42 - index * 0.043, scale: 1 - index * 0.07 })));
+const fullscreenTrail = ref(Array.from({ length: 6 }, (_, index) => ({ x: -80, y: -80, opacity: 0.34 - index * 0.045, scale: 1 - index * 0.1 })));
 const fullscreenPulse = ref<{ key: number; x: number; y: number } | null>(null);
 let pendingFullscreenPointer: PointerEvent | undefined;
 let fullscreenPointerFrame = 0;
@@ -129,7 +129,7 @@ function paintFullscreenPointer() {
   fullscreenPointer.active = true;
   fullscreenTrail.value = fullscreenTrail.value.map((point, index, points) => {
     const leader = index === 0 ? { x, y } : points[index - 1];
-    const easing = 0.45 - index * 0.028;
+    const easing = 0.78 - index * 0.055;
     return { ...point, x: point.x + (leader.x - point.x) * easing, y: point.y + (leader.y - point.y) * easing };
   });
 }

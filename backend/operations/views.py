@@ -696,7 +696,31 @@ class TwinModelReadinessView(APIView):
         mapped_asset_count = len(active_assets) - len(missing_mesh_codes) - len(invalid_mesh_codes)
         latest_update = max((asset.updated_at for asset in active_assets), default=None)
         active_release = TwinModelRelease.objects.select_related('uploaded_by', 'activated_by').filter(status=TwinModelRelease.Status.ACTIVE).first()
-        release_compatible = bool(active_release and active_release.is_compatible)
+        model_node_names = set(active_release.node_names) if active_release and active_release.node_inventory_available else None
+        mappings = []
+        for asset in active_assets:
+            if not asset.mesh:
+                mapping_status = 'missing'
+            elif asset.code in invalid_mesh_codes:
+                mapping_status = 'invalid'
+            elif model_node_names is None:
+                mapping_status = 'unverified'
+            elif asset.mesh in model_node_names:
+                mapping_status = 'matched'
+            else:
+                mapping_status = 'not_in_model'
+            mappings.append({'assetCode': asset.code, 'meshName': asset.mesh, 'status': mapping_status})
+        model_mismatch_codes = [item['assetCode'] for item in mappings if item['status'] == 'not_in_model']
+        # Releases created before node-name inventory was introduced retain the
+        # validation decision captured at upload. New releases are checked
+        # dynamically so later asset changes cannot produce a false "ready".
+        release_compatible = bool(
+            active_release
+            and (
+                (model_node_names is not None and not active_release.duplicate_node_names and not model_mismatch_codes)
+                or (model_node_names is None and active_release.is_compatible)
+            )
+        )
         return Response({
             'status': 'ready' if release_compatible and not missing_mesh_codes and not invalid_mesh_codes else 'blocked',
             'summary': {
@@ -706,11 +730,14 @@ class TwinModelReadinessView(APIView):
             },
             'missingMeshCodes': missing_mesh_codes,
             'invalidMeshCodes': invalid_mesh_codes,
+            'modelMismatchCodes': model_mismatch_codes,
+            'mappings': mappings,
             'contract': {
                 'nodeNamePattern': 'A-Z, 0-9, hyphen and underscore',
                 'nodeNamesUnique': True,
                 'modelFileVerified': bool(active_release),
                 'modelNodesCompatible': release_compatible,
+                'modelNodeInventoryAvailable': model_node_names is not None,
             },
             'activeRelease': TwinModelReleaseSerializer(active_release).data if active_release else None,
             'updatedAt': latest_update,
@@ -769,6 +796,8 @@ def validate_glb_upload(uploaded_file):
     meshes = scene_document.get('meshes', [])
     if not isinstance(nodes, list) or not nodes or any(not isinstance(node, dict) for node in nodes):
         return None, None, error_response('invalid_model', 'GLB 场景不包含有效的模型节点。', 400)
+    if len(nodes) > 10000:
+        return None, None, error_response('invalid_model', 'GLB 模型节点超过 10000 个，请在 Blender 中精简场景后重新导出。', 400)
     if not isinstance(meshes, list):
         return None, None, error_response('invalid_model', 'GLB 网格描述格式无效。', 400)
     mesh_indexes = [node.get('mesh') for node in nodes if 'mesh' in node]
@@ -831,6 +860,8 @@ class TwinModelReleaseListView(APIView):
             node_count=model_metadata['nodeCount'],
             mesh_count=model_metadata['meshCount'],
             named_node_count=model_metadata['namedNodeCount'],
+            node_names=sorted(model_node_names),
+            node_inventory_available=True,
             duplicate_node_names=model_metadata['duplicateNodeNames'],
             missing_asset_codes=missing_asset_codes,
             is_compatible=is_compatible,
@@ -864,16 +895,28 @@ class TwinModelReleaseActivateView(APIView):
                 return error_response('not_found', '模型版本不存在。', 404)
             if release.status == TwinModelRelease.Status.ACTIVE:
                 return Response(TwinModelReleaseSerializer(release).data)
-            if not release.is_compatible:
+            active_assets = list(Asset.objects.filter(is_active=True).only('code', 'mesh').order_by('code'))
+            has_node_inventory = release.node_inventory_available
+            current_missing_codes = (
+                [asset.code for asset in active_assets if not asset.mesh or asset.mesh not in set(release.node_names)]
+                if has_node_inventory else release.missing_asset_codes
+            )
+            current_compatible = (
+                not release.duplicate_node_names and not current_missing_codes
+                if has_node_inventory else release.is_compatible
+            )
+            if not current_compatible:
                 return error_response('model_contract_failed', '模型未覆盖全部设备节点，或包含重复节点名称，不能启用。', 409, {
-                    'missingAssetCodes': release.missing_asset_codes,
+                    'missingAssetCodes': current_missing_codes,
                     'duplicateNodeNames': release.duplicate_node_names,
                 })
             TwinModelRelease.objects.select_for_update().filter(status=TwinModelRelease.Status.ACTIVE).update(status=TwinModelRelease.Status.RETIRED)
             release.status = TwinModelRelease.Status.ACTIVE
+            release.missing_asset_codes = current_missing_codes
+            release.is_compatible = current_compatible
             release.activated_by = request.user
             release.activated_at = timezone.now()
-            release.save(update_fields=['status', 'activated_by', 'activated_at'])
+            release.save(update_fields=['status', 'missing_asset_codes', 'is_compatible', 'activated_by', 'activated_at'])
             audit(request.user, 'twin.model.activated', 'twin_model_release', release.pk, {'version': release.version, 'sha256': release.sha256}, request_id(request))
         return Response(TwinModelReleaseSerializer(release).data)
 

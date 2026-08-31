@@ -392,13 +392,15 @@ class TwinModelReleaseSerializer(serializers.ModelSerializer):
     nodeCount = serializers.IntegerField(source='node_count', read_only=True)
     meshCount = serializers.IntegerField(source='mesh_count', read_only=True)
     namedNodeCount = serializers.IntegerField(source='named_node_count', read_only=True)
+    nodeNames = serializers.JSONField(source='node_names', read_only=True)
+    nodeInventoryAvailable = serializers.BooleanField(source='node_inventory_available', read_only=True)
     duplicateNodeNames = serializers.JSONField(source='duplicate_node_names', read_only=True)
     missingAssetCodes = serializers.JSONField(source='missing_asset_codes', read_only=True)
     isCompatible = serializers.BooleanField(source='is_compatible', read_only=True)
 
     class Meta:
         model = TwinModelRelease
-        fields = ['id', 'version', 'originalName', 'sha256', 'sizeBytes', 'nodeCount', 'meshCount', 'namedNodeCount', 'duplicateNodeNames', 'missingAssetCodes', 'isCompatible', 'notes', 'status', 'uploadedBy', 'activatedBy', 'activatedAt', 'createdAt', 'fileUrl']
+        fields = ['id', 'version', 'originalName', 'sha256', 'sizeBytes', 'nodeCount', 'meshCount', 'namedNodeCount', 'nodeNames', 'nodeInventoryAvailable', 'duplicateNodeNames', 'missingAssetCodes', 'isCompatible', 'notes', 'status', 'uploadedBy', 'activatedBy', 'activatedAt', 'createdAt', 'fileUrl']
 
     def get_uploadedBy(self, obj):
         return obj.uploaded_by.get_full_name() or getattr(getattr(obj.uploaded_by, 'profile', None), 'display_name', '') or obj.uploaded_by.email

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
 import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
@@ -7,13 +8,17 @@ import type { WorkOrder } from '../types';
 
 const store = useOperationsStore();
 const auth = useAuthStore();
+const route = useRoute();
 const search = ref('');
 const actionError = ref('');
 const busyId = ref<number | null>(null);
 const canWrite = computed(() => !store.offline && (auth.user?.role === 'administrator' || auth.user?.role === 'operator'));
 const canComplete = computed(() => auth.user?.role === 'administrator');
 const visible = computed(() => store.workOrders.filter((item) => `${item.code} ${item.title} ${item.assetCode}`.toLowerCase().includes(search.value.trim().toLowerCase())));
+const focusedCode = computed(() => typeof route.query.focus === 'string' ? route.query.focus : '');
+const navigationHint = computed(() => focusedCode.value && route.query.source === 'alert' ? `已打开告警 ${String(route.query.alert || '')} 生成的处置工单` : '');
 const nextStatus: Partial<Record<WorkOrder['status'], WorkOrder['status']>> = { open: 'assigned', assigned: 'in_progress', in_progress: 'pending_review', pending_review: 'completed' };
+const transitionLabel: Partial<Record<WorkOrder['status'], string>> = { open: '接单并分派', assigned: '开始现场处理', in_progress: '提交复核', pending_review: '复核并完成' };
 const form = reactive({ assetCode: '', title: '', description: '', priority: 'normal' as WorkOrder['priority'] });
 const formOpen = ref(false);
 const creating = ref(false);
@@ -65,6 +70,8 @@ async function createOrder() {
       <div class="section-actions"><input v-model="search" class="search-input" placeholder="搜索工单、资产或标题" aria-label="搜索工单" /><button v-if="canWrite" class="primary-button compact-button" @click="formOpen = !formOpen">{{ formOpen ? '收起' : '+ 新建工单' }}</button></div>
     </section>
     <p v-if="actionError" class="inline-message error-message" role="alert">{{ actionError }}</p>
+    <p v-if="navigationHint" class="inline-message success-message work-order-navigation" role="status">{{ navigationHint }}，已为你定位到对应卡片。</p>
+    <section class="workflow-guide" aria-label="工单处理流程"><div><b>1</b><span>待分派<small>确认责任人</small></span></div><i>→</i><div><b>2</b><span>处理中<small>执行现场任务</small></span></div><i>→</i><div><b>3</b><span>待复核<small>核对处理结果</small></span></div><i>→</i><div><b>4</b><span>已完成<small>关闭处置链路</small></span></div></section>
     <section v-if="formOpen" class="create-order-panel" aria-label="新建工单">
       <div class="settings-head"><span>新建运维工单</span><small>创建后进入“待分派”状态并写入审计日志</small></div>
       <form class="order-form" @submit.prevent="createOrder">
@@ -80,7 +87,7 @@ async function createOrder() {
     <section class="kanban">
       <article v-for="status in ['open','assigned','in_progress','pending_review','completed']" :key="status" class="kanban-column">
         <header><span>{{ status === 'open' ? '待分派' : status === 'assigned' ? '已分派' : status === 'in_progress' ? '处理中' : status === 'pending_review' ? '待复核' : '已完成' }}</span><b>{{ visible.filter((item) => item.status === status).length }}</b></header>
-        <div v-for="order in visible.filter((item) => item.status === status)" :key="order.id" class="order-card"><span :class="['badge', order.priority]">{{ order.priority === 'urgent' ? '紧急' : order.priority === 'high' ? '高' : order.priority === 'low' ? '低' : '普通' }}</span><b>{{ order.code }}</b><h3>{{ order.title }}</h3><small>{{ order.assetCode }} · {{ order.assigneeName || '待分配' }}</small><small :class="['due-time', `sla-${order.slaStatus || 'not_set'}`]">{{ slaLabel(order) }}</small><small v-if="order.dueAt" class="due-deadline">截止 {{ new Date(order.dueAt).toLocaleString('zh-CN') }}</small><button v-if="nextStatus[order.status] && (nextStatus[order.status] !== 'completed' || canComplete)" :disabled="busyId === order.id" @click="advance(order)">{{ busyId === order.id ? '处理中…' : `推进至 ${nextStatus[order.status] === 'assigned' ? '已分派' : nextStatus[order.status] === 'in_progress' ? '处理中' : nextStatus[order.status] === 'pending_review' ? '待复核' : '已完成'}` }}</button></div>
+        <div v-for="order in visible.filter((item) => item.status === status)" :key="order.id" :class="['order-card', { focused: order.code === focusedCode }]" :data-testid="`work-order-${order.code}`"><span :class="['badge', order.priority]">{{ order.priority === 'urgent' ? '紧急' : order.priority === 'high' ? '高' : order.priority === 'low' ? '低' : '普通' }}</span><b>{{ order.code }}</b><h3>{{ order.title }}</h3><small>{{ order.assetCode }} · {{ order.assigneeName || '待分配' }}</small><small :class="['due-time', `sla-${order.slaStatus || 'not_set'}`]">{{ slaLabel(order) }}</small><small v-if="order.dueAt" class="due-deadline">截止 {{ new Date(order.dueAt).toLocaleString('zh-CN') }}</small><button v-if="nextStatus[order.status] && (nextStatus[order.status] !== 'completed' || canComplete)" :disabled="busyId === order.id" @click="advance(order)">{{ busyId === order.id ? '处理中…' : transitionLabel[order.status] }}</button></div>
       </article>
     </section>
   </AppShell>

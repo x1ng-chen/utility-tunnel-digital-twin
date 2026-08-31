@@ -26,7 +26,9 @@ export interface TwinModelReadinessResponse {
   summary: { activeAssetCount: number; mappedAssetCount: number; unmappedAssetCount: number };
   missingMeshCodes: string[];
   invalidMeshCodes: string[];
-  contract: { nodeNamePattern: string; nodeNamesUnique: boolean; modelFileVerified: boolean; modelNodesCompatible: boolean };
+  modelMismatchCodes: string[];
+  mappings: Array<{ assetCode: string; meshName: string; status: 'missing' | 'invalid' | 'unverified' | 'matched' | 'not_in_model' }>;
+  contract: { nodeNamePattern: string; nodeNamesUnique: boolean; modelFileVerified: boolean; modelNodesCompatible: boolean; modelNodeInventoryAvailable: boolean };
   activeRelease: TwinModelRelease | null;
   updatedAt: string | null;
 }

@@ -370,7 +370,15 @@ onMounted(() => {
   animate();
 });
 
-watch(() => [props.assets, props.alerts, props.selectedCode], () => { syncSceneAssets(); applyVisualState(); focusAsset(props.selectedCode); }, { deep: true });
+// Camera focus is a deliberate selection action. Live telemetry and alert
+// refreshes must never re-run it, otherwise OrbitControls appears to "spring
+// back" while an operator is zooming or rotating the model.
+watch(() => props.assets, () => { syncSceneAssets(); applyVisualState(); }, { deep: true });
+watch(() => props.alerts, applyVisualState, { deep: true });
+watch(() => props.selectedCode, (next, previous) => {
+  applyVisualState();
+  if (next && next !== previous) focusAsset(next);
+});
 watch(() => props.modelUrl, (next, previous) => { if (next && next !== previous) reloadModel(); });
 onBeforeUnmount(() => {
   modelLoadToken += 1;

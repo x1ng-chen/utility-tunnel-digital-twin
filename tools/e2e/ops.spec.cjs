@@ -209,17 +209,24 @@ test('运维员可确认告警、生成工单并推进处置流程', async ({ pa
 
   await page.getByRole('button', { name: '告警中心' }).click();
   const alertRow = page.locator('.table-row').filter({ hasText: 'ALM-260826-001' });
-  await alertRow.getByRole('button', { name: '确认' }).click();
-  await expect(alertRow.getByTestId('alert-status-ALM-260826-001')).toHaveText('已确认');
+  await expect(alertRow).toBeVisible();
+  const alertStatus = alertRow.getByTestId('alert-status-ALM-260826-001');
+  const acknowledgeButton = alertRow.getByRole('button', { name: '确认' });
+  if ((await alertStatus.textContent())?.trim() === '待确认') {
+    await expect(acknowledgeButton).toBeVisible();
+    await acknowledgeButton.click();
+  }
+  await expect(alertStatus).toHaveText('已确认');
   await alertRow.getByRole('button', { name: '转工单' }).click();
-
-  await page.getByRole('button', { name: '工单中心' }).click();
+  await expect(page).toHaveURL(/\/work-orders\?focus=/);
+  await expect(page.getByText(/已打开告警 ALM-260826-001 生成的处置工单/)).toBeVisible();
   const linkedOrder = page.locator('.order-card').filter({ hasText: 'ALM-260826-001' });
   await expect(linkedOrder).toBeVisible();
-  await linkedOrder.getByRole('button', { name: '推进至 已分派' }).click();
-  await linkedOrder.getByRole('button', { name: '推进至 处理中' }).click();
-  await linkedOrder.getByRole('button', { name: '推进至 待复核' }).click();
-  await expect(linkedOrder.getByRole('button', { name: '推进至 已完成' })).toHaveCount(0);
+  await expect(linkedOrder).toHaveClass(/focused/);
+  await linkedOrder.getByRole('button', { name: '接单并分派' }).click();
+  await linkedOrder.getByRole('button', { name: '开始现场处理' }).click();
+  await linkedOrder.getByRole('button', { name: '提交复核' }).click();
+  await expect(linkedOrder.getByRole('button', { name: '复核并完成' })).toHaveCount(0);
 
   await page.getByRole('button', { name: '数据洞察' }).click();
   await page.getByLabel('资产').selectOption('ENV-01');
@@ -308,7 +315,7 @@ test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }
   // Keep the asset-governance scenario compatible with the production GLB
   // contract so the following model-release scenario can validate the full
   // suite as one continuous operator journey.
-  await page.getByLabel('孪生网格').fill('MESH_TEMP_A01');
+  await page.getByLabel('模型设备节点').fill('MESH_TEMP_A01');
   await page.getByLabel('位置来源').selectOption('configured');
   await page.getByLabel('纬度').fill('31.230800');
   await page.getByLabel('经度').fill('121.474500');
@@ -362,7 +369,13 @@ test('管理员可校验、启用三维模型版本并由孪生页面鉴权加�
   const zoomOut = page.getByRole('button', { name: '缩小三维模型' });
   await expect(zoomIn).toBeVisible();
   await expect(zoomOut).toBeVisible();
+  const canvas = page.locator('.twin-canvas');
+  const distanceBefore = Number(await canvas.getAttribute('data-camera-distance'));
   await zoomOut.dispatchEvent('click');
+  await expect.poll(async () => Number(await canvas.getAttribute('data-camera-distance'))).toBeGreaterThan(distanceBefore);
+  const distanceAfterZoomOut = Number(await canvas.getAttribute('data-camera-distance'));
+  await page.waitForTimeout(500);
+  expect(Number(await canvas.getAttribute('data-camera-distance'))).toBeCloseTo(distanceAfterZoomOut, 2);
   await zoomIn.dispatchEvent('click');
   expect(consoleErrors).toEqual([]);
 });

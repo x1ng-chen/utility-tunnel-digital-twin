@@ -382,6 +382,8 @@ class OperationsApiTests(TestCase):
             self.assertTrue(first.json()['isCompatible'])
             self.assertEqual(first.json()['nodeCount'], 1)
             self.assertEqual(first.json()['namedNodeCount'], 1)
+            self.assertEqual(first.json()['nodeNames'], ['MESH_FAN_01'])
+            self.assertTrue(first.json()['nodeInventoryAvailable'])
             self.assertEqual(first.json()['missingAssetCodes'], [])
             self.assertTrue(AuditLog.objects.filter(action='twin.model.uploaded', resource_id=str(first.json()['id'])).exists())
 
@@ -398,6 +400,8 @@ class OperationsApiTests(TestCase):
             self.assertEqual(readiness['status'], 'ready')
             self.assertTrue(readiness['contract']['modelFileVerified'])
             self.assertEqual(readiness['activeRelease']['version'], 'r1')
+            self.assertTrue(readiness['contract']['modelNodeInventoryAvailable'])
+            self.assertEqual(readiness['mappings'], [{'assetCode': self.asset.code, 'meshName': 'MESH_FAN_01', 'status': 'matched'}])
             model_file = self.client.get('/api/twin/model-file/')
             self.assertEqual(model_file.status_code, 200)
             self.assertEqual(b''.join(model_file.streaming_content)[:4], b'glTF')
@@ -422,16 +426,54 @@ class OperationsApiTests(TestCase):
             self.assertEqual(rollback.json()['status'], 'active')
             self.assertEqual(TwinModelRelease.objects.filter(status=TwinModelRelease.Status.ACTIVE).count(), 1)
 
+    def test_model_readiness_rechecks_asset_mappings_after_activation(self):
+        self.asset.mesh = 'MESH_FAN_01'
+        self.asset.save(update_fields=['mesh', 'updated_at'])
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            self.auth(self.admin)
+            created = self.client.post('/api/twin/models/', {'version': 'dynamic-contract', 'file': self.glb_upload()}, format='multipart')
+            self.assertEqual(created.status_code, 201)
+            self.assertEqual(self.client.post(f"/api/twin/models/{created.json()['id']}/activate/").status_code, 200)
+
+            self.asset.mesh = 'MESH_FAN_RENAMED'
+            self.asset.save(update_fields=['mesh', 'updated_at'])
+            readiness = self.client.get('/api/twin/model-readiness/').json()
+            self.assertEqual(readiness['status'], 'blocked')
+            self.assertEqual(readiness['modelMismatchCodes'], [self.asset.code])
+            self.assertEqual(readiness['mappings'][0]['status'], 'not_in_model')
+
+            release = TwinModelRelease.objects.get(pk=created.json()['id'])
+            release.status = TwinModelRelease.Status.RETIRED
+            release.save(update_fields=['status'])
+            blocked_reactivation = self.client.post(f'/api/twin/models/{release.pk}/activate/')
+            self.assertEqual(blocked_reactivation.status_code, 409)
+            self.assertEqual(blocked_reactivation.json()['details']['missingAssetCodes'], [self.asset.code])
+
+            self.asset.mesh = 'MESH_FAN_01'
+            self.asset.save(update_fields=['mesh', 'updated_at'])
+            repaired_reactivation = self.client.post(f'/api/twin/models/{release.pk}/activate/')
+            self.assertEqual(repaired_reactivation.status_code, 200)
+            self.assertTrue(repaired_reactivation.json()['isCompatible'])
+            self.assertEqual(repaired_reactivation.json()['missingAssetCodes'], [])
+
     def test_release_preflight_detects_and_cleans_reserved_browser_test_data(self):
         self.asset.mesh = 'MESH_FAN_01'
         self.asset.save(update_fields=['mesh', 'updated_at'])
         User.objects.create_user(username='e2e-operator-stale', email='e2e-operator-stale', password='test-only-password')
+        shared_alert = Alert.objects.create(code='ALM-260826-001', asset=self.asset, severity=Alert.Severity.WARNING, category='通信', title='共享回归告警', detail='测试', opened_at=timezone.now(), status=Alert.Status.ACKNOWLEDGED, acknowledged_at=timezone.now(), acknowledged_by=self.operator)
+        baseline = TwinModelRelease.objects.create(version='baseline', model_file='twin_models/baseline.glb', original_name='baseline.glb', sha256='a' * 64, size_bytes=1, is_compatible=True, status=TwinModelRelease.Status.RETIRED, uploaded_by=self.admin)
+        TwinModelRelease.objects.create(version='e2e-model-stale', model_file='twin_models/e2e.glb', original_name='e2e.glb', sha256='b' * 64, size_bytes=1, is_compatible=True, status=TwinModelRelease.Status.ACTIVE, uploaded_by=self.admin)
         with self.assertRaises(CommandError):
             call_command('release_preflight', format='json', stdout=io.StringIO())
 
         output = io.StringIO()
         call_command('release_preflight', clean_test_data=True, format='json', stdout=output)
         self.assertFalse(User.objects.filter(email__startswith='e2e-operator-').exists())
+        shared_alert.refresh_from_db()
+        baseline.refresh_from_db()
+        self.assertEqual(shared_alert.status, Alert.Status.OPEN)
+        self.assertIsNone(shared_alert.acknowledged_at)
+        self.assertEqual(baseline.status, TwinModelRelease.Status.ACTIVE)
         self.assertIn('"clean": true', output.getvalue())
 
     def test_dashboard_uses_the_latest_telemetry_reading(self):

@@ -147,7 +147,7 @@ export const useOperationsStore = defineStore('operations', () => {
     const response = source.value === 'api' ? await runApiMutation(() => api.acknowledge(alert.id)) : null;
     Object.assign(alert, response?.data ?? { status: 'acknowledged', acknowledgedAt: new Date().toISOString(), acknowledgedBy: auth.user?.displayName || '演示用户' });
     if (source.value === 'demo') appendAudit('alert.acknowledged', 'alert', alert.id, { code: alert.code });
-    else await syncAudit();
+    else void syncAudit();
     notice.value = `${alert.code} 已确认`;
   }
 
@@ -161,7 +161,7 @@ export const useOperationsStore = defineStore('operations', () => {
     const next: WorkOrder = response?.data ?? { id: nextLocalId(), code: `WO-${now.slice(2, 10).replaceAll('-', '')}-${String(localSequence).padStart(2, '0')}`, sourceAlertId: alert.id, assetCode: alert.assetCode, title: `处置 ${alert.code}：${alert.title}`, priority: alert.severity === 'critical' ? 'urgent' : 'high', status: 'open', createdAt: now, updatedAt: now, version: 1 };
     workOrders.value.unshift(next);
     if (source.value === 'demo') appendAudit('work_order.created_from_alert', 'work_order', next.id, { alertCode: alert.code, assetCode: alert.assetCode });
-    else await syncAudit();
+    else void syncAudit();
     notice.value = '已创建关联工单';
     return next;
   }
@@ -184,7 +184,7 @@ export const useOperationsStore = defineStore('operations', () => {
       if (asset && !hasActiveAlert) asset.status = 'normal';
     }
     if (source.value === 'demo') appendAudit('work_order.transitioned', 'work_order', order.id, { from: previous, to });
-    else await syncAudit();
+    else void syncAudit();
     notice.value = `${order.code} 已更新为 ${to}`;
   }
 
@@ -198,7 +198,7 @@ export const useOperationsStore = defineStore('operations', () => {
       threshold.warning = warning; threshold.alarm = alarm; threshold.version += 1;
     }
     if (source.value === 'demo') appendAudit('setting.threshold.update', 'threshold', threshold.key, { warning, alarm, version: threshold.version });
-    else await syncAudit();
+    else void syncAudit();
     notice.value = `${threshold.label} 阈值已保存`;
   }
 
@@ -228,7 +228,7 @@ export const useOperationsStore = defineStore('operations', () => {
     };
     workOrders.value.unshift(next);
     if (source.value === 'demo') appendAudit('work_order.created_manual', 'work_order', next.id, { assetCode: next.assetCode, priority: next.priority });
-    else await syncAudit();
+    else void syncAudit();
     notice.value = `${next.code} 已创建`;
     return next;
   }
@@ -239,7 +239,7 @@ export const useOperationsStore = defineStore('operations', () => {
     const created = response.data as Asset;
     assets.value.unshift(created);
     recalculateAssetSummary();
-    await syncAudit();
+    void syncAudit();
     notice.value = `${created.code} 已创建`;
     return created;
   }
@@ -253,7 +253,7 @@ export const useOperationsStore = defineStore('operations', () => {
     else if (currentIndex >= 0) Object.assign(assets.value[currentIndex], updated);
     else if (updated.isActive) assets.value.unshift(updated);
     recalculateAssetSummary();
-    await syncAudit();
+    void syncAudit();
     notice.value = `${updated.code} 已更新`;
     return updated;
   }
@@ -274,7 +274,7 @@ export const useOperationsStore = defineStore('operations', () => {
     assertGisWriteAllowed();
     const response = await runApiMutation(() => api.importGisFeatures(payload));
     spatialFeatures.value = [...normalizeSpatialFeatures(response.data.features), ...spatialFeatures.value.filter((feature) => !response.data.features.some((item: { id?: string; properties: SpatialFeature }) => Number(item.id ?? item.properties.id) === feature.id))];
-    await syncAudit();
+    void syncAudit();
     notice.value = `已导入 ${response.data.meta.created} 个 GIS 空间对象，待审核后方可发布。`;
     return response.data;
   }
@@ -284,7 +284,7 @@ export const useOperationsStore = defineStore('operations', () => {
     const response = await runApiMutation(() => api.updateGisFeature(feature.id, { ...payload, version: feature.version }));
     const updated = normalizeSpatialFeatures([response.data])[0];
     spatialFeatures.value = spatialFeatures.value.map((item) => item.id === updated.id ? updated : item);
-    await syncAudit();
+    void syncAudit();
     notice.value = `${updated.code} 已更新为 ${updated.status === 'published' ? '已发布' : updated.status} 状态。`;
     return updated;
   }
@@ -293,7 +293,7 @@ export const useOperationsStore = defineStore('operations', () => {
     assertGisWriteAllowed();
     const response = await runApiMutation(() => api.createHardwareBinding(payload));
     hardwareBindings.value.unshift(response.data as HardwareBinding);
-    await syncAudit();
+    void syncAudit();
     notice.value = `${response.data.assetCode} 的硬件接入契约已预留。`;
     return response.data as HardwareBinding;
   }
@@ -308,7 +308,7 @@ export const useOperationsStore = defineStore('operations', () => {
       const record = await runApiMutation(() => api.report(report, requestKey('report')));
       const exported = await api.downloadReport(record.data.id);
       downloadBlob(exported.data, record.data.fileName || `utility-tunnel-${report}.csv`);
-      await syncAudit();
+      void syncAudit();
     } else {
       downloadReport(report);
       appendAudit('report.export', 'report_export', report, { report, format: 'csv' });
