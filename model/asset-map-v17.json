@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.2",
+  "units": "m",
+  "model": "utility-tunnel-annular-v17-fabrication-waterloop.glb",
+  "status": "engineering-model; not-yet-web-runtime",
+  "assets": [
+    {"assetId":"LEVEL-L01","zoneId":"UT-ZB","meshNames":["MESH_V17_FSIR02_L01_BOARD","MESH_V17_FSIR02_L01_PROBE_BODY","MESH_V17_FSIR02_L01_MOUNT_PLATE"],"telemetryKeys":["LEVEL-L01.state","LEVEL-L01.analogV"]},
+    {"assetId":"LEVEL-L02","zoneId":"UT-ZB","meshNames":["MESH_V17_FSIR02_L02_BOARD","MESH_V17_FSIR02_L02_PROBE_BODY","MESH_V17_FSIR02_L02_MOUNT_PLATE"],"telemetryKeys":["LEVEL-L02.state","LEVEL-L02.analogV"]},
+    {"assetId":"LEVEL-L03","zoneId":"UT-ZB","meshNames":["MESH_V17_FSIR02_L03_BOARD","MESH_V17_FSIR02_L03_PROBE_BODY","MESH_V17_FSIR02_L03_MOUNT_PLATE"],"telemetryKeys":["LEVEL-L03.state","LEVEL-L03.analogV"]},
+    {"assetId":"LEVEL-L04","zoneId":"UT-ZB","meshNames":["MESH_V17_FSIR02_L04_BOARD","MESH_V17_FSIR02_L04_PROBE_BODY","MESH_V17_FSIR02_L04_MOUNT_PLATE"],"telemetryKeys":["LEVEL-L04.state","LEVEL-L04.analogV"]},
+    {"assetId":"LEVEL-L05","zoneId":"UT-ZB","meshNames":["MESH_V17_FSIR02_L05_BOARD","MESH_V17_FSIR02_L05_PROBE_BODY","MESH_V17_FSIR02_L05_MOUNT_PLATE"],"telemetryKeys":["LEVEL-L05.state","LEVEL-L05.analogV"]},
+    {"assetId":"FAN-01","zoneId":"UT-ZC","meshNames":["MESH_V17_FAN-01_INTAKE_FRAME_TOP","MESH_V17_FAN-01_INTAKE_FRAME_BOTTOM","MESH_V17_FAN-01_INTAKE_HUB"],"telemetryKeys":["FAN-01.rpm","FAN-01.currentA"]},
+    {"assetId":"FAN-02","zoneId":"UT-ZC","meshNames":["MESH_V17_FAN-02_EXHAUST_FRAME_TOP","MESH_V17_FAN-02_EXHAUST_FRAME_BOTTOM","MESH_V17_FAN-02_EXHAUST_HUB"],"telemetryKeys":["FAN-02.rpm","FAN-02.currentA"]},
+    {"assetId":"PUMP-P01","zoneId":"UT-ZB","meshNames":["MESH_V17_PUMP24V_MOTOR","MESH_V17_PUMP24V_HEAD","MESH_V17_PUMP_P01_BASE"],"telemetryKeys":["PUMP-P01.state"]},
+    {"assetId":"VALVE-V01","zoneId":"UT-ZB","meshNames":["MESH_V17_VALVE_V01_BODY"],"telemetryKeys":["VALVE-V01.state"]},
+    {"assetId":"RELAY-K01","zoneId":"UT-ZA","meshNames":["MESH_V17_RELAY_K01_PCB","MESH_V17_RELAY_K01_BODY"],"telemetryKeys":["RELAY-K01.state"]}
+  ]
+}
