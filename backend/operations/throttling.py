@@ -1,6 +1,7 @@
 import hashlib
 
 from django.conf import settings
+from django.core.cache import cache
 from rest_framework.throttling import SimpleRateThrottle
 
 
@@ -29,6 +30,14 @@ class LoginRateThrottle(SimpleRateThrottle):
         identity = f'{client_address(request)}:{account}' if account else client_address(request)
         digest = hashlib.sha256(identity.encode('utf-8')).hexdigest()
         return self.cache_format % {'scope': self.scope, 'ident': digest}
+
+    @classmethod
+    def clear_after_success(cls, request):
+        """A valid login proves credential ownership; retain only failed-attempt history."""
+        throttle = cls()
+        key = throttle.get_cache_key(request, None)
+        if key:
+            cache.delete(key)
 
 
 class LoginBurstRateThrottle(ClientAddressRateThrottle):

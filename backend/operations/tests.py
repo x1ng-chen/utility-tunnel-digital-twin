@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
@@ -291,6 +292,16 @@ class OperationsApiTests(TestCase):
         finally:
             cache.clear()
 
+    def test_successful_logins_do_not_consume_the_failed_attempt_budget(self):
+        cache.clear()
+        try:
+            for _ in range(12):
+                response = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'demo-password'}, format='json')
+                self.assertEqual(response.status_code, 200)
+            self.assertEqual(self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'wrong-password'}, format='json').status_code, 401)
+        finally:
+            cache.clear()
+
     def test_read_api_contract_and_report_export(self):
         threshold = Threshold.objects.create(key='temperature', label='温度', warning=28, alarm=32, unit='°C')
         self.auth(self.operator)
@@ -343,7 +354,7 @@ class OperationsApiTests(TestCase):
         self.assertIsNone(ready.json()['activeRelease'])
 
     @staticmethod
-    def glb_upload(name='utility-tunnel.glb', payload=b'{"asset":{"version":"2.0"},"nodes":[{}]}'):
+    def glb_upload(name='utility-tunnel.glb', payload=b'{"asset":{"version":"2.0"},"nodes":[{"name":"MESH_FAN_01"}]}'):
         payload += b' ' * (-len(payload) % 4)
         body = struct.pack('<I4s', len(payload), b'JSON') + payload
         content = struct.pack('<4sII', b'glTF', 2, 12 + len(body)) + body
@@ -368,6 +379,10 @@ class OperationsApiTests(TestCase):
             self.assertEqual(first.status_code, 201)
             self.assertEqual(first.json()['status'], 'draft')
             self.assertEqual(len(first.json()['sha256']), 64)
+            self.assertTrue(first.json()['isCompatible'])
+            self.assertEqual(first.json()['nodeCount'], 1)
+            self.assertEqual(first.json()['namedNodeCount'], 1)
+            self.assertEqual(first.json()['missingAssetCodes'], [])
             self.assertTrue(AuditLog.objects.filter(action='twin.model.uploaded', resource_id=str(first.json()['id'])).exists())
 
             duplicate = self.client.post('/api/twin/models/', {'version': 'r1-copy', 'file': self.glb_upload()}, format='multipart')
@@ -388,7 +403,15 @@ class OperationsApiTests(TestCase):
             self.assertEqual(b''.join(model_file.streaming_content)[:4], b'glTF')
             self.assertTrue(model_file.headers['ETag'].startswith('"'))
 
-            second = self.client.post('/api/twin/models/', {'version': 'r2', 'notes': '材质更新', 'file': self.glb_upload(payload=b'{"asset":{"version":"2.0"},"nodes":[{},{}]}')}, format='multipart')
+            incompatible = self.client.post('/api/twin/models/', {'version': 'incompatible', 'file': self.glb_upload(payload=b'{"asset":{"version":"2.0"},"nodes":[{"name":"OTHER_NODE"}]}')}, format='multipart')
+            self.assertEqual(incompatible.status_code, 201)
+            self.assertFalse(incompatible.json()['isCompatible'])
+            self.assertEqual(incompatible.json()['missingAssetCodes'], [self.asset.code])
+            blocked_activation = self.client.post(f"/api/twin/models/{incompatible.json()['id']}/activate/")
+            self.assertEqual(blocked_activation.status_code, 409)
+            self.assertEqual(blocked_activation.json()['error'], 'model_contract_failed')
+
+            second = self.client.post('/api/twin/models/', {'version': 'r2', 'notes': '材质更新', 'file': self.glb_upload(payload=b'{"asset":{"version":"2.0"},"nodes":[{"name":"MESH_FAN_01"},{"name":"SCENE_ROOT"}]}')}, format='multipart')
             self.assertEqual(second.status_code, 201)
             self.assertEqual(self.client.post(f"/api/twin/models/{second.json()['id']}/activate/").status_code, 200)
             self.assertEqual(self.client.get(first_file_url).status_code, 404)
@@ -398,6 +421,18 @@ class OperationsApiTests(TestCase):
             self.assertEqual(rollback.status_code, 200)
             self.assertEqual(rollback.json()['status'], 'active')
             self.assertEqual(TwinModelRelease.objects.filter(status=TwinModelRelease.Status.ACTIVE).count(), 1)
+
+    def test_release_preflight_detects_and_cleans_reserved_browser_test_data(self):
+        self.asset.mesh = 'MESH_FAN_01'
+        self.asset.save(update_fields=['mesh', 'updated_at'])
+        User.objects.create_user(username='e2e-operator-stale', email='e2e-operator-stale', password='test-only-password')
+        with self.assertRaises(CommandError):
+            call_command('release_preflight', format='json', stdout=io.StringIO())
+
+        output = io.StringIO()
+        call_command('release_preflight', clean_test_data=True, format='json', stdout=output)
+        self.assertFalse(User.objects.filter(email__startswith='e2e-operator-').exists())
+        self.assertIn('"clean": true', output.getvalue())
 
     def test_dashboard_uses_the_latest_telemetry_reading(self):
         from .models import Telemetry
@@ -891,12 +926,12 @@ class OperationsApiTests(TestCase):
     def test_seed_demo_assigns_distinct_twin_positions(self):
         call_command('seed_demo', stdout=io.StringIO())
         positions = list(Asset.objects.values_list('code', 'position'))
-        self.assertEqual(len(positions), 12)
-        self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 12)
+        self.assertEqual(len(positions), 13)
+        self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 13)
         water = Asset.objects.get(hardware_code='H-04')
         self.assertEqual(water.integration_status, Asset.IntegrationStatus.CALIBRATION_REQUIRED)
         self.assertEqual(float(water.latitude), 31.230505)
-        self.assertEqual(Asset.objects.filter(latitude__isnull=False, longitude__isnull=False).count(), 12)
+        self.assertEqual(Asset.objects.filter(latitude__isnull=False, longitude__isnull=False).count(), 13)
 
     def test_e2e_cleanup_removes_legacy_and_timestamped_twin_test_assets(self):
         Asset.objects.create(code='ENV-E2E', name='旧版回归资产', zone='UT-ZA', asset_type='测试')
@@ -1083,4 +1118,4 @@ class OperationsApiTests(TestCase):
         self.assertIsNone(order.completed_at)
         self.assertIsNone(order.reviewed_by)
         self.assertEqual(order.version, 1)
-        self.assertEqual(HardwareBinding.objects.filter(status=HardwareBinding.Status.RESERVED).count(), 12)
+        self.assertEqual(HardwareBinding.objects.filter(status=HardwareBinding.Status.RESERVED).count(), 13)

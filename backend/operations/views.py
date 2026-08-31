@@ -299,6 +299,7 @@ class LoginView(APIView):
         authenticated = authenticate(username=user.username if user else email, password=password)
         if not authenticated:
             return error_response('invalid_credentials', 'Invalid email or password.', 401)
+        LoginRateThrottle.clear_after_success(request)
         with transaction.atomic():
             # The token table has a unique user constraint, so get_or_create already
             # resolves concurrent inserts without taking an UPDATE row lock. Avoiding
@@ -695,8 +696,9 @@ class TwinModelReadinessView(APIView):
         mapped_asset_count = len(active_assets) - len(missing_mesh_codes) - len(invalid_mesh_codes)
         latest_update = max((asset.updated_at for asset in active_assets), default=None)
         active_release = TwinModelRelease.objects.select_related('uploaded_by', 'activated_by').filter(status=TwinModelRelease.Status.ACTIVE).first()
+        release_compatible = bool(active_release and active_release.is_compatible)
         return Response({
-            'status': 'ready' if active_release and not missing_mesh_codes and not invalid_mesh_codes else 'blocked',
+            'status': 'ready' if release_compatible and not missing_mesh_codes and not invalid_mesh_codes else 'blocked',
             'summary': {
                 'activeAssetCount': len(active_assets),
                 'mappedAssetCount': mapped_asset_count,
@@ -708,6 +710,7 @@ class TwinModelReadinessView(APIView):
                 'nodeNamePattern': 'A-Z, 0-9, hyphen and underscore',
                 'nodeNamesUnique': True,
                 'modelFileVerified': bool(active_release),
+                'modelNodesCompatible': release_compatible,
             },
             'activeRelease': TwinModelReleaseSerializer(active_release).data if active_release else None,
             'updatedAt': latest_update,
@@ -718,58 +721,79 @@ TWIN_MODEL_VERSION_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$')
 
 
 def validate_glb_upload(uploaded_file):
-    """Validate the GLB 2.0 container header and return its SHA-256 digest."""
+    """Validate a GLB 2.0 container and return digest plus scene metadata."""
     if not uploaded_file or not uploaded_file.name.lower().endswith('.glb'):
-        return None, error_response('invalid_model', '请选择 Blender 导出的 GLB 2.0 文件。', 400)
+        return None, None, error_response('invalid_model', '请选择 Blender 导出的 GLB 2.0 文件。', 400)
     if uploaded_file.size <= 12 or uploaded_file.size > settings.TWIN_MODEL_MAX_BYTES:
-        return None, error_response('invalid_model', f'模型文件必须小于 {settings.TWIN_MODEL_MAX_BYTES // (1024 * 1024)} MB。', 400)
+        return None, None, error_response('invalid_model', f'模型文件必须小于 {settings.TWIN_MODEL_MAX_BYTES // (1024 * 1024)} MB。', 400)
     uploaded_file.seek(0)
     header = uploaded_file.read(12)
     try:
         magic, glb_version, declared_size = struct.unpack('<4sII', header)
     except struct.error:
-        return None, error_response('invalid_model', '模型文件头不完整。', 400)
+        return None, None, error_response('invalid_model', '模型文件头不完整。', 400)
     if magic != b'glTF' or glb_version != 2 or declared_size != uploaded_file.size:
-        return None, error_response('invalid_model', '文件不是有效的 GLB 2.0，或文件长度校验失败。', 400)
+        return None, None, error_response('invalid_model', '文件不是有效的 GLB 2.0，或文件长度校验失败。', 400)
     remaining = uploaded_file.size - 12
     chunk_index = 0
     scene_document = None
     while remaining:
         if remaining < 8:
-            return None, error_response('invalid_model', 'GLB 数据块头不完整。', 400)
+            return None, None, error_response('invalid_model', 'GLB 数据块头不完整。', 400)
         chunk_header = uploaded_file.read(8)
         chunk_length, chunk_type = struct.unpack('<I4s', chunk_header)
         if chunk_length > remaining - 8 or chunk_length % 4:
-            return None, error_response('invalid_model', 'GLB 数据块长度校验失败。', 400)
+            return None, None, error_response('invalid_model', 'GLB 数据块长度校验失败。', 400)
         if chunk_index == 0 and chunk_type != b'JSON':
-            return None, error_response('invalid_model', 'GLB 首个数据块必须为 JSON 场景描述。', 400)
+            return None, None, error_response('invalid_model', 'GLB 首个数据块必须为 JSON 场景描述。', 400)
         if chunk_index > 0 and chunk_type != b'BIN\x00':
-            return None, error_response('invalid_model', 'GLB 仅允许一个 JSON 场景块和一个二进制资源块。', 400)
+            return None, None, error_response('invalid_model', 'GLB 仅允许一个 JSON 场景块和一个二进制资源块。', 400)
         if chunk_index > 1:
-            return None, error_response('invalid_model', 'GLB 包含过多数据块。', 400)
+            return None, None, error_response('invalid_model', 'GLB 包含过多数据块。', 400)
         chunk_payload = uploaded_file.read(chunk_length)
         if len(chunk_payload) != chunk_length:
-            return None, error_response('invalid_model', 'GLB 数据块内容不完整。', 400)
+            return None, None, error_response('invalid_model', 'GLB 数据块内容不完整。', 400)
         if chunk_index == 0:
             try:
                 scene_document = json.loads(chunk_payload.rstrip(b' \t\r\n\x00').decode('utf-8'))
             except (UnicodeDecodeError, json.JSONDecodeError):
-                return None, error_response('invalid_model', 'GLB 场景描述不是有效的 UTF-8 JSON。', 400)
+                return None, None, error_response('invalid_model', 'GLB 场景描述不是有效的 UTF-8 JSON。', 400)
         remaining -= 8 + chunk_length
         chunk_index += 1
     if chunk_index == 0:
-        return None, error_response('invalid_model', 'GLB 文件不包含场景数据。', 400)
+        return None, None, error_response('invalid_model', 'GLB 文件不包含场景数据。', 400)
     asset_descriptor = scene_document.get('asset') if isinstance(scene_document, dict) else None
     if not isinstance(asset_descriptor, dict) or str(asset_descriptor.get('version', '')) != '2.0':
-        return None, error_response('invalid_model', 'GLB 场景必须声明 glTF 2.0。', 400)
-    if not isinstance(scene_document.get('nodes'), list) or not scene_document['nodes']:
-        return None, error_response('invalid_model', 'GLB 场景不包含可显示的模型节点。', 400)
+        return None, None, error_response('invalid_model', 'GLB 场景必须声明 glTF 2.0。', 400)
+    nodes = scene_document.get('nodes')
+    meshes = scene_document.get('meshes', [])
+    if not isinstance(nodes, list) or not nodes or any(not isinstance(node, dict) for node in nodes):
+        return None, None, error_response('invalid_model', 'GLB 场景不包含有效的模型节点。', 400)
+    if not isinstance(meshes, list):
+        return None, None, error_response('invalid_model', 'GLB 网格描述格式无效。', 400)
+    mesh_indexes = [node.get('mesh') for node in nodes if 'mesh' in node]
+    if any(not isinstance(index, int) or index < 0 or index >= len(meshes) for index in mesh_indexes):
+        return None, None, error_response('invalid_model', 'GLB 节点引用了不存在的模型网格。', 400)
+    node_names = [str(node.get('name', '')).strip() for node in nodes if str(node.get('name', '')).strip()]
+    seen_names = set()
+    duplicate_names = set()
+    for node_name in node_names:
+        if node_name in seen_names:
+            duplicate_names.add(node_name)
+        else:
+            seen_names.add(node_name)
     uploaded_file.seek(0)
     digest = hashlib.sha256()
     for chunk in uploaded_file.chunks():
         digest.update(chunk)
     uploaded_file.seek(0)
-    return digest.hexdigest(), None
+    return digest.hexdigest(), {
+        'nodeNames': set(node_names),
+        'nodeCount': len(nodes),
+        'meshCount': len(meshes),
+        'namedNodeCount': len(node_names),
+        'duplicateNodeNames': sorted(duplicate_names),
+    }, None
 
 
 class TwinModelReleaseListView(APIView):
@@ -789,9 +813,13 @@ class TwinModelReleaseListView(APIView):
         if len(notes) > 500:
             return error_response('invalid_request', '版本说明不能超过 500 个字符。', 400)
         uploaded_file = request.FILES.get('file')
-        digest, validation_error = validate_glb_upload(uploaded_file)
+        digest, model_metadata, validation_error = validate_glb_upload(uploaded_file)
         if validation_error:
             return validation_error
+        active_assets = list(Asset.objects.filter(is_active=True).only('code', 'mesh').order_by('code'))
+        model_node_names = model_metadata['nodeNames']
+        missing_asset_codes = [asset.code for asset in active_assets if not asset.mesh or asset.mesh not in model_node_names]
+        is_compatible = not model_metadata['duplicateNodeNames'] and not missing_asset_codes
         if TwinModelRelease.objects.filter(Q(version__iexact=version) | Q(sha256=digest)).exists():
             return error_response('conflict', '相同版本号或相同模型文件已经存在。', 409)
         release = TwinModelRelease(
@@ -800,13 +828,19 @@ class TwinModelReleaseListView(APIView):
             original_name=uploaded_file.name[:180],
             sha256=digest,
             size_bytes=uploaded_file.size,
+            node_count=model_metadata['nodeCount'],
+            mesh_count=model_metadata['meshCount'],
+            named_node_count=model_metadata['namedNodeCount'],
+            duplicate_node_names=model_metadata['duplicateNodeNames'],
+            missing_asset_codes=missing_asset_codes,
+            is_compatible=is_compatible,
             notes=notes,
             uploaded_by=request.user,
         )
         try:
             with transaction.atomic():
                 release.save()
-                audit(request.user, 'twin.model.uploaded', 'twin_model_release', release.pk, {'version': version, 'sha256': digest, 'sizeBytes': uploaded_file.size}, request_id(request))
+                audit(request.user, 'twin.model.uploaded', 'twin_model_release', release.pk, {'version': version, 'sha256': digest, 'sizeBytes': uploaded_file.size, 'nodeCount': release.node_count, 'meshCount': release.mesh_count, 'isCompatible': release.is_compatible, 'missingAssetCodes': release.missing_asset_codes}, request_id(request))
         except IntegrityError:
             if release and release.model_file:
                 release.model_file.delete(save=False)
@@ -830,6 +864,11 @@ class TwinModelReleaseActivateView(APIView):
                 return error_response('not_found', '模型版本不存在。', 404)
             if release.status == TwinModelRelease.Status.ACTIVE:
                 return Response(TwinModelReleaseSerializer(release).data)
+            if not release.is_compatible:
+                return error_response('model_contract_failed', '模型未覆盖全部设备节点，或包含重复节点名称，不能启用。', 409, {
+                    'missingAssetCodes': release.missing_asset_codes,
+                    'duplicateNodeNames': release.duplicate_node_names,
+                })
             TwinModelRelease.objects.select_for_update().filter(status=TwinModelRelease.Status.ACTIVE).update(status=TwinModelRelease.Status.RETIRED)
             release.status = TwinModelRelease.Status.ACTIVE
             release.activated_by = request.user

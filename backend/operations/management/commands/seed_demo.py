@@ -2,10 +2,10 @@ from datetime import timedelta
 import os
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.cache import cache
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
-from operations.models import Alert, Asset, HardwareBinding, Profile, RegistrationRequest, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder
+from operations.models import Alert, Asset, HardwareBinding, Profile, Telemetry, Threshold, WorkOrder
+from operations.release_hygiene import clean_release_test_data
 
 
 class Command(BaseCommand):
@@ -26,24 +26,7 @@ class Command(BaseCommand):
         if len(admin_password) < 12:
             raise CommandError('SEED_ADMIN_PASSWORD must contain at least 12 characters.')
         if options['clean_e2e_data']:
-            # Browser regression performs many legitimate logins from the
-            # local loopback address. Clear only that local test throttle key;
-            # production rate limiting remains unchanged.
-            cache.delete('throttle_login_127.0.0.1')
-            cache.delete('throttle_login_burst_127.0.0.1')
-            RegistrationRequest.objects.filter(account__startswith='e2e-operator-').delete()
-            User.objects.filter(email__startswith='e2e-operator-').delete()
-            SpatialFeature.objects.filter(code__startswith='SEG-E2E-').delete()
-            for release in TwinModelRelease.objects.filter(version__startswith='e2e-model-'):
-                release.model_file.delete(save=False)
-                release.delete()
-            # Older browser suites used ENV-E2E without a timestamp suffix;
-            # keep the reserved test namespace clean across suite versions.
-            Asset.objects.filter(code__startswith='ENV-E2E').delete()
-            # The browser suite creates a linked order for this fixed demo
-            # alert.  Remove it only in explicit E2E-clean mode so normal
-            # demonstration data is never discarded by a regular seed.
-            WorkOrder.objects.filter(source_alert__code='ALM-260826-001').delete()
+            clean_release_test_data()
         users = [
             (admin_account, '管理员', Profile.Role.ADMINISTRATOR, admin_password),
             ('operator@example.com', '运维员', Profile.Role.OPERATOR, 'demo-password-2026'),
@@ -73,6 +56,7 @@ class Command(BaseCommand):
             {'code': 'SEEP-W01', 'hardware_code': 'H-04', 'name': '水位传感器', 'zone': 'UT-ZB', 'asset_type': '测点', 'status': Asset.Status.WARNING, 'integration_status': Asset.IntegrationStatus.CALIBRATION_REQUIRED, 'interface': 'PC0 / ADC1_IN10', 'capabilities': ['8 次采样平均', '水位趋势', '阈值告警'], 'mesh': 'MESH_SEEP_W01', 'position': {'x': 58, 'y': 70, 'z': 0}, 'latitude': 31.230505, 'longitude': 121.473910, 'installation_note': '固件已接入；阈值 1000 为临时值，需完成现场标定。'},
             {'code': 'MOIST-01', 'hardware_code': 'H-05', 'name': '土壤湿度传感器', 'zone': 'UT-ZB', 'asset_type': '辅助测点', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.OPTIONAL, 'interface': '模拟量（待分配）', 'capabilities': ['辅助湿度趋势'], 'mesh': 'MESH_MOIST_01', 'position': {'x': 64, 'y': 64, 'z': 0}, 'latitude': 31.230535, 'longitude': 121.473955, 'installation_note': '仅作辅助展示，不用于安全联锁，当前固件未接入。'},
             {'code': 'ENV-01', 'hardware_code': 'H-06', 'name': 'DHT11 温湿度传感器', 'zone': 'UT-ZA', 'asset_type': '环境测点', 'status': Asset.Status.NORMAL, 'integration_status': Asset.IntegrationStatus.VERIFIED, 'interface': 'PA1 单总线', 'capabilities': ['环境温度', '环境湿度', '约 2 秒采样'], 'mesh': 'MESH_ENV_01', 'position': {'x': 34, 'y': 44, 'z': 0}, 'latitude': 31.230475, 'longitude': 121.473815, 'installation_note': '实物与当前固件已验证。'},
+            {'code': 'GAS-01', 'hardware_code': 'H-12', 'name': '气体监测节点', 'zone': 'UT-ZC', 'asset_type': '环境测点', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.PENDING_VERIFICATION, 'interface': '采集接口待分配', 'capabilities': ['氧气安装位', '一氧化碳安装位', '甲烷安装位'], 'mesh': 'MESH_GAS_SAMPLE_MANIFOLD_01', 'position': {'x': 80, 'y': 45, 'z': 0}, 'latitude': 31.230610, 'longitude': 121.474095, 'installation_note': '三合一采样歧管已纳入实体模型；传感器型号、接口和标定状态需由硬件组确认后接入。'},
             {'code': 'VIB-01', 'hardware_code': 'H-07', 'name': 'SW-420 振动传感器', 'zone': 'UT-ZC', 'asset_type': '安全测点', 'status': Asset.Status.WARNING, 'integration_status': Asset.IntegrationStatus.FIRMWARE_CONNECTED, 'interface': 'PA4 / EXTI4 双边沿', 'capabilities': ['振动事件', '5 秒状态锁存'], 'mesh': 'MESH_VIB_01', 'position': {'x': 76, 'y': 44, 'z': 0}, 'latitude': 31.230590, 'longitude': 121.474070, 'installation_note': '固件已接入，等待实体振动场景复核。'},
             {'code': 'BUZZ-01', 'hardware_code': 'H-08', 'name': '有源蜂鸣器', 'zone': 'CTRL', 'asset_type': '声光执行器', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.PENDING_VERIFICATION, 'interface': 'GPIO（待分配）', 'capabilities': ['本地声报警'], 'mesh': 'MESH_BUZZ_01', 'position': {'x': 26, 'y': 58, 'z': 0}, 'latitude': 31.230430, 'longitude': 121.473730, 'installation_note': '实物已到位；电平与工作电压待确认，当前固件未接入。'},
             {'code': 'RELAY-01', 'hardware_code': 'H-09', 'name': '5V 继电器模块', 'zone': 'CTRL', 'asset_type': '控制执行器', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.PENDING_VERIFICATION, 'interface': 'GPIO（待分配）', 'capabilities': ['隔离开关控制'], 'mesh': 'MESH_RELAY_01', 'position': {'x': 31, 'y': 62, 'z': 0}, 'latitude': 31.230445, 'longitude': 121.473745, 'installation_note': '实物已到位；触发电平待确认，当前固件未接入。'},

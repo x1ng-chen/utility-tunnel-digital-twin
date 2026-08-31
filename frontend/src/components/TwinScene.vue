@@ -11,6 +11,8 @@ const emit = defineEmits<{ select: [code: string]; modelReport: [report: TwinMod
 const host = ref<HTMLDivElement>();
 const modelState = ref<'loading' | 'loaded' | 'fallback'>('loading');
 const modelMessage = ref('正在加载三维模型…');
+const modelProgress = ref(0);
+const performanceMode = ref<'full' | 'reduced'>('full');
 let scene: Scene | undefined;
 let camera: PerspectiveCamera | undefined;
 let renderer: WebGLRenderer | undefined;
@@ -27,6 +29,7 @@ let modelRoot: Object3D | undefined;
 let fallbackSceneRoot: Group | undefined;
 let fallbackAssetRoot: Group | undefined;
 let modelLoadToken = 0;
+let modelLoadTimeout = 0;
 let sceneRadius = 18;
 
 const colors: Record<TwinVisualState, number> = { normal: 0x4ee7c3, warning: 0xffbb62, alarm: 0xff536f, unknown: 0x6d87aa };
@@ -121,6 +124,22 @@ function syncSceneAssets() {
 }
 
 function clearLoadedModel() {
+  window.clearTimeout(modelLoadTimeout);
+  const disposableRoots = [modelRoot, fallbackSceneRoot, fallbackAssetRoot].filter(Boolean) as Object3D[];
+  const disposedGeometries = new Set<object>();
+  const disposedMaterials = new Set<object>();
+  disposableRoots.forEach((root) => root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    if (!disposedGeometries.has(object.geometry)) {
+      object.geometry.dispose();
+      disposedGeometries.add(object.geometry);
+    }
+    (Array.isArray(object.material) ? object.material : [object.material]).forEach((material) => {
+      if (disposedMaterials.has(material)) return;
+      material.dispose();
+      disposedMaterials.add(material);
+    });
+  }));
   modelRoot?.removeFromParent();
   fallbackSceneRoot?.removeFromParent();
   fallbackAssetRoot?.removeFromParent();
@@ -255,18 +274,43 @@ function animate() {
 function loadModel() {
   if (!scene) return;
   const loadToken = ++modelLoadToken;
+  modelProgress.value = 0;
+  modelState.value = 'loading';
+  modelMessage.value = '正在加载实体三维模型…';
+  window.clearTimeout(modelLoadTimeout);
+  modelLoadTimeout = window.setTimeout(() => {
+    if (loadToken !== modelLoadToken) return;
+    modelLoadToken += 1;
+    makeFallbackScene();
+    publishModelReport('fallback');
+    modelState.value = 'fallback';
+    modelMessage.value = '实体模型加载超时，已切换到安全预览，可重新检测';
+    applyVisualState();
+    resetView();
+  }, 25_000);
   new GLTFLoader().load(props.modelUrl || twinModelUrl, (gltf) => {
     if (loadToken !== modelLoadToken || !scene) return;
+    window.clearTimeout(modelLoadTimeout);
     modelRoot = gltf.scene;
     scene.add(modelRoot);
     publishModelReport('loaded', bindModelAssets(modelRoot));
     modelState.value = 'loaded';
+    modelProgress.value = 100;
     modelMessage.value = '已加载实体三维模型';
     applyVisualState();
     resetView();
     if (props.selectedCode) focusAsset(props.selectedCode);
-  }, undefined, () => {
+  }, (progress) => {
     if (loadToken !== modelLoadToken) return;
+    if (progress.total > 0) {
+      modelProgress.value = Math.min(99, Math.round(progress.loaded / progress.total * 100));
+      modelMessage.value = `正在加载实体三维模型… ${modelProgress.value}%`;
+    } else if (progress.loaded > 0) {
+      modelMessage.value = `正在加载实体三维模型… ${(progress.loaded / 1024 / 1024).toFixed(1)} MB`;
+    }
+  }, () => {
+    if (loadToken !== modelLoadToken) return;
+    window.clearTimeout(modelLoadTimeout);
     makeFallbackScene();
     publishModelReport('fallback');
     modelState.value = 'fallback';
@@ -281,6 +325,7 @@ function reloadModel() {
   if (!scene) return;
   clearLoadedModel();
   modelState.value = 'loading';
+  modelProgress.value = 0;
   modelMessage.value = '正在重新检测实体三维模型…';
   loadModel();
 }
@@ -291,8 +336,10 @@ onMounted(() => {
   scene.background = new Color(0x081628);
   scene.fog = new Fog(0x081628, 22, 55);
   camera = new PerspectiveCamera(48, 1, .1, 200);
-  renderer = new WebGLRenderer({ antialias: true, alpha: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const navigatorWithMemory = navigator as Navigator & { deviceMemory?: number };
+  performanceMode.value = window.matchMedia('(prefers-reduced-motion: reduce)').matches || (navigatorWithMemory.deviceMemory ?? 8) <= 4 ? 'reduced' : 'full';
+  renderer = new WebGLRenderer({ antialias: performanceMode.value === 'full', alpha: false, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, performanceMode.value === 'reduced' ? 1.25 : 2));
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.shadowMap.enabled = true;
   host.value.append(renderer.domElement);
@@ -309,6 +356,8 @@ onMounted(() => {
   key.position.set(10, 16, 10);
   scene.add(key);
   renderer.domElement.addEventListener('pointerdown', onCanvasPointerDown);
+  renderer.domElement.addEventListener('webglcontextlost', onContextLost);
+  renderer.domElement.addEventListener('webglcontextrestored', onContextRestored);
   resizeObserver = new ResizeObserver(([entry]) => {
     if (!renderer || !camera) return;
     const { width, height } = entry.contentRect;
@@ -325,28 +374,39 @@ watch(() => [props.assets, props.alerts, props.selectedCode], () => { syncSceneA
 watch(() => props.modelUrl, (next, previous) => { if (next && next !== previous) reloadModel(); });
 onBeforeUnmount(() => {
   modelLoadToken += 1;
+  window.clearTimeout(modelLoadTimeout);
   window.cancelAnimationFrame(frame);
   resizeObserver?.disconnect();
   renderer?.domElement.removeEventListener('pointerdown', onCanvasPointerDown);
+  renderer?.domElement.removeEventListener('webglcontextlost', onContextLost);
+  renderer?.domElement.removeEventListener('webglcontextrestored', onContextRestored);
   controls?.dispose();
+  clearLoadedModel();
   renderer?.dispose();
-  scene?.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    object.geometry.dispose();
-    (Array.isArray(object.material) ? object.material : [object.material]).forEach((material) => material.dispose());
-  });
   assetObjects.clear();
   animatedObjects.clear();
   modelBoundCodes.clear();
 });
 
-defineExpose({ resetView, focusAsset, zoomBy, reloadModel, modelState, modelMessage });
+function onContextLost(event: Event) {
+  event.preventDefault();
+  modelState.value = 'fallback';
+  modelMessage.value = '三维图形服务暂时不可用，正在等待浏览器恢复';
+}
+
+function onContextRestored() {
+  modelMessage.value = '三维图形服务已恢复，正在重新加载模型…';
+  reloadModel();
+}
+
+defineExpose({ resetView, focusAsset, zoomBy, reloadModel, modelState, modelMessage, modelProgress });
 </script>
 
 <template>
   <div class="twin-scene" :data-model-state="modelState">
     <div ref="host" class="twin-canvas" aria-label="综合管廊三维数字孪生场景" role="application" />
-    <div class="twin-model-state"><i :class="modelState" /><span>{{ modelMessage }}</span></div>
+    <div class="twin-model-state"><i :class="modelState" /><span>{{ modelMessage }}</span><em v-if="performanceMode === 'reduced'">流畅模式</em></div>
+    <div v-if="modelState === 'loading'" class="twin-model-progress" role="progressbar" aria-label="三维模型加载进度" :aria-valuenow="modelProgress" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${Math.max(modelProgress, 6)}%` }" /></div>
     <div class="twin-camera-controls" role="group" aria-label="三维视角缩放"><button type="button" aria-label="放大三维模型" title="放大" @click="zoomBy(.62)">＋</button><button type="button" aria-label="缩小三维模型" title="缩小" @click="zoomBy(1.55)">－</button><button type="button" aria-label="显示完整三维模型" title="显示全景" @click="resetView">⌂</button></div>
     <div class="twin-scene-tip">拖动旋转 · 滚轮缩放 · 点击设备查看详情</div>
   </div>

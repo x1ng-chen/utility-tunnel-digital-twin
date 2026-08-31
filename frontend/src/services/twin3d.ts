@@ -26,7 +26,7 @@ export interface TwinModelReadinessResponse {
   summary: { activeAssetCount: number; mappedAssetCount: number; unmappedAssetCount: number };
   missingMeshCodes: string[];
   invalidMeshCodes: string[];
-  contract: { nodeNamePattern: string; nodeNamesUnique: boolean; modelFileVerified: boolean };
+  contract: { nodeNamePattern: string; nodeNamesUnique: boolean; modelFileVerified: boolean; modelNodesCompatible: boolean };
   activeRelease: TwinModelRelease | null;
   updatedAt: string | null;
 }

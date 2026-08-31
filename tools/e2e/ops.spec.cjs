@@ -118,6 +118,13 @@ test('告警可携带处置上下文直达三维实体模型', async ({ page }) 
   await inspector.getByRole('button', { name: '进入告警中心处置' }).click();
   await expect(page).toHaveURL(/\/alerts\?focus=ALM-260826-001/);
   await expect(page.locator('.table-row.focused').getByText('ALM-260826-001', { exact: true })).toBeVisible();
+  await page.locator('.table-row.focused').getByRole('button', { name: '地图定位' }).click();
+  await expect(page).toHaveURL(/\/gis\?asset=CTRL-01/);
+  const gisInspector = page.locator('.gis-inspector');
+  await expect(gisInspector.getByText('已从告警中心定位到当前设备。', { exact: true })).toBeVisible();
+  await expect(gisInspector.getByText('控制器通信质量波动', { exact: true })).toBeVisible();
+  await gisInspector.getByRole('button', { name: '在三维中查看此设备 →' }).click();
+  await expect(page).toHaveURL(/\/twin-3d\?asset=CTRL-01/);
 });
 
 test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续选择设备', async ({ page }) => {
@@ -258,6 +265,7 @@ test('注册申请须经管理员批准后才能登录使用', async ({ page }) 
   await adminPage.getByLabel('账号或邮箱').fill('admin');
   await adminPage.getByLabel('密码').fill(adminPassword);
   await adminPage.getByRole('button', { name: /安全登录/ }).click();
+  await expect(adminPage.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible({ timeout: 15_000 });
   await adminPage.locator('.governance-nav summary').click();
   await adminPage.getByRole('button', { name: '系统配置' }).click();
   const applicationRow = adminPage.locator('.registration-request-row').filter({ hasText: account });
@@ -297,6 +305,10 @@ test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }
   await page.getByLabel('资产名称').fill('端到端环境节点');
   await page.getByLabel('所属区域').fill('UT-ZA');
   await page.getByLabel('资产类型').fill('环境测点');
+  // Keep the asset-governance scenario compatible with the production GLB
+  // contract so the following model-release scenario can validate the full
+  // suite as one continuous operator journey.
+  await page.getByLabel('孪生网格').fill('MESH_TEMP_A01');
   await page.getByLabel('位置来源').selectOption('configured');
   await page.getByLabel('纬度').fill('31.230800');
   await page.getByLabel('经度').fill('121.474500');
@@ -332,13 +344,16 @@ test('管理员可校验、启用三维模型版本并由孪生页面鉴权加�
   await page.locator('.governance-nav summary').click();
   await page.getByRole('button', { name: '系统配置' }).click();
   await expect(page.getByText('三维模型版本', { exact: true })).toBeVisible();
+  await expect(page.getByText('正在读取模型版本…', { exact: true })).toHaveCount(0, { timeout: 15_000 });
   await page.getByLabel('版本号').fill(version);
   await page.getByLabel('GLB 模型').setInputFiles(modelUploadFor(version));
+  await expect(page.getByLabel('GLB 模型')).toHaveValue(/utility-tunnel\.glb$/);
   await page.getByLabel('版本说明').fill('浏览器回归验证模型发布与鉴权加载');
   await page.getByRole('button', { name: '上传并校验' }).click();
-  await expect(page.getByText('模型已通过 GLB 2.0 与完整性校验，启用后即可用于三维孪生。')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/模型校验通过：\d+ 个命名节点，已覆盖全部设备，可启用。/)).toBeVisible({ timeout: 60_000 });
   const release = page.locator('.model-release-row').filter({ hasText: version });
   await expect(release).toBeVisible();
+  await expect(release.getByText('设备节点映射完整，可以安全启用')).toBeVisible();
   await release.getByRole('button', { name: '启用此版本' }).click();
   await expect(release.getByText('当前使用', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '三维孪生' }).click();

@@ -169,10 +169,12 @@ async function uploadModel() {
     payload.append('version', modelUpload.version.trim());
     payload.append('notes', modelUpload.notes.trim());
     payload.append('file', modelUpload.file);
-    await api.uploadTwinModel(payload);
+    const release = (await api.uploadTwinModel(payload)).data as TwinModelRelease;
     modelUpload.version = ''; modelUpload.notes = ''; modelUpload.file = null;
     if (modelFileInput.value) modelFileInput.value.value = '';
-    modelMessage.value = '模型已通过 GLB 2.0 与完整性校验，启用后即可用于三维孪生。';
+    modelMessage.value = release.isCompatible
+      ? `模型校验通过：${release.namedNodeCount} 个命名节点，已覆盖全部设备，可启用。`
+      : `文件结构有效，但有 ${release.missingAssetCodes.length} 个设备未映射；修正 Blender 节点名称后再启用。`;
     await loadModelReleases();
   } catch (cause: unknown) { modelError.value = cause instanceof Error ? cause.message : '模型上传失败'; }
   finally { modelBusyId.value = null; }
@@ -189,6 +191,14 @@ async function activateModel(release: TwinModelRelease) {
 }
 
 function formatBytes(bytes: number) { return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`; }
+
+function modelContractSummary(release: TwinModelRelease) {
+  if (release.isCompatible) return '设备节点映射完整，可以安全启用';
+  const problems = [];
+  if (release.missingAssetCodes.length) problems.push(`${release.missingAssetCodes.length} 个设备未映射`);
+  if (release.duplicateNodeNames.length) problems.push(`${release.duplicateNodeNames.length} 个节点名称重复`);
+  return problems.join('，') || '该历史模型需要重新校验';
+}
 
 function changeRole(user: AdminUser, event: Event) {
   const value = (event.target as HTMLSelectElement | null)?.value;
@@ -248,9 +258,15 @@ watch([() => store.source, () => auth.user?.role], () => { void loadUsers(); voi
       <div v-else class="model-release-list">
         <article v-for="release in modelReleases" :key="release.id" :class="['model-release-row', release.status]">
           <div><span :class="['model-release-status', release.status]">{{ release.status === 'active' ? '当前使用' : release.status === 'draft' ? '待启用' : '历史版本' }}</span><b>{{ release.version }}</b><small>{{ release.originalName }} · {{ formatBytes(release.sizeBytes) }} · {{ new Date(release.createdAt).toLocaleString('zh-CN') }}</small></div>
+          <div class="model-contract-result">
+            <strong :class="release.isCompatible ? 'compatible' : 'blocked'">{{ release.isCompatible ? '校验通过' : '需要修订' }}</strong>
+            <span>{{ modelContractSummary(release) }}</span>
+            <small v-if="release.nodeCount">场景 {{ release.nodeCount }} 个节点 · {{ release.meshCount }} 个网格 · {{ release.namedNodeCount }} 个节点已命名</small>
+            <small v-if="release.missingAssetCodes.length" :title="release.missingAssetCodes.join('、')">未映射：{{ release.missingAssetCodes.join('、') }}</small>
+          </div>
           <p>{{ release.notes || '未填写版本说明' }}</p>
-          <code :title="release.sha256">校验码 {{ release.sha256.slice(0, 12) }}</code>
-          <button v-if="release.status !== 'active'" class="outline-button" :disabled="modelBusyId === release.id" @click="activateModel(release)">{{ modelBusyId === release.id ? '正在切换…' : release.status === 'retired' ? '回滚到此版本' : '启用此版本' }}</button>
+          <code :title="release.sha256">文件校验码 {{ release.sha256.slice(0, 12) }}</code>
+          <button v-if="release.status !== 'active'" class="outline-button" :disabled="modelBusyId === release.id || !release.isCompatible" :title="release.isCompatible ? '' : '请修正设备节点映射后重新上传'" @click="activateModel(release)">{{ modelBusyId === release.id ? '正在切换…' : !release.isCompatible ? '校验未通过' : release.status === 'retired' ? '回滚到此版本' : '启用此版本' }}</button>
           <span v-else class="active-release-note">三维页面已自动使用</span>
         </article>
       </div>

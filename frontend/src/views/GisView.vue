@@ -5,6 +5,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import AppShell from '../components/AppShell.vue';
 import { escapeMapText, hasValidLocation, integrationLabels, locationSourceLabels } from '../services/gis';
+import { primaryTwinAlert } from '../services/twin3d';
 import { useOperationsStore } from '../stores/operations';
 import type { Asset, HardwareConnectivity, IntegrationStatus, SpatialFeature, SpatialLayerType } from '../types';
 import '../assets/gis.css';
@@ -45,6 +46,13 @@ const publishedFeatureCount = computed(() => store.spatialFeatures.filter((featu
 const verifiedCount = computed(() => store.assets.filter((asset) => asset.integrationStatus === 'verified').length);
 const connectedCount = computed(() => store.assets.filter((asset) => ['verified', 'firmware_connected', 'calibration_required'].includes(asset.integrationStatus)).length);
 const selectedBinding = computed(() => selectedAsset.value ? store.hardwareBindings.find((binding) => binding.assetCode === selectedAsset.value?.code) : null);
+const selectedAlert = computed(() => selectedAsset.value ? primaryTwinAlert(selectedAsset.value.code, store.alerts) : null);
+const navigationContext = computed(() => {
+  const source = typeof route.query.source === 'string' ? route.query.source : '';
+  if (source === 'twin') return '已从三维孪生定位到当前设备。';
+  if (source === 'alert') return '已从告警中心定位到当前设备。';
+  return '';
+});
 
 function markerIcon(asset: Asset) {
   return L.divIcon({
@@ -90,7 +98,8 @@ function selectAsset(asset: Asset) {
   selectedCode.value = asset.code;
   if (map && hasValidLocation(asset)) map.flyTo([asset.latitude, asset.longitude], Math.max(map.getZoom(), 18), { duration: 0.65 });
 }
-function openTwin() { if (selectedAsset.value) void router.push({ path: '/twin-3d', query: { asset: selectedAsset.value.code, source: 'gis' } }); }
+function openTwin() { if (selectedAsset.value) void router.push({ path: '/twin-3d', query: { asset: selectedAsset.value.code, source: 'gis', ...(selectedAlert.value ? { alert: selectedAlert.value.code } : {}) } }); }
+function openAlertCenter() { if (selectedAlert.value) void router.push({ path: '/alerts', query: { focus: selectedAlert.value.code, source: 'gis' } }); }
 
 onMounted(async () => {
   await nextTick();
@@ -165,13 +174,15 @@ onBeforeUnmount(() => {
       </div>
 
       <aside v-if="selectedAsset" class="gis-inspector" aria-live="polite">
+        <p v-if="navigationContext" class="gis-navigation-context" role="status">{{ navigationContext }}</p>
         <header><span>{{ selectedAsset.hardwareCode || 'NO HW ID' }}</span><b :class="`integration-${selectedAsset.integrationStatus}`">{{ integrationLabels[selectedAsset.integrationStatus] }}</b></header>
         <h2>{{ selectedAsset.name }}</h2><p>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</p>
         <dl><div><dt>硬件接口</dt><dd>{{ selectedAsset.interface || '未配置' }}</dd></div><div><dt>坐标来源</dt><dd>{{ locationSourceLabels[selectedAsset.locationSource] }}</dd></div><div><dt>纬度</dt><dd>{{ selectedAsset.latitude?.toFixed(6) ?? '未配置' }}</dd></div><div><dt>经度</dt><dd>{{ selectedAsset.longitude?.toFixed(6) ?? '未配置' }}</dd></div></dl>
         <div class="gis-capabilities"><small>当前能力</small><span v-for="capability in selectedAsset.capabilities" :key="capability">{{ capability }}</span></div>
         <div class="gis-note"><small>实物状态说明</small><p>{{ selectedAsset.installationNote }}</p></div>
         <div class="gis-binding"><small>设备数据连接</small><template v-if="selectedBinding"><p><b :class="selectedBinding.connectivity">{{ connectivityLabels[selectedBinding.connectivity] }}</b>{{ selectedBinding.protocol.toUpperCase() }} · {{ selectedBinding.deviceIdentifier }}</p><code>{{ selectedBinding.endpoint }}</code><em v-if="selectedBinding.connectivity === 'online'">最近心跳 {{ selectedBinding.heartbeatAgeSeconds }} 秒前，连接正常。</em><em v-else-if="selectedBinding.connectivity === 'offline'">设备超过 {{ selectedBinding.expectedIntervalSeconds * 3 }} 秒未上报，请检查供电与网络。</em><em v-else>期望每 {{ selectedBinding.expectedIntervalSeconds }} 秒上报；收到真实数据后才显示在线。</em></template><p v-else>尚未登记设备数据接口。</p></div>
-        <button class="gis-twin-link" @click="openTwin">在三维中查看此设备 →</button>
+        <div v-if="selectedAlert" class="gis-alert-summary"><small>当前异常</small><strong>{{ selectedAlert.title }}</strong><p>{{ selectedAlert.severity === 'critical' ? '严重告警' : '待处置告警' }} · {{ selectedAlert.code }}</p></div>
+        <div class="gis-context-actions"><button class="gis-twin-link" @click="openTwin">在三维中查看此设备 →</button><button v-if="selectedAlert" class="gis-alert-link" @click="openAlertCenter">查看当前告警</button></div>
       </aside>
     </section>
 

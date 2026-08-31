@@ -48,9 +48,10 @@ POST /api/auth/login/
 ```bash
 cd backend
 python manage.py production_preflight
+python manage.py release_preflight --clean-test-data --require-model --format=json
 ```
 
-预检会拒绝非生产配置、非 PostgreSQL/TLS 连接、未启用 HTTPS/HSTS、进程内缓存和未执行迁移，并执行一次 `SELECT 1` 数据库探针。CI 会先执行迁移再运行预检；本地仅做数据库连通性探针时可显式使用 `--allow-non-production --skip-migrations`，生产环境不允许跳过迁移检查。
+第一条预检会拒绝非生产配置、非 PostgreSQL/TLS 连接、未启用 HTTPS/HSTS、进程内缓存和未执行迁移，并执行一次 `SELECT 1` 数据库探针。第二条只清理自动化测试专用命名空间，随后确认没有测试账号、测试空间对象、临时资产和测试模型，并要求存在兼容且已启用的三维模型；它不会删除普通业务数据。CI 会先执行迁移再运行预检；本地仅做数据库连通性探针时可显式使用 `--allow-non-production --skip-migrations`，生产环境不允许跳过迁移检查。
 
 ## 3. 前端
 

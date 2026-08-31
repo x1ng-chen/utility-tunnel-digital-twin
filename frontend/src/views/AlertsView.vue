@@ -30,6 +30,11 @@ function openTwin(alert: Alert) {
   void router.push({ path: '/twin-3d', query: { asset: alert.assetCode, source: 'alert', alert: alert.code } });
 }
 
+function openGis(alert: Alert) {
+  if (!alert.assetCode) return;
+  void router.push({ path: '/gis', query: { asset: alert.assetCode, source: 'alert', alert: alert.code } });
+}
+
 async function runAction(id: number, action: () => Promise<unknown>) {
   actionError.value = '';
   busyId.value = id;
@@ -78,6 +83,7 @@ function getUserFacingError(cause: unknown) {
         <span :data-testid="`alert-status-${alert.code}`" :class="['status-text', alert.status]">{{ alert.status === 'open' ? '待确认' : alert.status === 'acknowledged' ? '已确认' : alert.status === 'resolved' ? '已解决' : '已关闭' }}</span>
         <div class="row-actions">
           <button v-if="alert.assetCode" class="alert-locate-button" type="button" @click="openTwin(alert)">三维定位</button>
+          <button v-if="alert.assetCode" class="alert-locate-button" type="button" @click="openGis(alert)">地图定位</button>
           <template v-if="canWrite">
             <button v-if="alert.status === 'open'" :disabled="busyId === alert.id" @click="acknowledge(alert)">{{ busyId === alert.id ? '处理中…' : '确认' }}</button>
             <button v-if="!store.workOrders.some((item) => item.sourceAlertId === alert.id)" :disabled="busyId === alert.id" @click="createWorkOrder(alert)">转工单</button>

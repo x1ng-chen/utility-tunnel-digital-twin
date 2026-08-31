@@ -89,6 +89,11 @@
 | `GET` | `/report-exports/` | 登录 | 导出操作记录 |
 | `POST` | `/report-exports/` | 登录 | 创建 `{ report: alerts\|workOrders\|assets\|daily }`；可提供 `Idempotency-Key` 防止重复登记 |
 | `GET` | `/report-exports/{id}/download/` | 创建者/管理员 | 返回创建时固化的 UTF-8 CSV 不可变快照；响应含 SHA-256，执行公式注入防护且不受前端分页限制 |
+| `GET` | `/twin/model-readiness/` | 登录 | 查询设备节点映射和当前三维版本的交付状态 |
+| `GET` | `/twin/models/` | 登录 | 查询三维模型版本、节点/网格统计和设备映射结果 |
+| `POST` | `/twin/models/` | 管理员 | 上传 GLB；校验容器、场景节点、网格引用、重复名称和设备覆盖 |
+| `POST` | `/twin/models/{id}/activate/` | 管理员 | 启用或回滚兼容版本；不兼容版本返回 `409 model_contract_failed` |
+| `GET` | `/twin/model-file/` | 登录 | 鉴权下载使用中模型，返回 `ETag` 和不可变短期缓存头 |
 
 ## 角色边界
 
@@ -103,6 +108,7 @@
 | 新建/修改/停用资产主数据 | ✓ | — | — |
 | 导入、审核与发布 GIS 空间对象 | ✓ | — | — |
 | 维护硬件通信绑定契约 | ✓ | — | — |
+| 上传、启用和回滚三维模型 | ✓ | — | — |
 | 导出报表 | ✓ | ✓ | ✓ |
 
 任何未列出的写操作默认拒绝，后端权限校验是最终边界，前端按钮隐藏仅用于改善使用体验。
