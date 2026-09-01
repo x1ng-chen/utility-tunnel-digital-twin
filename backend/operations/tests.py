@@ -84,6 +84,18 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('accessToken', response.json())
 
+    @override_settings(API_TOKEN_TTL_SECONDS=900, API_TOKEN_RENEWAL_WINDOW_SECONDS=60)
+    def test_login_rotates_a_token_that_is_about_to_expire(self):
+        token = Token.objects.create(user=self.operator)
+        token.created = timezone.now() - timedelta(seconds=850)
+        token.save(update_fields=['created'])
+
+        response = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'demo-password'}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotEqual(response.json()['accessToken'], token.key)
+        self.assertFalse(Token.objects.filter(key=token.key).exists())
+
     def test_password_change_rotates_bearer_credential(self):
         self.auth(self.operator)
         previous_token = Token.objects.get(user=self.operator).key

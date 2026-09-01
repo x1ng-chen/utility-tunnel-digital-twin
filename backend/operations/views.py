@@ -306,7 +306,11 @@ class LoginView(APIView):
             # SELECT ... FOR UPDATE keeps login compatible with the reviewed runtime
             # role, which intentionally has no token UPDATE privilege.
             token, created = Token.objects.get_or_create(user=authenticated)
-            if not created and token.created + timedelta(seconds=settings.API_TOKEN_TTL_SECONDS) <= timezone.now():
+            # Never hand a freshly authenticated browser a credential that can
+            # expire during its initial data load. Rotate within the configured
+            # renewal window while preserving established sessions otherwise.
+            renewal_deadline = timezone.now() + timedelta(seconds=settings.API_TOKEN_RENEWAL_WINDOW_SECONDS)
+            if not created and token.created + timedelta(seconds=settings.API_TOKEN_TTL_SECONDS) <= renewal_deadline:
                 token.delete()
                 token = Token.objects.create(user=authenticated)
             profile, _ = Profile.objects.get_or_create(
