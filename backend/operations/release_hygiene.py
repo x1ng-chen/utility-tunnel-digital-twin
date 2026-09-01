@@ -19,8 +19,15 @@ def release_test_data_summary():
 
 def clean_release_test_data():
     """Delete deterministic browser-test data and restore its shared fixtures."""
-    cache.delete('throttle_login_127.0.0.1')
-    cache.delete('throttle_login_burst_127.0.0.1')
+    # Browser regression uses the loopback client for public authentication
+    # flows. Clear only those deterministic local throttle buckets so repeated
+    # release verification remains isolated without weakening real clients.
+    cache.delete_many([
+        'throttle_login_127.0.0.1',
+        'throttle_login_burst_127.0.0.1',
+        'throttle_registration_127.0.0.1',
+        'throttle_password_setup_127.0.0.1',
+    ])
     model_files = []
     with transaction.atomic():
         test_order_ids = list(WorkOrder.objects.filter(source_alert__code='ALM-260826-001').values_list('id', flat=True))

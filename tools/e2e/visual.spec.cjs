@@ -18,6 +18,24 @@ const pages = [
   ['/audit', '审计追踪', '审计追踪'],
 ];
 
+async function loginAsAdministrator(page) {
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码').fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+}
+
+async function openAuthenticatedPage(page, route) {
+  await page.goto(`${webUrl}${route}`);
+  // The visual audit intentionally performs full document navigations. Keep it
+  // independent from token state left by earlier business scenarios: auth is
+  // tested separately, while this test owns re-establishing its visual session.
+  if (await page.getByLabel('账号或邮箱').isVisible()) {
+    await loginAsAdministrator(page);
+    if (route !== '/dashboard') await page.goto(`${webUrl}${route}`);
+  }
+}
+
 test('全部业务页面通过桌面端布局巡检', async ({ page }) => {
   test.setTimeout(120_000);
   const consoleErrors = [];
@@ -29,15 +47,12 @@ test('全部业务页面通过桌面端布局巡检', async ({ page }) => {
     body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
   }));
   await page.goto(webUrl);
-  await page.getByLabel('账号或邮箱').fill('admin');
-  await page.getByLabel('密码').fill(adminPassword);
-  await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await loginAsAdministrator(page);
 
   const output = path.resolve(__dirname, '../../test-results/visual-audit');
   fs.mkdirSync(output, { recursive: true });
   for (const [route, heading, fileName] of pages) {
-    await page.goto(`${webUrl}${route}`);
+    await openAuthenticatedPage(page, route);
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     await page.waitForTimeout(route === '/twin-3d' ? 1_500 : 1_200);
     const layout = await page.evaluate(() => ({

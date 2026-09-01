@@ -459,6 +459,13 @@ class OperationsApiTests(TestCase):
     def test_release_preflight_detects_and_cleans_reserved_browser_test_data(self):
         self.asset.mesh = 'MESH_FAN_01'
         self.asset.save(update_fields=['mesh', 'updated_at'])
+        throttle_keys = [
+            'throttle_login_burst_127.0.0.1',
+            'throttle_registration_127.0.0.1',
+            'throttle_password_setup_127.0.0.1',
+        ]
+        for key in throttle_keys:
+            cache.set(key, [timezone.now().timestamp()], 3600)
         User.objects.create_user(username='e2e-operator-stale', email='e2e-operator-stale', password='test-only-password')
         shared_alert = Alert.objects.create(code='ALM-260826-001', asset=self.asset, severity=Alert.Severity.WARNING, category='通信', title='共享回归告警', detail='测试', opened_at=timezone.now(), status=Alert.Status.ACKNOWLEDGED, acknowledged_at=timezone.now(), acknowledged_by=self.operator)
         baseline = TwinModelRelease.objects.create(version='baseline', model_file='twin_models/baseline.glb', original_name='baseline.glb', sha256='a' * 64, size_bytes=1, is_compatible=True, status=TwinModelRelease.Status.RETIRED, uploaded_by=self.admin)
@@ -474,6 +481,7 @@ class OperationsApiTests(TestCase):
         self.assertEqual(shared_alert.status, Alert.Status.OPEN)
         self.assertIsNone(shared_alert.acknowledged_at)
         self.assertEqual(baseline.status, TwinModelRelease.Status.ACTIVE)
+        self.assertEqual(cache.get_many(throttle_keys), {})
         self.assertIn('"clean": true', output.getvalue())
 
     def test_dashboard_uses_the_latest_telemetry_reading(self):

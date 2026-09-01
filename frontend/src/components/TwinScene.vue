@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Home, ZoomIn, ZoomOut } from 'lucide-vue-next';
-import { Box3, BoxGeometry, Color, DirectionalLight, Fog, Group, HemisphereLight, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera, PointLight, Raycaster, Scene, Sphere, SphereGeometry, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from 'three';
+import { Hand, Home, Orbit, ZoomIn, ZoomOut } from 'lucide-vue-next';
+import { Box3, BoxGeometry, Color, DirectionalLight, Fog, Group, HemisphereLight, MOUSE, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera, PointLight, Raycaster, Scene, Sphere, SphereGeometry, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Alert, Asset } from '../types';
@@ -14,6 +14,7 @@ const modelState = ref<'loading' | 'loaded' | 'fallback'>('loading');
 const modelMessage = ref('正在加载三维模型…');
 const modelProgress = ref(0);
 const performanceMode = ref<'full' | 'reduced'>('full');
+const navigationMode = ref<'pan' | 'orbit'>('pan');
 let scene: Scene | undefined;
 let camera: PerspectiveCamera | undefined;
 let renderer: WebGLRenderer | undefined;
@@ -243,8 +244,20 @@ function zoomBy(scale: number) {
   publishCameraDistance();
 }
 
+function setNavigationMode(mode: 'pan' | 'orbit') {
+  navigationMode.value = mode;
+  if (!controls) return;
+  // Both modes retain full navigation. The active mode only decides what the
+  // primary mouse button does; the secondary button always provides the other
+  // operation so an operator never becomes trapped in a fixed-axis view.
+  controls.mouseButtons.LEFT = mode === 'pan' ? MOUSE.PAN : MOUSE.ROTATE;
+  controls.mouseButtons.RIGHT = mode === 'pan' ? MOUSE.ROTATE : MOUSE.PAN;
+}
+
 function onCanvasPointerDown(event: PointerEvent) {
   if (!renderer || !camera) return;
+  // Camera gestures must never select an object and pull the target back to it.
+  if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || navigationMode.value === 'pan') return;
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -356,10 +369,14 @@ onMounted(() => {
   controls.panSpeed = .9;
   controls.zoomSpeed = 1.08;
   controls.screenSpacePanning = true;
+  controls.zoomToCursor = true;
+  controls.keyPanSpeed = 18;
   controls.minDistance = .35;
   controls.maxDistance = 80;
   controls.minPolarAngle = .01;
   controls.maxPolarAngle = Math.PI - .01;
+  setNavigationMode('pan');
+  controls.listenToKeyEvents(window);
   controls.addEventListener('change', publishCameraDistance);
   resetView();
   scene.add(new HemisphereLight(0x8ba6ff, 0x071021, 2.1));
@@ -418,7 +435,7 @@ function onContextRestored() {
   reloadModel();
 }
 
-defineExpose({ resetView, focusAsset, zoomBy, reloadModel, modelState, modelMessage, modelProgress });
+defineExpose({ resetView, focusAsset, zoomBy, setNavigationMode, reloadModel, modelState, modelMessage, modelProgress });
 </script>
 
 <template>
@@ -426,7 +443,7 @@ defineExpose({ resetView, focusAsset, zoomBy, reloadModel, modelState, modelMess
     <div ref="host" class="twin-canvas" aria-label="综合管廊三维数字孪生场景" role="application" />
     <div class="twin-model-state"><i :class="modelState" /><span>{{ modelMessage }}</span><em v-if="performanceMode === 'reduced'">流畅模式</em></div>
     <div v-if="modelState === 'loading'" class="twin-model-progress" role="progressbar" aria-label="三维模型加载进度" :aria-valuenow="modelProgress" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${Math.max(modelProgress, 6)}%` }" /></div>
-    <div class="twin-camera-controls" role="group" aria-label="三维视角缩放"><button type="button" aria-label="放大三维模型" title="放大" @click="zoomBy(.62)"><ZoomIn /></button><button type="button" aria-label="缩小三维模型" title="缩小" @click="zoomBy(1.55)"><ZoomOut /></button><button type="button" aria-label="显示完整三维模型" title="显示全景" @click="resetView"><Home /></button></div>
-    <div class="twin-scene-tip">左键旋转 · 右键或中键平移 · 滚轮缩放 · 点击设备查看详情</div>
+    <div class="twin-camera-controls" role="group" aria-label="三维自由视角控制"><button type="button" aria-label="放大三维模型" title="放大" @click="zoomBy(.62)"><ZoomIn /></button><button type="button" aria-label="缩小三维模型" title="缩小" @click="zoomBy(1.55)"><ZoomOut /></button><button type="button" :class="{ active: navigationMode === 'pan' }" aria-label="启用自由平移" title="左键自由平移" @click="setNavigationMode('pan')"><Hand /></button><button type="button" :class="{ active: navigationMode === 'orbit' }" aria-label="启用自由旋转" title="左键自由旋转" @click="setNavigationMode('orbit')"><Orbit /></button><button type="button" aria-label="显示完整三维模型" title="显示全景" @click="resetView"><Home /></button></div>
+    <div class="twin-scene-tip">{{ navigationMode === 'pan' ? '左键自由平移 · 右键旋转' : '左键旋转 · 右键自由平移' }} · 滚轮指向缩放 · 方向键平移</div>
   </div>
 </template>
