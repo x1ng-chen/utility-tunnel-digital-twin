@@ -72,6 +72,16 @@ test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告
   await expect(page.getByRole('application', { name: '综合管廊三维数字孪生场景' })).toBeVisible();
   await expect(page.getByText('已加载实体三维模型')).toBeVisible();
   const canvas = page.locator('.twin-canvas canvas');
+  const cameraControls = page.locator('.twin-camera-controls');
+  const iconOffsets = await cameraControls.locator('button').evaluateAll((buttons) => buttons.map((button) => {
+    const buttonBox = button.getBoundingClientRect();
+    const iconBox = button.querySelector('svg').getBoundingClientRect();
+    return {
+      x: Math.abs((buttonBox.left + buttonBox.width / 2) - (iconBox.left + iconBox.width / 2)),
+      y: Math.abs((buttonBox.top + buttonBox.height / 2) - (iconBox.top + iconBox.height / 2)),
+    };
+  }));
+  expect(iconOffsets.every(({ x, y }) => x <= 1 && y <= 1)).toBe(true);
   const panMode = page.getByRole('button', { name: '启用自由平移' });
   await expect(panMode).toHaveClass(/active/);
   const targetBeforePan = await page.locator('.twin-canvas').getAttribute('data-camera-target');
