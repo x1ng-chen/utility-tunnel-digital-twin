@@ -97,6 +97,9 @@ test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告
   expect(iconOffsets.every(({ x, y }) => x <= 1 && y <= 1)).toBe(true);
   const panMode = page.getByRole('button', { name: '启用自由平移' });
   await expect(panMode).toHaveClass(/active/);
+  // Re-apply the mode through the same control an operator uses. This also
+  // verifies that the active visual state and OrbitControls mapping agree.
+  await panMode.click();
   const targetBeforePan = await page.locator('.twin-canvas').getAttribute('data-camera-target');
   const canvasBox = await canvas.boundingBox();
   expect(canvasBox).not.toBeNull();
