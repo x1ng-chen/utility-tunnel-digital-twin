@@ -73,6 +73,19 @@ test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告
   await expect(page.getByText('已加载实体三维模型')).toBeVisible();
   const canvas = page.locator('.twin-canvas canvas');
   const cameraControls = page.locator('.twin-camera-controls');
+  const presetHud = page.getByRole('navigation', { name: '三维视角预设' });
+  await expect(presetHud.getByText('视角预设', { exact: true })).toBeVisible();
+  const presetFits = await presetHud.locator('span, button').evaluateAll((items) => items.every((item) => (
+    item.scrollWidth <= item.clientWidth + 1 && item.scrollHeight <= item.clientHeight + 1
+  )));
+  expect(presetFits).toBe(true);
+  const [presetBox, focusBox] = await Promise.all([
+    presetHud.boundingBox(),
+    page.locator('.twin-focus-status').boundingBox(),
+  ]);
+  expect(presetBox).not.toBeNull();
+  expect(focusBox).not.toBeNull();
+  expect(focusBox.y).toBeGreaterThanOrEqual(presetBox.y + presetBox.height + 12);
   const iconOffsets = await cameraControls.locator('button').evaluateAll((buttons) => buttons.map((button) => {
     const buttonBox = button.getBoundingClientRect();
     const iconBox = button.querySelector('svg').getBoundingClientRect();
