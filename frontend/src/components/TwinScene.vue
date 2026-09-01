@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { Home, ZoomIn, ZoomOut } from 'lucide-vue-next';
 import { Box3, BoxGeometry, Color, DirectionalLight, Fog, Group, HemisphereLight, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera, PointLight, Raycaster, Scene, Sphere, SphereGeometry, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -37,6 +38,8 @@ const colors: Record<TwinVisualState, number> = { normal: 0x4ee7c3, warning: 0xf
 function publishCameraDistance() {
   if (!host.value || !camera || !controls) return;
   host.value.dataset.cameraDistance = camera.position.distanceTo(controls.target).toFixed(4);
+  host.value.dataset.cameraPosition = camera.position.toArray().map((value) => value.toFixed(4)).join(',');
+  host.value.dataset.cameraTarget = controls.target.toArray().map((value) => value.toFixed(4)).join(',');
 }
 
 function makeFallbackScene() {
@@ -344,12 +347,20 @@ onMounted(() => {
   renderer.shadowMap.enabled = true;
   host.value.append(renderer.domElement);
   controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableRotate = true;
+  controls.enablePan = true;
+  controls.enableZoom = true;
   controls.enableDamping = true;
-  controls.dampingFactor = .06;
-  controls.zoomSpeed = 1.15;
+  controls.dampingFactor = .045;
+  controls.rotateSpeed = .72;
+  controls.panSpeed = .9;
+  controls.zoomSpeed = 1.08;
+  controls.screenSpacePanning = true;
   controls.minDistance = .35;
   controls.maxDistance = 80;
-  controls.maxPolarAngle = Math.PI * .48;
+  controls.minPolarAngle = .01;
+  controls.maxPolarAngle = Math.PI - .01;
+  controls.addEventListener('change', publishCameraDistance);
   resetView();
   scene.add(new HemisphereLight(0x8ba6ff, 0x071021, 2.1));
   const key = new DirectionalLight(0xb5d5ff, 2.5);
@@ -415,7 +426,7 @@ defineExpose({ resetView, focusAsset, zoomBy, reloadModel, modelState, modelMess
     <div ref="host" class="twin-canvas" aria-label="综合管廊三维数字孪生场景" role="application" />
     <div class="twin-model-state"><i :class="modelState" /><span>{{ modelMessage }}</span><em v-if="performanceMode === 'reduced'">流畅模式</em></div>
     <div v-if="modelState === 'loading'" class="twin-model-progress" role="progressbar" aria-label="三维模型加载进度" :aria-valuenow="modelProgress" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${Math.max(modelProgress, 6)}%` }" /></div>
-    <div class="twin-camera-controls" role="group" aria-label="三维视角缩放"><button type="button" aria-label="放大三维模型" title="放大" @click="zoomBy(.62)">＋</button><button type="button" aria-label="缩小三维模型" title="缩小" @click="zoomBy(1.55)">－</button><button type="button" aria-label="显示完整三维模型" title="显示全景" @click="resetView">⌂</button></div>
-    <div class="twin-scene-tip">拖动旋转 · 滚轮缩放 · 点击设备查看详情</div>
+    <div class="twin-camera-controls" role="group" aria-label="三维视角缩放"><button type="button" aria-label="放大三维模型" title="放大" @click="zoomBy(.62)"><ZoomIn /></button><button type="button" aria-label="缩小三维模型" title="缩小" @click="zoomBy(1.55)"><ZoomOut /></button><button type="button" aria-label="显示完整三维模型" title="显示全景" @click="resetView"><Home /></button></div>
+    <div class="twin-scene-tip">左键旋转 · 右键或中键平移 · 滚轮缩放 · 点击设备查看详情</div>
   </div>
 </template>

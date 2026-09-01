@@ -1,0 +1,3 @@
+<script setup lang="ts">withDefaults(defineProps<{ variant?: 'primary'|'secondary'|'danger'; disabled?: boolean; type?: 'button'|'submit'|'reset' }>(),{variant:'primary',disabled:false,type:'button'});</script>
+<template><button :type="type" :disabled="disabled" :class="variant"><slot /></button></template>
+<style scoped>button{min-height:40px;padding:0 16px;border:1px solid var(--ops-line);background:transparent;color:var(--ops-text);font-weight:750;letter-spacing:.04em;transition:.12s linear}button:hover:not(:disabled){border-color:var(--ops-signal);color:var(--ops-signal)}button.primary{border-color:var(--ops-signal);color:var(--ops-signal)}button.danger{border-color:var(--ops-danger);color:var(--ops-danger)}button:disabled{opacity:.45}</style>

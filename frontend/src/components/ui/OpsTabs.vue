@@ -1,0 +1,3 @@
+<script setup lang="ts">defineProps<{ modelValue: string; items: Array<{value:string;label:string}> }>();defineEmits<{ 'update:modelValue':[value:string] }>();</script>
+<template><div class="ops-tabs" role="tablist"><button v-for="item in items" :key="item.value" role="tab" :aria-selected="modelValue===item.value" :class="{active:modelValue===item.value}" @click="$emit('update:modelValue',item.value)">{{ item.label }}</button></div></template>
+<style scoped>.ops-tabs{display:flex;border:1px solid var(--ops-line)}button{min-height:38px;padding:0 14px;border:0;border-right:1px solid var(--ops-line);background:transparent;color:var(--ops-muted)}button:last-child{border-right:0}button.active{background:var(--ops-signal);color:#061018;font-weight:800}</style>

@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const webUrl = process.env.E2E_WEB_URL || 'http://127.0.0.1:5173';
-const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'local-admin-password-2026';
+const adminPassword = process.env.E2E_ADMIN_PASSWORD || '123';
 
 function trackConsoleErrors(page) {
   const errors = [];
@@ -141,7 +141,7 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
   await page.getByRole('button', { name: '巡检下一异常设备' }).click();
   await expect.poll(() => patrolCode.textContent()).not.toBe(beforePatrol);
 
-  await page.getByRole('button', { name: '⛶ 全屏查看' }).click();
+  await page.getByRole('button', { name: '全屏查看' }).click();
   await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
   const zoomIn = page.getByRole('button', { name: '放大三维模型' });
   const zoomOut = page.getByRole('button', { name: '缩小三维模型' });
@@ -177,7 +177,7 @@ test('账号密码登录后可读取运行数据并写入审计', async ({ page 
   await page.getByLabel('密码').fill('demo-password-2026');
   await page.getByRole('button', { name: /安全登录/ }).click();
   await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
-  await expect(page.getByText('数据服务在线', { exact: true })).toBeVisible();
+  await expect(page.getByText('链路在线', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: '数据洞察' }).click();
   await expect(page.getByRole('heading', { name: '数据洞察' })).toBeVisible();
@@ -193,7 +193,7 @@ test('操作反馈在页面上方显示并在两秒内自动关闭', async ({ pa
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await page.getByRole('button', { name: '↓ 导出运行快照' }).click();
+  await page.getByRole('button', { name: '导出运行快照' }).click();
   const notice = page.getByRole('status').filter({ hasText: '报表已生成' });
   await expect(notice).toBeVisible();
   await expect(notice.getByText('操作已完成', { exact: true })).toBeVisible();
@@ -377,5 +377,21 @@ test('管理员可校验、启用三维模型版本并由孪生页面鉴权加�
   await page.waitForTimeout(500);
   expect(Number(await canvas.getAttribute('data-camera-distance'))).toBeCloseTo(distanceAfterZoomOut, 2);
   await zoomIn.dispatchEvent('click');
+
+  const sceneBox = await canvas.boundingBox();
+  expect(sceneBox).not.toBeNull();
+  const cameraBeforeRotate = await canvas.getAttribute('data-camera-position');
+  await page.mouse.move(sceneBox.x + sceneBox.width * .62, sceneBox.y + sceneBox.height * .45);
+  await page.mouse.down({ button: 'left' });
+  await page.mouse.move(sceneBox.x + sceneBox.width * .42, sceneBox.y + sceneBox.height * .68, { steps: 8 });
+  await page.mouse.up({ button: 'left' });
+  await expect.poll(() => canvas.getAttribute('data-camera-position')).not.toBe(cameraBeforeRotate);
+
+  const targetBeforePan = await canvas.getAttribute('data-camera-target');
+  await page.mouse.move(sceneBox.x + sceneBox.width * .54, sceneBox.y + sceneBox.height * .48);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(sceneBox.x + sceneBox.width * .68, sceneBox.y + sceneBox.height * .58, { steps: 8 });
+  await page.mouse.up({ button: 'right' });
+  await expect.poll(() => canvas.getAttribute('data-camera-target')).not.toBe(targetBeforePan);
   expect(consoleErrors).toEqual([]);
 });

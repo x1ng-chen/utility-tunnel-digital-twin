@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import AppShell from '../components/AppShell.vue';
+import OpsChart from '../components/ui/OpsChart.vue';
 import { useOperationsStore } from '../stores/operations';
 import type { TelemetryQuery } from '../types';
 
@@ -13,15 +14,10 @@ const recordedTo = ref('');
 const actionError = ref('');
 
 const goodRate = computed(() => store.telemetrySummary.sampleCount ? Math.round(store.telemetrySummary.qualityCounts.good / store.telemetrySummary.sampleCount * 100) : 0);
-const bars = computed(() => {
-  const chronological = [...store.telemetryInsights].slice(0, 30).reverse();
-  if (!chronological.length) return [];
-  const values = chronological.map((item) => item.value);
-  const minimum = Math.min(...values);
-  const span = Math.max(1, Math.max(...values) - minimum);
-  return chronological.map((item) => ({ ...item, height: 18 + ((item.value - minimum) / span) * 76 }));
-});
-const trendPoints = computed(() => bars.value.map((item, index, all) => `${all.length === 1 ? 50 : index / (all.length - 1) * 100},${100 - item.height}`).join(' '));
+const trendWindow = computed(() => [...store.telemetryInsights].slice(0, 100).reverse());
+const trendLabels = computed(() => trendWindow.value.map((item) => new Date(item.recordedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })));
+const trendSeries = computed(() => [{ name: store.telemetrySummary.latest?.metric || '遥测值', data: trendWindow.value.map((item) => item.value), color: '#38bdf8' }]);
+const trendThreshold = computed(() => store.thresholds.find((item) => item.key === store.telemetrySummary.latest?.metricKey)?.warning);
 const qualityDonut = computed(() => {
   const total = Math.max(1, store.telemetrySummary.sampleCount);
   const good = store.telemetrySummary.qualityCounts.good / total * 100;
@@ -55,6 +51,10 @@ function reset() {
   void search();
 }
 
+function qualityLabel(value: string) {
+  return ({ good: '良好', suspect: '需关注', bad: '异常', missing: '缺失' } as Record<string, string>)[value] || '未知';
+}
+
 onMounted(search);
 </script>
 
@@ -85,16 +85,16 @@ onMounted(search);
     <section class="telemetry-layout">
       <article class="panel telemetry-chart-panel">
         <div class="panel-head"><div><span class="eyebrow">RECENT WINDOW</span><h2>最近 30 条趋势</h2></div><span class="insight-count">显示 {{ store.telemetryInsights.length }} / {{ store.telemetryInsightsTotal }}</span></div>
-        <div v-if="bars.length && store.telemetrySummary.comparable" class="telemetry-line-chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="`${store.telemetrySummary.latest?.metric || '遥测'}趋势图`"><defs><linearGradient id="trend-fill" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#7393ff" stop-opacity=".42" /><stop offset="1" stop-color="#7393ff" stop-opacity="0" /></linearGradient></defs><polygon :points="`0,100 ${trendPoints} 100,100`" fill="url(#trend-fill)" /><polyline :points="trendPoints" fill="none" stroke="#84a0ff" stroke-width="2" vector-effect="non-scaling-stroke" /></svg></div>
-        <div v-else class="empty-state">{{ bars.length ? '混合指标不可直接比较，请选择单一指标后查看趋势。' : '当前条件下没有遥测趋势。' }}</div>
+        <OpsChart v-if="trendWindow.length && store.telemetrySummary.comparable" zoom :labels="trendLabels" :series="trendSeries" :threshold="trendThreshold" />
+        <div v-else class="empty-state">{{ trendWindow.length ? '混合指标不可直接比较，请选择单一指标后查看趋势。' : '当前条件下没有遥测趋势。' }}</div>
         <div class="quality-strip"><span><i class="good" />良好 {{ store.telemetrySummary.qualityCounts.good }}</span><span><i class="suspect" />可疑 {{ store.telemetrySummary.qualityCounts.suspect }}</span><span><i class="bad" />异常 {{ store.telemetrySummary.qualityCounts.bad }}</span><span><i class="missing" />缺失 {{ store.telemetrySummary.qualityCounts.missing }}</span></div>
       </article>
-      <article class="panel latest-reading-panel"><span class="eyebrow">LATEST SAMPLE</span><template v-if="store.telemetrySummary.latest"><strong>{{ store.telemetrySummary.latest.value }}<small>{{ store.telemetrySummary.latest.unit }}</small></strong><h2>{{ store.telemetrySummary.latest.metric }}</h2><p>{{ store.telemetrySummary.latest.assetCode }} · {{ store.telemetrySummary.latest.metricKey || '未定义指标键' }}</p><time>{{ new Date(store.telemetrySummary.latest.recordedAt).toLocaleString('zh-CN') }}</time><b :class="store.telemetrySummary.latest.quality">{{ store.telemetrySummary.latest.quality }}</b><div class="quality-donut" :style="qualityDonut"><span>{{ goodRate }}%</span><small>可信率</small></div></template><div v-else class="empty-state">暂无最新样本。</div></article>
+      <article class="panel latest-reading-panel"><span class="eyebrow">LATEST SAMPLE</span><template v-if="store.telemetrySummary.latest"><strong>{{ store.telemetrySummary.latest.value }}<small>{{ store.telemetrySummary.latest.unit }}</small></strong><h2>{{ store.telemetrySummary.latest.metric }}</h2><p>{{ store.telemetrySummary.latest.assetCode }} · {{ store.telemetrySummary.latest.metricKey || '未定义监测项目' }}</p><time>{{ new Date(store.telemetrySummary.latest.recordedAt).toLocaleString('zh-CN') }}</time><b :class="store.telemetrySummary.latest.quality">{{ qualityLabel(store.telemetrySummary.latest.quality) }}</b><div class="quality-donut" :style="qualityDonut"><span>{{ goodRate }}%</span><small>可信率</small></div></template><div v-else class="empty-state">暂无最新样本。</div></article>
     </section>
 
     <section class="table-panel telemetry-table">
       <div class="table-head"><span>采集时间</span><span>资产 / 指标</span><span>数值</span><span>质量</span><span>事件编号</span></div>
-      <div v-for="item in store.telemetryInsights" :key="item.id" class="table-row"><time>{{ new Date(item.recordedAt).toLocaleString('zh-CN') }}</time><div><strong>{{ item.metric }}</strong><small>{{ item.assetCode }} · {{ item.metricKey || '未定义' }}</small></div><b>{{ item.value }} {{ item.unit }}</b><span :class="['badge', `quality-${item.quality}`]">{{ item.quality }}</span><code>{{ item.eventId || '历史记录' }}</code></div>
+      <div v-for="item in store.telemetryInsights" :key="item.id" class="table-row"><time>{{ new Date(item.recordedAt).toLocaleString('zh-CN') }}</time><div><strong>{{ item.metric }}</strong><small>{{ item.assetCode }} · {{ item.metricKey || '未定义' }}</small></div><b>{{ item.value }} {{ item.unit }}</b><span :class="['badge', `quality-${item.quality}`]">{{ qualityLabel(item.quality) }}</span><code>{{ item.eventId || '历史记录' }}</code></div>
       <div v-if="!store.telemetryInsights.length" class="empty-state">当前筛选条件下没有遥测记录。</div>
     </section>
   </AppShell>

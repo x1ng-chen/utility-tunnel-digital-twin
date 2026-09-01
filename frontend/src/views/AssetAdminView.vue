@@ -195,7 +195,7 @@ const locations: Array<{ value: LocationSource; label: string }> = [{ value: 'un
 
 <template>
   <AppShell>
-    <section class="section-title asset-admin-title"><div><span class="eyebrow light">ASSET MASTER DATA</span><h1>资产主数据</h1><p>集中维护设备身份、数字孪生坐标与生命周期；所有写操作均由 Django 鉴权并写入审计日志。</p></div><button class="primary-button" :disabled="!writable" @click="startCreate">＋ 新建资产</button></section>
+    <section class="section-title asset-admin-title"><div><span class="eyebrow light">ASSET MASTER DATA</span><h1>资产主数据</h1><p>集中维护设备身份、数字孪生坐标与生命周期；所有变更均进行权限校验并记录审计日志。</p></div><button class="primary-button" :disabled="!writable" @click="startCreate">＋ 新建资产</button></section>
     <div v-if="!writable" class="asset-readonly" role="status"><b>当前为只读模式</b><span>{{ store.source !== 'api' ? '请使用企业 API 登录后维护主数据；演示数据不会被写入数据库。' : 'API 已离线，恢复连接后方可修改。' }}</span></div>
     <p v-if="error" class="inline-message error-message" role="alert">{{ error }}</p><p v-if="success" class="inline-message success-message" role="status">{{ success }}</p>
     <section class="mapping-overview" aria-label="三维模型映射概况">

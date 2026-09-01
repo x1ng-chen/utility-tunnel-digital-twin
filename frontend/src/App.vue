@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useOperationsStore } from './stores/operations';
 import { useAuthStore } from './stores/auth';
 import ExperienceLayer from './components/ExperienceLayer.vue';
+import { Check, TriangleAlert } from 'lucide-vue-next';
 
 const operations = useOperationsStore();
 const auth = useAuthStore();
@@ -54,7 +55,7 @@ onUnmounted(() => {
   </RouterView>
   <Transition name="notice">
     <section v-if="operations.notice" :class="['operation-notice', noticeTone]" role="status" aria-live="polite">
-      <span class="notice-icon">{{ noticeTone === 'success' ? '✓' : '!' }}</span>
+      <span class="notice-icon"><Check v-if="noticeTone === 'success'" /><TriangleAlert v-else /></span>
       <div><strong>{{ noticeTone === 'success' ? '操作已完成' : '操作提示' }}</strong><p>{{ operations.notice }}</p></div>
       <i class="notice-progress" />
     </section>

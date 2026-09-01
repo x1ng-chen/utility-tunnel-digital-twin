@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { Camera, Expand, MapPin, RefreshCw, RotateCcw, Search } from 'lucide-vue-next';
 import { useRoute, useRouter } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
 import TwinScene from '../components/TwinScene.vue';
+import OpsChart from '../components/ui/OpsChart.vue';
 import { useOperationsStore } from '../stores/operations';
 import { api } from '../services/api';
 import { activeTwinAlerts, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelDelivery, twinStateLabel, type TwinModelBindingReport, type TwinModelReadinessResponse, type TwinVisualState } from '../services/twin3d';
@@ -37,6 +39,9 @@ const selectedAlerts = computed(() => selectedAsset.value ? activeTwinAlerts(sel
 const primaryAlert = computed(() => selectedAsset.value ? primaryTwinAlert(selectedAsset.value.code, store.alerts) : null);
 const selectedOrders = computed(() => selectedAsset.value ? store.workOrders.filter((order) => order.assetCode === selectedAsset.value?.code) : []);
 const selectedTelemetry = computed(() => selectedAsset.value ? store.telemetry.find((reading) => reading.assetCode === selectedAsset.value?.code) : null);
+const selectedTelemetryWindow = computed(() => selectedAsset.value ? store.telemetry.filter((reading) => reading.assetCode === selectedAsset.value?.code).slice(0, 30).reverse() : []);
+const selectedTelemetryLabels = computed(() => selectedTelemetryWindow.value.map((item) => new Date(item.recordedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })));
+const selectedTelemetrySeries = computed(() => [{ name: selectedTelemetry.value?.metric || '设备遥测', data: selectedTelemetryWindow.value.map((item) => item.value), color: '#38bdf8' }]);
 const visibleAssets = computed(() => store.assets.filter((asset) => {
   const matchesQuery = !query.value || `${asset.code} ${asset.name} ${asset.zone}`.toLowerCase().includes(query.value.toLowerCase());
   return matchesQuery && (stateFilter.value === 'all' || resolveTwinVisualState(asset, store.alerts) === stateFilter.value);
@@ -86,6 +91,11 @@ function inspectRisk(direction: 1 | -1) {
 function openGis() { if (selectedAsset.value) void router.push({ path: '/gis', query: { asset: selectedAsset.value.code, source: 'twin' } }); }
 function openAlertCenter() { if (primaryAlert.value) void router.push({ path: '/alerts', query: { focus: primaryAlert.value.code, source: 'twin' } }); }
 function resetView() { scene.value?.resetView(); }
+function selectPreset(zone: string) {
+  if (zone === '总览') { resetView(); return; }
+  const asset = store.assets.find((item) => item.zone.includes(zone) || (zone === '水浸点' && /SEEP|水浸|水位/.test(`${item.code}${item.name}`)));
+  if (asset) select(asset.code);
+}
 function retryModel() { scene.value?.reloadModel(); }
 function receiveModelReport(report: TwinModelBindingReport) { modelReport.value = report; }
 async function refreshModelReadiness() {
@@ -213,10 +223,12 @@ onBeforeUnmount(() => {
   <AppShell>
     <section class="twin-title section-title">
       <div><span class="eyebrow light">THREE-DIMENSIONAL DIGITAL TWIN</span><h1>三维孪生中心</h1><p>以真实实体模型定位设备、告警与工单；三维状态与运行数据实时同步。</p></div>
-      <div class="twin-title-actions"><span :class="['twin-live', { blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><i />{{ modelDeliveryLabel }}</span><button v-if="modelReport.mode === 'fallback'" type="button" class="outline-button twin-model-retry-top" @click="retryModel">↻ 检测模型</button><button class="primary-button compact-button" @click="resetView">⌖ 重置视角</button><button class="outline-button" @click="fullscreen">⛶ 全屏查看</button></div>
+      <div class="twin-title-actions"><span :class="['twin-live', { blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><i />{{ modelDeliveryLabel }}</span><button v-if="modelReport.mode === 'fallback'" type="button" class="outline-button twin-model-retry-top" @click="retryModel"><RefreshCw />检测模型</button><button class="primary-button compact-button" @click="resetView"><RotateCcw />重置视角</button><button class="outline-button" @click="fullscreen"><Expand />全屏查看</button></div>
     </section>
     <section class="twin-workspace">
       <article ref="stage" :class="['twin-stage-panel', { 'twin-fullscreen-active': fullscreenActive }]" @pointermove="onStagePointerMove" @pointerdown="onStagePointerDown" @pointerup="onStagePointerUp" @pointerleave="onStagePointerLeave">
+        <nav class="twin-preset-hud" aria-label="三维视角预设"><span><Camera />[ VIEW PRESETS ]</span><button v-for="preset in ['总览','电力舱','燃气舱','水浸点']" :key="preset" @click="selectPreset(preset)">{{ preset }}</button></nav>
+        <aside class="twin-risk-hud"><strong>[ RISK LOCATOR ]</strong><button v-for="asset in riskAssets.slice(0,5)" :key="asset.id" @click="select(asset.code)"><i :class="resolveTwinVisualState(asset, store.alerts)" /><span>{{ asset.code }}</span><small>{{ asset.name }}</small></button><p v-if="!riskAssets.length">当前无风险设备</p></aside>
         <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" :model-url="activeModelUrl" @select="select" @model-report="receiveModelReport" />
         <div v-if="selectedAsset" class="twin-focus-status" aria-live="polite"><span :class="resolveTwinVisualState(selectedAsset, store.alerts)"><i />{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span><b :title="selectedAsset.name">{{ selectedAssetName }}</b><small>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</small><div v-if="riskAssets.length" class="twin-risk-patrol"><em>{{ riskPatrolLabel }}</em><button type="button" aria-label="巡检上一异常设备" @click="inspectRisk(-1)">← 上一异常</button><button type="button" aria-label="巡检下一异常设备" @click="inspectRisk(1)">下一异常 →</button></div></div>
         <nav class="twin-quick-switch" aria-label="场景内设备切换" @pointerenter="onQuickSwitchPointerMove" @pointerdown.capture="onQuickSwitchPointerDown" @pointermove.capture="onQuickSwitchPointerMove" @pointerup.capture="onQuickSwitchPointerEnd" @pointercancel.capture="onQuickSwitchPointerEnd" @mousedown.stop>
@@ -236,16 +248,17 @@ onBeforeUnmount(() => {
           <details class="twin-model-binding-list"><summary>查看实体模型映射</summary><p v-if="modelReport.isComplete">模型中的设备节点已全部绑定，可进行状态高亮与点击定位。</p><p v-else>待补齐：{{ modelReport.missingCodes.join('、') }}</p><div><span v-for="code in modelReport.boundCodes" :key="code">{{ code }}</span></div></details>
           <p v-if="navigationContext" class="twin-navigation-context" role="status">{{ navigationContext }}</p>
           <div class="twin-inspector-grid"><div><span>所在区域</span><b>{{ selectedAsset.zone }}</b></div><div><span>实体模型</span><b>{{ selectedAsset.mesh || '待绑定' }}</b></div><div><span>最新上报</span><b>{{ formatTime(selectedAsset.lastSeenAt) }}</b></div><div><span>当前遥测</span><b>{{ selectedTelemetry ? `${selectedTelemetry.value} ${selectedTelemetry.unit}` : '暂无数据' }}</b></div></div>
+          <section class="twin-detail-section"><span class="eyebrow">LIVE TELEMETRY</span><OpsChart v-if="selectedTelemetryWindow.length" compact :labels="selectedTelemetryLabels" :series="selectedTelemetrySeries" /><p v-else class="twin-empty">当前设备暂无可绘制遥测。</p></section>
           <section class="twin-detail-section"><span class="eyebrow">CURRENT ALERTS</span><div v-if="primaryAlert" class="twin-alert-summary"><b>{{ primaryAlert.severity === 'critical' ? '严重告警' : primaryAlert.severity === 'warning' ? '待处置告警' : '提示告警' }} · {{ primaryAlert.code }}</b><strong>{{ primaryAlert.title }}</strong><p>{{ primaryAlert.detail }}</p><button type="button" class="twin-alert-action" @click="openAlertCenter">进入告警中心处置</button></div><p v-else class="twin-empty">当前设备没有未关闭告警。</p></section>
           <section class="twin-detail-section"><span class="eyebrow">WORK ORDER STATUS</span><p v-if="selectedOrders.length" class="twin-order-summary"><b>{{ selectedOrders[0].code }}</b>{{ selectedOrders[0].title }}</p><p v-else class="twin-empty">当前设备没有关联工单。</p></section>
-          <button class="twin-gis-link" type="button" @click="openGis">在 GIS 地图中查看</button>
+          <button class="twin-gis-link" type="button" @click="openGis"><MapPin />在 GIS 地图中查看</button>
           <p class="twin-install-note">{{ selectedAsset.installationNote }}</p>
         </template>
         <div v-else class="twin-empty-inspector">从三维场景或设备列表中选择一个设备。</div>
       </aside>
     </section>
     <section class="twin-asset-panel">
-      <header><div><span class="eyebrow">EQUIPMENT LOCATOR</span><h2>三维设备定位</h2></div><label class="twin-search">⌕<input v-model="query" aria-label="搜索三维设备" placeholder="搜索设备编码、名称或区域" /></label></header>
+      <header><div><span class="eyebrow">EQUIPMENT LOCATOR</span><h2>三维设备定位</h2></div><label class="twin-search"><Search /><input v-model="query" aria-label="搜索三维设备" placeholder="搜索设备编码、名称或区域" /></label></header>
       <div class="twin-asset-list"><button v-for="asset in visibleAssets" :key="asset.id" :class="['twin-asset-item', resolveTwinVisualState(asset, store.alerts), { selected: asset.code === selectedCode }]" @click="select(asset.code)"><i /><span><b>{{ asset.code }}</b><small>{{ asset.name }} · {{ asset.zone }}</small></span><em>{{ statusLabel(resolveTwinVisualState(asset, store.alerts)) }}</em></button><p v-if="!visibleAssets.length" class="twin-empty">没有符合当前条件的设备。</p></div>
     </section>
   </AppShell>
@@ -253,3 +266,6 @@ onBeforeUnmount(() => {
 
 <style src="../assets/twin3d.css" />
 <style src="../assets/operational-layout-polish.css" />
+<style scoped>
+.twin-preset-hud{position:absolute;top:16px;left:50%;z-index:7;display:flex;align-items:center;border:1px solid var(--ops-line);background:#09111dea;transform:translateX(-50%)}.twin-preset-hud span,.twin-preset-hud button{height:38px;display:flex;align-items:center;gap:7px;padding:0 12px;border:0;border-right:1px solid var(--ops-line);background:transparent;color:var(--ops-muted);font:11px "Cascadia Mono",monospace}.twin-preset-hud span{color:var(--ops-signal)}.twin-preset-hud svg{width:15px}.twin-preset-hud button:hover{color:#fff;background:var(--ops-raised)}.twin-risk-hud{position:absolute;left:16px;top:70px;z-index:6;width:210px;border:1px solid var(--ops-line);background:#09111de8}.twin-risk-hud>strong{display:block;padding:10px 12px;border-bottom:1px solid var(--ops-line);color:var(--ops-danger);font:10px "Cascadia Mono",monospace;letter-spacing:.12em}.twin-risk-hud button{width:100%;display:grid;grid-template-columns:8px 55px 1fr;gap:8px;align-items:center;padding:9px 11px;border:0;border-bottom:1px solid var(--ops-line-soft);background:transparent;color:var(--ops-text);text-align:left}.twin-risk-hud button:hover{background:var(--ops-raised)}.twin-risk-hud i{width:7px;height:7px;background:var(--ops-warn)}.twin-risk-hud i.alarm{background:var(--ops-danger)}.twin-risk-hud span{font:10px "Cascadia Mono",monospace}.twin-risk-hud small{overflow:hidden;color:var(--ops-muted);text-overflow:ellipsis;white-space:nowrap}.twin-risk-hud p{padding:10px;margin:0;color:var(--ops-muted);font-size:11px}.twin-title-actions button,.twin-gis-link{display:inline-flex!important;align-items:center;justify-content:center;gap:7px}.twin-title-actions svg,.twin-gis-link svg,.twin-search svg{width:16px}.twin-search{display:flex!important;align-items:center;gap:8px;padding-left:10px}
+</style>
