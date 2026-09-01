@@ -1,108 +1,60 @@
-# STM32F103RCT6 台架固件
+# STM32F103RCT6 双节点台架固件
 
-本目录保存综合管廊现场控制器的首个可编译、可烧录台架基线。工程由 STM32CubeMX 生成，使用 STM32CubeF1 HAL、CMake 和 Arm GNU Toolchain。
+当前活动固件是两块 STM32F103RCT6 通过两块 ESP8266-01S 及 MQTT 通信的 Node A / Node B 组合。**不要烧录旧的 DHT11 `bench` 映像。**
 
-## 当前已接入
+## 当前节点与接线
 
-| 模块 | MCU 接口 | 当前状态 |
+| 节点 | 作用 | 已验证接口 |
 |---|---|---|
-| 1.44 寸 ST7735S TFT | PB4—PB9，软件 SPI | 已完成显示与局部刷新验证 |
-| DHT11 | PA1，单总线 | 已完成采集与屏幕显示验证 |
-| 水位传感器 | PC0 / ADC1_IN10 | 已完成 ADC 采集和界面接入；干湿阈值待实测校准 |
-| SW-420 震动模块 | PA4 / EXTI4 | 已完成双边沿中断和 5 秒报警锁存；实体触发结果待补录 |
-| 板载 LED | PA8 | 用于 DHT11 成功读取指示 |
-| USART2 遥测 | PA2/PA3，9600 bit/s，8N1 | 固定连接ESP8266-01S；每2秒发送一行 `ut.telemetry.v1` JSON，真实数据已完成MQTT与IoTDA上行验证 |
+| `CTRL-01` / Node A | 采集并发布环境数据 | SHT30 Slot 1：PB6=SCL、PB7=SDA、3.3 V、I²C 地址 `0x44`；ESP8266：PA2→RX、PA3←TX，9600 8N1 |
+| `CTRL-02` / Node B | 接收 Node A 数据并显示 | ESP8266：PA2→RX、PA3←TX，9600 8N1；ST7735S TFT：PB4=SCL、PB5=SDA、PB6=RES、PB7=DC、PB8=CS、PB9=BLK |
 
-水位报警阈值目前暂设为 `1000`（12 位 ADC 原始值），不得作为最终阈值或真实安全联锁依据。
+所有模块必须共地；ESP8266 使用稳定独立的 3.3 V 供电。Node A 发布 SHT30 数据后，MQTT 转发服务将 Slot 1 数据转发到 Node B；台架已观察到 Node B TFT 显示来自 Node A 的温湿度。
 
-## 接线表
+## 构建
 
-### TFT（ST7735S）
+依赖：STM32CubeMX 6.18.1、STM32Cube FW_F1 V1.8.7、Arm GNU Toolchain 12.2.1、CMake 3.22+、Ninja。
 
-| TFT | STM32 |
-|---|---|
-| GND | GND |
-| VCC | 3V3 |
-| SCL | PB4 |
-| SDA | PB5 |
-| RES | PB6 |
-| DC | PB7 |
-| CS | PB8 |
-| BLK | PB9 |
-
-### USART2通信
-
-| 设备侧 | STM32 |
-|---|---|
-| 模块 RXD | PA2 / USART2_TX |
-| 模块 TXD | PA3 / USART2_RX |
-| GND | GND |
-
-串口配置为 9600 bit/s、8N1。STM32 每2秒发送温湿度、水位和震动告警的行式JSON，行末为 `\r\n`。ESP8266-01S已按该配置与STM32真机连接，并完成真实采集数据上行至华为云IoTDA。JDY-31已退出项目，不得再占用USART2。
-
-### 传感器
-
-| 模块 | VCC | GND | 信号 |
-|---|---|---|---|
-| DHT11 | 3V3 | GND | DATA → PA1 |
-| 水位传感器 | 3V3 | GND | S → PC0 |
-| SW-420 | 3V3 | GND | DO → PA4 |
-
-## 构建环境
-
-- STM32CubeMX 6.18.1
-- STM32Cube FW_F1 V1.8.7
-- Arm GNU Toolchain 12.2.1
-- CMake 3.22 或更高版本
-- Ninja
-
-## 编译
-
-在本目录执行：
+### CTRL-01 / Node A（当前默认）
 
 ```powershell
-cmake --preset Debug --fresh
-cmake --build --preset Debug
+cmake --preset NodeA --fresh
+cmake --build --preset NodeA
 ```
 
-构建成功后自动生成：
+烧录文件：
 
 ```text
-build/Debug/led_blink.elf
-build/Debug/led_blink.bin
+build/NodeA/stm32_controller.bin
 ```
 
-`CMakeLists.txt` 已配置链接后自动执行 `objcopy`，避免出现 ELF 已更新但 BIN 仍为旧版本的问题。
+### CTRL-02 / Node B（TFT 显示）
 
-## 烧录
+```powershell
+cmake --preset NodeB --fresh
+cmake --build --preset NodeB
+```
 
-可使用 ST-Link/SWD 或 STM32 系统串口 BootLoader。串口方式的进入顺序为：
+烧录文件：
 
-1. `BOOT0=1`、`BOOT1=0`；
-2. 复位 MCU；
-3. 使用 STM32CubeProgrammer 或兼容工具写入 `build/Debug/led_blink.bin`，起始地址 `0x08000000`；
-4. 校验成功后恢复 `BOOT0=0`、`BOOT1=0`，再次复位。
+```text
+build/NodeB/stm32_controller.bin
+```
 
-当前 CubeMX 配置为释放调试复用引脚，日常烧录以串口 BootLoader 流程为准。若后续恢复 ST-Link/SWD，应在不占用 TFT 的 PB4 前提下重新核对 SYS 调试配置。
+`Debug` 与 `Release` 也默认构建 Node A。CMake 会在每次成功链接后生成同目录的 `.bin` 文件。
 
-## 当前界面
+## 串口 BootLoader 烧录
 
-- `T`：DHT11 温度
-- `H`：DHT11 湿度
-- `W`：水位 ADC 原始值
-- `WATER OK / WATER ALARM`：临时积水状态
-- `VIB OK / VIB ALARM`：震动状态，触发后保持约 5 秒
+1. `BOOT0=1`、`BOOT1=0`，复位 MCU；
+2. 使用 STM32CubeProgrammer 或兼容工具写入相应的 `.bin`，起始地址 `0x08000000`；
+3. 校验成功后恢复 `BOOT0=0`、`BOOT1=0`，再次复位。
 
-## 待完成
+## 旧 bench 说明
 
-- 记录水位传感器干燥、浅水、目标报警水位的 ADC 值并冻结阈值和回差；
-- 实测 SW-420 常态/触发电平、旋钮灵敏度和误触发情况；
-- 接入蜂鸣器并实现本地报警联动；
-- 归档ESP8266启动日志、Broker消息与IoTDA接收截图；完成断网重连、下行命令和连续运行验收；
-- 增加通信状态机、发送确认、失败缓存、故障码和更完整的数据质量处理；
-- 将台架代码按驱动、服务、业务状态机和协议层拆分。
+`Core/Src/main.c`、DHT11（PA1）、PC0 水位 ADC 和 SW-420（PA4）是早期单板台架程序的历史记录。它们仍可通过显式 `FIRMWARE_VARIANT=bench` 供回归使用，但不是当前控制器默认映像，不能作为 SHT30 双节点系统的接线或烧录依据。
 
-## 已验证边界
+## 尚未完成的实体验收
 
-- `STM32 → ESP8266 → 本地MQTT → IoTDA` 已完成真实采集数据上行验证；仓库仍需补齐日志、截图、测试时间、断网恢复和连续运行证据。
-- 当前串口发送使用阻塞式 `HAL_UART_Transmit`，适合台架；执行器和更多传感器接入后应改为中断/DMA队列，避免长报文阻塞主循环。
+- 接入其余 SHT30 通道，并完成同地址传感器的 I²C 复用/地址规划；
+- MQTT 下行命令 → STM32 → 执行器 → 执行回执的真实闭环；
+- 水位、气体与执行器的供电、电平调理、标定和安全验证。

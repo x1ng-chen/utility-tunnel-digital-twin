@@ -8,7 +8,7 @@
       "args": [
         "/d",
         "/c",
-        "cmake --build \"${workspaceFolder}\\build\\Debug\" && python -m stm32loader --port COM8 --baud 115200 --family F1 --erase --write --verify --go-address 0x08000000 \"${workspaceFolder}\\build\\Debug\\led_blink.bin\""
+        "cmake --build \"${workspaceFolder}\\build\\NodeA\" && python -m stm32loader --port COM8 --baud 115200 --family F1 --erase --write --verify --go-address 0x08000000 \"${workspaceFolder}\\build\\NodeA\\stm32_controller.bin\""
       ],
       "group": {
         "kind": "build",
