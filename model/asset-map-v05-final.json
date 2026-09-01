@@ -1,0 +1,19 @@
+{
+  "modelVersion": "V05",
+  "sourceVersion": "2026-08-31 final",
+  "modelFile": "utility-tunnel-annular-v05-final.glb",
+  "designPolicy": "Retain the approved transparent annular engineering visual language and stable liquid-level runtime names.",
+  "status": "visual/digital-twin model only. Water and power operation are not approved.",
+  "assets": {
+    "LEVEL-L01": ["LEVEL-L01", "LEVEL-L01-PROBE_TEMP", "LEVEL-L01-BRACKET_TEMP", "LEVEL-L01-HARNESS", "LEVEL-L01-STATUS"],
+    "LEVEL-L02": ["LEVEL-L02", "LEVEL-L02-PROBE_TEMP", "LEVEL-L02-BRACKET_TEMP", "LEVEL-L02-HARNESS", "LEVEL-L02-STATUS"],
+    "LEVEL-L03": ["LEVEL-L03", "LEVEL-L03-PROBE_TEMP", "LEVEL-L03-BRACKET_TEMP", "LEVEL-L03-HARNESS", "LEVEL-L03-STATUS"],
+    "LEVEL-L04": ["LEVEL-L04", "LEVEL-L04-PROBE_TEMP", "LEVEL-L04-BRACKET_TEMP", "LEVEL-L04-HARNESS", "LEVEL-L04-STATUS"],
+    "LEVEL-L05": ["LEVEL-L05", "LEVEL-L05-PROBE_TEMP", "LEVEL-L05-BRACKET_TEMP", "LEVEL-L05-HARNESS", "LEVEL-L05-STATUS"],
+    "PIPE-G01": ["PIPE-G01"],
+    "WATER-TRAY-01": ["WATER-TRAY-01"],
+    "FAN-01": ["FAN-01"],
+    "GAS-01": ["GAS-01"]
+  },
+  "unfrozenParameters": ["FS-IR02 probe thread", "nut size", "mount-hole diameter", "cable length", "real electrical pinout"]
+}
