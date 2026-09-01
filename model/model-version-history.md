@@ -14,5 +14,10 @@
 | V16 | `distributed-levels` | 5个液位站分散布置。 |
 | V17 | `fabrication-waterloop` | 待安全评审的低水量路径。 |
 | V18 | `fabrication-safety` | 加工尺寸门槛、干湿隔离与锁定状态。 |
+| V19 | `clarity-layout` | 1.00×0.50×0.30m清晰分区与照片比例软管视觉路径。 |
+| V20 | `visible-water-piping` | 仅用于审查的可见水路表达。 |
+| V21 | `engineering-baseline` | A/B/C三区桌面式工程基线。 |
+| V22 | `sensor-detail` | 五套液位站及环境/气体运行时节点细化。 |
+| V23 | `v17-sensor-refinement` | 保留V17环形外观并规范液位站运行时命名。 |
 
-未来版本应使用 `utility-tunnel-annular-vNN-<主题>`，其中 `NN` 比上一个已发布模型版本加一；不得把项目计划书、硬件清单或软件版本号拼入模型迭代号。
+未来版本应使用 `utility-tunnel-annular-vNN-<主题>`，其中 `NN` 比上一个已发布模型版本加一；不得把项目计划书、硬件清单或软件版本号拼入模型迭代号。同一自然日只发布并记录当天最终确认的最新一版，中间试验文件不占用正式版本号。
