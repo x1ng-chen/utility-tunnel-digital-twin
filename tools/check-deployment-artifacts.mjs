@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 
-const requirements = ['.dockerignore', 'deploy/containers/Dockerfile.api', 'deploy/containers/Dockerfile.web', 'deploy/containers/nginx.web.conf', 'deploy/containers/docker-compose.production.yml', 'deploy/containers/README.md', 'deploy/postgres/provision.sql'];
+const requirements = ['.dockerignore', 'deploy/containers/Dockerfile.api', 'deploy/containers/Dockerfile.web', 'deploy/containers/nginx.web.conf', 'deploy/containers/docker-compose.production.yml', 'deploy/containers/README.md', 'deploy/postgres/provision.sql', 'deploy/postgres/backup-django.ps1', 'deploy/postgres/restore-verify-django.ps1'];
 const missing = requirements.filter((file) => !existsSync(file));
 if (missing.length) {
   console.error(`Deployment artifact check failed: missing ${missing.join(', ')}`);
@@ -12,7 +12,9 @@ const web = readFileSync('deploy/containers/Dockerfile.web', 'utf8');
 const nginx = readFileSync('deploy/containers/nginx.web.conf', 'utf8');
 const compose = readFileSync('deploy/containers/docker-compose.production.yml', 'utf8');
 const grants = readFileSync('deploy/postgres/provision.sql', 'utf8');
-const combined = `${api}\n${web}\n${nginx}\n${compose}\n${grants}`;
+const backup = readFileSync('deploy/postgres/backup-django.ps1', 'utf8');
+const restore = readFileSync('deploy/postgres/restore-verify-django.ps1', 'utf8');
+const combined = `${api}\n${web}\n${nginx}\n${compose}\n${grants}\n${backup}\n${restore}`;
 const checks = [
   ['API uses a non-root runtime user', /USER utilitytunnel/],
   ['API exposes a database-aware readiness probe', /HEALTHCHECK[\s\S]*\/api\/ready\//],
@@ -31,6 +33,9 @@ const checks = [
   ['Compose persists validated twin model releases', /twin_model_media:\/app\/media[\s\S]*volumes:[\s\S]*twin_model_media:/],
   ['Nginx permits the governed GLB upload size', /client_max_body_size 34m/],
   ['PostgreSQL runtime role can read and publish twin releases', /operations_twinmodelrelease[\s\S]*GRANT UPDATE \(status, activated_by_id, activated_at\)/],
+  ['Database backups use a portable custom format and SHA-256 sidecar', /pg_dump --format=custom --no-owner --no-privileges[\s\S]*Get-FileHash -Algorithm SHA256/],
+  ['Database restores require explicit destructive-action confirmation', /if \(-not \$ConfirmRestore\)[\s\S]*Restore is destructive/],
+  ['Database restores verify checksums and application tables', /Backup SHA-256 checksum[\s\S]*operations_asset[\s\S]*django_migrations/],
 ];
 const failures = checks.filter(([, pattern]) => !pattern.test(combined)).map(([label]) => label);
 if (/postgres(?:ql)?:\/\/[^$\s]*:[^$\s]*@/i.test(combined) || /BEGIN (?:RSA|OPENSSH|EC) PRIVATE KEY/.test(combined)) {
