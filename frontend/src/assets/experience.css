@@ -56,8 +56,8 @@ body[data-pointer-mode='interactive'] .experience-cursor .cursor-ring { width: 3
 .activity-item > i, .audit-row > i { animation: status-pulse 2.6s ease-out infinite; }
 .table-row { transition: background .2s ease, box-shadow .2s ease; }
 .table-row:hover { background: linear-gradient(90deg, #2748792e, transparent 78%); box-shadow: inset 3px 0 #6f91ff; }
-.order-card { transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease; }
-.order-card:hover { transform: translateY(-3px) rotateX(1deg); border-color: #668df1a8; box-shadow: 0 15px 30px #0005; }
+.order-card { transition: border-color .22s ease, box-shadow .22s ease; }
+.order-card:hover { border-color: #668df1a8; box-shadow: 0 15px 30px #0005, inset 3px 0 #668df1; }
 .toast { overflow: hidden; animation: toast-glow 2.5s ease-in-out infinite; }
 
 /* High-visibility, self-dismissing operation feedback. */
