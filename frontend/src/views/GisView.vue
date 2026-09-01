@@ -141,7 +141,7 @@ onBeforeUnmount(() => {
 <template>
   <AppShell>
     <section class="section-title gis-title">
-      <div><span class="eyebrow light">GOVERNED GEOGRAPHIC INFORMATION SYSTEM</span><h1>GIS 空间运维总览</h1><p>以受治理的 WGS84 坐标、审核空间图层和硬件绑定契约支撑现场地图；二维孪生仍由设备台账负责。</p></div>
+      <div><span class="eyebrow light">空间位置总览</span><h1>GIS 空间运维总览</h1><p>以受治理的 WGS84 坐标、审核空间图层和硬件绑定契约支撑现场地图；二维孪生仍由设备台账负责。</p></div>
       <div class="gis-live"><i />{{ connectedCount }} / {{ store.assets.length }} 固件链路已接入</div>
     </section>
 
@@ -193,7 +193,7 @@ onBeforeUnmount(() => {
     </section>
 
     <section class="spatial-feature-list" aria-label="已发布 GIS 空间对象">
-      <header><span class="eyebrow">PUBLISHED SPATIAL LAYERS</span><h2>已审核空间对象</h2><p>仅显示已发布的 WGS84 GeoJSON；草稿与退役对象不会进入运维地图。</p></header>
+      <header><span class="eyebrow">已发布空间图层</span><h2>已审核空间对象</h2><p>仅显示已发布的 WGS84 GeoJSON；草稿与退役对象不会进入运维地图。</p></header>
       <div v-if="visibleSpatialFeatures.length" class="spatial-feature-grid"><article v-for="feature in visibleSpatialFeatures" :key="feature.id"><span>{{ spatialLayerLabels[feature.layerType] }}</span><strong>{{ feature.name }}</strong><small>{{ feature.code }} · {{ feature.source }} · 精度 {{ feature.accuracyM ?? '未登记' }} m</small></article></div>
       <div v-else class="empty-state">当前没有已审核发布的空间对象。管理员可通过 GIS 数据管理接口导入真实 GeoJSON 后发布。</div>
     </section>

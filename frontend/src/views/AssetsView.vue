@@ -48,13 +48,13 @@ function formatTime(value?: string | null) {
 <template>
   <AppShell>
     <section class="section-title">
-      <div><span class="eyebrow light">ASSET REGISTER / DIGITAL TWIN</span><h1>设备台账</h1><p>设备位置、健康状态与孪生模型统一维护，点击节点查看实时关联数据。</p></div>
+      <div><span class="eyebrow light">设备全生命周期</span><h1>设备台账</h1><p>设备位置、健康状态与孪生模型统一维护，点击节点查看实时关联数据。</p></div>
       <input v-model="search" class="search-input" placeholder="搜索设备编码、名称或区域" aria-label="搜索设备" />
     </section>
 
     <section class="asset-workspace">
       <div class="asset-twin-panel">
-        <header class="panel-head"><div><span class="eyebrow">SPATIAL MODEL</span><h2>管廊设备孪生视图</h2></div><span class="config-source"><i />{{ visible.length }} 个可定位节点</span></header>
+        <header class="panel-head"><div><span class="eyebrow">空间位置</span><h2>管廊设备孪生视图</h2></div><span class="config-source"><i />{{ visible.length }} 个可定位节点</span></header>
         <div class="asset-map" role="list" aria-label="设备空间定位图">
           <div class="asset-map-grid" /><div class="asset-map-route route-a" /><div class="asset-map-route route-b" />
           <button v-for="asset in visible" :key="asset.id" class="asset-map-node" :class="[asset.status, { selected: selectedAsset?.code === asset.code }]" :style="positionStyle(asset)" :aria-label="`定位 ${asset.name}`" @click="selectAsset(asset)"><i /><span>{{ asset.code }}</span></button>
@@ -63,11 +63,11 @@ function formatTime(value?: string | null) {
       </div>
 
       <aside v-if="selectedAsset" class="asset-detail-panel" aria-live="polite">
-        <div class="detail-heading"><div><span class="eyebrow">SELECTED NODE</span><h2>{{ selectedAsset.name }}</h2><b>{{ selectedAsset.code }}</b></div><div class="asset-detail-actions"><span :class="['asset-status', selectedAsset.status]">{{ statusLabel(selectedAsset.status) }}</span><button class="asset-twin-link" @click="openTwin(selectedAsset)">在三维中查看 →</button><button class="asset-gis-link" @click="openGis(selectedAsset)">在地图中查看 →</button></div></div>
+        <div class="detail-heading"><div><span class="eyebrow">当前设备</span><h2>{{ selectedAsset.name }}</h2><b>{{ selectedAsset.code }}</b></div><div class="asset-detail-actions"><span :class="['asset-status', selectedAsset.status]">{{ statusLabel(selectedAsset.status) }}</span><button class="asset-twin-link" @click="openTwin(selectedAsset)">在三维中查看 →</button><button class="asset-gis-link" @click="openGis(selectedAsset)">在地图中查看 →</button></div></div>
         <div class="detail-grid"><div><small>硬件编号</small><strong>{{ selectedAsset.hardwareCode || '未分配' }}</strong></div><div><small>接入状态</small><strong>{{ integrationLabel(selectedAsset.integrationStatus) }}</strong></div><div><small>接口</small><strong>{{ selectedAsset.interface || '未配置' }}</strong></div><div><small>最近上报</small><strong>{{ formatTime(selectedAsset.lastSeenAt) }}</strong></div></div>
-        <div class="detail-block"><span class="eyebrow">ACTUAL HARDWARE</span><p class="detail-list">{{ selectedAsset.installationNote }}</p><div class="capability-tags"><span v-for="capability in selectedAsset.capabilities" :key="capability">{{ capability }}</span></div></div>
-        <div class="detail-block"><span class="eyebrow">TELEMETRY</span><div v-if="selectedTelemetry" class="detail-reading"><strong>{{ selectedTelemetry.value }}</strong><span>{{ selectedTelemetry.unit }}</span><small>{{ selectedTelemetry.metric }} · {{ selectedTelemetry.quality === 'good' ? '质量良好' : selectedTelemetry.quality === 'suspect' ? '需要关注' : selectedTelemetry.quality === 'bad' ? '数据异常' : '数据缺失' }}</small></div><p v-else class="detail-empty">暂无遥测数据</p></div>
-        <div class="detail-block"><span class="eyebrow">LINKED EVENTS</span><p v-if="selectedAlerts.length" class="detail-list">{{ selectedAlerts.length }} 条告警 · {{ selectedAlerts.filter((item) => ['open', 'acknowledged'].includes(item.status)).length }} 条待处置</p><p v-else class="detail-empty">暂无告警</p><p v-if="selectedOrders.length" class="detail-list">{{ selectedOrders.length }} 个关联工单</p><p v-else class="detail-empty">暂无关联工单</p></div>
+        <div class="detail-block"><span class="eyebrow">实体设备</span><p class="detail-list">{{ selectedAsset.installationNote }}</p><div class="capability-tags"><span v-for="capability in selectedAsset.capabilities" :key="capability">{{ capability }}</span></div></div>
+        <div class="detail-block"><span class="eyebrow">实时数据</span><div v-if="selectedTelemetry" class="detail-reading"><strong>{{ selectedTelemetry.value }}</strong><span>{{ selectedTelemetry.unit }}</span><small>{{ selectedTelemetry.metric }} · {{ selectedTelemetry.quality === 'good' ? '质量良好' : selectedTelemetry.quality === 'suspect' ? '需要关注' : selectedTelemetry.quality === 'bad' ? '数据异常' : '数据缺失' }}</small></div><p v-else class="detail-empty">暂无遥测数据</p></div>
+        <div class="detail-block"><span class="eyebrow">关联事件</span><p v-if="selectedAlerts.length" class="detail-list">{{ selectedAlerts.length }} 条告警 · {{ selectedAlerts.filter((item) => ['open', 'acknowledged'].includes(item.status)).length }} 条待处置</p><p v-else class="detail-empty">暂无告警</p><p v-if="selectedOrders.length" class="detail-list">{{ selectedOrders.length }} 个关联工单</p><p v-else class="detail-empty">暂无关联工单</p></div>
       </aside>
       <div v-else class="asset-detail-panel empty-state">没有匹配的设备节点，请调整搜索条件。</div>
     </section>

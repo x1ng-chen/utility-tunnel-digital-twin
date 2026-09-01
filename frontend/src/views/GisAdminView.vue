@@ -82,7 +82,7 @@ async function publishFeature(featureId: number) {
 <template>
   <AppShell>
     <section class="section-title gis-admin-title">
-      <div><span class="eyebrow light">GIS GOVERNANCE CONSOLE</span><h1>空间数据管理</h1><p>导入、审核和发布真实 WGS84 空间数据；此页面不建立硬件连接，只登记受控通信契约。</p></div>
+      <div><span class="eyebrow light">空间数据治理</span><h1>空间数据管理</h1><p>导入、审核和发布真实 WGS84 空间数据；此页面不建立硬件连接，只登记受控通信契约。</p></div>
       <div class="gis-title-meta"><span class="insight-source">仅管理员可操作</span><small>受控发布 · 审计留痕</small></div>
     </section>
 

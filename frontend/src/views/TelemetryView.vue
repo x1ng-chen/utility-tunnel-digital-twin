@@ -84,7 +84,7 @@ onMounted(search);
 
     <section class="telemetry-layout">
       <article class="panel telemetry-chart-panel">
-        <div class="panel-head"><div><span class="eyebrow">RECENT WINDOW</span><h2>最近 30 条趋势</h2></div><span class="insight-count">显示 {{ store.telemetryInsights.length }} / {{ store.telemetryInsightsTotal }}</span></div>
+        <div class="panel-head"><div><span class="eyebrow">近期趋势</span><h2>最近 30 条趋势</h2></div><span class="insight-count">显示 {{ store.telemetryInsights.length }} / {{ store.telemetryInsightsTotal }}</span></div>
         <OpsChart v-if="trendWindow.length && store.telemetrySummary.comparable" zoom :labels="trendLabels" :series="trendSeries" :threshold="trendThreshold" />
         <div v-else class="empty-state">{{ trendWindow.length ? '混合指标不可直接比较，请选择单一指标后查看趋势。' : '当前条件下没有遥测趋势。' }}</div>
         <div class="quality-strip"><span><i class="good" />良好 {{ store.telemetrySummary.qualityCounts.good }}</span><span><i class="suspect" />可疑 {{ store.telemetrySummary.qualityCounts.suspect }}</span><span><i class="bad" />异常 {{ store.telemetrySummary.qualityCounts.bad }}</span><span><i class="missing" />缺失 {{ store.telemetrySummary.qualityCounts.missing }}</span></div>
