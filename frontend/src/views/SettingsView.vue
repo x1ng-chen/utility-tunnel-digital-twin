@@ -210,7 +210,7 @@ watch([() => store.source, () => auth.user?.role], () => { void loadUsers(); voi
 
 <template>
   <AppShell>
-    <section class="section-title"><div><span class="eyebrow light">SYSTEM CONFIGURATION</span><h1>系统配置</h1><p>管理告警阈值与数据服务，管理员变更会写入审计日志。</p></div><span class="config-source"><i />{{ store.offline ? '离线数据快照' : '数据服务在线' }}</span></section>
+    <section class="section-title"><div><span class="eyebrow light">平台管理</span><h1>系统配置</h1><p>管理告警阈值与数据服务，管理员变更会写入审计日志。</p></div><span class="config-source"><i />{{ store.offline ? '离线数据快照' : '数据服务在线' }}</span></section>
     <section class="settings-panel">
       <div class="settings-head"><span>阈值策略</span><small>报警值必须高于预警值</small></div>
       <div v-for="item in store.thresholds" :key="item.key" class="threshold-row">

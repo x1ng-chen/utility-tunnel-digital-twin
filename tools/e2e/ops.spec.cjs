@@ -259,6 +259,11 @@ test('运维员可确认告警、生成工单并推进处置流程', async ({ pa
   const linkedOrder = page.locator('.order-card').filter({ hasText: 'ALM-260826-001' });
   await expect(linkedOrder).toBeVisible();
   await expect(linkedOrder).toHaveClass(/focused/);
+  await linkedOrder.getByRole('button', { name: '三维定位' }).click();
+  await expect(page).toHaveURL(/\/twin-3d\?asset=CTRL-01&source=work-order/);
+  await expect(page.locator('.twin-inspector').getByText('MESH_CTRL_01', { exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(linkedOrder).toBeVisible();
   await linkedOrder.getByRole('button', { name: '接单并分派' }).click();
   await linkedOrder.getByRole('button', { name: '开始现场处理' }).click();
   await linkedOrder.getByRole('button', { name: '提交复核' }).click();

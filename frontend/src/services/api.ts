@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type InternalAxiosRequestConfig } from 'axios';
 
 const localStorageRef = typeof window !== 'undefined' ? window.localStorage : null;
 const sessionStorageRef = typeof window !== 'undefined' ? window.sessionStorage : null;
@@ -41,6 +41,19 @@ function initialApiBaseUrl(): string {
 
 const defaultBaseUrl = initialApiBaseUrl();
 const client = axios.create({ baseURL: defaultBaseUrl, timeout: 8000, headers: { 'Content-Type': 'application/json' } });
+type RetriableRequestConfig = InternalAxiosRequestConfig & { __safeRetryCount?: number };
+
+export function shouldRetryApiRequest(method: string | undefined, status: number | undefined, retryCount: number): boolean {
+  if (!['get', 'head'].includes((method || '').toLowerCase()) || retryCount >= 2) return false;
+  return status == null || status === 408 || status === 429 || [502, 503, 504].includes(status);
+}
+
+export function apiRetryDelayMs(retryCount: number, retryAfter?: string): number {
+  const serverDelay = Number(retryAfter);
+  if (Number.isFinite(serverDelay) && serverDelay >= 0) return Math.min(serverDelay * 1000, 1500);
+  return Math.min(250 * (2 ** retryCount), 1000);
+}
+
 client.interceptors.request.use((config) => {
   // The browser must generate the multipart boundary. Keeping the client's
   // JSON default here makes Django see an empty request.FILES collection.
@@ -50,6 +63,16 @@ client.interceptors.request.use((config) => {
   const requestId = typeof globalThis.crypto?.randomUUID === 'function' ? globalThis.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   config.headers['X-Request-Id'] = requestId;
   return config;
+});
+client.interceptors.response.use(undefined, async (error) => {
+  const config = error?.config as RetriableRequestConfig | undefined;
+  const retryCount = config?.__safeRetryCount ?? 0;
+  const status = error?.response?.status as number | undefined;
+  if (!config || !shouldRetryApiRequest(config.method, status, retryCount)) return Promise.reject(error);
+  config.__safeRetryCount = retryCount + 1;
+  const retryAfter = error?.response?.headers?.['retry-after'] as string | undefined;
+  await new Promise((resolve) => window.setTimeout(resolve, apiRetryDelayMs(retryCount, retryAfter)));
+  return client.request(config);
 });
 
 export const api = {

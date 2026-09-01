@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
 import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
@@ -9,6 +9,7 @@ import type { WorkOrder } from '../types';
 const store = useOperationsStore();
 const auth = useAuthStore();
 const route = useRoute();
+const router = useRouter();
 const search = ref('');
 const actionError = ref('');
 const busyId = ref<number | null>(null);
@@ -22,6 +23,13 @@ const transitionLabel: Partial<Record<WorkOrder['status'], string>> = { open: '�
 const form = reactive({ assetCode: '', title: '', description: '', priority: 'normal' as WorkOrder['priority'] });
 const formOpen = ref(false);
 const creating = ref(false);
+
+function openTwin(order: WorkOrder) { void router.push({ path: '/twin-3d', query: { asset: order.assetCode, source: 'work-order', order: order.code } }); }
+function openGis(order: WorkOrder) { void router.push({ path: '/gis', query: { asset: order.assetCode, source: 'work-order', order: order.code } }); }
+function openSourceAlert(order: WorkOrder) {
+  const alert = order.sourceAlertId ? store.alerts.find((item) => item.id === order.sourceAlertId) : undefined;
+  if (alert) void router.push({ path: '/alerts', query: { focus: alert.code, source: 'work-order', order: order.code } });
+}
 
 function slaLabel(order: WorkOrder) {
   if (order.slaStatus === 'closed') return '已按流程关闭';
@@ -66,7 +74,7 @@ async function createOrder() {
 <template>
   <AppShell>
     <section class="section-title">
-      <div><span class="eyebrow light">WORKFLOW CENTER</span><h1>工单中心</h1><p>从告警关联到复核关闭，按状态推进每一条处置链路。</p></div>
+      <div><span class="eyebrow light">处置流程</span><h1>工单中心</h1><p>从告警关联到复核关闭，按状态推进每一条处置链路。</p></div>
       <div class="section-actions"><input v-model="search" class="search-input" placeholder="搜索工单、资产或标题" aria-label="搜索工单" /><button v-if="canWrite" class="primary-button compact-button" @click="formOpen = !formOpen">{{ formOpen ? '收起' : '+ 新建工单' }}</button></div>
     </section>
     <p v-if="actionError" class="inline-message error-message" role="alert">{{ actionError }}</p>
@@ -87,8 +95,12 @@ async function createOrder() {
     <section class="kanban">
       <article v-for="status in ['open','assigned','in_progress','pending_review','completed']" :key="status" class="kanban-column">
         <header><span>{{ status === 'open' ? '待分派' : status === 'assigned' ? '已分派' : status === 'in_progress' ? '处理中' : status === 'pending_review' ? '待复核' : '已完成' }}</span><b>{{ visible.filter((item) => item.status === status).length }}</b></header>
-        <div v-for="order in visible.filter((item) => item.status === status)" :key="order.id" :class="['order-card', { focused: order.code === focusedCode }]" :data-testid="`work-order-${order.code}`"><span :class="['badge', order.priority]">{{ order.priority === 'urgent' ? '紧急' : order.priority === 'high' ? '高' : order.priority === 'low' ? '低' : '普通' }}</span><b>{{ order.code }}</b><h3>{{ order.title }}</h3><small>{{ order.assetCode }} · {{ order.assigneeName || '待分配' }}</small><small :class="['due-time', `sla-${order.slaStatus || 'not_set'}`]">{{ slaLabel(order) }}</small><small v-if="order.dueAt" class="due-deadline">截止 {{ new Date(order.dueAt).toLocaleString('zh-CN') }}</small><button v-if="nextStatus[order.status] && (nextStatus[order.status] !== 'completed' || canComplete)" :disabled="busyId === order.id" @click="advance(order)">{{ busyId === order.id ? '处理中…' : transitionLabel[order.status] }}</button></div>
+        <div v-for="order in visible.filter((item) => item.status === status)" :key="order.id" :class="['order-card', { focused: order.code === focusedCode }]" :data-testid="`work-order-${order.code}`"><span :class="['badge', order.priority]">{{ order.priority === 'urgent' ? '紧急' : order.priority === 'high' ? '高' : order.priority === 'low' ? '低' : '普通' }}</span><b>{{ order.code }}</b><h3>{{ order.title }}</h3><small>{{ order.assetCode }} · {{ order.assigneeName || '待分配' }}</small><small :class="['due-time', `sla-${order.slaStatus || 'not_set'}`]">{{ slaLabel(order) }}</small><small v-if="order.dueAt" class="due-deadline">截止 {{ new Date(order.dueAt).toLocaleString('zh-CN') }}</small><div class="order-card-links" aria-label="查看工单关联信息"><button type="button" @click="openTwin(order)">三维定位</button><button type="button" @click="openGis(order)">地图定位</button><button v-if="order.sourceAlertId" type="button" @click="openSourceAlert(order)">源告警</button></div><button v-if="nextStatus[order.status] && (nextStatus[order.status] !== 'completed' || canComplete)" class="order-transition" :disabled="busyId === order.id" @click="advance(order)">{{ busyId === order.id ? '处理中…' : transitionLabel[order.status] }}</button></div>
       </article>
     </section>
   </AppShell>
 </template>
+
+<style scoped>
+.order-card-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:11px}.order-card-links button{min-width:0;margin:0;padding:7px 4px;border-color:#2d4a69;background:#0d2036;color:#9db5d2;white-space:nowrap}.order-card-links button:hover,.order-card-links button:focus-visible{border-color:#5b86c2;background:#18385d;color:#fff;outline:0}.order-card .order-transition{margin-top:7px;border-color:#4b69bd;background:#223b73;color:#dce5ff}
+</style>

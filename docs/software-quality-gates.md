@@ -14,6 +14,7 @@ node tools/quality-scan.mjs
 
 ```powershell
 node tools/check-postgres-policy.mjs
+node tools/check-twin-model-artifacts.mjs
 ```
 
 该检查验证 PostgreSQL `ut_runtime` 账号的最小权限、管理员用户生命周期字段、Token/用户序列权限和占位符保护，防止正式环境授权脚本与 Django API 实际写入路径不一致。

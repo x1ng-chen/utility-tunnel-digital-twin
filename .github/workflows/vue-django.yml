@@ -15,6 +15,7 @@ on:
       - 'deploy/containers/**'
       - 'services/iotda-gateway/**'
       - 'tools/**'
+      - 'model/**'
       - '.github/workflows/vue-django.yml'
 
   pull_request:
@@ -31,6 +32,7 @@ on:
       - 'deploy/containers/**'
       - 'services/iotda-gateway/**'
       - 'tools/**'
+      - 'model/**'
       - '.github/workflows/vue-django.yml'
 
 permissions:
@@ -48,6 +50,7 @@ jobs:
       - run: node tools/quality-scan.mjs
       - run: node tools/check-postgres-policy.mjs
       - run: node tools/check-deployment-artifacts.mjs
+      - run: node tools/check-twin-model-artifacts.mjs
 
   frontend:
     name: Vue3 quality

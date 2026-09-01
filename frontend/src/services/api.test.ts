@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveApiBaseUrl, setApiBaseUrl } from './api';
+import { apiRetryDelayMs, resolveApiBaseUrl, setApiBaseUrl, shouldRetryApiRequest } from './api';
 import { csvCell } from '../stores/operations';
 
 describe('API base URL validation', () => {
@@ -23,5 +23,20 @@ describe('API base URL validation', () => {
     expect(() => setApiBaseUrl('https://api.example.com/api?tenant=demo')).toThrow('不得包含无关参数');
     expect(csvCell('=SUM(A1:A2)')).toBe("'=SUM(A1:A2)");
     expect(csvCell(-12)).toBe('-12');
+  });
+
+  it('only retries temporary failures for safe read requests', () => {
+    expect(shouldRetryApiRequest('get', 503, 0)).toBe(true);
+    expect(shouldRetryApiRequest('HEAD', undefined, 1)).toBe(true);
+    expect(shouldRetryApiRequest('get', 400, 0)).toBe(false);
+    expect(shouldRetryApiRequest('post', 503, 0)).toBe(false);
+    expect(shouldRetryApiRequest('get', 503, 2)).toBe(false);
+  });
+
+  it('honors a bounded Retry-After delay and uses short exponential backoff', () => {
+    expect(apiRetryDelayMs(0)).toBe(250);
+    expect(apiRetryDelayMs(1)).toBe(500);
+    expect(apiRetryDelayMs(0, '2')).toBe(1500);
+    expect(apiRetryDelayMs(0, '0.25')).toBe(250);
   });
 });

@@ -36,6 +36,64 @@ async function openAuthenticatedPage(page, route) {
   }
 }
 
+async function inspectDesktopLayout(page, heading) {
+  const layout = await page.evaluate(() => {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const visible = (element) => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+    };
+    const outsideViewport = [...document.querySelectorAll('body *')]
+      .filter(visible)
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          tag: element.tagName,
+          className: String(element.className || ''),
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+        };
+      })
+      .filter((item) => item.left < -1 || item.right > viewportWidth + 1)
+      .sort((a, b) => Math.max(Math.abs(b.left), b.right - viewportWidth) - Math.max(Math.abs(a.left), a.right - viewportWidth))
+      .slice(0, 8);
+    const clippedControls = [...document.querySelectorAll('button, a, input, select')]
+      .filter(visible)
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          label: (element.getAttribute('aria-label') || element.textContent || '').trim().slice(0, 40),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          scrollWidth: element.scrollWidth,
+          scrollHeight: element.scrollHeight,
+        };
+      })
+      .filter((item) => item.scrollWidth > item.width + 3 || item.scrollHeight > item.height + 3)
+      .slice(0, 8);
+    const sidebar = document.querySelector('.sidebar')?.getBoundingClientRect();
+    const content = document.querySelector('.page-content')?.getBoundingClientRect();
+    return {
+      viewportWidth,
+      viewportHeight,
+      documentWidth: document.documentElement.scrollWidth,
+      sidebarWidth: sidebar?.width || 0,
+      contentLeft: content?.left || 0,
+      contentRight: content?.right || 0,
+      outsideViewport,
+      clippedControls,
+    };
+  });
+  expect(layout.documentWidth, `${heading} 不应产生整页横向滚动：${JSON.stringify(layout.outsideViewport)}`).toBeLessThanOrEqual(layout.viewportWidth + 1);
+  expect(layout.contentLeft, `${heading} 内容区不得压入侧栏`).toBeGreaterThanOrEqual(layout.sidebarWidth - 1);
+  expect(layout.contentRight, `${heading} 内容区不得越过视口`).toBeLessThanOrEqual(layout.viewportWidth + 1);
+  expect(layout.clippedControls, `${heading} 存在尺寸过小或文字裁切的控件`).toEqual([]);
+  const contentOpacity = await page.locator('.page-content > *').first().evaluate((element) => Number(getComputedStyle(element).opacity));
+  expect(contentOpacity, `${heading} 首屏内容不得被过渡动画隐藏`).toBeGreaterThanOrEqual(.99);
+}
+
 test('全部业务页面通过桌面端布局巡检', async ({ page }) => {
   test.setTimeout(120_000);
   const consoleErrors = [];
@@ -55,21 +113,7 @@ test('全部业务页面通过桌面端布局巡检', async ({ page }) => {
     await openAuthenticatedPage(page, route);
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     await page.waitForTimeout(route === '/twin-3d' ? 1_500 : 1_200);
-    const layout = await page.evaluate(() => ({
-      viewport: window.innerWidth,
-      documentWidth: document.documentElement.scrollWidth,
-      sidebarWidth: document.querySelector('.sidebar')?.getBoundingClientRect().width || 0,
-      pageLeft: document.querySelector('.page-content')?.getBoundingClientRect().left || 0,
-      overflowers: [...document.querySelectorAll('body *')]
-        .map((element) => ({ tag: element.tagName, className: String(element.className || ''), right: Math.round(element.getBoundingClientRect().right) }))
-        .filter((item) => item.right > window.innerWidth + 1)
-        .sort((a, b) => b.right - a.right)
-        .slice(0, 6),
-    }));
-    expect(layout.documentWidth, `${heading} 不应产生整页横向滚动：${JSON.stringify(layout.overflowers)}`).toBeLessThanOrEqual(layout.viewport + 1);
-    expect(layout.pageLeft, `${heading} 内容区不得压入侧栏`).toBeGreaterThanOrEqual(layout.sidebarWidth - 1);
-    const contentOpacity = await page.locator('.page-content > *').first().evaluate((element) => Number(getComputedStyle(element).opacity));
-    expect(contentOpacity, `${heading} 首屏内容不得被过渡动画隐藏`).toBeGreaterThanOrEqual(.99);
+    await inspectDesktopLayout(page, heading);
     if (route === '/alerts') {
       const alertTable = await page.locator('.table-row').first().evaluate((row) => {
         const style = getComputedStyle(row);
@@ -80,6 +124,33 @@ test('全部业务页面通过桌面端布局巡检', async ({ page }) => {
       expect(new Set(alertTable.children).size, `告警表格各字段不得堆叠：${JSON.stringify(alertTable)}`).toBeGreaterThanOrEqual(4);
     }
     await page.screenshot({ path: path.join(output, `${fileName}.png`), fullPage: true });
+  }
+  expect(consoleErrors).toEqual([]);
+});
+
+test('全部业务页面通过三档桌面分辨率布局巡检', async ({ page }) => {
+  test.setTimeout(240_000);
+  const consoleErrors = [];
+  page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+  page.on('pageerror', (error) => consoleErrors.push(error.message));
+  await page.route(/https:\/\/.*\.tile\.openstreetmap\.org\/.*/, (route) => route.fulfill({
+    status: 200,
+    contentType: 'image/png',
+    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
+  }));
+
+  for (const viewport of [
+    { width: 1366, height: 768 },
+    { width: 1600, height: 900 },
+    { width: 1920, height: 1080 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const [route, heading] of pages) {
+      await openAuthenticatedPage(page, route);
+      await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+      await page.waitForTimeout(route === '/twin-3d' ? 900 : 350);
+      await inspectDesktopLayout(page, `${heading}（${viewport.width}×${viewport.height}）`);
+    }
   }
   expect(consoleErrors).toEqual([]);
 });

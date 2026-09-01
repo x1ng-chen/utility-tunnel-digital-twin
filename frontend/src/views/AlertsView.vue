@@ -75,7 +75,7 @@ function getUserFacingError(cause: unknown) {
 <template>
   <AppShell>
     <section class="section-title">
-      <div><span class="eyebrow light">INCIDENT CENTER</span><h1>告警中心</h1><p>确认异常、关联工单并保留完整处理链路。</p></div>
+      <div><span class="eyebrow light">异常处置</span><h1>告警中心</h1><p>确认异常、关联工单并保留完整处理链路。</p></div>
       <div class="filter-tabs"><button v-for="item in [['all','全部'],['open','待确认'],['acknowledged','已确认']]" :key="item[0]" :class="{ active: filter === item[0] }" @click="filter = item[0]">{{ item[1] }}</button></div>
     </section>
     <p v-if="actionError" class="inline-message error-message" role="alert">{{ actionError }}</p>
