@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const webUrl = process.env.E2E_WEB_URL || 'http://127.0.0.1:5173';
-const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'local-admin-password-2026';
+const adminPassword = '123';
 
 function trackConsoleErrors(page) {
   const errors = [];

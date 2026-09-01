@@ -284,7 +284,7 @@ npm ci
 npm run dev
 ```
 
-浏览器打开终端提示的地址，使用 `seed_demo` 配置的本地账号登录。告警、工单、资产、审计与完整 CSV 报表均通过 Django API；本地开发默认使用 SQLite，生产环境强制 PostgreSQL。详细配置见 [软件平台说明](docs/software-platform.md) 与 [API 契约](docs/api-contract.md)。
+浏览器打开终端提示的地址，使用固定本地演示账号 `admin`、密码 `123` 登录。`seed_demo` 在生产环境中禁止执行，正式账号不使用该弱口令。告警、工单、资产、审计与完整 CSV 报表均通过 Django API；本地开发默认使用 SQLite，生产环境强制 PostgreSQL。详细配置见 [软件平台说明](docs/software-platform.md) 与 [API 契约](docs/api-contract.md)。
 
 ### STM32 台架固件
 

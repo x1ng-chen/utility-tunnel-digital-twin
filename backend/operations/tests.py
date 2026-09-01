@@ -975,6 +975,7 @@ class OperationsApiTests(TestCase):
 
     def test_seed_demo_assigns_distinct_twin_positions(self):
         call_command('seed_demo', stdout=io.StringIO())
+        self.assertTrue(User.objects.get(username='admin').check_password('123'))
         positions = list(Asset.objects.values_list('code', 'position'))
         self.assertEqual(len(positions), 13)
         self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 13)

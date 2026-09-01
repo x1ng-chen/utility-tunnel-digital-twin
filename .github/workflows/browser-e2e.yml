@@ -76,9 +76,6 @@ jobs:
         env:
           NODE_PATH: ${{ runner.temp }}/ut-playwright/node_modules
           E2E_WEB_URL: http://127.0.0.1:5173
-          # Keep CI credentials aligned with seed_demo. Local development may
-          # still override E2E_ADMIN_PASSWORD for an environment-specific credential.
-          E2E_ADMIN_PASSWORD: local-admin-password-2026
         run: |
           "$RUNNER_TEMP/ut-playwright/node_modules/.bin/playwright" test --config "$GITHUB_WORKSPACE/tools/e2e/playwright.config.cjs" --reporter=line --timeout=60000
       - name: Upload service logs when a regression fails
