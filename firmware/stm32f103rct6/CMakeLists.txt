@@ -28,6 +28,21 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 project(${CMAKE_PROJECT_NAME})
 message("Build type: " ${CMAKE_BUILD_TYPE})
 
+# Keep the verified legacy bench application as the default.  Node-specific
+# images use the same Cube/HAL base but do not inherit incompatible pin use
+# from the TFT/DHT11 bench program.
+set(FIRMWARE_VARIANT "bench" CACHE STRING "Firmware image to build")
+set_property(CACHE FIRMWARE_VARIANT PROPERTY STRINGS bench node_a node_b)
+if(FIRMWARE_VARIANT STREQUAL "node_a")
+    set(STM32_APP_MAIN "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/node_a.c")
+elseif(FIRMWARE_VARIANT STREQUAL "node_b")
+    set(STM32_APP_MAIN "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/node_b.c")
+elseif(FIRMWARE_VARIANT STREQUAL "bench")
+    set(STM32_APP_MAIN "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/main.c")
+else()
+    message(FATAL_ERROR "Unknown FIRMWARE_VARIANT: ${FIRMWARE_VARIANT}")
+endif()
+
 # Enable CMake support for ASM and C languages
 enable_language(C ASM)
 

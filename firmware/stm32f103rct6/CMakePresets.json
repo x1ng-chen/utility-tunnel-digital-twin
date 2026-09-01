@@ -21,6 +21,22 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
+        },
+        {
+            "name": "NodeA",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "FIRMWARE_VARIANT": "node_a"
+            }
+        },
+        {
+            "name": "NodeB",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "FIRMWARE_VARIANT": "node_b"
+            }
         }
     ],
     "buildPresets": [
@@ -31,6 +47,14 @@
         {
             "name": "Release",
             "configurePreset": "Release"
+        },
+        {
+            "name": "NodeA",
+            "configurePreset": "NodeA"
+        },
+        {
+            "name": "NodeB",
+            "configurePreset": "NodeB"
         }
     ]
 }
