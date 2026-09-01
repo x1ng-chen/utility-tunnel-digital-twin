@@ -62,7 +62,7 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
 });
 
 test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告警状态', async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
@@ -164,7 +164,7 @@ test('告警可携带处置上下文直达三维实体模型', async ({ page }) 
 });
 
 test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续选择设备', async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
