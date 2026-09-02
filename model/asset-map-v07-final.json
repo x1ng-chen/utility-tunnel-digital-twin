@@ -29,16 +29,16 @@
     {"asset_id":"FAN-01","meshNames":["FAN-01"]},
     {"asset_id":"FAN-02","meshNames":["FAN-02"]},
     {"asset_id":"GAS-01","meshNames":["GAS-01"]},
-    {"asset_id":"ROOF-CENTER-HANDLE","meshNames":["GEO-V16-ROOF-CENTER-HANDLE_TEMP"]},
     {"asset_id":"ROOF-FULL-LID","meshNames":["GEO-V21-ROOF-FULL-LID_TEMP"],"status":"TEMP_VISUAL"},
     {"asset_id":"ROOF-FULL-GASKET","meshNames":["GEO-V21-ROOF-FULL-GASKET_TEMP"],"status":"TEMP_VISUAL"}
   ],
   "runtimeValidation": {
-    "glbNodes": 492,
-    "requiredNodes": 20,
+    "glbNodes": 494,
+    "requiredNodes": 16,
+    "sensorStationRequiredNodes": 20,
     "missingRequiredNodes": 0,
     "legacyNodeLeaks": 0,
-    "reimportedObjects": 492,
+    "reimportedObjects": 494,
     "status": "PASS"
   },
   "safety": "This is a digital-twin visual model. No physical dimensions, water/power commissioning, fabrication, or building-water connection is approved."
