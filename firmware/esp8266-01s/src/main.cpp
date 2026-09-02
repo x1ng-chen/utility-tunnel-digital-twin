@@ -28,7 +28,9 @@ String serialFrame;
 String telemetryTopic;
 String commandTopic;
 String statusTopic;
+String commandAckTopic;
 char pendingFrames[kPendingFrameCapacity][kMaxSerialFrame + 1] = {};
+bool pendingFrameIsCommandAck[kPendingFrameCapacity] = {};
 uint8_t pendingHead = 0;
 uint8_t pendingCount = 0;
 uint32_t lastWiFiAttempt = 0;
@@ -81,7 +83,7 @@ void connectMqtt() {
   Serial.println("#MQTT connected");
 }
 
-void enqueueFrame(const String& line) {
+void enqueueFrame(const String& line, bool isCommandAck) {
   if (pendingCount == kPendingFrameCapacity) {
     pendingHead = (pendingHead + 1U) % kPendingFrameCapacity;
     pendingCount--;
@@ -89,14 +91,17 @@ void enqueueFrame(const String& line) {
   }
   const uint8_t index = (pendingHead + pendingCount) % kPendingFrameCapacity;
   line.toCharArray(pendingFrames[index], kMaxSerialFrame + 1);
+  pendingFrameIsCommandAck[index] = isCommandAck;
   pendingCount++;
   Serial.printf("#QUEUED count=%u\r\n", pendingCount);
 }
 
 void flushPendingFrame() {
   if (!mqtt.connected() || pendingCount == 0) return;
-  if (!mqtt.publish(telemetryTopic.c_str(), pendingFrames[pendingHead], false)) return;
+  const char* topic = pendingFrameIsCommandAck[pendingHead] ? commandAckTopic.c_str() : telemetryTopic.c_str();
+  if (!mqtt.publish(topic, pendingFrames[pendingHead], false)) return;
   pendingFrames[pendingHead][0] = '\0';
+  pendingFrameIsCommandAck[pendingHead] = false;
   pendingHead = (pendingHead + 1U) % kPendingFrameCapacity;
   pendingCount--;
   Serial.printf("#PUBLISHED queued=%u\r\n", pendingCount);
@@ -113,14 +118,16 @@ void handleSerialLine(String line) {
     Serial.println("#ERROR expected JSON, STATUS, or AT");
     return;
   }
+  const bool isCommandAck = line.indexOf("\"schema\":\"ut.command.ack.v1\"") >= 0;
+  const char* topic = isCommandAck ? commandAckTopic.c_str() : telemetryTopic.c_str();
   if (!mqtt.connected()) {
-    enqueueFrame(line);
+    enqueueFrame(line, isCommandAck);
     return;
   }
-  if (mqtt.publish(telemetryTopic.c_str(), line.c_str(), false)) {
-    Serial.println("#PUBLISHED");
+  if (mqtt.publish(topic, line.c_str(), false)) {
+    Serial.println(isCommandAck ? "#ACK_PUBLISHED" : "#PUBLISHED");
   } else {
-    enqueueFrame(line);
+    enqueueFrame(line, isCommandAck);
   }
 }
 
@@ -150,6 +157,7 @@ void setup() {
   serialFrame.reserve(kMaxSerialFrame);
   telemetryTopic = String("ut/v1/") + DEVICE_ID + "/telemetry";
   commandTopic = String("ut/v1/") + DEVICE_ID + "/cmd/#";
+  commandAckTopic = String("ut/v1/") + DEVICE_ID + "/cmd_ack";
   statusTopic = String("ut/v1/") + DEVICE_ID + "/status";
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setCallback(onMqttMessage);

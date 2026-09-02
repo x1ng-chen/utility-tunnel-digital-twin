@@ -84,6 +84,35 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('accessToken', response.json())
 
+    @patch('operations.views.publish_controller_command')
+    def test_operator_can_send_audited_controller_led_command(self, publish_command):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        publish_command.return_value = {
+            'schema': 'ut.command.ack.v1', 'cmdId': 'platform-command', 'status': 'accepted', 'reason': 'led_blue',
+        }
+        self.auth(self.operator)
+
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_blue'}, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['delivery'], 'acknowledged')
+        command = publish_command.call_args.args[0]
+        self.assertEqual(command['schema'], 'ut.command.v1')
+        self.assertEqual(command['action'], 'led_blue')
+        self.assertEqual(command['ttlMs'], 10000)
+        self.assertTrue(command['cmdId'].startswith('platform-'))
+        self.assertTrue(AuditLog.objects.filter(action='controller.command.sent', resource_id='CTRL-01').exists())
+
+    def test_viewer_cannot_send_controller_command(self):
+        viewer = User.objects.create_user(username='viewer@example.com', email='viewer@example.com', password='demo-password')
+        Profile.objects.create(user=viewer, display_name='查看者', role=Profile.Role.VIEWER)
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        self.auth(viewer)
+
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_blue'}, format='json')
+
+        self.assertEqual(response.status_code, 403)
+
     def test_password_change_rotates_bearer_credential(self):
         self.auth(self.operator)
         previous_token = Token.objects.get(user=self.operator).key

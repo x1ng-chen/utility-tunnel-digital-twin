@@ -33,6 +33,7 @@ let fallbackAssetRoot: Group | undefined;
 let modelLoadToken = 0;
 let modelLoadTimeout = 0;
 let sceneRadius = 18;
+let pendingPanGesture: { pointerId: number; startX: number; startY: number; target: Vector3 } | undefined;
 
 const colors: Record<TwinVisualState, number> = { normal: 0x4ee7c3, warning: 0xffbb62, alarm: 0xff536f, unknown: 0x6d87aa };
 
@@ -255,7 +256,16 @@ function setNavigationMode(mode: 'pan' | 'orbit') {
 }
 
 function onCanvasPointerDown(event: PointerEvent) {
-  if (!renderer || !camera) return;
+  if (!renderer || !camera || !controls) return;
+  if (event.button === 0 && navigationMode.value === 'pan') {
+    pendingPanGesture = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      target: controls.target.clone(),
+    };
+    return;
+  }
   // Camera gestures must never select an object and pull the target back to it.
   if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || navigationMode.value === 'pan') return;
   const rect = renderer.domElement.getBoundingClientRect();
@@ -266,6 +276,37 @@ function onCanvasPointerDown(event: PointerEvent) {
   const code = hit?.object.userData.assetCode as string | undefined;
   if (code) emit('select', code);
 }
+
+function onCanvasPointerUp(event: PointerEvent) {
+  const gesture = pendingPanGesture;
+  if (!gesture || gesture.pointerId !== event.pointerId) return;
+  pendingPanGesture = undefined;
+  if (!renderer || !camera || !controls) return;
+
+  // OrbitControls normally handles the gesture. A pointer-capture transition
+  // can occasionally swallow its move events in Chromium (notably around
+  // fullscreen/custom-cursor layers). If that happened, apply the same
+  // screen-space translation once on release so left-button panning remains
+  // deterministic instead of appearing unresponsive.
+  if (controls.target.distanceToSquared(gesture.target) > 1e-10) {
+    publishCameraDistance();
+    return;
+  }
+  const deltaX = event.clientX - gesture.startX;
+  const deltaY = event.clientY - gesture.startY;
+  if (Math.hypot(deltaX, deltaY) < 4) return;
+  const height = Math.max(renderer.domElement.clientHeight, 1);
+  const distance = Math.max(camera.position.distanceTo(controls.target), .001);
+  const worldPerPixel = 2 * distance * Math.tan(camera.fov * Math.PI / 360) / height;
+  const offset = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(-deltaX * worldPerPixel)
+    .add(new Vector3(0, 1, 0).applyQuaternion(camera.quaternion).multiplyScalar(deltaY * worldPerPixel));
+  camera.position.add(offset);
+  controls.target.add(offset);
+  controls.update();
+  publishCameraDistance();
+}
+
+function cancelCanvasPan() { pendingPanGesture = undefined; }
 
 function animate() {
   frame = window.requestAnimationFrame(animate);
@@ -384,6 +425,8 @@ onMounted(() => {
   key.position.set(10, 16, 10);
   scene.add(key);
   renderer.domElement.addEventListener('pointerdown', onCanvasPointerDown);
+  window.addEventListener('pointerup', onCanvasPointerUp);
+  window.addEventListener('pointercancel', cancelCanvasPan);
   renderer.domElement.addEventListener('webglcontextlost', onContextLost);
   renderer.domElement.addEventListener('webglcontextrestored', onContextRestored);
   resizeObserver = new ResizeObserver(([entry]) => {
@@ -414,6 +457,8 @@ onBeforeUnmount(() => {
   window.cancelAnimationFrame(frame);
   resizeObserver?.disconnect();
   renderer?.domElement.removeEventListener('pointerdown', onCanvasPointerDown);
+  window.removeEventListener('pointerup', onCanvasPointerUp);
+  window.removeEventListener('pointercancel', cancelCanvasPan);
   renderer?.domElement.removeEventListener('webglcontextlost', onContextLost);
   renderer?.domElement.removeEventListener('webglcontextrestored', onContextRestored);
   controls?.dispose();

@@ -33,6 +33,21 @@ function requestKey(prefix: string): string {
   return `${prefix}-${suffix}`.slice(0, 80);
 }
 
+/**
+ * Keep existing records alive across polling cycles. Besides reducing rendering
+ * work, this prevents an operator's focused control from being replaced while
+ * they are about to click it.
+ */
+export function reconcileRecords<T extends { id: number | string }>(current: T[], incoming: T[]): T[] {
+  const existing = new Map(current.map((item) => [item.id, item]));
+  return incoming.map((item) => {
+    const retained = existing.get(item.id);
+    if (!retained) return item;
+    Object.assign(retained, item);
+    return retained;
+  });
+}
+
 export const useOperationsStore = defineStore('operations', () => {
   const auth = useAuthStore();
   const dashboard = ref<Dashboard>({ assets: { total: 12, online: 5 }, health: { value: 100 }, openAlerts: 2, activeWorkOrders: 2, telemetry: { id: 1, assetCode: 'ENV-01', metric: '环境温度', value: 26.4, unit: '°C', quality: 'good', recordedAt: new Date().toISOString() } });
@@ -90,7 +105,7 @@ export const useOperationsStore = defineStore('operations', () => {
       const listParams = { page: 1, pageSize: 100 };
       const gisStatus = auth.user?.role === 'administrator' ? 'all' : 'published';
       const [dashboardResponse, assetsResponse, alertsResponse, ordersResponse, thresholdsResponse, telemetryResponse, auditResponse, gisResponse, bindingsResponse] = await Promise.all([api.dashboard(), api.assets(listParams), api.alerts(listParams), api.workOrders(listParams), api.thresholds(), api.telemetry(listParams), api.audit(listParams), api.gisFeatures({ status: gisStatus }), api.hardwareBindings(listParams)]);
-      dashboard.value = dashboardResponse.data; assets.value = assetsResponse.data.items; alerts.value = alertsResponse.data.items; workOrders.value = ordersResponse.data.items; thresholds.value = thresholdsResponse.data.items; telemetry.value = telemetryResponse.data.items; audit.value = auditResponse.data.items; spatialFeatures.value = normalizeSpatialFeatures(gisResponse.data.features); hardwareBindings.value = bindingsResponse.data.items;
+      dashboard.value = dashboardResponse.data; assets.value = reconcileRecords(assets.value, assetsResponse.data.items); alerts.value = reconcileRecords(alerts.value, alertsResponse.data.items); workOrders.value = reconcileRecords(workOrders.value, ordersResponse.data.items); thresholds.value = thresholdsResponse.data.items; telemetry.value = reconcileRecords(telemetry.value, telemetryResponse.data.items); audit.value = reconcileRecords(audit.value, auditResponse.data.items); spatialFeatures.value = reconcileRecords(spatialFeatures.value, normalizeSpatialFeatures(gisResponse.data.features)); hardwareBindings.value = reconcileRecords(hardwareBindings.value, bindingsResponse.data.items);
       offline.value = false;
       lastSyncedAt.value = new Date().toISOString();
     } catch (cause: unknown) {
@@ -115,10 +130,10 @@ export const useOperationsStore = defineStore('operations', () => {
           api.dashboard(), api.assets(listParams), api.alerts(listParams), api.workOrders(listParams), api.telemetry(listParams),
         ]);
         dashboard.value = dashboardResponse.data;
-        assets.value = assetsResponse.data.items;
-        alerts.value = alertsResponse.data.items;
-        workOrders.value = ordersResponse.data.items;
-        telemetry.value = telemetryResponse.data.items;
+        assets.value = reconcileRecords(assets.value, assetsResponse.data.items);
+        alerts.value = reconcileRecords(alerts.value, alertsResponse.data.items);
+        workOrders.value = reconcileRecords(workOrders.value, ordersResponse.data.items);
+        telemetry.value = reconcileRecords(telemetry.value, telemetryResponse.data.items);
         offline.value = false;
         syncError.value = '';
         lastSyncedAt.value = new Date().toISOString();

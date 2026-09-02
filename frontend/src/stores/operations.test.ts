@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useAuthStore } from './auth';
-import { summarizeTelemetry, useOperationsStore } from './operations';
+import { reconcileRecords, summarizeTelemetry, useOperationsStore } from './operations';
 import { api } from '../services/api';
 
 describe('operations store', () => {
@@ -13,6 +13,15 @@ describe('operations store', () => {
     expect(store.assets).toHaveLength(12);
     expect(store.openAlerts).toBe(2);
     expect(store.activeOrders).toBe(2);
+  });
+
+  it('preserves record identity while applying live polling updates', () => {
+    const retained = { id: 1, status: 'open', title: '原工单' };
+    const result = reconcileRecords([retained], [{ id: 1, status: 'assigned', title: '更新工单' }, { id: 2, status: 'open', title: '新增工单' }]);
+
+    expect(result[0]).toBe(retained);
+    expect(retained).toEqual({ id: 1, status: 'assigned', title: '更新工单' });
+    expect(result[1]).toEqual({ id: 2, status: 'open', title: '新增工单' });
   });
 
   it('rejects invalid threshold ranges and records valid changes', async () => {
