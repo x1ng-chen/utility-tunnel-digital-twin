@@ -13,6 +13,20 @@ if DJANGO_ENV not in {'development', 'test', 'production'}:
 IS_PRODUCTION = DJANGO_ENV == 'production'
 APP_VERSION = os.getenv('APP_VERSION', '0.6.0')
 APP_COMMIT_SHA = os.getenv('APP_COMMIT_SHA', 'local')
+MQTT_COMMAND_BROKER_HOST = os.getenv('MQTT_COMMAND_BROKER_HOST', '127.0.0.1').strip()
+if not MQTT_COMMAND_BROKER_HOST:
+    raise ValueError('MQTT_COMMAND_BROKER_HOST must not be empty.')
+try:
+    MQTT_COMMAND_BROKER_PORT = int(os.getenv('MQTT_COMMAND_BROKER_PORT', '1884'))
+    MQTT_COMMAND_ACK_TIMEOUT_SECONDS = float(os.getenv('MQTT_COMMAND_ACK_TIMEOUT_SECONDS', '3'))
+except ValueError as exc:
+    raise ValueError('MQTT command broker settings must be numeric.') from exc
+if not 1 <= MQTT_COMMAND_BROKER_PORT <= 65535:
+    raise ValueError('MQTT_COMMAND_BROKER_PORT must be between 1 and 65535.')
+if not 0.5 <= MQTT_COMMAND_ACK_TIMEOUT_SECONDS <= 10:
+    raise ValueError('MQTT_COMMAND_ACK_TIMEOUT_SECONDS must be between 0.5 and 10.')
+MQTT_COMMAND_USERNAME = os.getenv('MQTT_COMMAND_USERNAME', '')
+MQTT_COMMAND_PASSWORD = os.getenv('MQTT_COMMAND_PASSWORD', '')
 # Fail closed for deployments that do not explicitly provide a debug flag.
 # Local development can opt in through backend/.env.example.
 DEBUG = DJANGO_ENV != 'production' and os.getenv('DJANGO_DEBUG', 'false').lower() in {'1', 'true', 'yes'}

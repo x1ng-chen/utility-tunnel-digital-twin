@@ -28,6 +28,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .authentication import BearerTokenAuthentication, IngestApiKeyAuthentication
+from .command_dispatch import CommandDispatchError, publish_controller_command
 from .connectivity import count_online_assets, mark_assets_connected
 from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder, WorkOrderEvent
 from .permissions import AuthenticatedRead, TelemetryPermission
@@ -106,6 +107,9 @@ def can_ingest(request) -> bool:
 
 def is_admin(request) -> bool:
     return role(request) == Profile.Role.ADMINISTRATOR
+
+
+CONTROLLER_LED_ACTIONS = {'led_red', 'led_green', 'led_blue', 'led_off'}
 
 
 def work_order_code() -> str:
@@ -654,6 +658,50 @@ class AdminUserDetailView(APIView):
             profile.save(update_fields=['display_name', 'role'])
             audit(request.user, 'admin.user.updated', 'app_user', user.pk, {'role': profile.role, 'isActive': user.is_active, 'passwordChanged': password_value is not None}, request_id(request))
         return Response(AdminUserSerializer(user).data)
+
+
+class ControllerCommandView(APIView):
+    """Publish the small, reviewed set of safe demonstration LED actions."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, asset_code):
+        if not can_write(request):
+            return error_response('forbidden', 'Operator permission is required to control equipment.', 403)
+        if asset_code != 'CTRL-01':
+            return error_response('not_found', 'This controller is not configured for platform commands.', 404)
+        payload = object_payload(request)
+        action = payload.get('action') if payload else None
+        if action not in CONTROLLER_LED_ACTIONS:
+            return error_response('invalid_request', 'Only approved lighting test actions are available.', 400)
+        if not Asset.objects.filter(code=asset_code, is_active=True).exists():
+            return error_response('not_found', 'The controller asset is not active.', 404)
+
+        command = {
+            'schema': 'ut.command.v1',
+            'cmdId': f'platform-{uuid4().hex[:16]}',
+            'action': action,
+            'ttlMs': 10000,
+        }
+        try:
+            acknowledgement = publish_controller_command(command)
+        except CommandDispatchError as exc:
+            audit(request.user, 'controller.command.failed', 'asset', asset_code, {
+                'cmdId': command['cmdId'], 'action': action, 'reason': str(exc),
+            }, request_id(request))
+            return error_response('command_unavailable', 'The local controller command broker is unavailable.', 503)
+
+        outcome = acknowledgement.get('status') if acknowledgement else 'ack_timeout'
+        audit(request.user, 'controller.command.sent', 'asset', asset_code, {
+            'cmdId': command['cmdId'], 'action': action, 'outcome': outcome,
+            'ackReason': acknowledgement.get('reason') if acknowledgement else '',
+        }, request_id(request))
+        return Response({
+            'cmdId': command['cmdId'],
+            'action': action,
+            'delivery': 'acknowledged' if acknowledgement else 'published',
+            'ack': acknowledgement,
+        }, status=201)
 
 
 class DashboardView(APIView):

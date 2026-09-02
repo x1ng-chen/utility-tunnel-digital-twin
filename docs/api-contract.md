@@ -64,6 +64,7 @@
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
 | `GET` | `/dashboard/` | 登录 | 资产、健康度、告警、工单和最新遥测汇总；在线数按硬件绑定期望上报间隔和最近心跳判定，`workOrderSla` 提供已超时和 4 小时内到期工单数 |
+| `POST` | `/controllers/CTRL-01/commands/` | 管理员/运维员 | 仅允许 `{ action: led_red\|led_green\|led_blue\|led_off }`；服务端生成唯一 `cmdId`，以 QoS 1 发布至本地 MQTT，最多等待 3 秒匹配 `cmd_ack`，并记录审计。该接口不开放继电器或蜂鸣器控制。 |
 | `GET` | `/assets/` | 登录 | `search`、`status`、`zone`、`integrationStatus`、`hardwareCode`、`hasLocation=true\|false`、`isActive=true\|false`、`page`、`pageSize`；管理员可用 `isActive=all` 查询全部生命周期；返回硬件接入信息、WGS84 坐标、坐标来源和版本 |
 | `POST` | `/assets/` | 管理员 | 新建资产主数据；校验编码、硬件编号、能力去重、二维孪生坐标和成对 WGS84 坐标，成功后写入审计 |
 | `PATCH` | `/assets/{id}/` | 管理员 | 更新资产主数据，必须提交当前 `version`；并发过期返回 `409`，停用存在活动告警或工单的资产返回 `409` |
