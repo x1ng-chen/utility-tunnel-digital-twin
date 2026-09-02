@@ -108,7 +108,7 @@ export const api = {
   createAlertWorkOrder: (id: number) => client.post(`/alerts/${id}/work-order/`),
   workOrders: (params?: Record<string, string | number>) => client.get('/work-orders/', { params }),
   createWorkOrder: (payload: Record<string, unknown>, idempotencyKey?: string) => client.post('/work-orders/', payload, { headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined }),
-  transitionWorkOrder: (id: number, to: string, version?: number) => client.post(`/work-orders/${id}/transition/`, { to, ...(version == null ? {} : { version }) }),
+  transitionWorkOrder: (id: number, to: string, version?: number, note = '') => client.post(`/work-orders/${id}/transition/`, { to, note, ...(version == null ? {} : { version }) }),
   telemetry: (params?: Record<string, string | number>) => client.get('/telemetry/', { params }),
   telemetrySummary: (params?: Record<string, string | number>) => client.get('/telemetry/summary/', { params }),
   ingestTelemetry: (readings: Record<string, unknown>[]) => client.post('/telemetry/', { readings }),

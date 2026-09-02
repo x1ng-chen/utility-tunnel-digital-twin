@@ -878,7 +878,21 @@ class OperationsApiTests(TestCase):
         self.auth(self.operator)
         self.assertEqual(self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.COMPLETED}, format='json').status_code, 403)
         self.auth(self.admin)
-        self.assertEqual(self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.COMPLETED}, format='json').status_code, 200)
+        response = self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.COMPLETED, 'note': '复核通过，设备反馈恢复正常。'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['timeline'][0]['note'], '复核通过，设备反馈恢复正常。')
+
+    def test_work_order_review_requires_note_and_exposes_timeline(self):
+        order = WorkOrder.objects.create(code='WO-TIMELINE', asset=self.asset, title='处置留痕', status=WorkOrder.Status.IN_PROGRESS, created_by=self.operator)
+        self.auth(self.operator)
+        missing = self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.PENDING_REVIEW}, format='json')
+        self.assertEqual(missing.status_code, 400)
+        response = self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.PENDING_REVIEW, 'note': '已复位控制器并连续观察十分钟。'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        event = response.json()['timeline'][0]
+        self.assertEqual(event['fromStatus'], WorkOrder.Status.IN_PROGRESS)
+        self.assertEqual(event['toStatus'], WorkOrder.Status.PENDING_REVIEW)
+        self.assertEqual(event['actorName'], self.operator.email)
 
     def test_work_order_transition_rejects_stale_version(self):
         order = WorkOrder.objects.create(code='WO-VERSION', asset=self.asset, title='版本校验', status=WorkOrder.Status.OPEN, created_by=self.operator)

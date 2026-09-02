@@ -29,7 +29,7 @@ from rest_framework.views import APIView
 
 from .authentication import BearerTokenAuthentication, IngestApiKeyAuthentication
 from .connectivity import count_online_assets, mark_assets_connected
-from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder
+from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder, WorkOrderEvent
 from .permissions import AuthenticatedRead, TelemetryPermission
 from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, HardwareBindingMutationSerializer, HardwareBindingSerializer, RegistrationRequestSerializer, ReportExportSerializer, SpatialFeatureMutationSerializer, SpatialFeatureSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, TwinModelReleaseSerializer, WorkOrderSerializer, hardware_connectivity
 from .services import actor_name, audit
@@ -1295,6 +1295,7 @@ class AlertWorkOrderView(APIView):
                     return error_response('invalid_state', 'Alert is not eligible for a work order.', 409)
                 priority = WorkOrder.Priority.URGENT if alert.severity == Alert.Severity.CRITICAL else WorkOrder.Priority.HIGH
                 order = WorkOrder.objects.create(code=work_order_code(), source_alert=alert, asset=alert.asset, title=f'处置 {alert.code}：{alert.title}', priority=priority, created_by=request.user, due_at=work_order_due_at(priority))
+                WorkOrderEvent.objects.create(work_order=order, event_type=WorkOrderEvent.EventType.CREATED, to_status=order.status, note='由告警自动转为处置工单', actor=request.user)
                 audit(request.user, 'work_order.created_from_alert', 'work_order', order.pk, {'alertCode': alert.code, 'priority': priority, 'dueAt': order.due_at.isoformat()}, request_id(request))
         except IntegrityError:
             # A concurrent request may create the same linked order first.
@@ -1309,7 +1310,7 @@ class WorkOrderListView(APIView):
     permission_classes = [AuthenticatedRead]
 
     def get(self, request):
-        queryset = WorkOrder.objects.select_related('asset', 'source_alert', 'assignee')
+        queryset = WorkOrder.objects.select_related('asset', 'source_alert', 'assignee').prefetch_related('events__actor')
         if request.query_params.get('status'):
             work_order_status = request.query_params['status']
             if work_order_status not in WorkOrder.Status.values:
@@ -1380,6 +1381,7 @@ class WorkOrderListView(APIView):
         try:
             with transaction.atomic():
                 order = WorkOrder.objects.create(code=work_order_code(), asset=asset, title=title, description=description_value.strip(), priority=priority, created_by=request.user, due_at=work_order_due_at(priority), idempotency_key=request_key)
+                WorkOrderEvent.objects.create(work_order=order, event_type=WorkOrderEvent.EventType.CREATED, to_status=order.status, note='手动创建运维工单', actor=request.user)
                 audit(request.user, 'work_order.created_manual', 'work_order', order.pk, {'assetCode': asset.code, 'priority': priority, 'dueAt': order.due_at.isoformat()}, request_id(request))
         except IntegrityError:
             # A simultaneous retry may win the unique idempotency constraint.
@@ -1417,6 +1419,12 @@ class WorkOrderTransitionView(APIView):
         target = payload.get('to')
         if not isinstance(target, str):
             return error_response('invalid_request', 'to must be a work order status string.', 400)
+        note_value = payload.get('note', '')
+        if not isinstance(note_value, str):
+            return error_response('invalid_request', 'note must be a string.', 400)
+        note = note_value.strip()
+        if len(note) > 1000:
+            return error_response('invalid_request', 'note must not exceed 1000 characters.', 400)
         requested_version = payload.get('version')
         if requested_version is not None:
             try:
@@ -1435,6 +1443,8 @@ class WorkOrderTransitionView(APIView):
                 return error_response('invalid_transition', 'Invalid work order transition.', 409)
             if target == WorkOrder.Status.COMPLETED and role(request) != Profile.Role.ADMINISTRATOR:
                 return error_response('forbidden', 'Administrator review permission is required.', 403)
+            if target in {WorkOrder.Status.PENDING_REVIEW, WorkOrder.Status.COMPLETED} and not note:
+                return error_response('validation_error', '提交复核或完成复核时必须填写处理说明。', 400)
             previous = order.status
             order.status = target
             if target == WorkOrder.Status.ASSIGNED:
@@ -1453,7 +1463,8 @@ class WorkOrderTransitionView(APIView):
             # Keep the runtime database role least-privileged: transition writes
             # only the lifecycle fields instead of every model column.
             order.save(update_fields=['status', 'assignee', 'completed_at', 'reviewed_by', 'version', 'updated_at'])
-            audit(request.user, 'work_order.transitioned', 'work_order', order.pk, {'from': previous, 'to': target}, request_id(request))
+            WorkOrderEvent.objects.create(work_order=order, event_type=WorkOrderEvent.EventType.TRANSITION, from_status=previous, to_status=target, note=note, actor=request.user)
+            audit(request.user, 'work_order.transitioned', 'work_order', order.pk, {'from': previous, 'to': target, 'hasNote': bool(note)}, request_id(request))
         return Response(WorkOrderSerializer(order).data)
 
 

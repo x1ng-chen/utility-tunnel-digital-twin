@@ -25,6 +25,7 @@ watch(visible, (items) => {
 function selectAsset(asset: Asset) { selectedCode.value = asset.code; }
 function openTwin(asset: Asset) { void router.push({ path: '/twin-3d', query: { asset: asset.code, source: 'asset' } }); }
 function openGis(asset: Asset) { void router.push({ path: '/gis', query: { asset: asset.code, source: 'asset' } }); }
+function openWorkOrders(asset: Asset) { void router.push({ path: '/work-orders', query: { asset: asset.code, source: 'asset' } }); }
 
 function positionStyle(asset: Asset) {
   const x = Math.min(95, Math.max(5, Number(asset.position?.x) || 50));
@@ -67,7 +68,7 @@ function formatTime(value?: string | null) {
         <div class="detail-grid"><div><small>硬件编号</small><strong>{{ selectedAsset.hardwareCode || '未分配' }}</strong></div><div><small>接入状态</small><strong>{{ integrationLabel(selectedAsset.integrationStatus) }}</strong></div><div><small>接口</small><strong>{{ selectedAsset.interface || '未配置' }}</strong></div><div><small>最近上报</small><strong>{{ formatTime(selectedAsset.lastSeenAt) }}</strong></div></div>
         <div class="detail-block"><span class="eyebrow">实体设备</span><p class="detail-list">{{ selectedAsset.installationNote }}</p><div class="capability-tags"><span v-for="capability in selectedAsset.capabilities" :key="capability">{{ capability }}</span></div></div>
         <div class="detail-block"><span class="eyebrow">实时数据</span><div v-if="selectedTelemetry" class="detail-reading"><strong>{{ selectedTelemetry.value }}</strong><span>{{ selectedTelemetry.unit }}</span><small>{{ selectedTelemetry.metric }} · {{ selectedTelemetry.quality === 'good' ? '质量良好' : selectedTelemetry.quality === 'suspect' ? '需要关注' : selectedTelemetry.quality === 'bad' ? '数据异常' : '数据缺失' }}</small></div><p v-else class="detail-empty">暂无遥测数据</p></div>
-        <div class="detail-block"><span class="eyebrow">关联事件</span><p v-if="selectedAlerts.length" class="detail-list">{{ selectedAlerts.length }} 条告警 · {{ selectedAlerts.filter((item) => ['open', 'acknowledged'].includes(item.status)).length }} 条待处置</p><p v-else class="detail-empty">暂无告警</p><p v-if="selectedOrders.length" class="detail-list">{{ selectedOrders.length }} 个关联工单</p><p v-else class="detail-empty">暂无关联工单</p></div>
+        <div class="detail-block"><span class="eyebrow">关联事件</span><p v-if="selectedAlerts.length" class="detail-list">{{ selectedAlerts.length }} 条告警 · {{ selectedAlerts.filter((item) => ['open', 'acknowledged'].includes(item.status)).length }} 条待处置</p><p v-else class="detail-empty">暂无告警</p><p v-if="selectedOrders.length" class="detail-list">{{ selectedOrders.length }} 个关联工单 · {{ selectedOrders.filter((item) => item.status === 'completed').length }} 个已完成</p><p v-else class="detail-empty">暂无关联工单</p><button v-if="selectedOrders.length" type="button" class="asset-history-link" @click="openWorkOrders(selectedAsset)">查看维护与处置记录 →</button></div>
       </aside>
       <div v-else class="asset-detail-panel empty-state">没有匹配的设备节点，请调整搜索条件。</div>
     </section>
@@ -77,3 +78,7 @@ function formatTime(value?: string | null) {
     </section>
   </AppShell>
 </template>
+
+<style scoped>
+.asset-history-link{width:100%;margin-top:10px;padding:9px 11px;border:1px solid #35597e;background:#102943;color:#b8cde6;text-align:left}.asset-history-link:hover,.asset-history-link:focus-visible{border-color:#5d8dca;background:#183b60;color:#fff;outline:0}
+</style>

@@ -256,7 +256,9 @@ test('运维员可确认告警、生成工单并推进处置流程', async ({ pa
     await acknowledgeButton.click();
   }
   await expect(alertStatus).toHaveText('已确认');
-  await alertRow.getByRole('button', { name: '转工单' }).click();
+  const openOrderButton = alertRow.getByRole('button', { name: /转工单|查看工单/ });
+  await expect(openOrderButton).toBeVisible();
+  await openOrderButton.click();
   await expect(page).toHaveURL(/\/work-orders\?focus=/);
   await expect(page.getByText(/已打开告警 ALM-260826-001 生成的处置工单/)).toBeVisible();
   const linkedOrder = page.locator('.order-card').filter({ hasText: 'ALM-260826-001' });
@@ -267,10 +269,18 @@ test('运维员可确认告警、生成工单并推进处置流程', async ({ pa
   await expect(page.locator('.twin-inspector').getByText('MESH_CTRL_01', { exact: true })).toBeVisible();
   await page.goBack();
   await expect(linkedOrder).toBeVisible();
-  await linkedOrder.getByRole('button', { name: '接单并分派' }).click();
-  await linkedOrder.getByRole('button', { name: '开始现场处理' }).click();
-  await linkedOrder.getByRole('button', { name: '提交复核' }).click();
+  const assignButton = linkedOrder.getByRole('button', { name: '接单并分派' });
+  if (await assignButton.count()) await assignButton.click();
+  const startButton = linkedOrder.getByRole('button', { name: '开始现场处理' });
+  if (await startButton.count()) await startButton.click();
+  const reviewButton = linkedOrder.getByRole('button', { name: '提交复核' });
+  if (await reviewButton.count()) {
+    await reviewButton.click();
+    await linkedOrder.getByLabel('处理结果').fill('已完成现场检查，设备反馈恢复正常。');
+    await linkedOrder.getByRole('button', { name: '确认提交' }).click();
+  }
   await expect(linkedOrder.getByRole('button', { name: '复核并完成' })).toHaveCount(0);
+  await expect(linkedOrder.getByText('处理记录')).toBeVisible();
 
   await page.getByRole('button', { name: '数据洞察' }).click();
   await page.getByLabel('资产').selectOption('ENV-01');

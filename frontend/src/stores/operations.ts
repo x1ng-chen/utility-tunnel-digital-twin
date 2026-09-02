@@ -181,13 +181,16 @@ export const useOperationsStore = defineStore('operations', () => {
     return next;
   }
 
-  async function transition(order: WorkOrder, to: WorkOrder['status']) {
+  async function transition(order: WorkOrder, to: WorkOrder['status'], note = '') {
     if (offline.value) throw new Error('数据服务当前离线，离线快照为只读状态。');
     if (source.value === 'demo' && !demoTransitions[order.status].includes(to)) throw new Error('无效的工单状态流转');
     if (source.value === 'demo' && to === 'completed' && auth.user?.role !== 'administrator') throw new Error('只有管理员可以完成工单');
     const previous = order.status;
-    const response = source.value === 'api' ? await runApiMutation(() => api.transitionWorkOrder(order.id, to, order.version)) : null;
+    const response = source.value === 'api' ? await runApiMutation(() => api.transitionWorkOrder(order.id, to, order.version, note)) : null;
     Object.assign(order, response?.data ?? { status: to, assigneeName: to === 'assigned' ? (auth.user?.displayName || '演示运维员') : order.assigneeName, updatedAt: new Date().toISOString(), completedAt: to === 'completed' ? new Date().toISOString() : order.completedAt, version: order.version + 1 });
+    if (source.value === 'demo') {
+      order.timeline = [{ id: nextLocalId(), eventType: 'transition', fromStatus: previous, toStatus: to, note, actorName: auth.user?.displayName || '当前用户', createdAt: new Date().toISOString() }, ...(order.timeline || [])];
+    }
     if (source.value === 'demo' && to === 'completed') {
       const linkedAlert = order.sourceAlertId ? alerts.value.find((item) => item.id === order.sourceAlertId) : undefined;
       if (linkedAlert && ['open', 'acknowledged'].includes(linkedAlert.status)) {
