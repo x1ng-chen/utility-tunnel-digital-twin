@@ -4,8 +4,8 @@
 
 `utility-tunnel-annular-v07-final.blend` 与
 `utility-tunnel-annular-v07-final.glb` 是当前唯一的正式工程模型。
-它保留透明环形外壳、工业设备布局和 5 个液位站，并统一使用
-`LEVEL-L01` 至 `LEVEL-L05` 及其探头、支架、线束、状态子节点；
+它保留透明环形外壳、工业设备布局和 5 个液位站；五套 FS-IR02 分别固定在
+排水、吸水、泵入口、阀后和回水管段，并各自具备板卡、探头、支架、管夹、线束和中文测点牌；
 `PIPE-G01`、`WATER-TRAY-01`、`FAN-01` 和 `GAS-01` 同样具备稳定名称。
 V07 继承 V06 的完整顶盖与连续密封边，并清理历史重复布局层，将控制、液位、水路和燃气/通风功能区分离为可读的检修布局。
 
@@ -26,7 +26,7 @@ V07 继承 V06 的完整顶盖与连续密封边，并清理历史重复布局�
 | V04 | 正式环形 Web 基线 | `utility-tunnel-annular-v04.glb` |
 | V05 | 2026-08-31 最终环形实体与运行时节点 | `utility-tunnel-annular-v05-final.glb` |
 | V06 | 2026-09-01 顶部与侧边完整封闭最终版 | `utility-tunnel-annular-v06-final.glb` |
-| V07 | 2026-09-02 历史重叠层清理与功能区净空最终版 | `utility-tunnel-annular-v07-final.glb` |
+| V07 | 2026-09-02 五个分散管路液位测点最终版 | `utility-tunnel-annular-v07-final.glb` |
 
 ## 功能与安全边界
 
