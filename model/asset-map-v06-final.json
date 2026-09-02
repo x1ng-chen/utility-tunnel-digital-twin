@@ -1,0 +1,40 @@
+{
+  "version": "V06",
+  "date": "2026-09-01",
+  "sourceVersion": "V05",
+  "model": "utility-tunnel-annular-v06-final.glb",
+  "scope": "Close the complete central roof opening and eliminate the remaining exposed top and side gaps.",
+  "sourceOpeningVisualMm": [800.952, 205.172],
+  "assets": [
+    {"asset_id":"CTRL-01","meshNames":["CTRL-01"]},
+    {"asset_id":"LEVEL-L01","meshNames":["LEVEL-L01","LEVEL-L01-PROBE_TEMP"]},
+    {"asset_id":"LEVEL-L02","meshNames":["LEVEL-L02","LEVEL-L02-PROBE_TEMP"]},
+    {"asset_id":"LEVEL-L03","meshNames":["LEVEL-L03","LEVEL-L03-PROBE_TEMP"]},
+    {"asset_id":"LEVEL-L04","meshNames":["LEVEL-L04","LEVEL-L04-PROBE_TEMP"]},
+    {"asset_id":"LEVEL-L05","meshNames":["LEVEL-L05","LEVEL-L05-PROBE_TEMP"]},
+    {"asset_id":"WATER-TRAY-01","meshNames":["WATER-TRAY-01"]},
+    {"asset_id":"P-01","meshNames":["P-01"]},
+    {"asset_id":"V-01","meshNames":["V-01"]},
+    {"asset_id":"WATER-TANK-01","meshNames":["WATER-TANK-01"]},
+    {"asset_id":"PIPE-G01","meshNames":["PIPE-G01"]},
+    {"asset_id":"FAN-01","meshNames":["FAN-01"]},
+    {"asset_id":"FAN-02","meshNames":["FAN-02"]},
+    {"asset_id":"ROOF-CENTER-HANDLE","meshNames":["GEO-V16-ROOF-CENTER-HANDLE_TEMP"]},
+    {"asset_id":"ROOF-FULL-LID","meshNames":["GEO-V21-ROOF-FULL-LID_TEMP"],"visualDimensionsMm":[810.952,215.172,4.0],"edgeOverlapMm":5.0,"status":"TEMP_VISUAL"},
+    {"asset_id":"ROOF-FULL-GASKET","meshNames":["GEO-V21-ROOF-FULL-GASKET_TEMP"],"visualBandMm":7.0,"status":"TEMP_VISUAL"}
+  ],
+  "runtimeValidation": {
+    "runtimeNodes": 555,
+    "requiredNodes": 16,
+    "missingRequiredNodes": 0,
+    "fullLidNodes": 1,
+    "fullGasketNodes": 1,
+    "supersededCenterLidNodes": 0,
+    "supersededInnerRailNodes": 0,
+    "legacyFiveStationPresentationNodes": 0,
+    "leakedPlanningNodes": 0,
+    "status": "PASS"
+  },
+  "releaseNote": "V06 is the formal daily release number. GEO-V16 and GEO-V21 are retained internal runtime node identifiers and do not consume formal release numbers.",
+  "safety": "All opening and lid dimensions are visual values measured from the Blender model, not verified physical dimensions. Do not use them for fabrication. No water, power, commissioning or building-water connection is approved."
+}
