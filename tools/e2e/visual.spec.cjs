@@ -4,6 +4,11 @@ const path = require('node:path');
 
 const webUrl = process.env.E2E_WEB_URL || 'http://127.0.0.1:5173';
 const adminPassword = '123';
+const mapTilePattern = /https?:\/\/(?:[^/]+\.)?tile\.openstreetmap\.org\/.*/i;
+const transparentMapTile = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+);
 const pages = [
   ['/dashboard', '运行，一眼掌握', '运行总览'],
   ['/alerts', '告警中心', '告警中心'],
@@ -34,6 +39,14 @@ async function openAuthenticatedPage(page, route) {
     await loginAsAdministrator(page);
     if (route !== '/dashboard') await page.goto(`${webUrl}${route}`);
   }
+}
+
+async function isolateMapTiles(page) {
+  await page.route(mapTilePattern, (route) => route.fulfill({
+    status: 200,
+    contentType: 'image/png',
+    body: transparentMapTile,
+  }));
 }
 
 async function inspectDesktopLayout(page, heading) {
@@ -99,11 +112,7 @@ test('全部业务页面通过桌面端布局巡检', async ({ page }) => {
   const consoleErrors = [];
   page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('pageerror', (error) => consoleErrors.push(error.message));
-  await page.route(/https:\/\/.*\.tile\.openstreetmap\.org\/.*/, (route) => route.fulfill({
-    status: 200,
-    contentType: 'image/png',
-    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
-  }));
+  await isolateMapTiles(page);
   await page.goto(webUrl);
   await loginAsAdministrator(page);
 
@@ -133,11 +142,7 @@ test('全部业务页面通过三档桌面分辨率布局巡检', async ({ page 
   const consoleErrors = [];
   page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('pageerror', (error) => consoleErrors.push(error.message));
-  await page.route(/https:\/\/.*\.tile\.openstreetmap\.org\/.*/, (route) => route.fulfill({
-    status: 200,
-    contentType: 'image/png',
-    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
-  }));
+  await isolateMapTiles(page);
 
   for (const viewport of [
     { width: 1366, height: 768 },

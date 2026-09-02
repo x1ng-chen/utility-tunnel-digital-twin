@@ -4,6 +4,19 @@ const path = require('node:path');
 
 const webUrl = process.env.E2E_WEB_URL || 'http://127.0.0.1:5173';
 const adminPassword = '123';
+const mapTilePattern = /https?:\/\/(?:[^/]+\.)?tile\.openstreetmap\.org\/.*/i;
+const transparentMapTile = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+);
+
+async function isolateMapTiles(page) {
+  await page.route(mapTilePattern, (route) => route.fulfill({
+    status: 200,
+    contentType: 'image/png',
+    body: transparentMapTile,
+  }));
+}
 
 function trackConsoleErrors(page) {
   const errors = [];
@@ -32,11 +45,7 @@ function modelUploadFor(version) {
 
 test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page }) => {
   const consoleErrors = trackConsoleErrors(page);
-  await page.route(/https:\/\/.*\.tile\.openstreetmap\.org\/.*/, (route) => route.fulfill({
-    status: 200,
-    contentType: 'image/png',
-    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
-  }));
+  await isolateMapTiles(page);
   await page.goto(webUrl);
   await expect(page.getByRole('heading', { name: /让每一米管廊/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '演示工作区' })).toHaveCount(0);
