@@ -1,9 +1,9 @@
 {
   "version": "V07",
   "date": "2026-09-02",
-  "sourceVersion": "V06",
+  "sourceVersion": "V06 + 当日确认的管路液位测点重构",
   "model": "utility-tunnel-annular-v07-final.glb",
-  "scope": "Remove historical duplicate layout layers and separate the current control, level, water, and gas/vent maintenance zones.",
+  "scope": "Five FS-IR02 liquid-level sensors are independently mounted at the drain, suction, pump-inlet, post-valve, and return-water pipe stations; each station has a board, optical probe, bracket, pipe clamp, harness, and Chinese callout.",
   "layout": {
     "status": "TEMP_VISUAL",
     "note": "Zone offsets are visual clearance values only and must not be used for fabrication, wiring, procurement, water, or power approval.",
@@ -16,11 +16,11 @@
   },
   "assets": [
     {"asset_id":"CTRL-01","meshNames":["CTRL-01"]},
-    {"asset_id":"LEVEL-L01","meshNames":["LEVEL-L01","LEVEL-L01-PROBE_TEMP"]},
-    {"asset_id":"LEVEL-L02","meshNames":["LEVEL-L02","LEVEL-L02-PROBE_TEMP"]},
-    {"asset_id":"LEVEL-L03","meshNames":["LEVEL-L03","LEVEL-L03-PROBE_TEMP"]},
-    {"asset_id":"LEVEL-L04","meshNames":["LEVEL-L04","LEVEL-L04-PROBE_TEMP"]},
-    {"asset_id":"LEVEL-L05","meshNames":["LEVEL-L05","LEVEL-L05-PROBE_TEMP"]},
+    {"asset_id":"LEVEL-L01","station":"排水段","meshNames":["MESH_V12-FSIR02_L01_BOARD","MESH_V12-FSIR02_L01_PROBE","GEO-V14-FSIR02_L01_BRACKET","GEO-V14-FSIR02_L01_PIPE_CLAMP"]},
+    {"asset_id":"LEVEL-L02","station":"吸水段","meshNames":["MESH_V12-FSIR02_L02_BOARD","MESH_V12-FSIR02_L02_PROBE","GEO-V14-FSIR02_L02_BRACKET","GEO-V14-FSIR02_L02_PIPE_CLAMP"]},
+    {"asset_id":"LEVEL-L03","station":"泵入口","meshNames":["MESH_V12-FSIR02_L03_BOARD","MESH_V12-FSIR02_L03_PROBE","GEO-V14-FSIR02_L03_BRACKET","GEO-V14-FSIR02_L03_PIPE_CLAMP"]},
+    {"asset_id":"LEVEL-L04","station":"阀后段","meshNames":["MESH_V12-FSIR02_L04_BOARD","MESH_V12-FSIR02_L04_PROBE","GEO-V14-FSIR02_L04_BRACKET","GEO-V14-FSIR02_L04_PIPE_CLAMP"]},
+    {"asset_id":"LEVEL-L05","station":"回水段","meshNames":["MESH_V12-FSIR02_L05_BOARD","MESH_V12-FSIR02_L05_PROBE","GEO-V14-FSIR02_L05_BRACKET","GEO-V14-FSIR02_L05_PIPE_CLAMP"]},
     {"asset_id":"WATER-TRAY-01","meshNames":["WATER-TRAY-01"]},
     {"asset_id":"P-01","meshNames":["P-01"]},
     {"asset_id":"V-01","meshNames":["V-01"]},
@@ -34,11 +34,11 @@
     {"asset_id":"ROOF-FULL-GASKET","meshNames":["GEO-V21-ROOF-FULL-GASKET_TEMP"],"status":"TEMP_VISUAL"}
   ],
   "runtimeValidation": {
-    "glbNodes": 528,
-    "requiredNodes": 17,
+    "glbNodes": 492,
+    "requiredNodes": 20,
     "missingRequiredNodes": 0,
     "legacyNodeLeaks": 0,
-    "reimportedObjects": 528,
+    "reimportedObjects": 492,
     "status": "PASS"
   },
   "safety": "This is a digital-twin visual model. No physical dimensions, water/power commissioning, fabrication, or building-water connection is approved."
