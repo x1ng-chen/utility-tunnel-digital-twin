@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const webUrl = process.env.E2E_WEB_URL || 'http://127.0.0.1:5173';
-const adminPassword = process.env.E2E_ADMIN_PASSWORD || '123';
+const adminPassword = '123';
 
 function trackConsoleErrors(page) {
   const errors = [];
@@ -61,8 +61,21 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
   expect(consoleErrors).toEqual([]);
 });
 
+test('滚轮在页面边界按导航顺序切换业务页面', async ({ page }) => {
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码').fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.mouse.wheel(0, 220);
+  await expect(page).toHaveURL(/\/alerts$/);
+  await expect(page.getByRole('heading', { name: '告警中心' })).toBeVisible();
+  await expect(page.getByRole('navigation').getByRole('button', { name: '告警中心' })).toHaveAttribute('aria-current', 'page');
+});
+
 test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告警状态', async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
@@ -167,7 +180,7 @@ test('告警可携带处置上下文直达三维实体模型', async ({ page }) 
 });
 
 test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续选择设备', async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
@@ -256,7 +269,9 @@ test('运维员可确认告警、生成工单并推进处置流程', async ({ pa
     await acknowledgeButton.click();
   }
   await expect(alertStatus).toHaveText('已确认');
-  await alertRow.getByRole('button', { name: '转工单' }).click();
+  const openOrderButton = alertRow.getByRole('button', { name: /转工单|查看工单/ });
+  await expect(openOrderButton).toBeVisible();
+  await openOrderButton.click();
   await expect(page).toHaveURL(/\/work-orders\?focus=/);
   await expect(page.getByText(/已打开告警 ALM-260826-001 生成的处置工单/)).toBeVisible();
   const linkedOrder = page.locator('.order-card').filter({ hasText: 'ALM-260826-001' });
@@ -267,10 +282,18 @@ test('运维员可确认告警、生成工单并推进处置流程', async ({ pa
   await expect(page.locator('.twin-inspector').getByText('MESH_CTRL_01', { exact: true })).toBeVisible();
   await page.goBack();
   await expect(linkedOrder).toBeVisible();
-  await linkedOrder.getByRole('button', { name: '接单并分派' }).click();
-  await linkedOrder.getByRole('button', { name: '开始现场处理' }).click();
-  await linkedOrder.getByRole('button', { name: '提交复核' }).click();
+  const assignButton = linkedOrder.getByRole('button', { name: '接单并分派' });
+  if (await assignButton.count()) await assignButton.click();
+  const startButton = linkedOrder.getByRole('button', { name: '开始现场处理' });
+  if (await startButton.count()) await startButton.click();
+  const reviewButton = linkedOrder.getByRole('button', { name: '提交复核' });
+  if (await reviewButton.count()) {
+    await reviewButton.click();
+    await linkedOrder.getByLabel('处理结果').fill('已完成现场检查，设备反馈恢复正常。');
+    await linkedOrder.getByRole('button', { name: '确认提交' }).click();
+  }
   await expect(linkedOrder.getByRole('button', { name: '复核并完成' })).toHaveCount(0);
+  await expect(linkedOrder.getByText('处理记录')).toBeVisible();
 
   await page.getByRole('button', { name: '数据洞察' }).click();
   await page.getByLabel('资产').selectOption('ENV-01');

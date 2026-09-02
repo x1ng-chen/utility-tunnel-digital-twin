@@ -16,6 +16,7 @@ const busyId = ref<number | null>(null);
 const visible = computed(() => store.alerts.filter((item) => filter.value === 'all' || item.status === filter.value));
 const focusedCode = computed(() => typeof route.query.focus === 'string' ? route.query.focus : '');
 const canWrite = computed(() => !store.offline && (auth.user?.role === 'administrator' || auth.user?.role === 'operator'));
+function linkedOrder(alert: Alert) { return store.workOrders.find((item) => item.sourceAlertId === alert.id); }
 
 async function acknowledge(alert: Alert) {
   await runAction(alert.id, () => store.acknowledge(alert));
@@ -28,6 +29,11 @@ async function createWorkOrder(alert: Alert) {
     orderCode = order.code;
   });
   if (orderCode) await router.push({ path: '/work-orders', query: { focus: orderCode, source: 'alert', alert: alert.code } });
+}
+
+function openWorkOrder(alert: Alert) {
+  const order = linkedOrder(alert);
+  if (order) void router.push({ path: '/work-orders', query: { focus: order.code, source: 'alert', alert: alert.code } });
 }
 
 function openTwin(alert: Alert) {
@@ -91,7 +97,8 @@ function getUserFacingError(cause: unknown) {
           <button v-if="alert.assetCode" class="alert-locate-button" type="button" @click="openGis(alert)">地图定位</button>
           <template v-if="canWrite">
             <button v-if="alert.status === 'open'" :disabled="busyId === alert.id" @click="acknowledge(alert)">{{ busyId === alert.id ? '处理中…' : '确认' }}</button>
-            <button v-if="!store.workOrders.some((item) => item.sourceAlertId === alert.id)" :disabled="busyId === alert.id" @click="createWorkOrder(alert)">转工单</button>
+            <button v-if="!linkedOrder(alert)" :disabled="busyId === alert.id" @click="createWorkOrder(alert)">转工单</button>
+            <button v-else type="button" @click="openWorkOrder(alert)">查看工单</button>
           </template>
           <small v-else class="permission-hint">{{ store.offline ? '离线只读' : '只读角色' }}</small>
         </div>

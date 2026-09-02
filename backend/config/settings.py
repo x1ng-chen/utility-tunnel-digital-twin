@@ -169,6 +169,9 @@ CORS_ALLOW_HEADERS = [*default_headers, 'x-request-id', 'idempotency-key']
 API_TOKEN_TTL_SECONDS = int(os.getenv('API_TOKEN_TTL_SECONDS', '900'))
 if API_TOKEN_TTL_SECONDS <= 0:
     raise ValueError('API_TOKEN_TTL_SECONDS must be greater than zero.')
+API_TOKEN_RENEWAL_WINDOW_SECONDS = int(os.getenv('API_TOKEN_RENEWAL_WINDOW_SECONDS', '60'))
+if API_TOKEN_RENEWAL_WINDOW_SECONDS < 0 or API_TOKEN_RENEWAL_WINDOW_SECONDS >= API_TOKEN_TTL_SECONDS:
+    raise ValueError('API_TOKEN_RENEWAL_WINDOW_SECONDS must be non-negative and lower than API_TOKEN_TTL_SECONDS.')
 INGEST_API_KEY = os.getenv('DJANGO_INGEST_API_KEY', '').strip()
 INGEST_PRINCIPAL_USERNAME = os.getenv('DJANGO_INGEST_PRINCIPAL_USERNAME', 'service-iotda-ingest').strip()
 if INGEST_API_KEY and len(INGEST_API_KEY) < 32:

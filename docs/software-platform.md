@@ -59,6 +59,8 @@ python manage.py seed_demo
 python manage.py runserver 127.0.0.1:8000
 ```
 
+本地演示管理员固定为 `admin` / `123`；`seed_demo` 在生产环境中禁止执行，正式账号仍须通过审批和一次性密码设置流程创建。
+
 提交前执行：
 
 ```powershell

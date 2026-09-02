@@ -29,7 +29,7 @@ python manage.py seed_demo
 - `DJANGO_CSRF_TRUSTED_ORIGINS`：与前端 HTTPS Origin 精确匹配；生产环境不得使用开发机 Origin；
 - `DJANGO_SECURE_SSL_REDIRECT=true`、`DJANGO_ENABLE_HSTS=true` 与 `DJANGO_TRUST_PROXY_SSL=true`：本项目的 Nginx TLS 终止架构必须信任 `X-Forwarded-Proto`，避免 HTTPS 重定向循环；
 - `DATABASE_URL`：`ut_runtime` 的 PostgreSQL TLS 连接串；
-- `API_TOKEN_TTL_SECONDS`、`LOGIN_RATE_LIMIT`、`REGISTRATION_RATE_LIMIT`、`PASSWORD_SETUP_RATE_LIMIT` 与 `PASSWORD_CHANGE_RATE_LIMIT`：按安全策略设置；登录、注册申请、一次性密码设置和已认证改密分别限流，避免不同入口互相消耗安全预算；
+- `API_TOKEN_TTL_SECONDS`、`API_TOKEN_RENEWAL_WINDOW_SECONDS`、`LOGIN_RATE_LIMIT`、`REGISTRATION_RATE_LIMIT`、`PASSWORD_SETUP_RATE_LIMIT` 与 `PASSWORD_CHANGE_RATE_LIMIT`：按安全策略设置；人员令牌在临近过期时于重新登录中提前轮换，登录、注册申请、一次性密码设置和已认证改密分别限流，避免不同入口互相消耗安全预算；
 - `DJANGO_MAX_REQUEST_BYTES` 与 `DJANGO_MAX_REQUEST_FIELDS`：限制单次请求体大小和字段数量，防止异常请求耗尽内存；
 - `TWIN_MODEL_MAX_BYTES`：三维 GLB 上传上限，默认 32 MB；反向代理请求体上限必须不小于该值；
 - `DJANGO_CACHE_BACKEND` 与 `DJANGO_CACHE_LOCATION`：登录限流必须使用跨进程共享缓存；如果使用 Django 内置 `DatabaseCache`，迁移后执行一次 `python manage.py createcachetable <cache_table>`；

@@ -113,6 +113,18 @@ class OperationsApiTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    @override_settings(API_TOKEN_TTL_SECONDS=900, API_TOKEN_RENEWAL_WINDOW_SECONDS=60)
+    def test_login_rotates_a_token_that_is_about_to_expire(self):
+        token = Token.objects.create(user=self.operator)
+        token.created = timezone.now() - timedelta(seconds=850)
+        token.save(update_fields=['created'])
+
+        response = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'demo-password'}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotEqual(response.json()['accessToken'], token.key)
+        self.assertFalse(Token.objects.filter(key=token.key).exists())
+
     def test_password_change_rotates_bearer_credential(self):
         self.auth(self.operator)
         previous_token = Token.objects.get(user=self.operator).key
@@ -895,7 +907,21 @@ class OperationsApiTests(TestCase):
         self.auth(self.operator)
         self.assertEqual(self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.COMPLETED}, format='json').status_code, 403)
         self.auth(self.admin)
-        self.assertEqual(self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.COMPLETED}, format='json').status_code, 200)
+        response = self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.COMPLETED, 'note': '复核通过，设备反馈恢复正常。'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['timeline'][0]['note'], '复核通过，设备反馈恢复正常。')
+
+    def test_work_order_review_requires_note_and_exposes_timeline(self):
+        order = WorkOrder.objects.create(code='WO-TIMELINE', asset=self.asset, title='处置留痕', status=WorkOrder.Status.IN_PROGRESS, created_by=self.operator)
+        self.auth(self.operator)
+        missing = self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.PENDING_REVIEW}, format='json')
+        self.assertEqual(missing.status_code, 400)
+        response = self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.PENDING_REVIEW, 'note': '已复位控制器并连续观察十分钟。'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        event = response.json()['timeline'][0]
+        self.assertEqual(event['fromStatus'], WorkOrder.Status.IN_PROGRESS)
+        self.assertEqual(event['toStatus'], WorkOrder.Status.PENDING_REVIEW)
+        self.assertEqual(event['actorName'], self.operator.email)
 
     def test_work_order_transition_rejects_stale_version(self):
         order = WorkOrder.objects.create(code='WO-VERSION', asset=self.asset, title='版本校验', status=WorkOrder.Status.OPEN, created_by=self.operator)
@@ -1004,6 +1030,7 @@ class OperationsApiTests(TestCase):
 
     def test_seed_demo_assigns_distinct_twin_positions(self):
         call_command('seed_demo', stdout=io.StringIO())
+        self.assertTrue(User.objects.get(username='admin').check_password('123'))
         positions = list(Asset.objects.values_list('code', 'position'))
         self.assertEqual(len(positions), 13)
         self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 13)

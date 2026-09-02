@@ -21,11 +21,11 @@ python manage.py seed_demo
 python manage.py runserver 127.0.0.1:8000
 ```
 
-`seed_demo` 创建的账号与口令只供隔离的本地演示和自动化回归使用，不得在可联网或生产环境执行该命令。生产账号应通过审批与一次性密码设置链接创建，密钥、允许主机和 `DATABASE_URL` 必须从受控环境注入。
+`seed_demo` 创建固定的本地演示管理员账号 `admin`，密码为 `123`。该弱口令只供隔离的本地演示和自动化回归使用，命令在生产环境中会直接拒绝执行。生产账号应通过审批与一次性密码设置链接创建，密钥、允许主机和 `DATABASE_URL` 必须从受控环境注入。
 
 ### API 安全与运行检查
 
-- 人员账号的 Bearer Token 默认有效期 15 分钟（`API_TOKEN_TTL_SECONDS`），过期令牌会被拒绝并在下一次登录时轮换。IoTDA 网关使用仅在 `POST /api/telemetry/` 启用的 `DJANGO_INGEST_API_KEY`，不能读取业务数据或执行人员操作，也不持有人类账号密码。
+- 人员账号的 Bearer Token 默认有效期 15 分钟（`API_TOKEN_TTL_SECONDS`）；已过期令牌会被拒绝，距离过期不足 60 秒（`API_TOKEN_RENEWAL_WINDOW_SECONDS`）时重新登录会提前轮换，避免刚进入系统即掉线。IoTDA 网关使用仅在 `POST /api/telemetry/` 启用的 `DJANGO_INGEST_API_KEY`，不能读取业务数据或执行人员操作，也不持有人类账号密码。
 - 登录、注册申请和一次性密码设置分别按客户端地址限流（`LOGIN_RATE_LIMIT`、`REGISTRATION_RATE_LIMIT`、`PASSWORD_SETUP_RATE_LIMIT`），默认只使用 TCP 对端地址；仅在反向代理已覆盖并可信时设置 `DJANGO_TRUST_PROXY_HEADERS=true` 以读取 `X-Forwarded-For`。多实例部署时应把 Django 缓存切换到共享 DatabaseCache、Redis 或 Memcached，并在网关再设置一层限流。
 - `DJANGO_ENV` 只接受 `development`、`test` 或 `production`；生产环境会强制关闭调试、拒绝 SQLite 回退，并要求 PostgreSQL `sslmode=require`/`verify-ca`/`verify-full`，同时启用 HTTPS 重定向、HSTS 与安全 Cookie。生产环境的 `CORS_ALLOWED_ORIGINS`、`DJANGO_CSRF_TRUSTED_ORIGINS` 必须精确填写正式 HTTPS 前端 Origin，`DJANGO_ALLOWED_HOSTS` 不得使用通配符且共享缓存必须显式配置。
 - `DATABASE_URL` 必须包含 PostgreSQL 主机、用户名和数据库名；`DB_CONN_MAX_AGE` 必须为非负整数。配置不完整或格式错误时 Django 会在启动阶段 fail fast。

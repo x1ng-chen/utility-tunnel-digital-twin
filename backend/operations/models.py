@@ -224,6 +224,24 @@ class WorkOrder(models.Model):
         ]
 
 
+class WorkOrderEvent(models.Model):
+    class EventType(models.TextChoices):
+        CREATED = 'created', '已创建'
+        TRANSITION = 'transition', '状态变更'
+
+    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name='events')
+    event_type = models.CharField(max_length=20, choices=EventType.choices)
+    from_status = models.CharField(max_length=20, choices=WorkOrder.Status.choices, blank=True)
+    to_status = models.CharField(max_length=20, choices=WorkOrder.Status.choices, blank=True)
+    note = models.TextField(blank=True)
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='work_order_events')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['work_order', '-created_at'], name='wo_event_order_time_idx')]
+
+
 class Telemetry(models.Model):
     class Quality(models.TextChoices):
         GOOD = 'good', '良好'

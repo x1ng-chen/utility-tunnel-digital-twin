@@ -22,9 +22,7 @@ class Command(BaseCommand):
         if settings.IS_PRODUCTION:
             raise CommandError('seed_demo is disabled in production environments.')
         admin_account = os.getenv('SEED_ADMIN_EMAIL', 'admin').strip() or 'admin'
-        admin_password = os.getenv('SEED_ADMIN_PASSWORD', 'local-admin-password-2026')
-        if len(admin_password) < 12:
-            raise CommandError('SEED_ADMIN_PASSWORD must contain at least 12 characters.')
+        admin_password = '123'
         if options['clean_e2e_data']:
             clean_release_test_data()
         users = [
@@ -106,4 +104,4 @@ class Command(BaseCommand):
 
         for key, label, warning, alarm, unit in [('temperature', '环境温度', 28, 32, '°C'), ('humidity', '环境湿度', 75, 85, '%RH'), ('water', '水浸趋势', 20, 45, '秒')]:
             Threshold.objects.update_or_create(key=key, defaults={'label': label, 'warning': warning, 'alarm': alarm, 'unit': unit})
-        self.stdout.write(self.style.SUCCESS(f'Django demo data seeded. Administrator account: {admin_account}; password read from SEED_ADMIN_PASSWORD.'))
+        self.stdout.write(self.style.SUCCESS(f'Django demo data seeded. Local administrator: {admin_account}; fixed password: 123.'))

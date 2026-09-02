@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const webUrl = process.env.E2E_WEB_URL || 'http://127.0.0.1:5173';
-const adminPassword = process.env.E2E_ADMIN_PASSWORD || '123';
+const adminPassword = '123';
 const pages = [
   ['/dashboard', '运行，一眼掌握', '运行总览'],
   ['/alerts', '告警中心', '告警中心'],

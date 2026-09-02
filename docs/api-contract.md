@@ -78,9 +78,9 @@
 | `GET` | `/alerts/` | 登录 | `status`、`severity`、`openedFrom`、`openedTo`、`page`、`pageSize` |
 | `POST` | `/alerts/{id}/acknowledge/` | 管理员/运维员 | 确认待处理告警 |
 | `POST` | `/alerts/{id}/work-order/` | 管理员/运维员 | 从告警创建关联工单；严重告警默认 4 小时、其他告警默认 24 小时处置时限 |
-| `GET` | `/work-orders/` | 登录 | `status`、`search`、`updatedFrom`、`updatedTo`、`page`、`pageSize` |
+| `GET` | `/work-orders/` | 登录 | `status`、`search`、`updatedFrom`、`updatedTo`、`page`、`pageSize`；每条工单包含按时间倒序的中文化 `timeline` 处理记录 |
 | `POST` | `/work-orders/` | 管理员/运维员 | 新建 `{ assetCode, title, description?, priority? }`；可提供 `Idempotency-Key` 防止重试重复建单。后端按优先级写入处置时限：低 72 小时、普通 48 小时、高 24 小时、紧急 4 小时 |
-| `POST` | `/work-orders/{id}/transition/` | 管理员/运维员 | 流转 `{ to, version? }`；提供 `version` 时启用乐观锁，完成工单必须管理员复核 |
+| `POST` | `/work-orders/{id}/transition/` | 管理员/运维员 | 流转 `{ to, version?, note? }`；提交复核与管理员完成复核时 `note` 必填（最多 1000 字），每次变更写入不可随工单更新覆盖的处理时间线；提供 `version` 时启用乐观锁 |
 | `GET` | `/telemetry/` | 登录 | `assetCode`、`metricKey`、`quality`、`recordedFrom`、`recordedTo`、`page`、`pageSize`；按业务采集时间倒序返回 |
 | `GET` | `/telemetry/summary/` | 登录 | 复用遥测筛选条件，返回样本数、最小值、最大值、平均值、时间范围、质量分布和最新样本 |
 | `POST` | `/telemetry/` | 管理员/运维员/采集密钥 | 批量写入 1–100 条可信遥测；按 `eventId` 幂等，刷新通信心跳并驱动阈值告警和资产状态联动；`X-Ingest-Key` 仅在此端点启用 |

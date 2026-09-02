@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useOperationsStore } from './stores/operations';
 import { useAuthStore } from './stores/auth';
 import ExperienceLayer from './components/ExperienceLayer.vue';
@@ -9,6 +9,7 @@ import { Check, TriangleAlert } from 'lucide-vue-next';
 const operations = useOperationsStore();
 const auth = useAuthStore();
 const router = useRouter();
+const route = useRoute();
 let noticeTimer: number | undefined;
 let liveTimer: number | undefined;
 const noticeTone = computed(() => /暂不可用|失败|过期|错误|离线/.test(operations.notice) ? 'warning' : 'success');
@@ -51,7 +52,7 @@ onUnmounted(() => {
 
 <template>
   <RouterView v-slot="{ Component }">
-    <Transition name="route" mode="out-in"><component :is="Component" /></Transition>
+    <Transition name="route" mode="out-in"><component :is="Component" :key="route.path" /></Transition>
   </RouterView>
   <Transition name="notice">
     <section v-if="operations.notice" :class="['operation-notice', noticeTone]" role="status" aria-live="polite">
