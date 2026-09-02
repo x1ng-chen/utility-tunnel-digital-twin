@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 
-type TrailPoint = { x: number; y: number; opacity: number; scale: number };
+type TrailPoint = { x: number; y: number };
 
 const finePointer = ref(false);
-const cursor = reactive({ x: -80, y: -80, active: false, pressed: false });
-const trail = ref<TrailPoint[]>(Array.from({ length: 6 }, (_, index) => ({ x: -80, y: -80, opacity: 0.34 - index * 0.045, scale: 1 - index * 0.1 })));
-let pendingPointer: PointerEvent | undefined;
+const cursorNode = ref<HTMLElement>();
+const trailNodes = ref<HTMLElement[]>([]);
+const target = { x: -80, y: -80 };
+const trail = Array.from({ length: 5 }, (): TrailPoint => ({ x: -80, y: -80 }));
 let animationFrame = 0;
+let visible = false;
 
 function interactiveTarget(target: EventTarget | null) {
   if (!(target instanceof Element)) return null;
@@ -15,32 +17,37 @@ function interactiveTarget(target: EventTarget | null) {
 }
 
 function paintPointer() {
-  animationFrame = 0;
-  if (!pendingPointer) return;
-  const event = pendingPointer;
-  pendingPointer = undefined;
-  cursor.x = event.clientX;
-  cursor.y = event.clientY;
-  cursor.active = true;
-  document.documentElement.style.setProperty('--pointer-x', `${event.clientX}px`);
-  document.documentElement.style.setProperty('--pointer-y', `${event.clientY}px`);
-  document.body.dataset.pointerMode = interactiveTarget(event.target) ? 'interactive' : 'default';
-  trail.value = trail.value.map((point, index, points) => {
-    const leader = index === 0 ? { x: event.clientX, y: event.clientY } : points[index - 1];
-    const easing = 0.78 - index * 0.055;
-    return { ...point, x: point.x + (leader.x - point.x) * easing, y: point.y + (leader.y - point.y) * easing };
+  const node = cursorNode.value;
+  if (!node || !visible) { animationFrame = 0; return; }
+  node.style.transform = `translate3d(${target.x}px, ${target.y}px, 0)`;
+  let moving = false;
+  trail.forEach((point, index) => {
+    const leader = index === 0 ? target : trail[index - 1];
+    const easing = Math.max(.24, .56 - index * .06);
+    point.x += (leader.x - point.x) * easing;
+    point.y += (leader.y - point.y) * easing;
+    moving ||= Math.abs(leader.x - point.x) > .15 || Math.abs(leader.y - point.y) > .15;
+    const scale = 1 - index * .12;
+    trailNodes.value[index]?.style.setProperty('transform', `translate3d(${point.x - target.x}px, ${point.y - target.y}px, 0) scale(${scale})`);
   });
+  animationFrame = moving ? window.requestAnimationFrame(paintPointer) : 0;
 }
 
 function onPointerMove(event: PointerEvent) {
   if (!finePointer.value) return;
-  pendingPointer = event;
+  target.x = event.clientX;
+  target.y = event.clientY;
+  visible = true;
+  cursorNode.value?.classList.add('active');
+  document.documentElement.style.setProperty('--pointer-x', `${event.clientX}px`);
+  document.documentElement.style.setProperty('--pointer-y', `${event.clientY}px`);
+  document.body.dataset.pointerMode = interactiveTarget(event.target) ? 'interactive' : 'default';
   if (!animationFrame) animationFrame = window.requestAnimationFrame(paintPointer);
 }
 
 function onPointerDown(event: PointerEvent) {
   if (!finePointer.value) return;
-  cursor.pressed = true;
+  cursorNode.value?.classList.add('pressed');
   const target = interactiveTarget(event.target);
   if (!(target instanceof HTMLElement) || target.matches(':disabled')) return;
   const bounds = target.getBoundingClientRect();
@@ -53,11 +60,20 @@ function onPointerDown(event: PointerEvent) {
   ripple.addEventListener('animationend', () => ripple.remove(), { once: true });
 }
 
-function onPointerUp() { cursor.pressed = false; }
-function onPointerLeave() { cursor.active = false; document.body.dataset.pointerMode = 'default'; }
+function onPointerUp() { cursorNode.value?.classList.remove('pressed'); }
+function onPointerLeave() {
+  visible = false;
+  cursorNode.value?.classList.remove('active', 'pressed');
+  document.body.dataset.pointerMode = 'default';
+}
 
 onMounted(() => {
-  finePointer.value = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const runtime = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  finePointer.value = window.matchMedia('(hover: hover) and (pointer: fine)').matches && !reducedMotion;
+  if ((runtime.deviceMemory || 8) < 6 || navigator.hardwareConcurrency < 6 || runtime.connection?.saveData || window.devicePixelRatio > 2) {
+    document.body.classList.add('fx-lite');
+  }
   if (!finePointer.value) return;
   document.body.classList.add('fx-enabled');
   window.addEventListener('pointermove', onPointerMove, { passive: true });
@@ -68,6 +84,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.body.classList.remove('fx-enabled');
+  document.body.classList.remove('fx-lite');
   delete document.body.dataset.pointerMode;
   window.removeEventListener('pointermove', onPointerMove);
   window.removeEventListener('pointerdown', onPointerDown);
@@ -84,8 +101,9 @@ onUnmounted(() => {
     <i class="backdrop-sweep sweep-two" />
     <i class="backdrop-noise" />
   </div>
-  <div v-if="finePointer" class="experience-cursor" :class="{ active: cursor.active, pressed: cursor.pressed }" :style="{ transform: `translate3d(${cursor.x}px, ${cursor.y}px, 0)` }" aria-hidden="true">
-    <i v-for="(point, index) in trail" :key="index" class="cursor-trail" :style="{ transform: `translate3d(${point.x - cursor.x}px, ${point.y - cursor.y}px, 0) scale(${point.scale})`, opacity: point.opacity }" />
+  <div v-if="finePointer" ref="cursorNode" class="experience-cursor" aria-hidden="true">
+    <i class="cursor-aura" />
+    <i v-for="(_, index) in trail" :key="index" ref="trailNodes" class="cursor-trail" :style="{ opacity: .3 - index * .05 }" />
     <i class="cursor-ring" />
     <i class="cursor-dot" />
   </div>

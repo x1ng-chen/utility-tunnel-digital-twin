@@ -61,6 +61,19 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
   expect(consoleErrors).toEqual([]);
 });
 
+test('滚轮在页面边界按导航顺序切换业务页面', async ({ page }) => {
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码').fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.mouse.wheel(0, 220);
+  await expect(page).toHaveURL(/\/alerts$/);
+  await expect(page.getByRole('heading', { name: '告警中心' })).toBeVisible();
+  await expect(page.getByRole('navigation').getByRole('button', { name: '告警中心' })).toHaveAttribute('aria-current', 'page');
+});
+
 test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告警状态', async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto(webUrl);
