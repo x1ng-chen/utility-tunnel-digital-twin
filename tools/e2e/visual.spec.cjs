@@ -50,6 +50,10 @@ async function isolateMapTiles(page) {
 }
 
 async function inspectDesktopLayout(page, heading) {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
   const layout = await page.evaluate(() => {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
@@ -153,7 +157,7 @@ test('全部业务页面通过三档桌面分辨率布局巡检', async ({ page 
     for (const [route, heading] of pages) {
       await openAuthenticatedPage(page, route);
       await expect(page.getByRole('heading', { name: heading })).toBeVisible();
-      await page.waitForTimeout(route === '/twin-3d' ? 900 : 350);
+      await page.waitForTimeout(route === '/twin-3d' ? 1_500 : 900);
       await inspectDesktopLayout(page, `${heading}（${viewport.width}×${viewport.height}）`);
     }
   }
