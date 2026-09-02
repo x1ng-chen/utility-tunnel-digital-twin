@@ -68,6 +68,8 @@ test('滚轮在页面边界按导航顺序切换业务页面', async ({ page }) 
   await page.getByRole('button', { name: /安全登录/ }).click();
   await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const viewport = page.viewportSize();
+  await page.mouse.move(viewport.width / 2, viewport.height / 2);
   await page.mouse.wheel(0, 220);
   await expect(page).toHaveURL(/\/alerts$/);
   await expect(page.getByRole('heading', { name: '告警中心' })).toBeVisible();

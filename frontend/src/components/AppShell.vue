@@ -50,9 +50,9 @@ async function retrySync() { await operations.refresh('api'); }
 let wheelDistance = 0;
 let lastWheelAt = 0;
 let wheelLockedUntil = 0;
-function hasScrollableParent(target: EventTarget | null, direction: number) {
+function hasScrollableParent(target: EventTarget | null, direction: number, root: Element | null) {
   let element = target instanceof Element ? target : null;
-  while (element && element !== document.documentElement) {
+  while (element && element !== root && element !== document.body && element !== document.documentElement) {
     if (element.matches('input, textarea, select, [role="dialog"], .twin-scene, .twin-quick-switch, canvas')) return true;
     const style = getComputedStyle(element);
     if (/(auto|scroll)/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 2) {
@@ -66,7 +66,7 @@ function onWheel(event: WheelEvent) {
   if (event.ctrlKey || event.metaKey || Math.abs(event.deltaY) < Math.abs(event.deltaX) || document.fullscreenElement) return;
   const direction = Math.sign(event.deltaY);
   const root = document.scrollingElement;
-  if (!direction || !root || hasScrollableParent(event.target, direction)) return;
+  if (!direction || !root || hasScrollableParent(event.target, direction, root)) return;
   const atBoundary = direction > 0
     ? root.scrollTop + window.innerHeight >= root.scrollHeight - 3
     : root.scrollTop <= 3;
