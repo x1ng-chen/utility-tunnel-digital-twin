@@ -102,6 +102,6 @@ class Command(BaseCommand):
         for asset_code, metric_key, metric, value, unit, quality in [('ENV-01', 'temperature', '环境温度', 26.4, '°C', Telemetry.Quality.GOOD), ('SEEP-W01', 'water_adc', '水位 ADC', 684, 'ADC', Telemetry.Quality.SUSPECT), ('VIB-01', 'vibration', '振动锁存', 0, 'bool', Telemetry.Quality.GOOD), ('CTRL-01', 'sample_period', '采集周期', 2.0, 's', Telemetry.Quality.GOOD)]:
             Telemetry.objects.update_or_create(asset=asset_by_code[asset_code], metric=metric, defaults={'event_id': f'demo:{asset_code}:{metric_key}', 'metric_key': metric_key, 'value': value, 'unit': unit, 'quality': quality, 'recorded_at': now})
 
-        for key, label, warning, alarm, unit in [('temperature', '环境温度', 28, 32, '°C'), ('humidity', '环境湿度', 75, 85, '%RH'), ('water', '水浸趋势', 20, 45, '秒')]:
+        for key, label, warning, alarm, unit in [('temperature', '环境温度', 28, 32, '°C'), ('humidity', '环境湿度', 75, 85, '%RH'), ('water', '水浸趋势', 20, 45, '秒'), ('smoke.alarm', '烟雾告警', 0.5, 0.9, 'bool')]:
             Threshold.objects.update_or_create(key=key, defaults={'label': label, 'warning': warning, 'alarm': alarm, 'unit': unit})
         self.stdout.write(self.style.SUCCESS(f'Django demo data seeded. Local administrator: {admin_account}; fixed password: 123.'))

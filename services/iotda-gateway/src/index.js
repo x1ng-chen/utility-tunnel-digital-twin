@@ -104,10 +104,21 @@ if (iotdaEnabled) {
   });
 
   cloud.on('message', (topic, payload) => {
-    local.publish(localCloudCommandTopic, JSON.stringify({
-      sourceTopic: topic,
-      payload: payload.toString('utf8'),
-    }), { qos: 1 });
+    let commandPayload = payload.toString('utf8');
+    /* IoTDA device messages are delivered in an envelope whose content is
+     * the application-supplied message.  STM32 accepts the inner
+     * ut.command.v1 JSON directly, not gateway metadata. */
+    try {
+      const envelope = JSON.parse(commandPayload);
+      if (typeof envelope.message === 'string') commandPayload = envelope.message;
+      else if (envelope.message && typeof envelope.message === 'object') commandPayload = JSON.stringify(envelope.message);
+    } catch (_) {
+      /* Direct MQTT custom messages are already the controller payload. */
+    }
+    local.publish(localCloudCommandTopic, commandPayload, { qos: 1 }, (error) => {
+      if (error) console.error('Local cloud-command publish failed:', error.message);
+      else console.info(`Forwarded IoTDA command from ${topic}.`);
+    });
   });
 }
 
