@@ -47,6 +47,7 @@ function mappedAssets(assetMap) {
 const runtime = parseGlb(runtimePath);
 const candidate = parseGlb(candidatePath);
 const contract = currentAssetContract();
+const candidateMap = JSON.parse(readFileSync(candidateMapPath, 'utf8'));
 const readme = readFileSync(modelReadmePath, 'utf8');
 const failures = [];
 
