@@ -19,10 +19,14 @@
 #define BUZZER_GPIO_Port                   GPIOB
 #define RELAY_Pin                          GPIO_PIN_1
 #define RELAY_GPIO_Port                    GPIOA
+#define SMOKE_Pin                          GPIO_PIN_12
+#define SMOKE_GPIO_Port                    GPIOB
 #define WS2812_Pin                         GPIO_PIN_15
 #define WS2812_GPIO_Port                   GPIOB
 #define WS2812_PIXEL_COUNT                 9U
 #define WS2812_TEST_BRIGHTNESS             32U
+#define SMOKE_SAMPLE_INTERVAL_MS            50U
+#define SMOKE_STABLE_SAMPLE_COUNT            4U
 
 typedef struct
 {
@@ -59,6 +63,9 @@ static uint32_t buzzer_duration_ms;
 static uint8_t relay_active;
 static uint32_t relay_started_at;
 static uint32_t relay_duration_ms;
+static uint8_t smoke_alarm;
+static uint8_t smoke_active_samples;
+static uint32_t smoke_last_sample_at;
 static uint8_t ws2812_encoded[WS2812_PIXEL_COUNT * 15U];
 
 void SystemClock_Config(void);
@@ -67,12 +74,13 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
 static uint8_t Sht30_Read(const SoftI2cBus *bus, uint8_t address, Sht30Reading *reading);
-static void SendTelemetry(const Sht30Reading readings[3]);
+static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected);
 static void Command_Poll(void);
 static void Buzzer_Silence(void);
 static void Buzzer_Start(uint32_t duration_ms);
 static void Relay_Disable(void);
 static void Relay_Enable(uint32_t duration_ms);
+static void Smoke_Poll(uint32_t now);
 static void MX_WS2812_SPI_Init(void);
 static void Ws2812_Show(uint8_t red, uint8_t green, uint8_t blue);
 static void Ws2812_Off(void);
@@ -172,9 +180,9 @@ static uint8_t Sht30_Read(const SoftI2cBus *bus, uint8_t address, Sht30Reading *
   reading->online = 1U;
   return 1U;
 }
-static void SendTelemetry(const Sht30Reading readings[3])
+static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected)
 {
-  char message[420];
+  char message[520];
   static uint32_t sequence = 0U;
   int32_t temperature_abs;
   const char *temperature_sign;
@@ -196,11 +204,13 @@ static void SendTelemetry(const Sht30Reading readings[3])
   length = snprintf(message, sizeof(message),
     "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
     "{\"assetCode\":\"ENV-01\",\"metric\":\"temperature\",\"value\":%s%ld.%02ld,\"unit\":\"degC\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"ENV-01\",\"metric\":\"humidity\",\"value\":%lu.%02lu,\"unit\":\"%%RH\",\"quality\":\"%s\"}]}\r\n",
+    "{\"assetCode\":\"ENV-01\",\"metric\":\"humidity\",\"value\":%lu.%02lu,\"unit\":\"%%RH\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"smoke.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"}]}\r\n",
     (unsigned long)sequence,
     temperature_sign, (long)(temperature_abs / 100), (long)(temperature_abs % 100), quality,
     (unsigned long)(readings[0].humidity_centi_rh / 100U),
-    (unsigned long)(readings[0].humidity_centi_rh % 100U), quality);
+    (unsigned long)(readings[0].humidity_centi_rh % 100U), quality,
+    (unsigned int)smoke_detected);
   if (length > 0 && length < (int)sizeof(message))
   {
     (void)HAL_UART_Transmit(&huart2, (uint8_t *)message, (uint16_t)length, 1000U);
@@ -331,6 +341,41 @@ static void Relay_Enable(uint32_t duration_ms)
   relay_started_at = HAL_GetTick();
   relay_duration_ms = duration_ms;
   relay_active = 1U;
+}
+
+/* The MQ board comparator is powered from 5 V and its DO output is divided
+ * to 3.3 V before PB12.  LM393 pulls DO low when the trimmer threshold is
+ * crossed, so a stable low level is the local smoke alarm. */
+static void Smoke_Poll(uint32_t now)
+{
+  uint8_t raw_alarm;
+  uint8_t next_alarm;
+
+  if ((now - smoke_last_sample_at) < SMOKE_SAMPLE_INTERVAL_MS) return;
+  smoke_last_sample_at = now;
+  raw_alarm = (HAL_GPIO_ReadPin(SMOKE_GPIO_Port, SMOKE_Pin) == GPIO_PIN_RESET) ? 1U : 0U;
+  if (raw_alarm != 0U)
+  {
+    if (smoke_active_samples < SMOKE_STABLE_SAMPLE_COUNT) ++smoke_active_samples;
+  }
+  else
+    smoke_active_samples = 0U;
+
+  next_alarm = (smoke_active_samples >= SMOKE_STABLE_SAMPLE_COUNT) ? 1U : 0U;
+  if (next_alarm == smoke_alarm) return;
+  smoke_alarm = next_alarm;
+  if (smoke_alarm != 0U)
+  {
+    /* Local safety indication remains independent of the network path. */
+    buzzer_active = 0U;
+    HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_SET);
+    Ws2812_Show(WS2812_TEST_BRIGHTNESS, 0U, 0U);
+  }
+  else
+  {
+    Buzzer_Silence();
+    Ws2812_Off();
+  }
 }
 
 /* SPI2 on PB15 runs at 4 MHz from the 8 MHz APB1 clock.  Each WS2812 bit is
@@ -581,8 +626,11 @@ int main(void)
     /* A command may start a timed actuator. Read the clock afterwards so a
      * just-written start timestamp can never appear to be in the future. */
     uint32_t now = HAL_GetTick();
-    if ((buzzer_active != 0U) && ((now - buzzer_started_at) >= buzzer_duration_ms))
+    Smoke_Poll(now);
+    if ((smoke_alarm == 0U) && (buzzer_active != 0U) && ((now - buzzer_started_at) >= buzzer_duration_ms))
       Buzzer_Silence();
+    if (smoke_alarm != 0U)
+      HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_SET);
     if ((relay_active != 0U) && ((now - relay_started_at) >= relay_duration_ms))
       Relay_Disable();
     if ((now - last_telemetry) >= TELEMETRY_INTERVAL_MS)
@@ -590,7 +638,7 @@ int main(void)
       (void)Sht30_Read(&i2c1_bus, SHT30_ADDRESS_44, &readings[0]);
       (void)Sht30_Read(&i2c1_bus, SHT30_ADDRESS_45, &readings[1]);
       (void)Sht30_Read(&i2c2_bus, SHT30_ADDRESS_44, &readings[2]);
-      SendTelemetry(readings); last_telemetry = now;
+      SendTelemetry(readings, smoke_alarm); last_telemetry = now;
     }
     if ((now - last_led) >= LED_INTERVAL_MS)
     {
@@ -627,6 +675,8 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(BUZZER_GPIO_Port, &gpio);
   gpio.Pin = RELAY_Pin; gpio.Mode = GPIO_MODE_OUTPUT_PP; gpio.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(RELAY_GPIO_Port, &gpio);
+  gpio.Pin = SMOKE_Pin; gpio.Mode = GPIO_MODE_INPUT; gpio.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(SMOKE_GPIO_Port, &gpio);
   HAL_GPIO_WritePin(GPIOB, i2c1_bus.scl_pin | i2c1_bus.sda_pin | i2c2_bus.scl_pin | i2c2_bus.sda_pin, GPIO_PIN_SET);
   gpio.Pin = i2c1_bus.scl_pin | i2c1_bus.sda_pin | i2c2_bus.scl_pin | i2c2_bus.sda_pin;
   gpio.Mode = GPIO_MODE_OUTPUT_OD; gpio.Speed = GPIO_SPEED_FREQ_LOW;
