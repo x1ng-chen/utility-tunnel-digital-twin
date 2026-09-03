@@ -1,8 +1,8 @@
 import { readFileSync, statSync } from 'node:fs';
 
 const runtimePath = 'frontend/public/models/utility-tunnel.glb';
-const candidatePath = 'model/utility-tunnel-annular-v05-final.glb';
-const candidateMapPath = 'model/asset-map-v05-final.json';
+const candidatePath = 'model/utility-tunnel-annular-v08-final.glb';
+const candidateMapPath = 'model/asset-map-v08-final.json';
 const seedPath = 'backend/operations/management/commands/seed_demo.py';
 const modelReadmePath = 'model/README.md';
 const maxRuntimeBytes = 32 * 1024 * 1024;
@@ -33,6 +33,15 @@ function currentAssetContract() {
   return entries;
 }
 
+function compatibleNodeNames(asset) {
+  return [asset.mesh, asset.code, `ASSET_${asset.code.replaceAll('-', '_')}`].filter(Boolean);
+}
+
+function mappedNodeNames(assetMap) {
+  const assets = Array.isArray(assetMap.assets) ? assetMap.assets : Object.entries(assetMap.assets || {}).map(([asset_id, meshNames]) => ({ asset_id, meshNames }));
+  return assets.flatMap((asset) => asset.meshNames || []);
+}
+
 const runtime = parseGlb(runtimePath);
 const candidate = parseGlb(candidatePath);
 const contract = currentAssetContract();
@@ -44,14 +53,16 @@ if (runtime.bytes > maxRuntimeBytes) failures.push(`运行时模型 ${(runtime.b
 const missingRuntimeNodes = contract.filter((asset) => !runtime.nodes.has(asset.mesh));
 if (missingRuntimeNodes.length) failures.push(`运行时模型缺少资产节点：${missingRuntimeNodes.map((asset) => `${asset.code}=${asset.mesh}`).join('、')}`);
 
-const candidateMappedNodes = Object.values(candidateMap.assets || {}).flat();
+const candidateMappedNodes = mappedNodeNames(candidateMap);
 const missingCandidateMapNodes = candidateMappedNodes.filter((name) => !candidate.nodes.has(name));
-if (missingCandidateMapNodes.length) failures.push(`V05 映射引用了模型中不存在的节点：${missingCandidateMapNodes.join('、')}`);
+if (missingCandidateMapNodes.length) failures.push(`V08 正式映射引用了模型中不存在的节点：${missingCandidateMapNodes.join('、')}`);
 
-const candidateReady = candidate.bytes <= maxRuntimeBytes && contract.every((asset) => candidate.nodes.has(asset.mesh));
+const unresolvedCandidateBindings = contract.filter((asset) => !compatibleNodeNames(asset).some((name) => candidate.nodes.has(name)));
+const candidateReady = candidate.bytes <= maxRuntimeBytes && unresolvedCandidateBindings.length === 0;
 if (!candidateReady) {
-  if (!/完成模型压缩、资产映射切换和浏览器加载回归/.test(readme)) failures.push('V05 尚未满足运行条件，但 README 未披露压缩、映射和回归门禁');
-  if (statSync(runtimePath).size === statSync(candidatePath).size) failures.push('未就绪的 V05 不得覆盖当前受控运行时模型');
+  if (!/完成模型压缩、资产映射切换和浏览器加载回归/.test(readme)) failures.push('V08 尚未满足运行条件，但 README 未披露压缩、映射和回归门禁');
+  if (unresolvedCandidateBindings.length) failures.push(`V08 缺少运行时资产绑定：${unresolvedCandidateBindings.map((asset) => `${asset.code}=${compatibleNodeNames(asset).join('|')}`).join('、')}`);
+  if (statSync(runtimePath).size === statSync(candidatePath).size) failures.push('未就绪的 V08 不得覆盖当前受控运行时模型');
 }
 
 if (failures.length) {
@@ -61,5 +72,5 @@ if (failures.length) {
 }
 
 console.log(`三维模型交付检查通过：运行时 ${(runtime.bytes / 1024 / 1024).toFixed(1)}MB，${contract.length}/${contract.length} 个资产节点可定位。`);
-if (candidateReady) console.log('V05 候选模型已满足浏览器运行时替换条件。');
-else console.log(`V05 候选模型暂不替换：${(candidate.bytes / 1024 / 1024).toFixed(1)}MB，仍需压缩并补齐当前 ${contract.length} 个资产节点映射。`);
+if (candidateReady) console.log(`V08 正式模型满足节点和体积门禁：${(candidate.bytes / 1024 / 1024).toFixed(1)}MB，${contract.length}/${contract.length} 个资产可通过首选节点或兼容别名定位；当前网页受控模型保持不替换。`);
+else console.log(`V08 正式模型未通过运行时门禁：${(candidate.bytes / 1024 / 1024).toFixed(1)}MB，需补齐当前 ${contract.length} 个资产绑定。`);

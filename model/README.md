@@ -1,21 +1,22 @@
 # 综合管廊实体样品模型
 
-## 当前正式交付：V07（2026-09-02 当日最终版）
+## 当前正式交付：V08（2026-09-03 当日最终版）
 
-`utility-tunnel-annular-v07-final.blend` 与
-`utility-tunnel-annular-v07-final.glb` 是当前唯一的正式工程模型。
-它保留透明环形外壳、工业设备布局和 5 个液位站；五套 FS-IR02 分别固定在
-排水、吸水、泵入口、阀后和回水管段，并各自具备板卡、探头、支架、管夹、线束和中文测点牌；
-`PIPE-G01`、`WATER-TRAY-01`、`FAN-01` 和 `GAS-01` 同样具备稳定名称。
-V07 继承 V06 的完整顶盖与连续密封边，并清理历史重复布局层，将控制、液位、水路和燃气/通风功能区分离为可读的检修布局。
+`utility-tunnel-annular-v08-final.blend` 与
+`utility-tunnel-annular-v08-final.glb` 是当前唯一的正式工程模型。
+它保留透明环形外壳、工业设备布局、5 个分散液位站和控制 PCB 前缘的
+`BT-01 蓝牙模块（可选）`；五套 FS-IR02 分别固定在排水、吸水、泵入口、阀后和回水管段，
+并各自具备板卡、探头、支架、管夹、线束和中文测点牌。`PIPE-G01`、`WATER-TRAY-01`、
+`FAN-01` 和 `GAS-01` 同样具备稳定名称。V08 继承 V07 的完整顶盖与连续密封边，
+保持控制、液位、水路和燃气/通风功能区的可读检修布局。
 
-`asset-map-v07-final.json` 是 V07 的资产映射。`_TEMP` 表示实物接口尚未测量，
+`asset-map-v08-final.json` 是 V08 的资产映射。`_TEMP` 表示实物接口尚未测量，
 不得据此加工、接线或采购。
 
 ## 版本规则
 
 - 每个自然日只保留当天最终确认的一版模型；同日中间 Blend、GLB、预览、映射和脚本不作为正式交付保留。
-- 版本号按连续整数递增。V07 是 2026-09-02 的最终版，下一次正式发布从 V08 开始。
+- 版本号按连续整数递增。V08 是 2026-09-03 的最终版，下一次正式发布从 V09 开始。
 - V01—V04 是此前日期的基线；原 V05—V23 是 2026-08-31 的中间过程，已归并为当前 V05。完整过程仍可通过 Git 历史追溯。
 
 | 版本 | 主题 | 主文件 |
@@ -27,6 +28,7 @@ V07 继承 V06 的完整顶盖与连续密封边，并清理历史重复布局�
 | V05 | 2026-08-31 最终环形实体与运行时节点 | `utility-tunnel-annular-v05-final.glb` |
 | V06 | 2026-09-01 顶部与侧边完整封闭最终版 | `utility-tunnel-annular-v06-final.glb` |
 | V07 | 2026-09-02 五个分散管路液位测点最终版 | `utility-tunnel-annular-v07-final.glb` |
+| V08 | 2026-09-03 控制区 BT-01 可选蓝牙模块最终版 | `utility-tunnel-annular-v08-final.glb` |
 
 ## 功能与安全边界
 
@@ -40,4 +42,5 @@ V07 继承 V06 的完整顶盖与连续密封边，并清理历史重复布局�
 - `previews/utility-tunnel-annular-v07-final-hero.png`：V07 透明环形整体视图。
 - `previews/utility-tunnel-annular-v07-final-clearance-inspection.png`：临时拆壳的功能区净空检查视图。
 - `previews/utility-tunnel-annular-v07-final-top-closure.png`：继承顶盖与密封边检查视图。
+- `previews/utility-tunnel-annular-v08-final-bt01-inspection.png`：V08 控制 PCB、BT-01 和相邻端子的近景审查视图。
 - V07 映射明确为数字孪生/视觉模型；实体水电投运未获批准。
