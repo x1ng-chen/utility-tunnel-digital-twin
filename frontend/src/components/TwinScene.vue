@@ -24,7 +24,12 @@ let resizeObserver: ResizeObserver | undefined;
 const raycaster = new Raycaster();
 const pointer = new Vector2();
 const assetObjects = new Map<string, Object3D>();
-const animatedObjects = new Map<string, Object3D>();
+// Cache the materials that need a live emissive pulse while the model is
+// bound. Traversing a full Blender scene for every asset on every animation
+// frame is prohibitively expensive on integrated GPUs and can starve normal
+// UI navigation. The scene graph is static between model reloads, so cache
+// the small material lists once and update only those materials per frame.
+const animatedMaterials = new Map<string, MeshStandardMaterial[]>();
 const modelBoundCodes = new Set<string>();
 const materialBaselines = new WeakMap<MeshStandardMaterial, { color: Color; emissive: Color }>();
 let modelRoot: Object3D | undefined;
@@ -97,7 +102,7 @@ function addFallbackAsset(asset: Asset) {
   group.position.set((Number(asset.position.x) / 100 - .5) * 27, .45, (Number(asset.position.y) / 100 - .5) * 14);
   fallbackAssetRoot.add(group);
   assetObjects.set(asset.code, group);
-  animatedObjects.set(asset.code, group);
+  animatedMaterials.set(asset.code, [box.material, beacon.material]);
 }
 
 function normalizedModelNodeName(value: unknown) {
@@ -145,13 +150,16 @@ function bindModelAssets(root: Object3D) {
       return;
     }
     node.userData.assetCode = asset.code;
+    const materials: MeshStandardMaterial[] = [];
     node.traverse((child) => {
       child.userData.assetCode = asset.code;
       if (!(child instanceof Mesh)) return;
       child.material = Array.isArray(child.material) ? child.material.map((material) => material.clone()) : child.material.clone();
+      const childMaterials = Array.isArray(child.material) ? child.material : [child.material];
+      childMaterials.forEach((material) => { if (material instanceof MeshStandardMaterial) materials.push(material); });
     });
     assetObjects.set(asset.code, node);
-    animatedObjects.set(asset.code, node);
+    animatedMaterials.set(asset.code, materials);
     modelBoundCodes.add(asset.code);
     boundCodes.push(asset.code);
   });
@@ -191,7 +199,7 @@ function clearLoadedModel() {
   fallbackAssetRoot = undefined;
   modelBoundCodes.clear();
   assetObjects.clear();
-  animatedObjects.clear();
+  animatedMaterials.clear();
 }
 
 function visualIntensity(state: TwinVisualState, selected: boolean, critical: boolean, now = 0) {
@@ -350,17 +358,12 @@ function animate() {
   frame = window.requestAnimationFrame(animate);
   const now = performance.now() / 1000;
   props.assets.forEach((asset) => {
-    const object = animatedObjects.get(asset.code);
-    if (!object) return;
+    const materials = animatedMaterials.get(asset.code);
+    if (!materials?.length) return;
     const state = resolveTwinVisualState(asset, props.alerts);
     const critical = primaryTwinAlert(asset.code, props.alerts)?.severity === 'critical';
-    object.traverse((child) => {
-      if (!(child instanceof Mesh)) return;
-      const materials = Array.isArray(child.material) ? child.material : [child.material];
-      materials.forEach((material) => {
-        if (material instanceof MeshStandardMaterial) material.emissiveIntensity = visualIntensity(state, props.selectedCode === asset.code, critical, now);
-      });
-    });
+    const intensity = visualIntensity(state, props.selectedCode === asset.code, critical, now);
+    materials.forEach((material) => { material.emissiveIntensity = intensity; });
   });
   controls?.update();
   if (renderer && scene && camera) renderer.render(scene, camera);
@@ -503,7 +506,7 @@ onBeforeUnmount(() => {
   clearLoadedModel();
   renderer?.dispose();
   assetObjects.clear();
-  animatedObjects.clear();
+  animatedMaterials.clear();
   modelBoundCodes.clear();
 });
 

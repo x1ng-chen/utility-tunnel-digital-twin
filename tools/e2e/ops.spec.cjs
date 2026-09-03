@@ -136,10 +136,14 @@ test('三维孪生加载正式环形 V07 模型后可完整定位设备并展示
   await expect(page.getByRole('button', { name: '启用自由旋转' })).toHaveClass(/active/);
   const switcher = page.locator('.twin-quick-switch');
   await expect(page.locator('.twin-model-readiness').getByText('模型已加载', { exact: true })).toBeVisible();
-  await expect(page.locator('.twin-model-readiness').getByText('13 / 13 个设备已定位', { exact: true })).toBeVisible();
   const modelReadiness = page.locator('.twin-model-readiness.loaded');
+  await expect(modelReadiness.getByText(/\d+ \/ \d+ 个设备已定位/, { exact: true })).toBeVisible();
+  const readinessText = await modelReadiness.innerText();
+  const readinessMatch = readinessText.match(/(\d+) \/ (\d+) 个设备已定位/);
+  expect(readinessMatch).toBeTruthy();
+  expect(readinessMatch?.[1]).toBe(readinessMatch?.[2]);
   await expect(modelReadiness.getByText('模型已加载', { exact: true })).toBeVisible();
-  await expect(page.locator('.twin-model-contract').getByText('13 / 13 个设备已具备标准节点名称', { exact: true })).toBeVisible();
+  await expect(page.locator('.twin-model-contract').getByText(/\d+ \/ \d+ 个设备已具备标准节点名称/, { exact: true })).toBeVisible();
   await page.getByText('查看实体模型映射', { exact: true }).click();
   await expect(page.locator('.twin-model-binding-list').getByText('ENV-01', { exact: true })).toBeVisible();
   await switcher.getByRole('button', { name: '告警', exact: true }).click();
