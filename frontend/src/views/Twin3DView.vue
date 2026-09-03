@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { useMediaQuery } from '@vueuse/core';
 import { Camera, Expand, MapPin, RefreshCw, RotateCcw, Search } from 'lucide-vue-next';
 import { useRoute, useRouter } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
@@ -20,6 +21,7 @@ const query = ref('');
 const stateFilter = ref<'all' | TwinVisualState>('all');
 const finePointer = ref(false);
 const fullscreenActive = ref(false);
+const compactLayout = useMediaQuery('(max-width: 1180px)');
 const fullscreenPointer = reactive({ x: -80, y: -80, active: false, pressed: false, draggingSwitcher: false });
 const fullscreenTrail = ref(Array.from({ length: 6 }, (_, index) => ({ x: -80, y: -80, opacity: 0.34 - index * 0.045, scale: 1 - index * 0.1 })));
 const fullscreenPulse = ref<{ key: number; x: number; y: number } | null>(null);
@@ -248,7 +250,7 @@ onBeforeUnmount(() => {
           <details class="twin-model-binding-list"><summary>查看实体模型映射</summary><p v-if="modelReport.isComplete">模型中的设备节点已全部绑定，可进行状态高亮与点击定位。</p><p v-else>待补齐：{{ modelReport.missingCodes.join('、') }}</p><div><span v-for="code in modelReport.boundCodes" :key="code">{{ code }}</span></div></details>
           <p v-if="navigationContext" class="twin-navigation-context" role="status">{{ navigationContext }}</p>
           <div class="twin-inspector-grid"><div><span>所在区域</span><b>{{ selectedAsset.zone }}</b></div><div><span>实体模型</span><b>{{ selectedAsset.mesh || '待绑定' }}</b></div><div><span>最新上报</span><b>{{ formatTime(selectedAsset.lastSeenAt) }}</b></div><div><span>当前遥测</span><b>{{ selectedTelemetry ? `${selectedTelemetry.value} ${selectedTelemetry.unit}` : '暂无数据' }}</b></div></div>
-          <section class="twin-detail-section"><span class="eyebrow">实时数据</span><OpsChart v-if="selectedTelemetryWindow.length" compact :labels="selectedTelemetryLabels" :series="selectedTelemetrySeries" /><p v-else class="twin-empty">当前设备暂无可绘制遥测。</p></section>
+          <section class="twin-detail-section"><span class="eyebrow">实时数据</span><OpsChart v-if="selectedTelemetryWindow.length && !compactLayout" compact :labels="selectedTelemetryLabels" :series="selectedTelemetrySeries" /><p v-else-if="!selectedTelemetryWindow.length" class="twin-empty">当前设备暂无可绘制遥测。</p></section>
           <section class="twin-detail-section"><span class="eyebrow">当前告警</span><div v-if="primaryAlert" class="twin-alert-summary"><b>{{ primaryAlert.severity === 'critical' ? '严重告警' : primaryAlert.severity === 'warning' ? '待处置告警' : '提示告警' }} · {{ primaryAlert.code }}</b><strong>{{ primaryAlert.title }}</strong><p>{{ primaryAlert.detail }}</p><button type="button" class="twin-alert-action" @click="openAlertCenter">进入告警中心处置</button></div><p v-else class="twin-empty">当前设备没有未关闭告警。</p></section>
           <section class="twin-detail-section"><span class="eyebrow">关联工单</span><p v-if="selectedOrders.length" class="twin-order-summary"><b>{{ selectedOrders[0].code }}</b>{{ selectedOrders[0].title }}</p><p v-else class="twin-empty">当前设备没有关联工单。</p></section>
           <button class="twin-gis-link" type="button" @click="openGis"><MapPin />在 GIS 地图中查看</button>

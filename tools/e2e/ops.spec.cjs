@@ -85,7 +85,7 @@ test('滚轮在页面边界按导航顺序切换业务页面', async ({ page }) 
   await expect(page.getByRole('navigation').getByRole('button', { name: '告警中心' })).toHaveAttribute('aria-current', 'page');
 });
 
-test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告警状态', async ({ page }) => {
+test('三维孪生加载正式环形 V07 模型后可完整定位设备并展示告警状态', async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
@@ -136,10 +136,10 @@ test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告
   await expect(page.getByRole('button', { name: '启用自由旋转' })).toHaveClass(/active/);
   const switcher = page.locator('.twin-quick-switch');
   await expect(page.locator('.twin-model-readiness').getByText('模型已加载', { exact: true })).toBeVisible();
-  await expect(page.locator('.twin-model-readiness').getByText(/\d+ \/ \d+ 个设备已定位/)).toBeVisible();
+  await expect(page.locator('.twin-model-readiness').getByText('13 / 13 个设备已定位', { exact: true })).toBeVisible();
   const modelReadiness = page.locator('.twin-model-readiness.loaded');
   await expect(modelReadiness.getByText('模型已加载', { exact: true })).toBeVisible();
-  await expect(page.locator('.twin-model-contract').getByText(/\d+ \/ \d+ 个设备已具备标准节点名称/)).toBeVisible();
+  await expect(page.locator('.twin-model-contract').getByText('13 / 13 个设备已具备标准节点名称', { exact: true })).toBeVisible();
   await page.getByText('查看实体模型映射', { exact: true }).click();
   await expect(page.locator('.twin-model-binding-list').getByText('ENV-01', { exact: true })).toBeVisible();
   await switcher.getByRole('button', { name: '告警', exact: true }).click();
@@ -147,7 +147,7 @@ test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告
   await switcher.getByRole('button', { name: '全部', exact: true }).click();
   await page.getByRole('button', { name: 'ENV-01' }).click();
   const inspector = page.locator('.twin-inspector');
-  await expect(inspector.getByText('MESH_ENV_01', { exact: true })).toBeVisible();
+  await expect(inspector.locator('header code')).toContainText('ENV-01');
   await expect(inspector.getByText('运行正常', { exact: true })).toBeVisible();
   await inspector.getByRole('button', { name: '在 GIS 地图中查看' }).click();
   await expect(page).toHaveURL(/\/gis\?asset=ENV-01/);
@@ -156,8 +156,8 @@ test('三维孪生加载正式环形 V04 模型后仍可定位设备并展示告
   await page.getByRole('button', { name: '在三维中查看此设备 →' }).click();
   await expect(page).toHaveURL(/\/twin-3d\?asset=ENV-01/);
   await expect(page.locator('.twin-inspector').getByText('已从 GIS 地图定位到当前设备。', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'BT-01' }).click();
-  await expect(page.locator('.twin-focus-status').getByText('HC-05 蓝牙模块', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'NET-01' }).click();
+  await expect(page.locator('.twin-focus-status').getByText('ESP8266-01S 通信模块', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '设备台账' }).click({ force: true });
   await page.getByRole('button', { name: '定位 水位传感器' }).click({ force: true });
   await page.getByRole('button', { name: '在三维中查看 →' }).click();
@@ -177,7 +177,7 @@ test('告警可携带处置上下文直达三维实体模型', async ({ page }) 
   await expect(page).toHaveURL(/\/twin-3d\?asset=CTRL-01/);
   const inspector = page.locator('.twin-inspector');
   await expect(inspector.getByText('已从告警 ALM-260826-001 定位到当前设备。', { exact: true })).toBeVisible();
-  await expect(inspector.getByText('MESH_CTRL_01', { exact: true })).toBeVisible();
+  await expect(inspector.locator('header code')).toContainText('CTRL-01');
   await inspector.getByRole('button', { name: '进入告警中心处置' }).click();
   await expect(page).toHaveURL(/\/alerts\?focus=ALM-260826-001/);
   await expect(page.locator('.table-row.focused').getByText('ALM-260826-001', { exact: true })).toBeVisible();
@@ -290,7 +290,7 @@ test('运维员可确认告警、生成工单并推进处置流程', async ({ pa
   await expect(linkedOrder).toHaveClass(/focused/);
   await linkedOrder.getByRole('button', { name: '三维定位' }).click();
   await expect(page).toHaveURL(/\/twin-3d\?asset=CTRL-01&source=work-order/);
-  await expect(page.locator('.twin-inspector').getByText('MESH_CTRL_01', { exact: true })).toBeVisible();
+  await expect(page.locator('.twin-inspector header code')).toContainText('CTRL-01');
   await page.goBack();
   await expect(linkedOrder).toBeVisible();
   const assignButton = linkedOrder.getByRole('button', { name: '接单并分派' });

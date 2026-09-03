@@ -100,12 +100,50 @@ function addFallbackAsset(asset: Asset) {
   animatedObjects.set(asset.code, group);
 }
 
+function normalizedModelNodeName(value: unknown) {
+  return typeof value === 'string' ? value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+}
+
+/**
+ * GLTFLoader may de-duplicate or sanitize Object3D.name while retaining the
+ * original Blender node name in userData.name. Resolve both representations,
+ * then use a punctuation-insensitive alias as a final compatibility bridge.
+ * This keeps legacy exports usable without weakening the formal mesh contract.
+ */
+function findModelNode(root: Object3D, asset: Asset) {
+  const candidates = modelNodeNames(asset);
+  for (const candidate of candidates) {
+    const exact = root.getObjectByName(candidate);
+    if (exact) return exact;
+  }
+
+  let originalNameMatch: Object3D | undefined;
+  const normalizedCandidates = new Set(candidates.map(normalizedModelNodeName).filter(Boolean));
+  let normalizedMatch: Object3D | undefined;
+  root.traverse((object) => {
+    if (originalNameMatch) return;
+    const originalName = object.userData?.name;
+    if (typeof originalName === 'string' && candidates.includes(originalName)) {
+      originalNameMatch = object;
+      return;
+    }
+    if (!normalizedMatch && (
+      normalizedCandidates.has(normalizedModelNodeName(object.name))
+      || normalizedCandidates.has(normalizedModelNodeName(originalName))
+    )) normalizedMatch = object;
+  });
+  return originalNameMatch || normalizedMatch;
+}
+
 function bindModelAssets(root: Object3D) {
   const boundCodes: string[] = [];
   props.assets.forEach((asset) => {
     if (modelBoundCodes.has(asset.code)) { boundCodes.push(asset.code); return; }
-    const node = modelNodeNames(asset).map((name) => root.getObjectByName(name)).find(Boolean);
-    if (!node) { addFallbackAsset(asset); return; }
+    const node = findModelNode(root, asset);
+    if (!node) {
+      addFallbackAsset(asset);
+      return;
+    }
     node.userData.assetCode = asset.code;
     node.traverse((child) => {
       child.userData.assetCode = asset.code;

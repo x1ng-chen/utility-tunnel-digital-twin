@@ -22,6 +22,7 @@ const navigationHint = computed(() => {
   if (typeof route.query.asset === 'string' && route.query.source === 'asset') return `正在查看设备 ${route.query.asset} 的维护与处置记录`;
   return '';
 });
+const ordersForStatus = (status: string) => visible.value.filter((item) => item.status === status);
 const nextStatus: Partial<Record<WorkOrder['status'], WorkOrder['status']>> = { open: 'assigned', assigned: 'in_progress', in_progress: 'pending_review', pending_review: 'completed' };
 const transitionLabel: Partial<Record<WorkOrder['status'], string>> = { open: '接单并分派', assigned: '开始现场处理', in_progress: '提交复核', pending_review: '复核并完成' };
 const form = reactive({ assetCode: '', title: '', description: '', priority: 'normal' as WorkOrder['priority'] });
@@ -123,8 +124,9 @@ async function createOrder() {
     <p v-else-if="!canWrite" class="inline-message">查看者无权新建或流转工单。</p>
     <section class="kanban">
       <article v-for="status in ['open','assigned','in_progress','pending_review','completed']" :key="status" class="kanban-column">
-        <header><span>{{ status === 'open' ? '待分派' : status === 'assigned' ? '已分派' : status === 'in_progress' ? '处理中' : status === 'pending_review' ? '待复核' : '已完成' }}</span><b>{{ visible.filter((item) => item.status === status).length }}</b></header>
-        <div v-for="order in visible.filter((item) => item.status === status)" :key="order.id" :class="['order-card', { focused: order.code === focusedCode }]" :data-testid="`work-order-${order.code}`">
+        <header><span>{{ status === 'open' ? '待分派' : status === 'assigned' ? '已分派' : status === 'in_progress' ? '处理中' : status === 'pending_review' ? '待复核' : '已完成' }}</span><b>{{ ordersForStatus(status).length }}</b></header>
+        <p v-if="!ordersForStatus(status).length" class="kanban-empty">当前阶段暂无工单</p>
+        <div v-for="order in ordersForStatus(status)" :key="order.id" :class="['order-card', { focused: order.code === focusedCode }]" :data-testid="`work-order-${order.code}`">
           <span :class="['badge', order.priority]">{{ order.priority === 'urgent' ? '紧急' : order.priority === 'high' ? '高' : order.priority === 'low' ? '低' : '普通' }}</span>
           <b>{{ order.code }}</b><h3>{{ order.title }}</h3><small>{{ order.assetCode }} · {{ order.assigneeName || '待分配' }}</small>
           <small :class="['due-time', `sla-${order.slaStatus || 'not_set'}`]">{{ slaLabel(order) }}</small><small v-if="order.dueAt" class="due-deadline">截止 {{ new Date(order.dueAt).toLocaleString('zh-CN') }}</small>
@@ -141,4 +143,5 @@ async function createOrder() {
 <style scoped>
 .order-card-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:11px}.order-card-links button{min-width:0;margin:0;padding:7px 4px;border-color:#2d4a69;background:#0d2036;color:#9db5d2;white-space:nowrap}.order-card-links button:hover,.order-card-links button:focus-visible{border-color:#5b86c2;background:#18385d;color:#fff;outline:0}.order-card .order-transition{margin-top:7px;border-color:#4b69bd;background:#223b73;color:#dce5ff}
 .order-timeline{margin-top:10px;border-top:1px solid #253d58;padding-top:8px;color:#adc2dc}.order-timeline summary{cursor:pointer;font-size:12px;list-style:none}.order-timeline summary::-webkit-details-marker{display:none}.order-timeline summary::after{content:'＋';float:right;color:#6d92c2}.order-timeline[open] summary::after{content:'－'}.order-timeline ol{display:grid;gap:9px;margin:9px 0 0;padding:0;list-style:none}.order-timeline li{position:relative;padding-left:12px;border-left:2px solid #345a86}.order-timeline li div{display:flex;justify-content:space-between;gap:8px}.order-timeline li b{font-size:11px;color:#dce9f8}.order-timeline time,.order-timeline small{font-size:10px;color:#7892ae}.order-timeline p{margin:4px 0;font-size:11px;line-height:1.55;color:#aebfd3;white-space:pre-wrap}.transition-note{display:grid;gap:7px;margin-top:10px;padding:10px;border:1px solid #40628c;background:#0a1a2c}.transition-note label{font-size:12px;color:#dce9f8}.transition-note textarea{width:100%;box-sizing:border-box;resize:vertical;border:1px solid #355372;background:#081522;color:#e8f2ff;padding:9px;font:inherit}.transition-note>div{display:flex;justify-content:flex-end;gap:7px}.transition-note button{margin:0;padding:7px 10px}
+.kanban-empty{display:grid;min-height:112px;margin:0;place-items:center;border:1px dashed #31445b;color:#647b96;font-size:10px;text-align:center}
 </style>
