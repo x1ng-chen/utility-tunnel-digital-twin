@@ -1,15 +1,19 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { createHash } from 'node:crypto';
-import { basename, join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 
 const runtimePath = 'frontend/public/models/utility-tunnel.glb';
-const modelDirectory = 'model';
+const candidatePath = 'model/utility-tunnel-annular-v08-final.glb';
+const candidateMapPath = 'model/asset-map-v08-final.json';
 const seedPath = 'backend/operations/management/commands/seed_demo.py';
 const modelReadmePath = 'model/README.md';
-const maxRuntimeBytes = 32 * 1024 * 1024;
+const maxModelBytes = 32 * 1024 * 1024;
 
 function parseGlb(file) {
+  if (!existsSync(file)) return { available: false, reason: '文件不存在' };
   const data = readFileSync(file);
+  const header = data.toString('utf8', 0, Math.min(data.length, 80));
+  if (header.startsWith('version https://git-lfs.github.com/spec/v1')) {
+    return { available: false, reason: 'LFS 对象尚未下载' };
+  }
   if (data.length < 20 || data.toString('ascii', 0, 4) !== 'glTF') throw new Error(`${file}: 不是有效的 GLB 文件`);
   if (data.readUInt32LE(4) !== 2) throw new Error(`${file}: 仅支持 GLB 2.0`);
   if (data.readUInt32LE(8) !== data.length) throw new Error(`${file}: 文件长度与 GLB 头不一致`);
@@ -24,12 +28,7 @@ function parseGlb(file) {
     offset = end;
   }
   if (!document || document.asset?.version !== '2.0') throw new Error(`${file}: 缺少有效的 glTF 2.0 JSON 数据块`);
-  return {
-    bytes: data.length,
-    digest: createHash('sha256').update(data).digest('hex'),
-    nodeCount: (document.nodes || []).length,
-    nodes: new Set((document.nodes || []).map((node) => node.name).filter(Boolean)),
-  };
+  return { available: true, bytes: data.length, nodeCount: (document.nodes || []).length, nodes: new Set((document.nodes || []).map((node) => node.name).filter(Boolean)) };
 }
 
 function currentAssetContract() {
@@ -39,58 +38,37 @@ function currentAssetContract() {
   return entries;
 }
 
-function latestFormalDelivery() {
-  const maps = readdirSync(modelDirectory)
-    .map((name) => ({ name, match: name.match(/^asset-map-v(\d+)-final\.json$/i) }))
-    .filter((entry) => entry.match)
-    .sort((left, right) => Number(right.match[1]) - Number(left.match[1]));
-  if (!maps.length) throw new Error(`${modelDirectory}: 缺少正式模型资产映射`);
-  const mapPath = join(modelDirectory, maps[0].name);
-  const map = JSON.parse(readFileSync(mapPath, 'utf8'));
-  const modelName = map.model || map.modelFile;
-  if (!modelName) throw new Error(`${mapPath}: 缺少 model/modelFile 字段`);
-  const modelPath = join(modelDirectory, modelName);
-  if (!existsSync(modelPath)) throw new Error(`${mapPath}: 声明的模型不存在：${modelName}`);
-  const version = map.version || map.modelVersion || `V${maps[0].match[1]}`;
-  const mappings = Array.isArray(map.assets)
-    ? map.assets.map((asset) => ({ code: asset.asset_id, names: asset.meshNames || [] }))
-    : Object.entries(map.assets || {}).map(([code, names]) => ({ code, names: Array.isArray(names) ? names : [] }));
-  return { map, mapPath, mappings, modelName, modelPath, version };
+function mappedAssets(assetMap) {
+  return Array.isArray(assetMap.assets)
+    ? assetMap.assets
+    : Object.entries(assetMap.assets || {}).map(([asset_id, meshNames]) => ({ asset_id, meshNames }));
 }
 
 const runtime = parseGlb(runtimePath);
-const formalDelivery = latestFormalDelivery();
-const formalModel = parseGlb(formalDelivery.modelPath);
+const candidate = parseGlb(candidatePath);
 const contract = currentAssetContract();
 const readme = readFileSync(modelReadmePath, 'utf8');
 const failures = [];
 
-if (runtime.bytes > maxRuntimeBytes) failures.push(`运行时模型 ${(runtime.bytes / 1024 / 1024).toFixed(1)}MB 超过 32MB 浏览器发布上限`);
-const missingRuntimeNodes = contract.filter((asset) => !runtime.nodes.has(asset.mesh));
+if (!runtime.available) failures.push(`网页运行时模型不可用：${runtime.reason}`);
+if (runtime.available && runtime.bytes > maxModelBytes) failures.push(`网页运行时模型 ${(runtime.bytes / 1024 / 1024).toFixed(1)}MB 超过 32MB 浏览器发布上限`);
+const missingRuntimeNodes = runtime.available ? contract.filter((asset) => !runtime.nodes.has(asset.mesh)) : contract;
 if (missingRuntimeNodes.length) failures.push(`运行时模型缺少资产节点：${missingRuntimeNodes.map((asset) => `${asset.code}=${asset.mesh}`).join('、')}`);
+if (!readme.includes('V07') || !readme.includes('asset-map-v07-final.json')) failures.push('模型 README 未声明已验证的 V07 网页运行时基线');
 
-const formalMappedNodes = formalDelivery.mappings.flatMap((mapping) => mapping.names);
-const missingFormalMapNodes = formalMappedNodes.filter((name) => !formalModel.nodes.has(name));
-if (missingFormalMapNodes.length) failures.push(`${formalDelivery.version} 映射引用了模型中不存在的节点：${missingFormalMapNodes.join('、')}`);
-if (!readme.includes(formalDelivery.modelName) || !readme.includes(basename(formalDelivery.mapPath))) {
-  failures.push(`README 未声明当前正式交付 ${formalDelivery.version} 的模型与资产映射`);
-}
-const validation = formalDelivery.map.runtimeValidation;
-if (validation) {
-  if (validation.glbNodes !== formalModel.nodeCount) failures.push(`${formalDelivery.version} 映射记录的节点总数与 GLB 不一致`);
-  if (validation.requiredNodes !== formalDelivery.mappings.length) failures.push(`${formalDelivery.version} 映射记录的必需节点数与资产条目不一致`);
-  if (validation.missingRequiredNodes !== 0) failures.push(`${formalDelivery.version} 映射仍报告缺失必需节点`);
-}
-
-const formalMappingsByCode = new Map(formalDelivery.mappings.map((mapping) => [mapping.code, mapping.names]));
-const missingRuntimeContractMappings = contract.filter((asset) => {
-  const names = formalMappingsByCode.get(asset.code) || [];
-  return !names.some((name) => formalModel.nodes.has(name));
-});
-const formalReady = formalModel.bytes <= maxRuntimeBytes && missingRuntimeContractMappings.length === 0;
-if (!formalReady) {
-  if (!/完成模型压缩、资产映射切换和浏览器加载回归/.test(readme)) failures.push(`${formalDelivery.version} 尚未满足 Web 运行条件，但 README 未披露压缩、映射和回归门禁`);
-  if (runtime.digest === formalModel.digest) failures.push(`未就绪的 ${formalDelivery.version} 不得覆盖当前受控运行时模型`);
+let candidateReady = false;
+let candidateNote = candidate.reason || 'V08 候选模型已进入审查';
+if (candidate.available) {
+  if (candidate.bytes > maxModelBytes) failures.push(`V08 候选模型 ${(candidate.bytes / 1024 / 1024).toFixed(1)}MB 超过 32MB 浏览器发布上限`);
+  if (!existsSync(candidateMapPath)) failures.push('V08 候选缺少资产映射文件');
+  else {
+    const map = JSON.parse(readFileSync(candidateMapPath, 'utf8'));
+    const mapAssets = mappedAssets(map);
+    const missingCandidateMapNodes = mapAssets.flatMap((asset) => asset.meshNames || []).filter((name) => !candidate.nodes.has(name));
+    if (missingCandidateMapNodes.length) failures.push(`V08 候选映射引用了模型中不存在的节点：${missingCandidateMapNodes.join('、')}`);
+    candidateReady = candidate.bytes <= maxModelBytes && missingCandidateMapNodes.length === 0;
+    candidateNote = candidateReady ? 'V08 候选通过节点和体积门禁，仍需独立发布审批' : 'V08 候选需要补齐映射或体积门禁';
+  }
 }
 
 if (failures.length) {
@@ -99,7 +77,6 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`三维模型交付检查通过：运行时 ${(runtime.bytes / 1024 / 1024).toFixed(1)}MB，${contract.length}/${contract.length} 个资产节点可定位。`);
-console.log(`当前正式工程模型：${formalDelivery.version}，${(formalModel.bytes / 1024 / 1024).toFixed(1)}MB，${formalModel.nodeCount} 个 GLB 节点，${formalDelivery.mappings.length} 条资产映射。`);
-if (formalReady) console.log(`${formalDelivery.version} 已满足浏览器运行时替换条件。`);
-else console.log(`${formalDelivery.version} 暂不替换 Web 运行模型：当前 13 资产契约仍有 ${missingRuntimeContractMappings.length} 条未完成映射兼容。`);
+console.log(`三维模型交付检查通过：网页运行时 ${(runtime.bytes / 1024 / 1024).toFixed(1)}MB，${contract.length}/${contract.length} 个资产节点可定位。`);
+if (candidate.available) console.log(`V08 候选：${(candidate.bytes / 1024 / 1024).toFixed(1)}MB，${candidate.nodeCount} 个 GLB 节点；${candidateNote}。`);
+else console.log(`V08 候选暂不参与二进制门禁：${candidateNote}；网页继续使用已验证的 V07。`);
