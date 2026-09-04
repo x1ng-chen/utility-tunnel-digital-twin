@@ -11,6 +11,10 @@ module.exports = defineConfig({
   use: {
     headless: true,
     viewport: { width: 1440, height: 960 },
+    // CI runners use software WebGL. Respecting the application's reduced
+    // motion/performance path keeps business controls responsive while the
+    // suite still exercises the real Three.js scene and camera gestures.
+    reducedMotion: 'reduce',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

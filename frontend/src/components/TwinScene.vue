@@ -20,6 +20,7 @@ let camera: PerspectiveCamera | undefined;
 let renderer: WebGLRenderer | undefined;
 let controls: OrbitControls | undefined;
 let frame = 0;
+let lastRenderedAt = 0;
 let resizeObserver: ResizeObserver | undefined;
 const raycaster = new Raycaster();
 const pointer = new Vector2();
@@ -354,8 +355,15 @@ function onCanvasPointerUp(event: PointerEvent) {
 
 function cancelCanvasPan() { pendingPanGesture = undefined; }
 
-function animate() {
+function animate(timestamp = 0) {
   frame = window.requestAnimationFrame(animate);
+  // Software WebGL, low-core industrial terminals and users who request less
+  // motion should not spend the entire main-thread budget repainting a static
+  // model. 30 FPS keeps camera gestures responsive while leaving enough time
+  // for surrounding navigation and business controls.
+  const minimumFrameInterval = performanceMode.value === 'reduced' ? 1000 / 30 : 0;
+  if (minimumFrameInterval && timestamp - lastRenderedAt < minimumFrameInterval) return;
+  lastRenderedAt = timestamp;
   const now = performance.now() / 1000;
   props.assets.forEach((asset) => {
     const materials = animatedMaterials.get(asset.code);
@@ -434,12 +442,15 @@ onMounted(() => {
   scene.background = new Color(0x081628);
   scene.fog = new Fog(0x081628, 22, 55);
   camera = new PerspectiveCamera(48, 1, .1, 200);
-  const navigatorWithMemory = navigator as Navigator & { deviceMemory?: number };
-  performanceMode.value = window.matchMedia('(prefers-reduced-motion: reduce)').matches || (navigatorWithMemory.deviceMemory ?? 8) <= 4 ? 'reduced' : 'full';
+  const navigatorCapabilities = navigator as Navigator & { deviceMemory?: number };
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const limitedMemory = (navigatorCapabilities.deviceMemory ?? 8) <= 4;
+  const limitedCpu = (navigator.hardwareConcurrency || 8) <= 4;
+  performanceMode.value = prefersReducedMotion || limitedMemory || limitedCpu ? 'reduced' : 'full';
   renderer = new WebGLRenderer({ antialias: performanceMode.value === 'full', alpha: false, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, performanceMode.value === 'reduced' ? 1.25 : 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, performanceMode.value === 'reduced' ? 1 : 2));
   renderer.outputColorSpace = SRGBColorSpace;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = performanceMode.value === 'full';
   host.value.append(renderer.domElement);
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableRotate = true;

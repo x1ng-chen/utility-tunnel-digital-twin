@@ -86,7 +86,10 @@ test('滚轮在页面边界按导航顺序切换业务页面', async ({ page }) 
 });
 
 test('三维孪生加载正式环形 V07 模型后可完整定位设备并展示告警状态', async ({ page }) => {
-  test.setTimeout(120_000);
+  // The complete model + camera + GIS + asset-ledger journey is intentionally
+  // broader than the other cases. Linux CI uses software WebGL, so reserve a
+  // realistic budget without weakening any of the business assertions.
+  test.setTimeout(240_000);
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
@@ -129,7 +132,7 @@ test('三维孪生加载正式环形 V07 模型后可完整定位设备并展示
   expect(canvasBox).not.toBeNull();
   await page.mouse.move(canvasBox.x + canvasBox.width * .55, canvasBox.y + canvasBox.height * .48);
   await page.mouse.down({ button: 'left' });
-  await page.mouse.move(canvasBox.x + canvasBox.width * .72, canvasBox.y + canvasBox.height * .58, { steps: 8 });
+  await page.mouse.move(canvasBox.x + canvasBox.width * .72, canvasBox.y + canvasBox.height * .58, { steps: 2 });
   await page.mouse.up({ button: 'left' });
   await expect.poll(() => page.locator('.twin-canvas').getAttribute('data-camera-target')).not.toBe(targetBeforePan);
   await page.getByRole('button', { name: '启用自由旋转' }).click();

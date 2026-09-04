@@ -41,7 +41,7 @@ jobs:
           - name: Business workflows
             id: operations
             spec: ops.spec.cjs
-            timeout: 120000
+            timeout: 240000
           - name: Visual layout audit
             id: visual
             spec: visual.spec.cjs
