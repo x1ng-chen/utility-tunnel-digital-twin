@@ -10,9 +10,29 @@ describe('operations store', () => {
 
   it('starts with the connected demo model', () => {
     const store = useOperationsStore();
-    expect(store.assets).toHaveLength(12);
+    expect(store.assets).toHaveLength(18);
     expect(store.openAlerts).toBe(2);
     expect(store.activeOrders).toBe(2);
+  });
+
+  it('keeps five pipe stations unconnected and independent of the seep sensor', () => {
+    const store = useOperationsStore();
+    const levels = store.assets.filter(a => a.code.startsWith('LEVEL-L'));
+    expect(levels).toHaveLength(5);
+    expect(new Set(levels.map(a => a.mesh)).size).toBe(5);
+    expect(new Set(levels.map(a => `${a.position.x},${a.position.y}`)).size).toBe(5);
+    for (const asset of levels) {
+      expect(asset.status).toBe('unknown');
+      expect(asset.integrationStatus).toBe('pending_verification');
+      expect(asset.lastSeenAt).toBeNull();
+      expect(asset.locationSource).toBe('unassigned');
+      expect(store.telemetry.some(t => t.assetCode === asset.code)).toBe(false);
+      const binding = store.hardwareBindings.find(b => b.assetCode === asset.code)!;
+      expect(binding.status).toBe('reserved');
+      expect(binding.lastHeartbeatAt).toBeNull();
+    }
+    expect(store.assets.some(a => a.code === 'BT-01')).toBe(false);
+    expect(store.assets.some(a => a.code === 'NET-01')).toBe(true);
   });
 
   it('preserves record identity while applying live polling updates', () => {

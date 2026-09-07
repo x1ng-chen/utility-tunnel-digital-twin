@@ -4,10 +4,11 @@
 
 `utility-tunnel-annular-v07-final.blend` 与
 `utility-tunnel-annular-v07-final.glb` 是当前已验证的网页运行时工程模型。
-它保留透明环形外壳、工业设备布局和 5 个分散液位站；五套 FS-IR02 分别固定在排水、吸水、泵入口、阀后和回水管段，
+它保留透明环形外壳、工业设备布局和 5 个分散液位站；五套 FS-IR02 分别标为排水、吸水、泵入口、阀后和回水管段，
 并各自具备板卡、探头、支架、管夹、线束和中文测点牌。`PIPE-G01`、`WATER-TRAY-01`、`FAN-01` 和 `GAS-01` 同样具备稳定名称。
 
-`asset-map-v07-final.json` 是 V07 的资产映射，并已与 Web 当前 13 个运行资产契约对齐。
+`asset-map-v07-final.json` 是 V07 的归档映射；2026-09-07 台账新增五个独立液位测点后，门禁验证 V07 仍能绑定全部 18 个资产。
+节点存在不等于物理连接已验收：本轮审查发现旧版吸水/回水连接表达不足，修复另存 V09 候选，不回写历史模型。
 V07 的 GLB 已通过体积、节点完整性与浏览器回归门禁，可作为 Web 运行模型。
 `_TEMP` 表示实物接口尚未测量，不得据此加工、接线或采购。
 
@@ -15,14 +16,15 @@ V07 的 GLB 已通过体积、节点完整性与浏览器回归门禁，可作�
 
 队友在远端提交了 V08 的 BT-01（HC-05 蓝牙模块）视觉设计、映射和质检资料。
 `asset-map-v08-final.json` 与 `quality-report-v08-final.md` 已纳入仓库作为候选审查记录；
-V08 的 LFS 二进制对象当前无法从远端下载（GitHub 返回 404），因此本地和网页继续使用已验证的 V07，
-待补齐对象后再执行 V08 独立发布、回滚和浏览器门禁。BT-01 仅是可选近场调试的视觉表达，
+V08 的 LFS 对象已于 2026-09-07 补传并通过独立缓存下载核验；9 月 3—4 日的 404 是历史状态。
+本轮审查发现 145 个非 V07/BT 基线的历史节点混入和 BT-01 安装间隔，故不直接升级 V08。
+网页继续使用 V07，修复成果另存 V09 候选。BT-01 仅是可选近场调试的视觉表达，
 不改变 ESP8266-01S 的正式无线链路，也不构成接线、供电或实体投运许可。
 
 ## 版本规则
 
 - 每个自然日只保留当天最终确认的一版模型；同日中间 Blend、GLB、预览、映射和脚本不作为正式交付保留。
-- 版本号按连续整数递增。V07 是当前网页运行时基线；V08 为候选模型资料，二进制对象恢复后才可升级为运行时正式版。
+- 版本号按连续整数递增。V07 是网页运行时基线；V08 为历史候选；V09 为本轮提交审查候选，未授权切换运行时。
 - V01—V04 是此前日期的基线；原 V05—V23 是 2026-08-31 的中间过程，已归并为当前 V05。完整过程仍可通过 Git 历史追溯。
 
 | 版本 | 主题 | 主文件 |
@@ -35,6 +37,15 @@ V08 的 LFS 二进制对象当前无法从远端下载（GitHub 返回 404），
 | V06 | 2026-09-01 顶部与侧边完整封闭最终版 | `utility-tunnel-annular-v06-final.glb` |
 | V07 | 2026-09-02 五个分散管路液位测点网页运行时版 | `utility-tunnel-annular-v07-final.glb` |
 | V08 | 2026-09-03 控制区 BT-01 可选视觉模块候选版 | `utility-tunnel-annular-v08-final.glb` |
+| V09 | 2026-09-07 受控导出、测点连接和铭牌修复候选 | `utility-tunnel-annular-v09-candidate.glb` |
+
+## V09 可重复验证
+
+- 构建：`blender -b --python tools/build_model_v09.py -- <仓库绝对路径>`（Blender 5.2.1、微软雅黑字体）。独立进程导入已归档 V08，不覆盖正在编辑的场景。
+- 结构门禁：`node --test tools/glb-contract.test.mjs tools/model-gate.test.mjs` 与 `node tools/check-twin-model-artifacts.mjs --require-candidate`；包完整性：`node tools/model-package.mjs`。
+- 映射：`asset-map-v09-candidate.json`；结构审查：`v09-structural-audit.json`；验收范围：`quality-report-v09-candidate.md`。
+- 预览：`previews/v09-overview.png`、`v09-front.png`、`v09-top.png`、`v09-water.png`、`v09-control.png`。检查图暂隐外壳和顶盖，GLB 保留这些对象。
+- 候选不等于投运。不得凭新增管路表达启用循环泵、受控阀或改变已批准的干燥管廊/少量积水演示边界。
 
 ## 功能与安全边界
 

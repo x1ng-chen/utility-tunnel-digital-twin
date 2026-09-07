@@ -1031,7 +1031,8 @@ class OperationsApiTests(TestCase):
     def test_seed_demo_assigns_distinct_twin_positions(self):
         call_command('seed_demo', stdout=io.StringIO())
         self.assertTrue(User.objects.get(username='admin').check_password('123'))
-        positions = list(Asset.objects.values_list('code', 'position'))
+        self.assertEqual(Asset.objects.count(), 18)
+        positions = list(Asset.objects.exclude(code__startswith='LEVEL-L').values_list('code', 'position'))
         self.assertEqual(len(positions), 13)
         self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 13)
         water = Asset.objects.get(hardware_code='H-04')
@@ -1224,4 +1225,4 @@ class OperationsApiTests(TestCase):
         self.assertIsNone(order.completed_at)
         self.assertIsNone(order.reviewed_by)
         self.assertEqual(order.version, 1)
-        self.assertEqual(HardwareBinding.objects.filter(status=HardwareBinding.Status.RESERVED).count(), 13)
+        self.assertEqual(HardwareBinding.objects.filter(status=HardwareBinding.Status.RESERVED).count(), 18)

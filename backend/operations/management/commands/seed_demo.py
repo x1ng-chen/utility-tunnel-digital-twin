@@ -61,6 +61,11 @@ class Command(BaseCommand):
             {'code': 'FAN-01', 'hardware_code': 'H-10', 'name': '小风扇与 IN-A/IN-B 驱动', 'zone': 'UT-ZC', 'asset_type': '通风执行器', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.PENDING_VERIFICATION, 'interface': '双路 GPIO（待分配）', 'capabilities': ['启停控制', '通风联动'], 'mesh': 'FAN-01', 'position': {'x': 84, 'y': 34, 'z': 0}, 'latitude': 31.230630, 'longitude': 121.474125, 'installation_note': '实物已到位；电压、电流、驱动与反馈链路待验证，当前固件未接入。'},
             {'code': 'NET-01', 'hardware_code': 'H-11', 'name': 'ESP8266-01S 通信模块', 'zone': 'CTRL', 'asset_type': '无线通信模块', 'status': Asset.Status.NORMAL, 'integration_status': Asset.IntegrationStatus.VERIFIED, 'interface': 'USART2 9600 bit/s / MQTT', 'capabilities': ['Wi-Fi 联网', 'MQTT 上报', '断线重连'], 'mesh': 'MESH_ESP01S_01', 'position': {'x': 36, 'y': 56, 'z': 0}, 'latitude': 31.230460, 'longitude': 121.473760, 'installation_note': '唯一无线通信链路；已完成 STM32 真机连接与 IoTDA 数据上行。'},
             {'code': 'PCB-01', 'hardware_code': 'H-25', 'name': '洞洞板', 'zone': 'CTRL', 'asset_type': '施工辅材', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.NON_OPERATIONAL, 'interface': '无', 'capabilities': ['转接与固定'], 'mesh': 'MESH_PCB_01', 'position': {'x': 41, 'y': 63, 'z': 0}, 'latitude': 31.230475, 'longitude': 121.473775, 'installation_note': '非运行资产，仅用于电气转接和实体安装。'},
+            {'code': 'LEVEL-L01', 'name': '液位1 · 排水段', 'zone': 'UT-ZB', 'asset_type': '管道液位测点', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.PENDING_VERIFICATION, 'interface': '待分配', 'capabilities': ['排水段独立液位检测'], 'mesh': 'MESH_V12-FSIR02_L01_PROBE', 'position': {'x': 52, 'y': 82, 'z': 0}, 'latitude': None, 'longitude': None, 'location_source': Asset.LocationSource.UNASSIGNED, 'installation_note': '二维位置仅为示意锚点，非测绘坐标。FS-IR02 排水段独立测点；未接入、未标定，端口和安装尺寸待实物确认；不复用 SEEP-W01 遥测。'},
+            {'code': 'LEVEL-L02', 'name': '液位2 · 吸水段', 'zone': 'UT-ZB', 'asset_type': '管道液位测点', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.PENDING_VERIFICATION, 'interface': '待分配', 'capabilities': ['吸水段独立液位检测'], 'mesh': 'MESH_V12-FSIR02_L02_PROBE', 'position': {'x': 72, 'y': 74, 'z': 0}, 'latitude': None, 'longitude': None, 'location_source': Asset.LocationSource.UNASSIGNED, 'installation_note': '二维位置仅为示意锚点，非测绘坐标。FS-IR02 吸水段独立测点；未接入、未标定，端口和安装尺寸待实物确认；不复用 SEEP-W01 遥测。'},
+            {'code': 'LEVEL-L03', 'name': '液位3 · 泵入口', 'zone': 'UT-ZB', 'asset_type': '管道液位测点', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.PENDING_VERIFICATION, 'interface': '待分配', 'capabilities': ['泵入口独立液位检测'], 'mesh': 'MESH_V12-FSIR02_L03_PROBE', 'position': {'x': 80, 'y': 82, 'z': 0}, 'latitude': None, 'longitude': None, 'location_source': Asset.LocationSource.UNASSIGNED, 'installation_note': '二维位置仅为示意锚点，非测绘坐标。FS-IR02 泵入口独立测点；未接入、未标定，端口和安装尺寸待实物确认；不复用 SEEP-W01 遥测。'},
+            {'code': 'LEVEL-L04', 'name': '液位4 · 阀后段', 'zone': 'UT-ZB', 'asset_type': '管道液位测点', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.PENDING_VERIFICATION, 'interface': '待分配', 'capabilities': ['阀后段独立液位检测'], 'mesh': 'MESH_V12-FSIR02_L04_PROBE', 'position': {'x': 89, 'y': 67, 'z': 0}, 'latitude': None, 'longitude': None, 'location_source': Asset.LocationSource.UNASSIGNED, 'installation_note': '二维位置仅为示意锚点，非测绘坐标。FS-IR02 阀后段独立测点；未接入、未标定，端口和安装尺寸待实物确认；不复用 SEEP-W01 遥测。'},
+            {'code': 'LEVEL-L05', 'name': '液位5 · 回水段', 'zone': 'UT-ZB', 'asset_type': '管道液位测点', 'status': Asset.Status.UNKNOWN, 'integration_status': Asset.IntegrationStatus.PENDING_VERIFICATION, 'interface': '待分配', 'capabilities': ['回水段独立液位检测'], 'mesh': 'MESH_V12-FSIR02_L05_PROBE', 'position': {'x': 60, 'y': 54, 'z': 0}, 'latitude': None, 'longitude': None, 'location_source': Asset.LocationSource.UNASSIGNED, 'installation_note': '二维位置仅为示意锚点，非测绘坐标。FS-IR02 回水段独立测点；未接入、未标定，端口和安装尺寸待实物确认；不复用 SEEP-W01 遥测。'},
         ]
         # Migrate the discontinued Bluetooth placeholder in local demo
         # databases without creating a second communication asset. Production
@@ -75,13 +80,19 @@ class Command(BaseCommand):
             code = spec['code']
             defaults = {key: value for key, value in spec.items() if key != 'code'}
             defaults.update({'location_source': Asset.LocationSource.DEMO_ANCHOR, 'last_seen_at': now if spec['integration_status'] in {Asset.IntegrationStatus.VERIFIED, Asset.IntegrationStatus.FIRMWARE_CONNECTED, Asset.IntegrationStatus.CALIBRATION_REQUIRED} else None, 'is_active': True, 'version': 1})
-            asset, _ = Asset.objects.update_or_create(code=code, defaults=defaults)
+            if code.startswith('LEVEL-L'):
+                defaults['location_source'] = Asset.LocationSource.UNASSIGNED
+                # Never reset a subsequently commissioned sensor on demo reseed.
+                asset, _ = Asset.objects.get_or_create(code=code, defaults=defaults)
+            else:
+                asset, _ = Asset.objects.update_or_create(code=code, defaults=defaults)
             asset_by_code[code] = asset
 
         # These are integration contracts only. They reserve stable identifiers
         # for future gateways and never claim that an unconnected module is online.
         for code, asset in asset_by_code.items():
-            HardwareBinding.objects.update_or_create(
+            binding_writer = HardwareBinding.objects.get_or_create if code.startswith('LEVEL-L') else HardwareBinding.objects.update_or_create
+            binding_writer(
                 asset=asset,
                 defaults={
                     'protocol': HardwareBinding.Protocol.MQTT,

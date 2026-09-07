@@ -1,0 +1,390 @@
+{
+  "sourceSha256": "2d5e9e8706c69dc4f4fb41ca0ce8a96689e8044e1b1098540de291f86be42f62",
+  "excludedLegacyNodes": [
+    "GEO-V07-GRP-CONTROL",
+    "GEO-V07-GRP-GAS-VENT",
+    "GEO-V07-GRP-LEVEL",
+    "GEO-V07-GRP-WATER",
+    "GEO-V08-ARM-MESH_GAS_CH4_01_BACKPLATE",
+    "GEO-V08-ARM-MESH_GAS_CO_01_BACKPLATE",
+    "GEO-V08-ARM-MESH_MOUNT_ENV_01",
+    "GEO-V08-ARM-MESH_PCB_01_MOUNT_PLATE",
+    "GEO-V08-LEG-MESH_GAS_CH4_01_BACKPLATE-L",
+    "GEO-V08-LEG-MESH_GAS_CH4_01_BACKPLATE-R",
+    "GEO-V08-LEG-MESH_GAS_CO_01_BACKPLATE-L",
+    "GEO-V08-LEG-MESH_GAS_CO_01_BACKPLATE-R",
+    "GEO-V08-LEG-MESH_MOUNT_ENV_01-L",
+    "GEO-V08-LEG-MESH_MOUNT_ENV_01-R",
+    "GEO-V08-LEG-MESH_PCB_01_MOUNT_PLATE-L",
+    "GEO-V08-LEG-MESH_PCB_01_MOUNT_PLATE-R",
+    "GEO-V08-PRIMARY-MOUNT-RAIL",
+    "GEO-V08-REAR-MOUNT-RAIL",
+    "GEO-V16-ROOF-RETAINER-01_TEMP",
+    "GEO-V16-ROOF-RETAINER-02_TEMP",
+    "GEO-V16-ROOF-RETAINER-03_TEMP",
+    "GEO-V16-ROOF-RETAINER-04_TEMP",
+    "GEO_AIR_FLOW_CHAIN",
+    "GEO_AIR_FLOW_LABEL_01",
+    "GEO_AIR_FLOW_LABEL_02",
+    "GEO_AIR_FLOW_LABEL_03",
+    "GEO_AIR_FLOW_LABEL_04",
+    "GEO_AIR_IN_01_WEATHER_LABEL",
+    "GEO_G01_FLOW",
+    "GEO_G01_SENSOR_LABEL_CH4",
+    "GEO_G01_SENSOR_LABEL_CO",
+    "GEO_G01_SENSOR_LABEL_O2",
+    "GEO_GAS_CH4_01_PANEL_LABEL",
+    "GEO_GAS_CO_01_PANEL_LABEL",
+    "GEO_GAS_O2_01_PANEL_LABEL",
+    "GEO_GAS_SENSOR_RAIL_LABEL",
+    "GEO_LABEL_AIR_IN",
+    "GEO_LABEL_AIR_OUT",
+    "GEO_LABEL_CH4",
+    "GEO_LABEL_CO",
+    "GEO_LABEL_ESTOP",
+    "GEO_LABEL_G01_CLOSED",
+    "GEO_LABEL_HILEVEL",
+    "GEO_LABEL_LEAK_G01",
+    "GEO_LABEL_O2",
+    "GEO_LABEL_SIMBOX",
+    "GEO_LABEL_SMOKE",
+    "GEO_LABEL_TEMP_A",
+    "GEO_LABEL_TEMP_B",
+    "GEO_LABEL_TEMP_C",
+    "GEO_LABEL_WATER_FLOW",
+    "GEO_LABEL_ZONE_A",
+    "GEO_LABEL_ZONE_B",
+    "GEO_LABEL_ZONE_C",
+    "GEO_PCB_01_IO_LABEL",
+    "GEO_PCB_01_LABEL",
+    "GEO_V17_FAN-01_INTAKE_BLADE_000",
+    "GEO_V17_FAN-01_INTAKE_BLADE_045",
+    "GEO_V17_FAN-01_INTAKE_BLADE_090",
+    "GEO_V17_FAN-01_INTAKE_BLADE_135",
+    "GEO_V17_FAN-01_INTAKE_BLADE_180",
+    "GEO_V17_FAN-01_INTAKE_BLADE_225",
+    "GEO_V17_FAN-01_INTAKE_BLADE_270",
+    "GEO_V17_FAN-01_INTAKE_BLADE_315",
+    "GEO_V17_FAN-01_INTAKE_DIM",
+    "GEO_V17_FAN-01_INTAKE_GRILLE_H_40",
+    "GEO_V17_FAN-01_INTAKE_GRILLE_H_72",
+    "GEO_V17_FAN-01_INTAKE_GRILLE_H_8",
+    "GEO_V17_FAN-01_INTAKE_GRILLE_RING",
+    "GEO_V17_FAN-01_INTAKE_GRILLE_V_40",
+    "GEO_V17_FAN-01_INTAKE_GRILLE_V_72",
+    "GEO_V17_FAN-01_INTAKE_GRILLE_V_8",
+    "GEO_V17_FAN-01_INTAKE_LABEL",
+    "GEO_V17_FAN-01_INTAKE_MOUNT_-50_-50",
+    "GEO_V17_FAN-01_INTAKE_MOUNT_-50_50",
+    "GEO_V17_FAN-01_INTAKE_MOUNT_50_-50",
+    "GEO_V17_FAN-01_INTAKE_MOUNT_50_50",
+    "GEO_V17_FAN-01_INTAKE_W01",
+    "GEO_V17_FAN-01_INTAKE_W02",
+    "GEO_V17_FAN-01_INTAKE_W03",
+    "GEO_V17_FAN-01_INTAKE_W04",
+    "GEO_V17_FAN-02_EXHAUST_BLADE_000",
+    "GEO_V17_FAN-02_EXHAUST_BLADE_045",
+    "GEO_V17_FAN-02_EXHAUST_BLADE_090",
+    "GEO_V17_FAN-02_EXHAUST_BLADE_135",
+    "GEO_V17_FAN-02_EXHAUST_BLADE_180",
+    "GEO_V17_FAN-02_EXHAUST_BLADE_225",
+    "GEO_V17_FAN-02_EXHAUST_BLADE_270",
+    "GEO_V17_FAN-02_EXHAUST_BLADE_315",
+    "GEO_V17_FAN-02_EXHAUST_DIM",
+    "GEO_V17_FAN-02_EXHAUST_GRILLE_H_40",
+    "GEO_V17_FAN-02_EXHAUST_GRILLE_H_72",
+    "GEO_V17_FAN-02_EXHAUST_GRILLE_H_8",
+    "GEO_V17_FAN-02_EXHAUST_GRILLE_RING",
+    "GEO_V17_FAN-02_EXHAUST_GRILLE_V_40",
+    "GEO_V17_FAN-02_EXHAUST_GRILLE_V_72",
+    "GEO_V17_FAN-02_EXHAUST_GRILLE_V_8",
+    "GEO_V17_FAN-02_EXHAUST_LABEL",
+    "GEO_V17_FAN-02_EXHAUST_MOUNT_-50_-50",
+    "GEO_V17_FAN-02_EXHAUST_MOUNT_-50_50",
+    "GEO_V17_FAN-02_EXHAUST_MOUNT_50_-50",
+    "GEO_V17_FAN-02_EXHAUST_MOUNT_50_50",
+    "GEO_V17_FAN-02_EXHAUST_W01",
+    "GEO_V17_FAN-02_EXHAUST_W02",
+    "GEO_V17_FAN-02_EXHAUST_W03",
+    "GEO_V17_FAN-02_EXHAUST_W04",
+    "GEO_V17_PUMP24V_FOOT_0_145",
+    "GEO_V17_PUMP24V_FOOT_0_225",
+    "GEO_V17_PUMP24V_TEST_IN",
+    "GEO_V17_PUMP24V_TEST_OUT",
+    "GEO_V17_PUMP_P01_LABEL",
+    "GEO_V17_RELAY_K01_LABEL",
+    "GEO_V17_RELAY_K01_PIN_-54",
+    "GEO_V17_RELAY_K01_PIN_-62",
+    "GEO_V17_RELAY_K01_PIN_-80",
+    "GEO_V17_RELAY_K01_PIN_-88",
+    "GEO_V17_VALVE_V01_LABEL",
+    "GEO_V17_VALVE_V01_LEVER",
+    "GEO_V17_WATER_FILL_DROP_060",
+    "GEO_V17_WATER_FILL_DROP_084",
+    "GEO_V17_WATER_FILL_DROP_108",
+    "GEO_V17_WATER_FILL_NOZZLE_060",
+    "GEO_V17_WATER_FILL_NOZZLE_084",
+    "GEO_V17_WATER_FILL_NOZZLE_108",
+    "GEO_V17_WATER_FLOW_LABEL",
+    "GEO_V17_WATER_P01_DISCHARGE",
+    "GEO_V17_WATER_P01_SUCTION",
+    "GEO_V17_WATER_RETURN_OVERFLOW",
+    "MESH_V17_FAN-01_INTAKE_FRAME_BOTTOM",
+    "MESH_V17_FAN-01_INTAKE_FRAME_LEFT",
+    "MESH_V17_FAN-01_INTAKE_FRAME_RIGHT",
+    "MESH_V17_FAN-01_INTAKE_HUB",
+    "MESH_V17_FAN-02_EXHAUST_FRAME_BOTTOM",
+    "MESH_V17_FAN-02_EXHAUST_FRAME_LEFT",
+    "MESH_V17_FAN-02_EXHAUST_FRAME_RIGHT",
+    "MESH_V17_FAN-02_EXHAUST_HUB",
+    "MESH_V17_PUMP24V_BASE",
+    "MESH_V17_PUMP24V_HEAD",
+    "MESH_V17_PUMP24V_IN",
+    "MESH_V17_PUMP24V_MOTOR",
+    "MESH_V17_PUMP24V_OUT",
+    "MESH_V17_RELAY_K01_BODY",
+    "MESH_V17_RELAY_K01_PCB",
+    "MESH_V17_WATER_FILL_MANIFOLD",
+    "MESH_WET_DRY_PARTITION_V04"
+  ],
+  "btBefore": [
+    [
+      -0.3230000138282776,
+      -0.2540000081062317,
+      0.22200000286102295
+    ],
+    [
+      -0.28700000047683716,
+      -0.23999999463558197,
+      0.23199999332427979
+    ]
+  ],
+  "btAfter": [
+    [
+      -0.4700000286102295,
+      -0.31700000166893005,
+      0.2980000078678131
+    ],
+    [
+      -0.43400001525878906,
+      -0.30300000309944153,
+      0.30799999833106995
+    ]
+  ],
+  "levelStations": [
+    {
+      "asset": "LEVEL-L01",
+      "station": "排水段",
+      "target": "MESH_WATER_DRAIN_VALVE_01",
+      "probeBounds": [
+        [
+          0.012799999676644802,
+          -0.2662000060081482,
+          0.19499999284744263
+        ],
+        [
+          0.025199998170137405,
+          -0.2537999749183655,
+          0.210999995470047
+        ]
+      ],
+      "bossEndpointDistance": 0.0,
+      "method": "point-to-valve-AABB",
+      "status": "VISUAL_ONLY",
+      "note": "Visual boss and route; not a pressure seal or calibration approval."
+    },
+    {
+      "asset": "LEVEL-L02",
+      "station": "吸水段",
+      "target": "GEO-V09-WATER-SUCTION",
+      "probeBounds": [
+        [
+          0.43380001187324524,
+          -0.1712000072002411,
+          0.19900000095367432
+        ],
+        [
+          0.4461999833583832,
+          -0.15880000591278076,
+          0.2150000035762787
+        ]
+      ],
+      "bossEndpointDistance": 1.4901161193847656e-08,
+      "method": "point-to-route-centerline",
+      "status": "VISUAL_ONLY",
+      "note": "Visual boss and route; not a pressure seal or calibration approval."
+    },
+    {
+      "asset": "LEVEL-L03",
+      "station": "泵入口",
+      "target": "GEO-V09-WATER-SUCTION",
+      "probeBounds": [
+        [
+          0.4997999966144562,
+          -0.16120000183582306,
+          0.19699999690055847
+        ],
+        [
+          0.5121999979019165,
+          -0.14880000054836273,
+          0.21299999952316284
+        ]
+      ],
+      "bossEndpointDistance": 0.0020000040901972183,
+      "method": "point-to-route-centerline",
+      "status": "VISUAL_ONLY",
+      "note": "Visual boss and route; not a pressure seal or calibration approval."
+    },
+    {
+      "asset": "LEVEL-L04",
+      "station": "阀后段",
+      "target": "GEO-V09-WATER-RETURN",
+      "probeBounds": [
+        [
+          0.6337999701499939,
+          -0.16120000183582306,
+          0.26899999380111694
+        ],
+        [
+          0.6462000012397766,
+          -0.14880000054836273,
+          0.2850000262260437
+        ]
+      ],
+      "bossEndpointDistance": 0.0,
+      "method": "point-to-route-centerline",
+      "status": "VISUAL_ONLY",
+      "note": "Visual boss and route; not a pressure seal or calibration approval."
+    },
+    {
+      "asset": "LEVEL-L05",
+      "station": "回水段",
+      "target": "GEO-V09-WATER-RETURN",
+      "probeBounds": [
+        [
+          0.10679998993873596,
+          -0.21819999814033508,
+          0.3739999830722809
+        ],
+        [
+          0.11919999122619629,
+          -0.20579999685287476,
+          0.39000001549720764
+        ]
+      ],
+      "bossEndpointDistance": 0.0,
+      "method": "point-to-route-centerline",
+      "status": "VISUAL_ONLY",
+      "note": "Visual boss and route; not a pressure seal or calibration approval."
+    }
+  ],
+  "routes": {
+    "GEO-V09-WATER-SUCTION": [
+      [
+        0.46,
+        -0.11,
+        0.207
+      ],
+      [
+        0.44,
+        -0.13,
+        0.207
+      ],
+      [
+        0.44,
+        -0.154,
+        0.207
+      ],
+      [
+        0.48,
+        -0.154,
+        0.207
+      ],
+      [
+        0.506,
+        -0.144,
+        0.207
+      ],
+      [
+        0.529,
+        -0.144,
+        0.207
+      ]
+    ],
+    "GEO-V09-WATER-DISCHARGE": [
+      [
+        0.548,
+        -0.144,
+        0.219
+      ],
+      [
+        0.566,
+        -0.144,
+        0.219
+      ],
+      [
+        0.566,
+        -0.144,
+        0.277
+      ],
+      [
+        0.5967,
+        -0.147,
+        0.277
+      ]
+    ],
+    "GEO-V09-WATER-RETURN": [
+      [
+        0.5967,
+        -0.147,
+        0.277
+      ],
+      [
+        0.64,
+        -0.144,
+        0.277
+      ],
+      [
+        0.672,
+        -0.144,
+        0.277
+      ],
+      [
+        0.672,
+        -0.245,
+        0.277
+      ],
+      [
+        0.672,
+        -0.245,
+        0.382
+      ],
+      [
+        0.113,
+        -0.245,
+        0.382
+      ],
+      [
+        0.113,
+        -0.201,
+        0.382
+      ],
+      [
+        0.081,
+        -0.201,
+        0.382
+      ],
+      [
+        0.081,
+        -0.177,
+        0.382
+      ],
+      [
+        0.081,
+        -0.177,
+        0.24
+      ]
+    ]
+  },
+  "scope": "visual candidate only; no physical commissioning approval"
+}
