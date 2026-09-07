@@ -3,6 +3,12 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 const manifestPath = 'model/v09-package-manifest.json';
+if (process.argv.includes('--write')) {
+  // Canonical generated metadata uses LF on every platform, like Git's blobs.
+  for (const file of ['model/asset-map-v09-candidate.json','model/v09-structural-audit.json']) {
+    writeFileSync(file, JSON.stringify(JSON.parse(readFileSync(file,'utf8')),null,2)+'\n');
+  }
+}
 const files = [
   'model/utility-tunnel-annular-v09-candidate.blend',
   'model/utility-tunnel-annular-v09-candidate.glb',

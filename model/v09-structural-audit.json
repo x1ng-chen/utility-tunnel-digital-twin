@@ -188,7 +188,7 @@
           0.210999995470047
         ]
       ],
-      "bossEndpointDistance": 0.0,
+      "bossEndpointDistance": 0,
       "method": "point-to-valve-AABB",
       "status": "VISUAL_ONLY",
       "note": "Visual boss and route; not a pressure seal or calibration approval."
@@ -209,7 +209,7 @@
           0.2150000035762787
         ]
       ],
-      "bossEndpointDistance": 1.4901161193847656e-08,
+      "bossEndpointDistance": 1.4901161193847656e-8,
       "method": "point-to-route-centerline",
       "status": "VISUAL_ONLY",
       "note": "Visual boss and route; not a pressure seal or calibration approval."
@@ -251,7 +251,7 @@
           0.2850000262260437
         ]
       ],
-      "bossEndpointDistance": 0.0,
+      "bossEndpointDistance": 0,
       "method": "point-to-route-centerline",
       "status": "VISUAL_ONLY",
       "note": "Visual boss and route; not a pressure seal or calibration approval."
@@ -272,7 +272,7 @@
           0.39000001549720764
         ]
       ],
-      "bossEndpointDistance": 0.0,
+      "bossEndpointDistance": 0,
       "method": "point-to-route-centerline",
       "status": "VISUAL_ONLY",
       "note": "Visual boss and route; not a pressure seal or calibration approval."

@@ -18,8 +18,8 @@
     },
     {
       "path": "model/v09-structural-audit.json",
-      "bytes": 10277,
-      "sha256": "29b3f81854f224e8c6482f19d68d20a26db307bf0c67d0674ea3c93bb4818089"
+      "bytes": 9880,
+      "sha256": "1384dcd6538a65a612abed7c298906db48af304bd960980ad16c52d472cb0c7c"
     },
     {
       "path": "model/previews/v09-overview.png",

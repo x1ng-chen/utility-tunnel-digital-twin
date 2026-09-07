@@ -217,8 +217,8 @@ for asset in asset_map['assets']:
     if asset['asset_id'] == 'GAS-01':
         asset['meshNames'] = ['MESH_GAS_SAMPLE_MANIFOLD_01']
 asset_map['runtimeValidation'] = {'glbNodes':len(doc['nodes']), 'status':'PENDING_GATE'}
-(out / 'asset-map-v09-candidate.json').write_text(json.dumps(asset_map, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
-(out / 'v09-structural-audit.json').write_text(json.dumps({'sourceSha256':hashlib.sha256(source.read_bytes()).hexdigest(),'excludedLegacyNodes':excluded,'btBefore':bt_before,'btAfter':bounds(bpy.data.objects['MESH_BT_01']),'levelStations':checks,'routes':routes,'scope':'visual candidate only; no physical commissioning approval'},ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+(out / 'asset-map-v09-candidate.json').write_text(json.dumps(asset_map, ensure_ascii=False, indent=2)+'\n', encoding='utf-8', newline='\n')
+(out / 'v09-structural-audit.json').write_text(json.dumps({'sourceSha256':hashlib.sha256(source.read_bytes()).hexdigest(),'excludedLegacyNodes':excluded,'btBefore':bt_before,'btAfter':bounds(bpy.data.objects['MESH_BT_01']),'levelStations':checks,'routes':routes,'scope':'visual candidate only; no physical commissioning approval'},ensure_ascii=False,indent=2)+'\n',encoding='utf-8', newline='\n')
 
 # Diagnostic cutaways, not a fabricated beauty shot. Export includes the shell;
 # only render views hide enclosure and lid for inspection.
