@@ -1,0 +1,71 @@
+{
+  "status": "PASS",
+  "sha256": "23e645dbb5f780a2083fe4e73702c10bec8611b6d08de251b5d85aee11282cc3",
+  "freshImportFloor": {
+    "method": "triangle clipping against actual floor-top triangular prisms",
+    "floorTop": 0.19589924812316895,
+    "tolerance": 1e-05,
+    "topTriangles": 152,
+    "checkedMeshes": 526,
+    "exceptions": {
+      "MESH_RING_FLOOR": "Reference slab itself",
+      "MESH_BASE_01": "Designed foundation below the reference slab",
+      "GEO_UT_RING_RENDER_GROUND": "Presentation ground below foundation"
+    },
+    "findings": [],
+    "status": "PASS"
+  },
+  "floorRegressionFixtures": {
+    "status": "PASS",
+    "cases": 5,
+    "caught": [
+      "embedded",
+      "fully-below",
+      "spanning-no-vertices-over-floor"
+    ],
+    "accepted": [
+      "in-hole",
+      "seated"
+    ]
+  },
+  "preservedOriginalNodes": 529,
+  "unchangedBoundsVerified": 447,
+  "meshCount": 529,
+  "ductDrainSurfaceChecks": [
+    [
+      "MESH_CABLE_DUCT_01",
+      "MESH_WATER_DRAIN_TUBE_01"
+    ],
+    [
+      "MESH_CABLE_DUCT_01",
+      "MESH_WATER_DRAIN_VALVE_01"
+    ],
+    [
+      "MESH_CABLE_DUCT_01",
+      "GEO_WATER_DRAIN_UNION_01"
+    ],
+    [
+      "GEO_CABLE_DUCT_COVER",
+      "MESH_WATER_DRAIN_TUBE_01"
+    ],
+    [
+      "GEO_CABLE_DUCT_COVER",
+      "MESH_WATER_DRAIN_VALVE_01"
+    ],
+    [
+      "GEO_CABLE_DUCT_COVER",
+      "GEO_WATER_DRAIN_UNION_01"
+    ]
+  ],
+  "newUnexpectedSurfacePairs": [],
+  "acceptedNewContacts": [
+    {
+      "pair": [
+        "GEO_MESH_SEEP_W01_LENS",
+        "MESH_SEEP_W01"
+      ],
+      "reason": "Indicator lens seated into its own sensor housing"
+    }
+  ],
+  "neighborMethod": "BVH surface overlap regression, excludes annotations/enclosure; not an exhaustive solid-volume clearance certificate"
+}

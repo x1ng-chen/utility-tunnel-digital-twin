@@ -10,3 +10,13 @@ model/utility-tunnel-annular-v09-candidate.glb filter=lfs diff=lfs merge=lfs -te
 model/previews/v09-*.png filter=lfs diff=lfs merge=lfs -text
 model/asset-map-v09-candidate.json text eol=lf
 model/v09-structural-audit.json text eol=lf
+model/utility-tunnel-annular-v10-candidate.blend filter=lfs diff=lfs merge=lfs -text
+model/utility-tunnel-annular-v10-candidate.glb filter=lfs diff=lfs merge=lfs -text
+model/previews/v10-*.png filter=lfs diff=lfs merge=lfs -text
+model/asset-map-v10-candidate.json text eol=lf
+model/v10-*.json text eol=lf
+model/quality-report-v10-candidate.md text eol=lf
+tools/model_floor_audit.py text eol=lf
+tools/repair_model_v10.py text eol=lf
+tools/verify_model_v10.py text eol=lf
+tools/check-model-v10.mjs text eol=lf
