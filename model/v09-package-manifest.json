@@ -1,0 +1,60 @@
+{
+  "version": "V09-CANDIDATE",
+  "files": [
+    {
+      "path": "model/utility-tunnel-annular-v09-candidate.blend",
+      "bytes": 2588654,
+      "sha256": "540b8b71c3e1725896ea1732cc2448bc03536020567d19623f8b0dd6da66c2d0"
+    },
+    {
+      "path": "model/utility-tunnel-annular-v09-candidate.glb",
+      "bytes": 7713176,
+      "sha256": "46cfec7a7d16b1e9e3fc03e4854f4405d893ec532a3c9b1b860d9df43e3e0568"
+    },
+    {
+      "path": "model/asset-map-v09-candidate.json",
+      "bytes": 4347,
+      "sha256": "c1a6d830b2db197a9ee9f1e5a96a23e38e49ca71efef8c534b3527a86ddf0f75"
+    },
+    {
+      "path": "model/v09-structural-audit.json",
+      "bytes": 9880,
+      "sha256": "1384dcd6538a65a612abed7c298906db48af304bd960980ad16c52d472cb0c7c"
+    },
+    {
+      "path": "model/previews/v09-overview.png",
+      "bytes": 1925907,
+      "sha256": "34d4c441b148d8a49ef78bb71f6889f805f127ec4dd7baad16434ba7de34d334"
+    },
+    {
+      "path": "model/previews/v09-front.png",
+      "bytes": 1740576,
+      "sha256": "2ddb1c641cb426ddfb9e7dd06b3c648b25ba50aac4ac87c6e63031482756fe81"
+    },
+    {
+      "path": "model/previews/v09-top.png",
+      "bytes": 2032880,
+      "sha256": "c3e5ccc7335eb374db92848a1684c8d662097d7bf1409bde2cd3b0e56ec10ef6"
+    },
+    {
+      "path": "model/previews/v09-water.png",
+      "bytes": 2162501,
+      "sha256": "d8efa1c806f97ac7652683c38f5cb9a1ec77622a18a98fd28c5bf4a4ffefd058"
+    },
+    {
+      "path": "model/previews/v09-control.png",
+      "bytes": 2155863,
+      "sha256": "4d84bb806fade921398fcef51696c47d01ff853302ba691fc960cf0bf947fe9f"
+    },
+    {
+      "path": "model/previews/v09-browser-candidate.png",
+      "bytes": 180020,
+      "sha256": "90c50107d6f8373dbf273a2ea0aebc910752b0a402bc5455f00bb3c2da5c8cce"
+    },
+    {
+      "path": "model/previews/v09-assets.png",
+      "bytes": 292213,
+      "sha256": "f7d09ef012711abcf1bb47011a8572798bd258394bbb745a82c45cb1d30908f1"
+    }
+  ]
+}

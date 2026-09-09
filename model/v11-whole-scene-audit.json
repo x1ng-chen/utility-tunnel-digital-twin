@@ -1,0 +1,145 @@
+{
+  "status": "REVIEW_REQUIRED",
+  "optics": [
+    {
+      "station": "L01",
+      "allContacts": [
+        "GEO-V13-LABEL-LINE-LVL1",
+        "GEO_WATER_DRAIN_UNION_01",
+        "MESH_V12-FSIR02_L01_PROBE",
+        "MESH_WATER_DRAIN_VALVE_01"
+      ],
+      "unexpectedNonAnnotation": [
+        "GEO_WATER_DRAIN_UNION_01",
+        "MESH_WATER_DRAIN_VALVE_01"
+      ]
+    },
+    {
+      "station": "L02",
+      "allContacts": [
+        "GEO-V13-LABEL-LINE-LVL2",
+        "MESH_V12-FSIR02_L02_PROBE"
+      ],
+      "unexpectedNonAnnotation": []
+    },
+    {
+      "station": "L03",
+      "allContacts": [
+        "GEO-V13-LABEL-LINE-LVL3",
+        "MESH_V12-FSIR02_L03_PROBE"
+      ],
+      "unexpectedNonAnnotation": []
+    },
+    {
+      "station": "L04",
+      "allContacts": [
+        "MESH_V12-FSIR02_L04_PROBE"
+      ],
+      "unexpectedNonAnnotation": []
+    },
+    {
+      "station": "L05",
+      "allContacts": [
+        "MESH_V12-FSIR02_L05_PROBE"
+      ],
+      "unexpectedNonAnnotation": []
+    }
+  ],
+  "topology": [
+    {
+      "name": "GEO-V09-L01-SERVICE-BOSS",
+      "vertices": 64,
+      "boundaryEdges": 0,
+      "nonManifoldEdges": 0,
+      "zeroAreaFaces": 0
+    },
+    {
+      "name": "GEO-V09-L02-SERVICE-BOSS",
+      "vertices": 64,
+      "boundaryEdges": 0,
+      "nonManifoldEdges": 0,
+      "zeroAreaFaces": 0
+    },
+    {
+      "name": "GEO-V09-L03-SERVICE-BOSS",
+      "vertices": 64,
+      "boundaryEdges": 0,
+      "nonManifoldEdges": 0,
+      "zeroAreaFaces": 0
+    },
+    {
+      "name": "GEO-V09-L04-SERVICE-BOSS",
+      "vertices": 64,
+      "boundaryEdges": 0,
+      "nonManifoldEdges": 0,
+      "zeroAreaFaces": 0
+    },
+    {
+      "name": "GEO-V09-L05-SERVICE-BOSS",
+      "vertices": 64,
+      "boundaryEdges": 0,
+      "nonManifoldEdges": 0,
+      "zeroAreaFaces": 0
+    },
+    {
+      "name": "GEO-V09-WATER-DISCHARGE",
+      "vertices": 384,
+      "boundaryEdges": 0,
+      "nonManifoldEdges": 0,
+      "zeroAreaFaces": 0
+    },
+    {
+      "name": "GEO-V09-WATER-RETURN",
+      "vertices": 1228,
+      "boundaryEdges": 0,
+      "nonManifoldEdges": 0,
+      "zeroAreaFaces": 0
+    },
+    {
+      "name": "GEO-V09-WATER-SUCTION",
+      "vertices": 851,
+      "boundaryEdges": 0,
+      "nonManifoldEdges": 0,
+      "zeroAreaFaces": 0
+    },
+    {
+      "name": "GEO-V14-FSIR02_L01_PIPE_CLAMP",
+      "vertices": 80,
+      "boundaryEdges": 0,
+      "nonManifoldEdges": 0,
+      "zeroAreaFaces": 0
+    },
+    {
+      "name": "GEO-V14-FSIR02_L02_PIPE_CLAMP",
+      "vertices": 80,
+      "boundaryEdges": 0,
+      "nonManifoldEdges": 0,
+      "zeroAreaFaces": 0
+    },
+    {
+      "name": "GEO-V14-FSIR02_L03_PIPE_CLAMP",
+      "vertices": 80,
+      "boundaryEdges": 0,
+      "nonManifoldEdges": 0,
+      "zeroAreaFaces": 0
+    },
+    {
+      "name": "GEO-V14-FSIR02_L04_PIPE_CLAMP",
+      "vertices": 80,
+      "boundaryEdges": 0,
+      "nonManifoldEdges": 0,
+      "zeroAreaFaces": 0
+    },
+    {
+      "name": "GEO-V14-FSIR02_L05_PIPE_CLAMP",
+      "vertices": 80,
+      "boundaryEdges": 0,
+      "nonManifoldEdges": 0,
+      "zeroAreaFaces": 0
+    }
+  ],
+  "limits": [
+    "Surface intersections do not detect complete containment.",
+    "Welded manifoldness does not prove fluid connectivity or minimum wall thickness."
+  ]
+}

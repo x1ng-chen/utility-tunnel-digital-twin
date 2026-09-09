@@ -1,0 +1,55 @@
+{
+  "status": "REVIEW_CANDIDATE_INCOMPLETE",
+  "materialCount": 32,
+  "assetCount": 27,
+  "missingAssetNodes": [],
+  "date": "2026-09-09",
+  "meshCount": 529,
+  "files": [
+    {
+      "sha256": "1aa9ef86b9eb0acb1e1adb4b8b850124a158b12d38391e39b68bd51e808de5e3",
+      "bytes": 2803566,
+      "path": "model/utility-tunnel-annular-v11-candidate.blend"
+    },
+    {
+      "sha256": "fcf09feab6b8ed86c4749a2184e0e1427ef9a0ee62f831af4b0dd6d775097f98",
+      "bytes": 8845028,
+      "path": "model/utility-tunnel-annular-v11-candidate.glb"
+    },
+    {
+      "sha256": "d48a8f13a1e8fafebcbd409c0a75d65d6731a6b97dca955f3e42286a14f460e7",
+      "bytes": 2594460,
+      "path": "model/sources/2026-09-08-iteration-input.blend"
+    },
+    {
+      "sha256": "e3330c4a225b2905dcf25f2280489ba5b767f4209aadbdbd9c44d0a584bc8c8f",
+      "bytes": 2381332,
+      "path": "model/previews/v11-air-pump-comparison.png"
+    },
+    {
+      "sha256": "dc9bef10d376c30be9d049a7fa594d50c38c7eb890fe46246f3feb725d79ad05",
+      "bytes": 737386,
+      "path": "model/previews/v11-L01-section.png"
+    },
+    {
+      "sha256": "7e69216a60d5a731999153215884bd239dcb69cdfe93c3d72797697dc6d14396",
+      "bytes": 735205,
+      "path": "model/previews/v11-L02-section.png"
+    },
+    {
+      "sha256": "7eda63394ac1133bc48bd739ae88cfbb2b4287a8809de474cef5fd755f885496",
+      "bytes": 756383,
+      "path": "model/previews/v11-L03-section.png"
+    },
+    {
+      "sha256": "d0637bcd35dff01f798fe0c1a3bb86bf9ba13f32f5dcdd4501b2342ff657ca5b",
+      "bytes": 746594,
+      "path": "model/previews/v11-L04-section.png"
+    },
+    {
+      "sha256": "bae77f00020b1dcbbbe1ff8d73cb837aff44abbbee222e4dd92978fe251d5bd4",
+      "bytes": 699809,
+      "path": "model/previews/v11-L05-section.png"
+    }
+  ]
+}

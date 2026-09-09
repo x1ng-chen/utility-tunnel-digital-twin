@@ -39,6 +39,21 @@ permissions:
   contents: read
 
 jobs:
+  model-release-contract:
+    name: Candidate binary and runtime contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          lfs: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+      - name: Fetch the candidate package from LFS (fail closed)
+        run: git lfs pull --include="model/utility-tunnel-annular-v09-candidate.*,model/previews/v09-*.png" --exclude=""
+      - run: node --test tools/glb-contract.test.mjs tools/model-gate.test.mjs
+      - run: node tools/check-twin-model-artifacts.mjs --require-candidate
+      - run: node tools/model-package.mjs
   repository-safety:
     name: Repository safety scan
     runs-on: ubuntu-latest

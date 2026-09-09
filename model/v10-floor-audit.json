@@ -1,0 +1,1126 @@
+{
+  "version": "V10-CANDIDATE",
+  "date": "2026-09-08",
+  "sourceSha256": "34352cfd28ae76bd94fb10b7c1970abb85aeaa74940f20095ad0e34301c4dfad",
+  "source": "v09-live-before-floor-repair.blend",
+  "before": {
+    "method": "triangle clipping against actual floor-top triangular prisms",
+    "floorTop": 0.19589924812316895,
+    "tolerance": 1e-05,
+    "topTriangles": 152,
+    "checkedMeshes": 526,
+    "exceptions": {
+      "MESH_RING_FLOOR": "Reference slab itself",
+      "MESH_BASE_01": "Designed foundation below the reference slab",
+      "GEO_UT_RING_RENDER_GROUND": "Presentation ground below foundation"
+    },
+    "findings": [
+      {
+        "name": "GEO-V09-P01-FEET",
+        "intersectingTriangles": 10,
+        "maximumDepth": 0.016899242997169495,
+        "bounds": [
+          [
+            0.5099999904632568,
+            -0.1639999896287918,
+            0.17900000512599945
+          ],
+          [
+            0.5579999685287476,
+            -0.12399999797344208,
+            0.1810000091791153
+          ]
+        ]
+      },
+      {
+        "name": "GEO-V09-P01-PUMP-BODY",
+        "intersectingTriangles": 7,
+        "maximumDepth": 0.016899242997169495,
+        "bounds": [
+          [
+            0.5149999856948853,
+            -0.15949998795986176,
+            0.17900000512599945
+          ],
+          [
+            0.5529999732971191,
+            -0.12849999964237213,
+            0.23900000751018524
+          ]
+        ]
+      },
+      {
+        "name": "GEO-V11-LEVEL-STATUS-FOOT-L",
+        "intersectingTriangles": 108,
+        "maximumDepth": 0.06439924240112305,
+        "bounds": [
+          [
+            -0.09300000220537186,
+            -0.25699999928474426,
+            0.1315000057220459
+          ],
+          [
+            -0.06300000101327896,
+            -0.23100000619888306,
+            0.140500009059906
+          ]
+        ]
+      },
+      {
+        "name": "GEO-V11-LEVEL-STATUS-FOOT-R",
+        "intersectingTriangles": 108,
+        "maximumDepth": 0.06439924240112305,
+        "bounds": [
+          [
+            0.06300000101327896,
+            -0.25699999928474426,
+            0.1315000057220459
+          ],
+          [
+            0.09300000220537186,
+            -0.23100000619888306,
+            0.140500009059906
+          ]
+        ]
+      },
+      {
+        "name": "GEO-V11-LEVEL-STATUS-STAND-L",
+        "intersectingTriangles": 66,
+        "maximumDepth": 0.06289926171302795,
+        "bounds": [
+          [
+            -0.08399999886751175,
+            -0.2529999911785126,
+            0.132999986410141
+          ],
+          [
+            -0.07200000435113907,
+            -0.23499999940395355,
+            0.210999995470047
+          ]
+        ]
+      },
+      {
+        "name": "GEO-V11-LEVEL-STATUS-STAND-R",
+        "intersectingTriangles": 66,
+        "maximumDepth": 0.06289926171302795,
+        "bounds": [
+          [
+            0.07200000435113907,
+            -0.2529999911785126,
+            0.132999986410141
+          ],
+          [
+            0.08399999886751175,
+            -0.23499999940395355,
+            0.210999995470047
+          ]
+        ]
+      },
+      {
+        "name": "GEO-V13-LABEL-LINE-PUMP",
+        "intersectingTriangles": 12,
+        "maximumDepth": 0.02393198013305664,
+        "bounds": [
+          [
+            0.5281000137329102,
+            -0.1926126331090927,
+            0.1719672679901123
+          ],
+          [
+            0.5303000211715698,
+            -0.1466873586177826,
+            0.19863276183605194
+          ]
+        ]
+      },
+      {
+        "name": "GEO-V13-LABEL-PUMP",
+        "intersectingTriangles": 508,
+        "maximumDepth": 0.0026674866676330566,
+        "bounds": [
+          [
+            0.5108892321586609,
+            -0.1923999935388565,
+            0.1932317614555359
+          ],
+          [
+            0.547565221786499,
+            -0.19189999997615814,
+            0.21078035235404968
+          ]
+        ]
+      },
+      {
+        "name": "GEO-V14-FSIR02_L01_BRACKET",
+        "intersectingTriangles": 66,
+        "maximumDepth": 0.004983887076377869,
+        "bounds": [
+          [
+            0.0024999999441206455,
+            -0.2670000195503235,
+            0.19091536104679108
+          ],
+          [
+            0.011499999091029167,
+            -0.2549999952316284,
+            0.2600846290588379
+          ]
+        ]
+      },
+      {
+        "name": "GEO-V14-FSIR02_L02_BRACKET",
+        "intersectingTriangles": 66,
+        "maximumDepth": 0.0013306289911270142,
+        "bounds": [
+          [
+            0.42399999499320984,
+            -0.17350000143051147,
+            0.19456861913204193
+          ],
+          [
+            0.43299999833106995,
+            -0.1615000069141388,
+            0.26643136143684387
+          ]
+        ]
+      },
+      {
+        "name": "GEO-V14-FSIR02_L03_BRACKET",
+        "intersectingTriangles": 66,
+        "maximumDepth": 0.003330618143081665,
+        "bounds": [
+          [
+            0.4899999499320984,
+            -0.16350001096725464,
+            0.19256862998008728
+          ],
+          [
+            0.4989999532699585,
+            -0.15150001645088196,
+            0.2644313871860504
+          ]
+        ]
+      },
+      {
+        "name": "GEO_ACRYLIC_SERVICE_SEAM_01",
+        "intersectingTriangles": 110,
+        "maximumDepth": 0.015887662768363953,
+        "bounds": [
+          [
+            -0.26742860674858093,
+            -0.23624999821186066,
+            0.180011585354805
+          ],
+          [
+            -0.2597143352031708,
+            -0.2246120721101761,
+            0.4788162112236023
+          ]
+        ]
+      },
+      {
+        "name": "GEO_ACRYLIC_SERVICE_SEAM_02",
+        "intersectingTriangles": 110,
+        "maximumDepth": 0.015887662768363953,
+        "bounds": [
+          [
+            -0.003857143223285675,
+            -0.23624999821186066,
+            0.180011585354805
+          ],
+          [
+            0.003857143223285675,
+            -0.2246120721101761,
+            0.4788162112236023
+          ]
+        ]
+      },
+      {
+        "name": "GEO_ACRYLIC_SERVICE_SEAM_03",
+        "intersectingTriangles": 110,
+        "maximumDepth": 0.015887662768363953,
+        "bounds": [
+          [
+            0.27257147431373596,
+            -0.23624999821186066,
+            0.180011585354805
+          ],
+          [
+            0.2802857458591461,
+            -0.2246120721101761,
+            0.4788162112236023
+          ]
+        ]
+      },
+      {
+        "name": "GEO_CABLE_DUCT_COVER",
+        "intersectingTriangles": 188,
+        "maximumDepth": 0.00932854413986206,
+        "bounds": [
+          [
+            -0.4692857265472412,
+            -0.3002586364746094,
+            0.18657070398330688
+          ],
+          [
+            0.41785717010498047,
+            -0.27698278427124023,
+            0.19531619548797607
+          ]
+        ]
+      },
+      {
+        "name": "GEO_G01_STANCHION_FOOT_01",
+        "intersectingTriangles": 110,
+        "maximumDepth": 0.03264985978603363,
+        "bounds": [
+          [
+            -0.027000002562999725,
+            -0.15129311382770538,
+            0.16324938833713531
+          ],
+          [
+            0.027000002562999725,
+            -0.1093965619802475,
+            0.1749100536108017
+          ]
+        ]
+      },
+      {
+        "name": "GEO_G01_STANCHION_FOOT_02",
+        "intersectingTriangles": 110,
+        "maximumDepth": 0.03264985978603363,
+        "bounds": [
+          [
+            0.2880000174045563,
+            0.1093965619802475,
+            0.16324938833713531
+          ],
+          [
+            0.3420000374317169,
+            0.15129311382770538,
+            0.1749100536108017
+          ]
+        ]
+      },
+      {
+        "name": "GEO_G01_STANCHION_FOOT_03",
+        "intersectingTriangles": 110,
+        "maximumDepth": 0.03264985978603363,
+        "bounds": [
+          [
+            -0.3420000374317169,
+            0.1093965619802475,
+            0.16324938833713531
+          ],
+          [
+            -0.2880000174045563,
+            0.15129311382770538,
+            0.1749100536108017
+          ]
+        ]
+      },
+      {
+        "name": "GEO_MESH_SEEP_W01_LENS",
+        "intersectingTriangles": 124,
+        "maximumDepth": 0.12988551706075668,
+        "bounds": [
+          [
+            0.1704857498407364,
+            -0.20768262445926666,
+            0.06601373106241226
+          ],
+          [
+            0.20237146317958832,
+            -0.19638635218143463,
+            0.09487580507993698
+          ]
+        ]
+      },
+      {
+        "name": "GEO_WATER_DRAIN_UNION_01",
+        "intersectingTriangles": 15,
+        "maximumDepth": 0.019049257040023804,
+        "bounds": [
+          [
+            0.002532120794057846,
+            -0.2578500211238861,
+            0.17684999108314514
+          ],
+          [
+            0.03526788204908371,
+            -0.24975000321865082,
+            0.2146500051021576
+          ]
+        ]
+      },
+      {
+        "name": "GEO_WET_DRY_PARTITION_GASKET",
+        "intersectingTriangles": 64,
+        "maximumDepth": 0.005549252033233643,
+        "bounds": [
+          [
+            -0.16875000298023224,
+            -0.22747501730918884,
+            0.1903499960899353
+          ],
+          [
+            -0.15254999697208405,
+            -0.12622499465942383,
+            0.20115000009536743
+          ]
+        ]
+      },
+      {
+        "name": "GEO_ZONE_B_FLOOR_KEY",
+        "intersectingTriangles": 188,
+        "maximumDepth": 0.029734700918197632,
+        "bounds": [
+          [
+            -0.04178571701049805,
+            -0.2502155303955078,
+            0.1661645472049713
+          ],
+          [
+            0.09321428835391998,
+            -0.22693967819213867,
+            0.1719948947429657
+          ]
+        ]
+      },
+      {
+        "name": "MESH_CABLE_DUCT_01",
+        "intersectingTriangles": 188,
+        "maximumDepth": 0.05597120523452759,
+        "bounds": [
+          [
+            -0.4757142961025238,
+            -0.30375000834465027,
+            0.13992804288864136
+          ],
+          [
+            0.42428573966026306,
+            -0.27349141240119934,
+            0.18657070398330688
+          ]
+        ]
+      },
+      {
+        "name": "MESH_HILEVEL_01",
+        "intersectingTriangles": 94,
+        "maximumDepth": 0.002186387777328491,
+        "bounds": [
+          [
+            0.11468570679426193,
+            -0.1836465448141098,
+            0.19371286034584045
+          ],
+          [
+            0.12959998846054077,
+            -0.17014653980731964,
+            0.35433855652809143
+          ]
+        ]
+      },
+      {
+        "name": "MESH_LEAK_W01",
+        "intersectingTriangles": 18,
+        "maximumDepth": 0.00023253262042999268,
+        "bounds": [
+          [
+            -0.02989285998046398,
+            -0.2093081921339035,
+            0.19566671550273895
+          ],
+          [
+            0.02989285998046398,
+            -0.1551918238401413,
+            0.23633329570293427
+          ]
+        ]
+      },
+      {
+        "name": "MESH_V12-FSIR02_L01_PROBE",
+        "intersectingTriangles": 51,
+        "maximumDepth": 0.0008992552757263184,
+        "bounds": [
+          [
+            0.012799999676644802,
+            -0.2662000060081482,
+            0.19499999284744263
+          ],
+          [
+            0.025199998170137405,
+            -0.2537999749183655,
+            0.210999995470047
+          ]
+        ]
+      },
+      {
+        "name": "MESH_WATER_BARRIER_01",
+        "intersectingTriangles": 63,
+        "maximumDepth": 0.013701274991035461,
+        "bounds": [
+          [
+            -0.1671428680419922,
+            -0.22984915971755981,
+            0.18219797313213348
+          ],
+          [
+            -0.154285728931427,
+            -0.11928880214691162,
+            0.2988046407699585
+          ]
+        ]
+      },
+      {
+        "name": "MESH_WATER_BARRIER_02",
+        "intersectingTriangles": 63,
+        "maximumDepth": 0.013701274991035461,
+        "bounds": [
+          [
+            0.18000000715255737,
+            -0.22984915971755981,
+            0.18219797313213348
+          ],
+          [
+            0.19285714626312256,
+            -0.11928880214691162,
+            0.2988046407699585
+          ]
+        ]
+      },
+      {
+        "name": "MESH_WATER_DRAIN_CAP_01",
+        "intersectingTriangles": 60,
+        "maximumDepth": 0.01634925603866577,
+        "bounds": [
+          [
+            0.0027000010013580322,
+            -0.2740499973297119,
+            0.17954999208450317
+          ],
+          [
+            0.035100001841783524,
+            -0.2632499933242798,
+            0.21195000410079956
+          ]
+        ]
+      },
+      {
+        "name": "MESH_WATER_DRAIN_TUBE_01",
+        "intersectingTriangles": 120,
+        "maximumDepth": 0.03780321776866913,
+        "bounds": [
+          [
+            0.01212316658347845,
+            -0.29126113653182983,
+            0.15809603035449982
+          ],
+          [
+            0.07520218938589096,
+            -0.2655439078807831,
+            0.19802778959274292
+          ]
+        ]
+      },
+      {
+        "name": "MESH_WATER_DRAIN_VALVE_01",
+        "intersectingTriangles": 60,
+        "maximumDepth": 0.01364925503730774,
+        "bounds": [
+          [
+            0.00540000107139349,
+            -0.2551499903202057,
+            0.1822499930858612
+          ],
+          [
+            0.03240000084042549,
+            -0.22004999220371246,
+            0.20925000309944153
+          ]
+        ]
+      },
+      {
+        "name": "MESH_WATER_MANUAL_DRAIN_01",
+        "intersectingTriangles": 60,
+        "maximumDepth": 0.017463713884353638,
+        "bounds": [
+          [
+            0.003857143223285675,
+            -0.23684896528720856,
+            0.1784355342388153
+          ],
+          [
+            0.034714289009571075,
+            -0.2193579524755478,
+            0.20636656880378723
+          ]
+        ]
+      },
+      {
+        "name": "MESH_WATER_TRAY_INNER_PAN",
+        "intersectingTriangles": 64,
+        "maximumDepth": 0.006899252533912659,
+        "bounds": [
+          [
+            -0.08100000023841858,
+            -0.21397501230239868,
+            0.1889999955892563
+          ],
+          [
+            0.11879999935626984,
+            -0.139724999666214,
+            0.20250000059604645
+          ]
+        ]
+      },
+      {
+        "name": "P-01",
+        "intersectingTriangles": 66,
+        "maximumDepth": 0.02984924614429474,
+        "bounds": [
+          [
+            0.44415003061294556,
+            -0.18359997868537903,
+            0.1660500019788742
+          ],
+          [
+            0.6142500042915344,
+            -0.11069998145103455,
+            0.17955000698566437
+          ]
+        ]
+      }
+    ],
+    "status": "FAIL"
+  },
+  "after": {
+    "method": "triangle clipping against actual floor-top triangular prisms",
+    "floorTop": 0.19589924812316895,
+    "tolerance": 1e-05,
+    "topTriangles": 152,
+    "checkedMeshes": 526,
+    "exceptions": {
+      "MESH_RING_FLOOR": "Reference slab itself",
+      "MESH_BASE_01": "Designed foundation below the reference slab",
+      "GEO_UT_RING_RENDER_GROUND": "Presentation ground below foundation"
+    },
+    "findings": [],
+    "status": "PASS"
+  },
+  "changes": [
+    {
+      "action": "translate-assembly",
+      "nodes": [
+        "GEO_MESH_SEEP_W01_LENS"
+      ],
+      "delta": [
+        -0.237857180647552,
+        0.010827581286430354,
+        0.16005653887987137
+      ],
+      "reason": "Restore indicator to seepage sensor front; do not intersect adjacent drip pipe"
+    },
+    {
+      "action": "translate-assembly",
+      "nodes": [
+        "GEO-V09-L01-BOARD-SUPPORT",
+        "GEO-V09-L01-SERVICE-BOSS",
+        "GEO-V12-FSIR02_L01_HARNESS",
+        "GEO-V12-FSIR02_L01_OPTIC",
+        "GEO-V12-FSIR02_L01_STANDOFF_-0.013_-0.007",
+        "GEO-V12-FSIR02_L01_STANDOFF_-0.013_0.007",
+        "GEO-V12-FSIR02_L01_STANDOFF_0.013_-0.007",
+        "GEO-V12-FSIR02_L01_STANDOFF_0.013_0.007",
+        "GEO-V12-FSIR02_L01_TERMINAL",
+        "GEO-V13-LABEL-LINE-LVL1",
+        "GEO-V13-LABEL-LVL1",
+        "GEO-V14-CALLOUT-EDGE_L01",
+        "GEO-V14-CALLOUT-LEADER_L01",
+        "GEO-V14-CALLOUT-PLATE_L01",
+        "GEO-V14-CALLOUT-TEXT_L01",
+        "GEO-V14-FSIR02_L01_BRACKET",
+        "GEO-V14-FSIR02_L01_PIPE_CLAMP",
+        "GEO_WATER_DRAIN_LEVER_01",
+        "GEO_WATER_DRAIN_UNION_01",
+        "MESH_V12-FSIR02_L01_BOARD",
+        "MESH_V12-FSIR02_L01_PROBE",
+        "MESH_WATER_DRAIN_CAP_01",
+        "MESH_WATER_DRAIN_TUBE_01",
+        "MESH_WATER_DRAIN_VALVE_01",
+        "MESH_WATER_MANUAL_DRAIN_01"
+      ],
+      "delta": [
+        0,
+        0,
+        0.04
+      ],
+      "reason": "Raise drain valve/hose/probe station together; main water routes stay fixed"
+    },
+    {
+      "action": "fit-mount-height",
+      "nodes": [
+        "P-01"
+      ],
+      "bottom": 0.19589924812316895,
+      "top": 0.19689924812316895
+    },
+    {
+      "action": "fit-mount-height",
+      "nodes": [
+        "GEO-V09-P01-FEET"
+      ],
+      "bottom": 0.19689924812316895,
+      "top": 0.19889924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO-V09-P01-PUMP-BODY"
+      ],
+      "oldBottom": 0.17900000512599945,
+      "newBottom": 0.19889924812316895
+    },
+    {
+      "action": "translate-assembly",
+      "nodes": [
+        "GEO-V13-LABEL-LINE-PUMP",
+        "GEO-V13-LABEL-PUMP"
+      ],
+      "delta": [
+        0,
+        0,
+        0.03
+      ],
+      "reason": "Lift pump annotation and its leader clear of floor"
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "MESH_WATER_TRAY_INNER_PAN"
+      ],
+      "oldBottom": 0.1889999955892563,
+      "newBottom": 0.19589924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "MESH_HILEVEL_01"
+      ],
+      "oldBottom": 0.19371286034584045,
+      "newBottom": 0.19589924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "MESH_WATER_BARRIER_01"
+      ],
+      "oldBottom": 0.18219797313213348,
+      "newBottom": 0.19589924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "MESH_WATER_BARRIER_02"
+      ],
+      "oldBottom": 0.18219797313213348,
+      "newBottom": 0.19589924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO-V14-FSIR02_L02_BRACKET"
+      ],
+      "oldBottom": 0.19456861913204193,
+      "newBottom": 0.19589924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO-V14-FSIR02_L03_BRACKET"
+      ],
+      "oldBottom": 0.19256862998008728,
+      "newBottom": 0.19589924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO-V14-FSIR02_L03_BRACKET"
+      ],
+      "oldBottom": 0.19589924812316895,
+      "newBottom": 0.19689924812316895
+    },
+    {
+      "action": "translate-assembly",
+      "nodes": [
+        "MESH_LEAK_W01"
+      ],
+      "delta": [
+        0,
+        0,
+        0.00023253262042999268
+      ],
+      "reason": "Resolve tiny leak sensor penetration"
+    },
+    {
+      "action": "fit-mount-height",
+      "nodes": [
+        "GEO_WET_DRY_PARTITION_GASKET"
+      ],
+      "bottom": 0.19589924812316895,
+      "top": 0.20115000009536743
+    },
+    {
+      "action": "fit-mount-height",
+      "nodes": [
+        "GEO-V11-LEVEL-STATUS-FOOT-L"
+      ],
+      "bottom": 0.19589924812316895,
+      "top": 0.19889924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO-V11-LEVEL-STATUS-STAND-L"
+      ],
+      "oldBottom": 0.132999986410141,
+      "newBottom": 0.19889924812316895
+    },
+    {
+      "action": "fit-mount-height",
+      "nodes": [
+        "GEO-V11-LEVEL-STATUS-FOOT-R"
+      ],
+      "bottom": 0.19589924812316895,
+      "top": 0.19889924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO-V11-LEVEL-STATUS-STAND-R"
+      ],
+      "oldBottom": 0.132999986410141,
+      "newBottom": 0.19889924812316895
+    },
+    {
+      "action": "translate-assembly",
+      "nodes": [
+        "GEO-V11-LEVEL-L01-HOUSING",
+        "GEO-V11-LEVEL-L01-INDEX",
+        "GEO-V11-LEVEL-L01-LENS",
+        "GEO-V11-LEVEL-L02-HOUSING",
+        "GEO-V11-LEVEL-L02-INDEX",
+        "GEO-V11-LEVEL-L02-LENS",
+        "GEO-V11-LEVEL-L03-HOUSING",
+        "GEO-V11-LEVEL-L03-INDEX",
+        "GEO-V11-LEVEL-L03-LENS",
+        "GEO-V11-LEVEL-L04-HOUSING",
+        "GEO-V11-LEVEL-L04-INDEX",
+        "GEO-V11-LEVEL-L04-LENS",
+        "GEO-V11-LEVEL-L05-HOUSING",
+        "GEO-V11-LEVEL-L05-INDEX",
+        "GEO-V11-LEVEL-L05-LENS",
+        "GEO-V11-LEVEL-STATUS-BACKPLATE",
+        "GEO-V11-LEVEL-STATUS-BASE-RAIL",
+        "GEO-V11-LEVEL-STATUS-FOOT-L",
+        "GEO-V11-LEVEL-STATUS-FOOT-R",
+        "GEO-V11-LEVEL-STATUS-STAND-L",
+        "GEO-V11-LEVEL-STATUS-STAND-R",
+        "GEO-V11-LEVEL-STATUS-TOP-RAIL",
+        "GEO-V14-CALLOUT-LEADER-STATUS",
+        "GEO-V14-CALLOUT-PLATE-STATUS",
+        "GEO-V14-CALLOUT-TEXT-STATUS"
+      ],
+      "delta": [
+        -0.15,
+        0,
+        0
+      ],
+      "reason": "Place status display between simulation box and drain station with separate access"
+    },
+    {
+      "action": "shorten-fill-marker",
+      "nodes": [
+        "GEO_WATER_MAX_FILL_MARK"
+      ],
+      "xInterval": [
+        -0.074,
+        -0.025
+      ]
+    },
+    {
+      "action": "fit-mount-height",
+      "nodes": [
+        "MESH_CABLE_DUCT_01"
+      ],
+      "bottom": 0.19589924812316895,
+      "top": 0.20089924812316895
+    },
+    {
+      "action": "fit-mount-height",
+      "nodes": [
+        "GEO_CABLE_DUCT_COVER"
+      ],
+      "bottom": 0.20089924812316895,
+      "top": 0.20289924812316895
+    },
+    {
+      "action": "drain-lane-detour",
+      "nodes": [
+        "MESH_CABLE_DUCT_01"
+      ],
+      "sections": [
+        [
+          -0.4757142663002014,
+          -0.2886207401752472,
+          0.015129297971725464
+        ],
+        [
+          -0.16,
+          -0.2886207401752472,
+          0.015129297971725464
+        ],
+        [
+          -0.115,
+          -0.313,
+          0.011
+        ],
+        [
+          0.1,
+          -0.313,
+          0.011
+        ],
+        [
+          0.15,
+          -0.2886207401752472,
+          0.015129297971725464
+        ],
+        [
+          0.42428579926490784,
+          -0.2886207401752472,
+          0.015129297971725464
+        ]
+      ],
+      "reason": "Keep raised cable duct clear of drain hose"
+    },
+    {
+      "action": "drain-lane-detour",
+      "nodes": [
+        "GEO_CABLE_DUCT_COVER"
+      ],
+      "sections": [
+        [
+          -0.4692856967449188,
+          -0.2886207401752472,
+          0.01163792610168457
+        ],
+        [
+          -0.16,
+          -0.2886207401752472,
+          0.01163792610168457
+        ],
+        [
+          -0.115,
+          -0.313,
+          0.011
+        ],
+        [
+          0.1,
+          -0.313,
+          0.011
+        ],
+        [
+          0.15,
+          -0.2886207401752472,
+          0.01163792610168457
+        ],
+        [
+          0.41785717010498047,
+          -0.2886207401752472,
+          0.01163792610168457
+        ]
+      ],
+      "reason": "Keep raised cable duct clear of drain hose"
+    },
+    {
+      "action": "fit-mount-height",
+      "nodes": [
+        "GEO_G01_STANCHION_FOOT_01"
+      ],
+      "bottom": 0.19589924812316895,
+      "top": 0.19689924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO_G01_STANCHION_01"
+      ],
+      "oldBottom": 0.16179180145263672,
+      "newBottom": 0.19689925014972687
+    },
+    {
+      "action": "fit-mount-height",
+      "nodes": [
+        "GEO_G01_STANCHION_FOOT_02"
+      ],
+      "bottom": 0.19589924812316895,
+      "top": 0.19689924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO_G01_STANCHION_02"
+      ],
+      "oldBottom": 0.16179180145263672,
+      "newBottom": 0.19689925014972687
+    },
+    {
+      "action": "fit-mount-height",
+      "nodes": [
+        "GEO_G01_STANCHION_FOOT_03"
+      ],
+      "bottom": 0.19589924812316895,
+      "top": 0.19689924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO_G01_STANCHION_03"
+      ],
+      "oldBottom": 0.16179180145263672,
+      "newBottom": 0.19689925014972687
+    },
+    {
+      "action": "translate-assembly",
+      "nodes": [
+        "GEO_G01_STANCHION_01",
+        "GEO_G01_STANCHION_FOOT_01"
+      ],
+      "delta": [
+        -0.12,
+        0,
+        0
+      ],
+      "reason": "Move front manifold support left of tray while retaining manifold elevation"
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO_ACRYLIC_SERVICE_SEAM_01"
+      ],
+      "oldBottom": 0.180011585354805,
+      "newBottom": 0.19589924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO_ACRYLIC_SERVICE_SEAM_02"
+      ],
+      "oldBottom": 0.180011585354805,
+      "newBottom": 0.19589924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO_ACRYLIC_SERVICE_SEAM_03"
+      ],
+      "oldBottom": 0.180011585354805,
+      "newBottom": 0.19589924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO_ZONE_A_RIB"
+      ],
+      "oldBottom": 0.1851131021976471,
+      "newBottom": 0.19589924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO_ZONE_B_RIB"
+      ],
+      "oldBottom": 0.1851131021976471,
+      "newBottom": 0.19589924812316895
+    },
+    {
+      "action": "shorten-bottom-keep-top",
+      "nodes": [
+        "GEO_ZONE_C_RIB"
+      ],
+      "oldBottom": 0.1851131021976471,
+      "newBottom": 0.19589924812316895
+    },
+    {
+      "action": "translate-assembly",
+      "nodes": [
+        "GEO_ZONE_B_FLOOR_KEY"
+      ],
+      "delta": [
+        0,
+        0,
+        0.029734700918197632
+      ],
+      "reason": "Expose buried B-zone floor marker"
+    },
+    {
+      "action": "translate-assembly",
+      "nodes": [
+        "GEO-V13-LABEL-PIPE"
+      ],
+      "delta": [
+        -0.22,
+        -0.165,
+        0.205
+      ],
+      "reason": "Bring buried utility pipe annotation above the slab"
+    },
+    {
+      "action": "translate-assembly",
+      "nodes": [
+        "GEO-V13-LABEL-LINE-PIPE"
+      ],
+      "delta": [
+        -0.22,
+        -0.165,
+        0.205
+      ],
+      "reason": "Bring buried utility pipe annotation above the slab"
+    }
+  ],
+  "drainAssembly": [
+    "GEO-V09-L01-BOARD-SUPPORT",
+    "GEO-V09-L01-SERVICE-BOSS",
+    "GEO-V12-FSIR02_L01_HARNESS",
+    "GEO-V12-FSIR02_L01_OPTIC",
+    "GEO-V12-FSIR02_L01_STANDOFF_-0.013_-0.007",
+    "GEO-V12-FSIR02_L01_STANDOFF_-0.013_0.007",
+    "GEO-V12-FSIR02_L01_STANDOFF_0.013_-0.007",
+    "GEO-V12-FSIR02_L01_STANDOFF_0.013_0.007",
+    "GEO-V12-FSIR02_L01_TERMINAL",
+    "GEO-V13-LABEL-LINE-LVL1",
+    "GEO-V13-LABEL-LVL1",
+    "GEO-V14-CALLOUT-EDGE_L01",
+    "GEO-V14-CALLOUT-LEADER_L01",
+    "GEO-V14-CALLOUT-PLATE_L01",
+    "GEO-V14-CALLOUT-TEXT_L01",
+    "GEO-V14-FSIR02_L01_BRACKET",
+    "GEO-V14-FSIR02_L01_PIPE_CLAMP",
+    "GEO_WATER_DRAIN_LEVER_01",
+    "GEO_WATER_DRAIN_UNION_01",
+    "MESH_V12-FSIR02_L01_BOARD",
+    "MESH_V12-FSIR02_L01_PROBE",
+    "MESH_WATER_DRAIN_CAP_01",
+    "MESH_WATER_DRAIN_TUBE_01",
+    "MESH_WATER_DRAIN_VALVE_01",
+    "MESH_WATER_MANUAL_DRAIN_01"
+  ],
+  "drainRigidDelta": [
+    0,
+    0,
+    0.04
+  ],
+  "scope": "Visual floor-clearance repair only; not global clash or fabrication certification"
+}
