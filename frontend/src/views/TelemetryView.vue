@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
 import TelemetryTrendChart from '../components/TelemetryTrendChart.vue';
 import ReportExportButton from '../components/ReportExportButton.vue';
@@ -11,6 +11,7 @@ import { telemetryTrend } from '../utils/telemetryTrend';
 
 const store = useOperationsStore();
 const route = useRoute();
+const router = useRouter();
 const assetCode = ref('');
 const metricKey = ref('');
 const quality = ref('');
@@ -28,6 +29,8 @@ const eventsTotal = ref(0);
 let eventSequence = 0;
 let eventPage = 0;
 let eventParams: Record<string, string> | null = null;
+const alertTotal = ref<number | null>(null);
+let alertCountSequence = 0;
 const metricOptions = computed(() => {
   const options = new Map(store.thresholds.map((item) => [item.key, item.label]));
   for (const item of [...store.telemetry, ...store.telemetryInsights]) {
@@ -40,6 +43,25 @@ const metricOptions = computed(() => {
 const goodRate = computed(() => store.telemetrySummary.sampleCount ? Math.round(store.telemetrySummary.qualityCounts.good / store.telemetrySummary.sampleCount * 100) : 0);
 const trendSeries = computed(() => telemetryTrend(store.telemetryInsights, store.telemetrySummary.latest));
 const trendPointCount = computed(() => trendSeries.value.reduce((count, series) => count + series.data.filter(point => point[1] !== null).length, 0));
+const spanLabel = computed(() => formatSpan(store.telemetrySummary.startedAt, store.telemetrySummary.endedAt));
+const spanRange = computed(() => {
+  const { startedAt, endedAt } = store.telemetrySummary;
+  if (!startedAt || !endedAt) return '按真实采集时间的样本最早—最晚跨度';
+  return `最早 ${new Date(startedAt).toLocaleString('zh-CN')} · 最晚 ${new Date(endedAt).toLocaleString('zh-CN')}`;
+});
+function formatSpan(startedAt: string | null, endedAt: string | null): string {
+  if (!startedAt || !endedAt) return '--';
+  const milliseconds = Date.parse(endedAt) - Date.parse(startedAt);
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return '--';
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  if (totalSeconds < 60) return `${totalSeconds} 秒`;
+  const minutes = Math.floor(totalSeconds / 60);
+  if (minutes < 60) return `${minutes} 分钟`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时 ${minutes % 60} 分`;
+  const days = Math.floor(hours / 24);
+  return `${days} 天 ${hours % 24} 小时`;
+}
 watch(trendSeries, (series) => {
   ++eventSequence;
   eventPage = 0; eventParams = null;
@@ -71,7 +93,60 @@ async function loadMoreEvents() {
     if (sequence === eventSequence) eventsLoading.value = false;
   }
 }
-onUnmounted(() => { eventSequence++; });
+onUnmounted(() => { eventSequence++; alertCountSequence++; });
+
+function readUrlValue(key: string): string {
+  const value = route.query[key];
+  return typeof value === 'string' ? value : '';
+}
+
+function applyUrlState() {
+  assetCode.value = readUrlValue('assetCode');
+  metricKey.value = readUrlValue('metricKey');
+  quality.value = readUrlValue('quality');
+  recordedFrom.value = readUrlValue('recordedFrom');
+  recordedTo.value = readUrlValue('recordedTo');
+  const page = Number(route.query.page);
+  historyPage.value = Number.isInteger(page) && page >= 1 ? page : 1;
+}
+
+function writeUrlState(page = historyPage.value) {
+  const query: Record<string, string> = {};
+  if (assetCode.value) query.assetCode = assetCode.value;
+  if (metricKey.value) query.metricKey = metricKey.value;
+  if (quality.value) query.quality = quality.value;
+  if (recordedFrom.value) query.recordedFrom = recordedFrom.value;
+  if (recordedTo.value) query.recordedTo = recordedTo.value;
+  if (page > 1) query.page = String(page);
+  void router.replace({ query });
+}
+
+function alertCountParams(): Record<string, string> {
+  const query = appliedQuery.value;
+  const params: Record<string, string> = {};
+  if (query.assetCode) params.assetCode = query.assetCode;
+  if (query.recordedFrom) params.openedFrom = query.recordedFrom;
+  if (query.recordedTo) params.openedTo = query.recordedTo;
+  return params;
+}
+
+async function loadAlertCount() {
+  const sequence = ++alertCountSequence;
+  if (store.source === 'demo') {
+    const query = appliedQuery.value;
+    const from = query.recordedFrom ? Date.parse(query.recordedFrom) : Number.NEGATIVE_INFINITY;
+    const to = query.recordedTo ? Date.parse(query.recordedTo) : Number.POSITIVE_INFINITY;
+    alertTotal.value = store.alerts.filter((alert) => (!query.assetCode || alert.assetCode === query.assetCode) && Date.parse(alert.openedAt) >= from && Date.parse(alert.openedAt) <= to).length;
+    return;
+  }
+  alertTotal.value = null;
+  try {
+    const response = await api.alerts({ ...alertCountParams(), page: 1, pageSize: 1 });
+    if (sequence === alertCountSequence) alertTotal.value = response.data.total;
+  } catch {
+    if (sequence === alertCountSequence) alertTotal.value = null;
+  }
+}
 
 function toIso(value: string): string | undefined {
   if (!value) return undefined;
@@ -80,25 +155,36 @@ function toIso(value: string): string | undefined {
   return date.toISOString();
 }
 
-async function search() {
-  const sequence = ++searchSequence;
-  actionError.value = '';
-  try {
-    const query: TelemetryQuery = {
+function buildQuery(): TelemetryQuery {
+  return {
     assetCode: assetCode.value || undefined,
     metricKey: metricKey.value.trim() || undefined,
     quality: (quality.value || undefined) as TelemetryQuery['quality'],
     recordedFrom: toIso(recordedFrom.value),
     recordedTo: toIso(recordedTo.value),
-    };
-    const accepted = await store.loadTelemetryInsights(query);
+  };
+}
+
+async function runSearch(page: number) {
+  const sequence = ++searchSequence;
+  actionError.value = '';
+  alertTotal.value = null;
+  try {
+    const query = buildQuery();
+    const accepted = await store.loadTelemetryInsights(query, page);
     if (accepted === false || sequence !== searchSequence) return;
     appliedQuery.value = { ...query };
-    historyPage.value = 1;
+    historyPage.value = page;
+    writeUrlState(page);
+    void loadAlertCount();
   } catch (cause) {
     if (sequence !== searchSequence) return;
     actionError.value = cause instanceof Error ? cause.message : '遥测查询失败，请稍后重试。';
   }
+}
+
+function search() {
+  void runSearch(1);
 }
 
 async function changePage(next: number) {
@@ -107,7 +193,10 @@ async function changePage(next: number) {
   actionError.value = '';
   try {
     const accepted = await store.loadTelemetryInsights(appliedQuery.value, next);
-    if (accepted !== false && sequence === searchSequence) historyPage.value = next;
+    if (accepted !== false && sequence === searchSequence) {
+      historyPage.value = next;
+      writeUrlState(next);
+    }
   } catch (cause) {
     if (sequence === searchSequence) actionError.value = cause instanceof Error ? cause.message : '翻页失败，请重试。';
   }
@@ -122,11 +211,21 @@ function qualityLabel(value: string) {
   return ({ good: '良好', suspect: '需关注', bad: '异常', missing: '缺失' } as Record<string, string>)[value] || '未知';
 }
 
-watch(() => [route.query.assetCode, route.query.metricKey], ([asset, metric]) => {
-  assetCode.value = typeof asset === 'string' ? asset : '';
-  metricKey.value = typeof metric === 'string' ? metric : '';
-  void search();
-}, { immediate: true });
+function snapshot() {
+  return JSON.stringify([assetCode.value, metricKey.value, quality.value, recordedFrom.value, recordedTo.value, historyPage.value]);
+}
+onMounted(() => {
+  applyUrlState();
+  void runSearch(historyPage.value);
+});
+watch(() => route.query, () => {
+  const before = snapshot();
+  applyUrlState();
+  if (snapshot() !== before) void runSearch(historyPage.value);
+});
+watch(() => store.source, (next, previous) => {
+  if (next !== previous) void runSearch(historyPage.value);
+});
 </script>
 
 <template>
@@ -151,6 +250,8 @@ watch(() => [route.query.assetCode, route.query.metricKey], ([asset, metric]) =>
       <article><span>平均值</span><strong>{{ store.telemetrySummary.average == null ? '--' : store.telemetrySummary.average.toFixed(2) }}</strong><small>{{ store.telemetrySummary.comparable ? (store.telemetrySummary.latest?.unit || '暂无单位') : '请选择单一指标' }}</small></article>
       <article><span>值域范围</span><strong>{{ store.telemetrySummary.minimum == null ? '--' : `${store.telemetrySummary.minimum}—${store.telemetrySummary.maximum}` }}</strong><small>最小值—最大值</small></article>
       <article><span>良好率</span><strong>{{ goodRate }}<em>%</em></strong><small>{{ store.telemetrySummary.qualityCounts.good }} 条可信样本</small></article>
+      <article><span>报警次数</span><strong>{{ alertTotal == null ? '--' : alertTotal }}</strong><small>资产与时间范围告警总数</small></article>
+      <article><span>采集时段</span><strong>{{ spanLabel }}</strong><small>{{ spanRange }}</small></article>
     </section>
 
     <section class="telemetry-layout">
@@ -228,7 +329,7 @@ watch(() => [route.query.assetCode, route.query.metricKey], ([asset, metric]) =>
 .telemetry-filters input, .telemetry-filters select { width: 100%; min-width: 0; min-height: 44px; }
 .telemetry-filter-actions { grid-column: auto; display: flex; gap: 10px; align-items: end; justify-content: flex-end; }
 .telemetry-filter-actions button { min-height: 44px; white-space: nowrap; }
-.insight-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.insight-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .insight-metrics article { min-width: 0; padding: 22px; }
 .insight-metrics strong { font-size: clamp(24px, 2.5vw, 38px); overflow-wrap: anywhere; }
 .telemetry-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: 20px; }

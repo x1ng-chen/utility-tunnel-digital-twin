@@ -679,3 +679,69 @@ test('非空历史告警在趋势图上叠加', async ({ page, request }) => {
   await page.goto(`${webUrl}/telemetry?assetCode=ENV-01&metricKey=temperature`);
   await expect(page.getByRole('region', { name: '趋势时段告警事件' })).toContainText('没有匹配事件');
 });
+
+test('多页事件加载、报警次数口径与页码刷新恢复', async ({ page, request }) => {
+  const base = process.env.E2E_API_URL || 'http://127.0.0.1:8000/api';
+  const login = await request.post(`${base}/auth/login/`, { data: { email: 'admin', password: adminPassword } });
+  expect(login.ok()).toBe(true);
+  const token = (await login.json()).accessToken;
+  const headers = { Authorization: `Bearer ${token}` };
+  const suffix = `${Date.now()}`.slice(-8);
+  const assetCode = `PAGE-EVT-${suffix}`;
+  const created = await request.post(`${base}/assets/`, { headers, data: {
+    code: assetCode, name: '分页事件验证节点', zone: 'UT-ZB', type: '环境测点',
+    integrationStatus: 'verified', locationSource: 'configured',
+    mesh: `MESH_PAGE_EVT_${suffix}`, latitude: 31.2309, longitude: 121.4746,
+  } });
+  expect(created.ok(), await created.text()).toBe(true);
+  const run = Date.now();
+  const readings = Array.from({ length: 160 }, (_, index) => ({
+    eventId: `page-evt-${run}-${index}`,
+    assetCode, metricKey: 'humidity', metric: '环境湿度',
+    value: index % 2 === 0 ? 78 : 60, unit: '%RH', quality: 'good',
+    recordedAt: new Date(run - (159 - index) * 60000).toISOString(),
+  }));
+  for (let index = 0; index < readings.length; index += 100) {
+    const result = await request.post(`${base}/telemetry/`, { headers, data: { readings: readings.slice(index, index + 100) } });
+    expect(result.ok(), await result.text()).toBe(true);
+  }
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await page.goto(`${webUrl}/telemetry?assetCode=${assetCode}&metricKey=humidity`);
+  const eventsRegion = page.getByRole('region', { name: '趋势时段告警事件' });
+  await expect(eventsRegion).not.toContainText('加载失败');
+  // The overlay is scoped to the current trend page (100 readings -> 50 breaches),
+  // while the alarm-count metric reflects the full asset query (80 alerts).
+  await expect(eventsRegion).toContainText('共 50 条告警，已加载 50 条');
+  await expect(eventsRegion.getByRole('button', { name: '加载更多事件' })).toHaveCount(0);
+  await expect(page.locator('.insight-metrics article').filter({ hasText: '报警次数' })).toContainText('80');
+  await expect(page.locator('.insight-metrics article').filter({ hasText: '采集时段' })).toBeVisible();
+  const paging = page.getByRole('navigation', { name: '历史采集记录分页' });
+  await paging.getByRole('button', { name: '下一页' }).click();
+  await expect(page).toHaveURL(/page=2/);
+  await expect(paging).toContainText('第 2 / 2 页');
+  await page.reload();
+  await expect(paging).toContainText('第 2 / 2 页');
+  await expect(page.getByRole('combobox', { name: '资产' })).toHaveValue(assetCode);
+  await expect(page.getByLabel('监测项目')).toHaveValue('humidity');
+});
+
+test('筛选条件写入URL并在刷新后恢复', async ({ page }) => {
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await page.goto(`${webUrl}/telemetry`);
+  await page.getByRole('combobox', { name: '资产' }).selectOption('ENV-01');
+  await page.getByLabel('监测项目').selectOption('temperature');
+  await page.getByRole('button', { name: '查询数据' }).click();
+  await expect(page).toHaveURL(/assetCode=ENV-01/);
+  await expect(page).toHaveURL(/metricKey=temperature/);
+  await page.reload();
+  await expect(page.getByRole('combobox', { name: '资产' })).toHaveValue('ENV-01');
+  await expect(page.getByLabel('监测项目')).toHaveValue('temperature');
+});
