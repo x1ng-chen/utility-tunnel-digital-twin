@@ -31,6 +31,19 @@ const creating = ref(false);
 const noteOrderId = ref<number | null>(null);
 const transitionNote = ref('');
 
+const workflowStages = [
+  { status: 'open', label: '待分派', description: '登记任务、确认责任人' },
+  { status: 'assigned', label: '已分派', description: '负责人接收任务' },
+  { status: 'in_progress', label: '处理中', description: '执行现场检查与维修' },
+  { status: 'pending_review', label: '待复核', description: '提交结果、等待验收' },
+  { status: 'completed', label: '已完成', description: '管理员复核、关闭工单' },
+] as const;
+
+function canAdvance(order: WorkOrder) {
+  const target = nextStatus[order.status];
+  return canWrite.value && Boolean(target) && (target !== 'completed' || canComplete.value);
+}
+
 function openTwin(order: WorkOrder) { void router.push({ path: '/twin-3d', query: { asset: order.assetCode, source: 'work-order', order: order.code } }); }
 function openGis(order: WorkOrder) { void router.push({ path: '/gis', query: { asset: order.assetCode, source: 'work-order', order: order.code } }); }
 function openSourceAlert(order: WorkOrder) {
@@ -49,6 +62,7 @@ function slaLabel(order: WorkOrder) {
 }
 
 function requestAdvance(order: WorkOrder) {
+  if (!canAdvance(order) || busyId.value !== null) return;
   const target = nextStatus[order.status];
   if (!target) return;
   if (target === 'pending_review' || target === 'completed') {
@@ -65,8 +79,10 @@ function cancelAdvance() {
 }
 
 async function advance(order: WorkOrder) {
+  if (!canAdvance(order) || busyId.value !== null) return;
   const target = nextStatus[order.status];
   if (!target) return;
+  if (['pending_review', 'completed'].includes(target) && !transitionNote.value.trim()) return;
   actionError.value = '';
   busyId.value = order.id;
   try {
@@ -86,6 +102,7 @@ function eventTitle(event: NonNullable<WorkOrder['timeline']>[number]) {
 }
 
 async function createOrder() {
+  if (!canWrite.value || creating.value) return;
   actionError.value = '';
   creating.value = true;
   try {
@@ -109,7 +126,10 @@ async function createOrder() {
     </section>
     <p v-if="actionError" class="inline-message error-message" role="alert">{{ actionError }}</p>
     <p v-if="navigationHint" class="inline-message success-message work-order-navigation" role="status">{{ navigationHint }}，已为你定位到对应卡片。</p>
-    <section class="workflow-guide" aria-label="工单处理流程"><div><b>1</b><span>待分派<small>确认责任人</small></span></div><i>→</i><div><b>2</b><span>处理中<small>执行现场任务</small></span></div><i>→</i><div><b>3</b><span>待复核<small>核对处理结果</small></span></div><i>→</i><div><b>4</b><span>已完成<small>关闭处置链路</small></span></div></section>
+    <section class="workflow-guide workflow-stages" aria-label="工单处理流程">
+      <div v-for="(stage, index) in workflowStages" :key="stage.status"><b>{{ index + 1 }}</b><span>{{ stage.label }}<small>{{ stage.description }}</small></span></div>
+    </section>
+    <p class="workflow-explanation">工单记录谁负责、做了什么、结果是否通过验收。完成当前阶段的实际工作后再推进状态，处置过程会保留在处理记录中。</p>
     <section v-if="formOpen" class="create-order-panel" aria-label="新建工单">
       <div class="settings-head"><span>新建运维工单</span><small>创建后进入“待分派”状态并写入审计日志</small></div>
       <form class="order-form" @submit.prevent="createOrder">
@@ -133,7 +153,7 @@ async function createOrder() {
           <div class="order-card-links" aria-label="查看工单关联信息"><button type="button" @click="openTwin(order)">三维定位</button><button type="button" @click="openGis(order)">地图定位</button><button v-if="order.sourceAlertId" type="button" @click="openSourceAlert(order)">源告警</button></div>
           <details v-if="order.timeline?.length" class="order-timeline"><summary>处理记录（{{ order.timeline.length }}）</summary><ol><li v-for="event in order.timeline" :key="event.id"><div><b>{{ eventTitle(event) }}</b><time>{{ new Date(event.createdAt).toLocaleString('zh-CN') }}</time></div><p v-if="event.note">{{ event.note }}</p><small>{{ event.actorName }}</small></li></ol></details>
           <div v-if="noteOrderId === order.id" class="transition-note"><label :for="`transition-note-${order.id}`">{{ order.status === 'pending_review' ? '复核意见' : '处理结果' }}</label><textarea :id="`transition-note-${order.id}`" v-model="transitionNote" maxlength="1000" rows="3" :placeholder="order.status === 'pending_review' ? '填写复核结论、验收结果或补充说明' : '填写已完成事项、现场结果和待复核内容'" autofocus></textarea><div><button type="button" class="ghost-button" @click="cancelAdvance">取消</button><button type="button" class="primary-button" :disabled="busyId === order.id || !transitionNote.trim()" @click="advance(order)">{{ busyId === order.id ? '提交中…' : '确认提交' }}</button></div></div>
-          <button v-else-if="nextStatus[order.status] && (nextStatus[order.status] !== 'completed' || canComplete)" class="order-transition" :disabled="busyId === order.id" @click="requestAdvance(order)">{{ busyId === order.id ? '处理中…' : transitionLabel[order.status] }}</button>
+          <button v-else-if="canAdvance(order)" class="order-transition" :disabled="busyId !== null" @click="requestAdvance(order)">{{ busyId === order.id ? '处理中…' : transitionLabel[order.status] }}</button>
         </div>
       </article>
     </section>

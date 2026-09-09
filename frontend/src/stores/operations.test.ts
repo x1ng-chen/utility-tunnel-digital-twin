@@ -8,6 +8,17 @@ describe('operations store', () => {
   beforeEach(() => setActivePinia(createPinia()));
   afterEach(() => vi.restoreAllMocks());
 
+  it('treats repeated identical notices as new feedback events', () => {
+    const store = useOperationsStore();
+    store.notice = '阈值已保存';
+    const first = store.noticeRevision;
+    store.notice = '阈值已保存';
+    expect(store.notice).toBe('阈值已保存');
+    expect(store.noticeRevision).toBe(first + 1);
+    store.notice = '';
+    expect(store.notice).toBe('');
+  });
+
   it('starts with the connected demo model', () => {
     const store = useOperationsStore();
     expect(store.assets).toHaveLength(12);
@@ -157,6 +168,34 @@ describe('operations store', () => {
     expect(store.telemetrySummary.sampleCount).toBe(1);
     expect(store.telemetrySummary.qualityCounts.suspect).toBe(1);
     expect(store.telemetry).toHaveLength(24);
+  });
+
+  it('paginates history without truncating the summary to the current page', async () => {
+    const store = useOperationsStore();
+    const sample = store.telemetry[0]!;
+    store.telemetry = Array.from({ length: 125 }, (_, index) => ({ ...sample, id: index + 1 }));
+    await store.loadTelemetryInsights({}, 2);
+    expect(store.telemetryInsights).toHaveLength(25);
+    expect(store.telemetryInsightsTotal).toBe(125);
+    expect(store.telemetrySummary.sampleCount).toBe(125);
+    await expect(store.loadTelemetryInsights({}, 0)).rejects.toThrow('页码无效');
+  });
+
+  it('does not let a stale history response overwrite a newer query', async () => {
+    const store = useOperationsStore();
+    store.source = 'api';
+    const sample = store.telemetry[0]!;
+    let resolveOld!: (value: never) => void;
+    vi.spyOn(api, 'telemetry').mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }))
+      .mockResolvedValueOnce({ data: { items: [{ ...sample, id: 999 }], total: 1 } } as never);
+    vi.spyOn(api, 'telemetrySummary').mockResolvedValue({ data: summarizeTelemetry([sample]) } as never);
+    const old = store.loadTelemetryInsights({ assetCode: 'old' });
+    await store.loadTelemetryInsights({ assetCode: 'new' });
+    resolveOld({ data: { items: [sample], total: 20 } } as never);
+    expect(await old).toBe(false);
+    expect(store.telemetryInsights[0]!.id).toBe(999);
+    expect(store.telemetryInsightsTotal).toBe(1);
+    expect(store.telemetryInsightsLoading).toBe(false);
   });
 
   it('returns an explicit empty summary for a telemetry query with no samples', () => {

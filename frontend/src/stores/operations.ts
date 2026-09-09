@@ -4,7 +4,7 @@ import { api } from '../services/api';
 import { useAuthStore } from './auth';
 import type { Alert, Asset, AssetMutation, AuditEntry, Dashboard, HardwareBinding, SpatialFeature, Telemetry, TelemetryIngestResult, TelemetryQuery, TelemetryReading, TelemetrySummary, Threshold, WorkOrder } from '../types';
 
-type ReportKind = 'alerts' | 'workOrders' | 'assets' | 'daily';
+type ReportKind = 'alerts' | 'workOrders' | 'assets' | 'daily' | 'telemetry';
 const demoTransitions: Record<WorkOrder['status'], WorkOrder['status'][]> = {
   draft: ['open', 'cancelled'],
   open: ['assigned', 'cancelled'],
@@ -69,7 +69,16 @@ export const useOperationsStore = defineStore('operations', () => {
   const offline = ref(false);
   const syncError = ref('');
   const lastSyncedAt = ref<string | null>(null);
-  const notice = ref('');
+  const noticeText = ref('');
+  const noticeRevision = ref(0);
+  const notice = computed({
+    get: () => noticeText.value,
+    set: (message: string) => {
+      noticeText.value = message;
+      // Identical messages still represent separate completed operations.
+      noticeRevision.value += 1;
+    },
+  });
   const openAlerts = computed(() => alerts.value.filter((item) => item.status === 'open').length);
   const activeOrders = computed(() => workOrders.value.filter((item) => !['completed', 'cancelled'].includes(item.status)).length);
   let liveRefreshPromise: Promise<void> | null = null;
@@ -322,6 +331,7 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function createReport(report: ReportKind) {
+    if (report === 'telemetry' && source.value !== 'api') throw new Error('完整历史导出需要连接数据服务。');
     if (source.value === 'api') {
       const record = await runApiMutation(() => api.report(report, requestKey('report')));
       const exported = await api.downloadReport(record.data.id);
@@ -331,7 +341,7 @@ export const useOperationsStore = defineStore('operations', () => {
       downloadReport(report);
       appendAudit('report.export', 'report_export', report, { report, format: 'csv' });
     }
-    notice.value = `${report} 报表已生成`;
+    notice.value = `${{ alerts: '告警', workOrders: '工单', assets: '设备', daily: '运行', telemetry: '历史遥测' }[report]}报表已生成`;
   }
 
   function appendAudit(action: string, resourceType: string, resourceId: number | string, detail: Record<string, unknown>) {
@@ -356,36 +366,41 @@ export const useOperationsStore = defineStore('operations', () => {
     return response.data as TelemetryIngestResult;
   }
 
-  async function loadTelemetryInsights(query: TelemetryQuery = {}) {
+  let telemetryRequestSequence = 0;
+  async function loadTelemetryInsights(query: TelemetryQuery = {}, page = 1) {
+    const requestSequence = ++telemetryRequestSequence;
     telemetryInsightsLoading.value = true;
     telemetryInsightsError.value = '';
     try {
+      if (!Number.isSafeInteger(page) || page < 1) throw new Error('历史数据页码无效。');
       const recordedFrom = query.recordedFrom ? new Date(query.recordedFrom).getTime() : null;
       const recordedTo = query.recordedTo ? new Date(query.recordedTo).getTime() : null;
       if ((recordedFrom != null && !Number.isFinite(recordedFrom)) || (recordedTo != null && !Number.isFinite(recordedTo))) throw new Error('采集时间格式无效。');
       if (recordedFrom != null && recordedTo != null && recordedFrom > recordedTo) throw new Error('开始时间不能晚于结束时间。');
       if (source.value === 'demo') {
         const filtered = telemetry.value.filter((item) => telemetryMatchesQuery(item, query)).sort((left, right) => new Date(right.recordedAt).getTime() - new Date(left.recordedAt).getTime() || right.id - left.id);
-        telemetryInsights.value = filtered.slice(0, 100);
+        telemetryInsights.value = filtered.slice((page - 1) * 100, page * 100);
         telemetryInsightsTotal.value = filtered.length;
         telemetrySummary.value = summarizeTelemetry(filtered);
         return;
       }
       const params = Object.fromEntries(Object.entries(query).filter(([, value]) => value)) as Record<string, string>;
       const [historyResponse, summaryResponse] = await Promise.all([
-        api.telemetry({ ...params, page: 1, pageSize: 100 }),
+        api.telemetry({ ...params, page, pageSize: 100 }),
         api.telemetrySummary(params),
       ]);
+      if (requestSequence !== telemetryRequestSequence) return false;
       telemetryInsights.value = historyResponse.data.items;
       telemetryInsightsTotal.value = historyResponse.data.total;
       telemetrySummary.value = summaryResponse.data;
     } catch (cause: unknown) {
+      if (requestSequence !== telemetryRequestSequence) return false;
       const status = responseStatus(cause);
       if (status === 401) expireApiSession();
       telemetryInsightsError.value = status != null ? apiErrorMessage(cause) : cause instanceof Error ? cause.message : '遥测查询失败，请稍后重试。';
       throw new Error(telemetryInsightsError.value);
     } finally {
-      telemetryInsightsLoading.value = false;
+      if (requestSequence === telemetryRequestSequence) telemetryInsightsLoading.value = false;
     }
   }
 
@@ -406,7 +421,7 @@ export const useOperationsStore = defineStore('operations', () => {
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
-  return { dashboard, assets, spatialFeatures, hardwareBindings, alerts, workOrders, thresholds, telemetry, telemetryInsights, telemetryInsightsTotal, telemetrySummary, telemetryInsightsLoading, telemetryInsightsError, audit, loading, source, offline, syncError, lastSyncedAt, notice, openAlerts, activeOrders, refresh, refreshLive, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, importGisFeatures, updateGisFeature, createHardwareBinding, transition, updateThreshold, createReport, ingestTelemetry, loadTelemetryInsights };
+  return { dashboard, assets, spatialFeatures, hardwareBindings, alerts, workOrders, thresholds, telemetry, telemetryInsights, telemetryInsightsTotal, telemetrySummary, telemetryInsightsLoading, telemetryInsightsError, audit, loading, source, offline, syncError, lastSyncedAt, notice, noticeRevision, openAlerts, activeOrders, refresh, refreshLive, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, importGisFeatures, updateGisFeature, createHardwareBinding, transition, updateThreshold, createReport, ingestTelemetry, loadTelemetryInsights };
 });
 
 function telemetryMatchesQuery(item: Telemetry, query: TelemetryQuery): boolean {

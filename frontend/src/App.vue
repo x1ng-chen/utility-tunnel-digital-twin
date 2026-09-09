@@ -22,10 +22,10 @@ watch(() => auth.isAuthenticated, (isAuthenticated) => {
     startLiveRefresh();
   }
 });
-watch(() => operations.notice, (notice) => {
+watch(() => operations.noticeRevision, () => {
   if (noticeTimer) window.clearTimeout(noticeTimer);
-  if (!notice) return;
-  noticeTimer = window.setTimeout(() => { operations.notice = ''; }, 2000);
+  if (!operations.notice) return;
+  noticeTimer = window.setTimeout(() => { operations.notice = ''; }, 3000);
 });
 function startLiveRefresh() {
   if (liveTimer || !auth.isAuthenticated) return;
@@ -58,7 +58,7 @@ onUnmounted(() => {
     <section v-if="operations.notice" :class="['operation-notice', noticeTone]" role="status" aria-live="polite">
       <span class="notice-icon"><Check v-if="noticeTone === 'success'" /><TriangleAlert v-else /></span>
       <div><strong>{{ noticeTone === 'success' ? '操作已完成' : '操作提示' }}</strong><p>{{ operations.notice }}</p></div>
-      <i class="notice-progress" />
+      <i :key="operations.noticeRevision" class="notice-progress" />
     </section>
   </Transition>
   <ExperienceLayer />

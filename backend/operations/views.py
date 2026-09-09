@@ -1275,6 +1275,13 @@ class AlertListView(APIView):
 
     def get(self, request):
         queryset = Alert.objects.select_related('asset', 'acknowledged_by')
+        if request.query_params.get('assetCode'):
+            queryset = queryset.filter(asset__code=request.query_params['assetCode'])
+        if 'assetCodes' in request.query_params:
+            asset_codes = request.query_params['assetCodes'].split(',')
+            if not 1 <= len(asset_codes) <= 100 or any(not code.strip() or len(code) > 80 for code in asset_codes):
+                return error_response('invalid_request', 'assetCodes requires 1 to 100 non-empty device codes.', 400)
+            queryset = queryset.filter(asset__code__in=[code.strip() for code in asset_codes])
         if request.query_params.get('status'):
             alert_status = request.query_params['status']
             if alert_status not in Alert.Status.values:
@@ -1731,7 +1738,7 @@ class ReportExportView(APIView):
         if not isinstance(report_value, str):
             return error_response('invalid_request', 'A valid report type is required.', 400)
         report_type = report_value.strip()
-        if report_type not in {'alerts', 'workOrders', 'assets', 'daily'}:
+        if report_type not in {'alerts', 'workOrders', 'assets', 'daily', 'telemetry'}:
             return error_response('invalid_request', 'A valid report type is required.', 400)
         if request_key:
             existing = ReportExport.objects.filter(idempotency_key=request_key).first()
@@ -1766,6 +1773,8 @@ class ReportExportView(APIView):
             if request_key:
                 existing = ReportExport.objects.filter(idempotency_key=request_key).first()
                 if existing and existing.requested_by_id == request.user.pk:
+                    if existing.report_type != report_type:
+                        return error_response('conflict', 'Idempotency-Key cannot be reused with a different report.', 409)
                     return Response(ReportExportSerializer(existing).data, status=200)
             return error_response('conflict', 'Report export could not be created because a unique value already exists.', 409)
         response = Response(ReportExportSerializer(record).data, status=201)
@@ -1784,6 +1793,9 @@ def _csv_safe(value):
 
 
 def _report_rows(report_type):
+    if report_type == 'telemetry':
+        fields = ['id', 'event_id', 'asset__code', 'metric_key', 'metric', 'value', 'unit', 'quality', 'recorded_at', 'ingested_at']
+        return fields, Telemetry.objects.order_by('-recorded_at', '-id').values_list(*fields).iterator(chunk_size=500)
     if report_type == 'assets':
         fields = ['code', 'name', 'zone', 'asset_type', 'status', 'hardware_code', 'integration_status', 'is_active', 'last_seen_at', 'updated_at']
         return fields, Asset.objects.order_by('code').values_list(*fields).iterator(chunk_size=500)

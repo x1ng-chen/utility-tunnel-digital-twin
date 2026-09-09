@@ -24,6 +24,7 @@ const router = createRouter({
     { path: '/telemetry', component: () => import('./views/TelemetryView.vue') },
     { path: '/settings', component: () => import('./views/SettingsView.vue') },
     { path: '/audit', component: () => import('./views/AuditView.vue') },
+    { path: '/:pathMatch(.*)*', component: () => import('./views/NotFoundView.vue') },
   ],
 });
 

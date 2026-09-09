@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
+import ReportExportButton from '../components/ReportExportButton.vue';
 import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
 import type { Alert } from '../types';
@@ -82,10 +83,11 @@ function getUserFacingError(cause: unknown) {
   <AppShell>
     <section class="section-title">
       <div><span class="eyebrow light">异常处置</span><h1>告警中心</h1><p>确认异常、关联工单并保留完整处理链路。</p></div>
+      <ReportExportButton report="alerts" label="导出全部告警" />
       <div class="filter-tabs"><button v-for="item in [['all','全部'],['open','待确认'],['acknowledged','已确认']]" :key="item[0]" :class="{ active: filter === item[0] }" @click="filter = item[0]">{{ item[1] }}</button></div>
     </section>
     <p v-if="actionError" class="inline-message error-message" role="alert">{{ actionError }}</p>
-    <section class="table-panel">
+    <section class="table-panel alerts-table" aria-label="告警记录">
       <div class="table-head"><span>告警编码</span><span>资产 / 事件</span><span>级别</span><span>状态</span><span>操作</span></div>
       <div v-for="alert in visible" :key="alert.id" :class="['table-row', { focused: alert.code === focusedCode }]">
         <div><b>{{ alert.code }}</b><small>{{ new Date(alert.openedAt).toLocaleString('zh-CN') }}</small></div>

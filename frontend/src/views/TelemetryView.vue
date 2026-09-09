@@ -1,48 +1,115 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
-import OpsChart from '../components/ui/OpsChart.vue';
+import TelemetryTrendChart from '../components/TelemetryTrendChart.vue';
+import ReportExportButton from '../components/ReportExportButton.vue';
 import { useOperationsStore } from '../stores/operations';
-import type { TelemetryQuery } from '../types';
+import type { Alert, TelemetryQuery } from '../types';
+import { api } from '../services/api';
+import { telemetryTrend } from '../utils/telemetryTrend';
 
 const store = useOperationsStore();
+const route = useRoute();
 const assetCode = ref('');
 const metricKey = ref('');
 const quality = ref('');
 const recordedFrom = ref('');
 const recordedTo = ref('');
 const actionError = ref('');
-
-const goodRate = computed(() => store.telemetrySummary.sampleCount ? Math.round(store.telemetrySummary.qualityCounts.good / store.telemetrySummary.sampleCount * 100) : 0);
-const trendWindow = computed(() => [...store.telemetryInsights].slice(0, 100).reverse());
-const trendLabels = computed(() => trendWindow.value.map((item) => new Date(item.recordedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })));
-const trendSeries = computed(() => [{ name: store.telemetrySummary.latest?.metric || '遥测值', data: trendWindow.value.map((item) => item.value), color: '#38bdf8' }]);
-const trendThreshold = computed(() => store.thresholds.find((item) => item.key === store.telemetrySummary.latest?.metricKey)?.warning);
-const qualityDonut = computed(() => {
-  const total = Math.max(1, store.telemetrySummary.sampleCount);
-  const good = store.telemetrySummary.qualityCounts.good / total * 100;
-  const suspect = good + store.telemetrySummary.qualityCounts.suspect / total * 100;
-  const bad = suspect + store.telemetrySummary.qualityCounts.bad / total * 100;
-  return { background: `conic-gradient(#55e3bd 0 ${good}%, #f2b064 ${good}% ${suspect}%, #ff7289 ${suspect}% ${bad}%, #7186a5 ${bad}% 100%)` };
+const historyPage = ref(1);
+const appliedQuery = ref<TelemetryQuery>({});
+let searchSequence = 0;
+const pageCount = computed(() => Math.max(1, Math.ceil(store.telemetryInsightsTotal / 100)));
+const historyEvents = ref<Alert[]>([]);
+const eventsError = ref('');
+const eventsLoading = ref(false);
+const eventsTotal = ref(0);
+let eventSequence = 0;
+let eventPage = 0;
+let eventParams: Record<string, string> | null = null;
+const metricOptions = computed(() => {
+  const options = new Map(store.thresholds.map((item) => [item.key, item.label]));
+  for (const item of [...store.telemetry, ...store.telemetryInsights]) {
+    if (item.metricKey) options.set(item.metricKey, item.metric);
+  }
+  if (metricKey.value && !options.has(metricKey.value)) options.set(metricKey.value, '当前指定监测项目');
+  return [...options].map(([key, label]) => ({ key, label }));
 });
 
+const goodRate = computed(() => store.telemetrySummary.sampleCount ? Math.round(store.telemetrySummary.qualityCounts.good / store.telemetrySummary.sampleCount * 100) : 0);
+const trendSeries = computed(() => telemetryTrend(store.telemetryInsights, store.telemetrySummary.latest));
+const trendPointCount = computed(() => trendSeries.value.reduce((count, series) => count + series.data.filter(point => point[1] !== null).length, 0));
+watch(trendSeries, (series) => {
+  ++eventSequence;
+  eventPage = 0; eventParams = null;
+  historyEvents.value = []; eventsTotal.value = 0; eventsError.value = ''; eventsLoading.value = false;
+  const times = series.flatMap(item => item.data.map(point => point[0]));
+  if (!times.length || store.source !== 'api') return;
+  eventParams = { openedFrom: new Date(Math.min(...times)).toISOString(),
+    openedTo: new Date(Math.max(...times)).toISOString(), assetCodes: series.map(item => item.name).join(',') };
+  void loadMoreEvents();
+}, { immediate: true });
+
+async function loadMoreEvents() {
+  if (!eventParams || eventsLoading.value) return;
+  const sequence = eventSequence;
+  const nextPage = eventPage + 1;
+  eventsLoading.value = true;
+  eventsError.value = '';
+  try {
+    const response = await api.alerts({ ...eventParams, page: nextPage, pageSize: 100 });
+    if (sequence !== eventSequence) return;
+    const records = new Map(historyEvents.value.map(event => [event.id, event]));
+    for (const event of response.data.items as Alert[]) records.set(event.id, event);
+    historyEvents.value = [...records.values()];
+    eventPage = nextPage;
+    eventsTotal.value = response.data.total;
+  } catch {
+    if (sequence === eventSequence) eventsError.value = '告警事件加载失败，趋势数据仍可查看。';
+  } finally {
+    if (sequence === eventSequence) eventsLoading.value = false;
+  }
+}
+onUnmounted(() => { eventSequence++; });
+
 function toIso(value: string): string | undefined {
-  return value ? new Date(value).toISOString() : undefined;
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) throw new Error('请输入有效的采集时间。');
+  return date.toISOString();
 }
 
 async function search() {
+  const sequence = ++searchSequence;
   actionError.value = '';
-  const query: TelemetryQuery = {
+  try {
+    const query: TelemetryQuery = {
     assetCode: assetCode.value || undefined,
     metricKey: metricKey.value.trim() || undefined,
     quality: (quality.value || undefined) as TelemetryQuery['quality'],
     recordedFrom: toIso(recordedFrom.value),
     recordedTo: toIso(recordedTo.value),
-  };
-  try {
-    await store.loadTelemetryInsights(query);
+    };
+    const accepted = await store.loadTelemetryInsights(query);
+    if (accepted === false || sequence !== searchSequence) return;
+    appliedQuery.value = { ...query };
+    historyPage.value = 1;
   } catch (cause) {
+    if (sequence !== searchSequence) return;
     actionError.value = cause instanceof Error ? cause.message : '遥测查询失败，请稍后重试。';
+  }
+}
+
+async function changePage(next: number) {
+  if (store.telemetryInsightsLoading || next < 1 || next > pageCount.value) return;
+  const sequence = ++searchSequence;
+  actionError.value = '';
+  try {
+    const accepted = await store.loadTelemetryInsights(appliedQuery.value, next);
+    if (accepted !== false && sequence === searchSequence) historyPage.value = next;
+  } catch (cause) {
+    if (sequence === searchSequence) actionError.value = cause instanceof Error ? cause.message : '翻页失败，请重试。';
   }
 }
 
@@ -55,19 +122,23 @@ function qualityLabel(value: string) {
   return ({ good: '良好', suspect: '需关注', bad: '异常', missing: '缺失' } as Record<string, string>)[value] || '未知';
 }
 
-onMounted(search);
+watch(() => [route.query.assetCode, route.query.metricKey], ([asset, metric]) => {
+  assetCode.value = typeof asset === 'string' ? asset : '';
+  metricKey.value = typeof metric === 'string' ? metric : '';
+  void search();
+}, { immediate: true });
 </script>
 
 <template>
   <AppShell>
     <section class="section-title telemetry-title">
       <div><span class="eyebrow light">运行数据分析</span><h1>数据洞察</h1><p>按采集时间追踪遥测趋势与质量，不承担告警处置或资产维护职责。</p></div>
-      <span class="insight-source">运行数据</span>
+      <ReportExportButton report="telemetry" label="导出全部历史记录" />
     </section>
 
     <form class="telemetry-filters" @submit.prevent="search">
       <label>资产<select v-model="assetCode"><option value="">全部资产</option><option v-for="asset in store.assets" :key="asset.id" :value="asset.code">{{ asset.code }} · {{ asset.name }}</option></select></label>
-      <label>指标键<input v-model="metricKey" placeholder="例如 temperature" pattern="[a-z][a-z0-9_.\x2D]{1,39}" /></label>
+      <label>监测项目<select v-model="metricKey"><option value="">全部监测项目</option><option v-for="item in metricOptions" :key="item.key" :value="item.key">{{ item.label }}</option></select></label>
       <label>质量<select v-model="quality"><option value="">全部质量</option><option value="good">良好</option><option value="suspect">可疑</option><option value="bad">异常</option><option value="missing">缺失</option></select></label>
       <label>开始时间<input v-model="recordedFrom" type="datetime-local" /></label>
       <label>结束时间<input v-model="recordedTo" type="datetime-local" /></label>
@@ -84,18 +155,104 @@ onMounted(search);
 
     <section class="telemetry-layout">
       <article class="panel telemetry-chart-panel">
-        <div class="panel-head"><div><span class="eyebrow">近期趋势</span><h2>最近 30 条趋势</h2></div><span class="insight-count">显示 {{ store.telemetryInsights.length }} / {{ store.telemetryInsightsTotal }}</span></div>
-        <OpsChart v-if="trendWindow.length && store.telemetrySummary.comparable" zoom :labels="trendLabels" :series="trendSeries" :threshold="trendThreshold" />
-        <div v-else class="empty-state">{{ trendWindow.length ? '混合指标不可直接比较，请选择单一指标后查看趋势。' : '当前条件下没有遥测趋势。' }}</div>
+        <div class="panel-head"><div><span class="eyebrow">历史测点对比</span><h2>{{ store.telemetrySummary.latest?.metric || '监测趋势' }}</h2><p>同指标、同单位 · {{ trendSeries.length }} 个设备 · {{ trendPointCount }} 个有效测点。点击图例筛选，拖动底部滑块查看时段。</p><p>基于第 {{ historyPage }} 页的 {{ store.telemetryInsights.length }} 条记录；按真实采集时间绘制，缺失值不补线。全部项目时以最新样本的指标为准。</p></div></div>
+        <TelemetryTrendChart v-if="trendPointCount" :series="trendSeries" :unit="store.telemetrySummary.latest?.unit || ''" :events="historyEvents" />
+        <div v-else class="empty-state">当前条件下没有可绘制的监测数据。</div>
+        <section class="history-events" aria-label="趋势时段告警事件">
+          <h3>同时间段告警事件</h3>
+          <p>虚线标记告警产生时间，不代表因果关系。仅匹配本页曲线设备。</p>
+          <p v-if="store.source !== 'api'">连接数据服务后可查询历史告警事件。</p>
+          <p v-else-if="eventsLoading" role="status">正在加载告警事件…</p>
+          <p v-else-if="eventsError" role="alert">{{ eventsError }}</p>
+          <p v-else-if="!historyEvents.length">已加载范围内没有匹配事件。</p>
+          <p v-if="eventsTotal">本页趋势时段及设备共 {{ eventsTotal }} 条告警，已加载 {{ historyEvents.length }} 条。</p>
+          <button v-if="eventsError || historyEvents.length < eventsTotal" type="button" :disabled="eventsLoading" @click="loadMoreEvents">{{ eventsLoading ? '加载中…' : eventsError ? '重试加载事件' : '加载更多事件' }}</button>
+          <article v-for="event in historyEvents" :key="event.id">
+            <time>{{ new Date(event.openedAt).toLocaleString('zh-CN') }}</time>
+            <strong>{{ event.code }} · {{ event.title }}</strong>
+            <span>{{ event.assetCode }} · {{ event.severity === 'critical' ? '严重' : event.severity === 'warning' ? '警告' : '提示' }}</span>
+          </article>
+        </section>
         <div class="quality-strip"><span><i class="good" />良好 {{ store.telemetrySummary.qualityCounts.good }}</span><span><i class="suspect" />可疑 {{ store.telemetrySummary.qualityCounts.suspect }}</span><span><i class="bad" />异常 {{ store.telemetrySummary.qualityCounts.bad }}</span><span><i class="missing" />缺失 {{ store.telemetrySummary.qualityCounts.missing }}</span></div>
       </article>
-      <article class="panel latest-reading-panel"><span class="eyebrow">LATEST SAMPLE</span><template v-if="store.telemetrySummary.latest"><strong>{{ store.telemetrySummary.latest.value }}<small>{{ store.telemetrySummary.latest.unit }}</small></strong><h2>{{ store.telemetrySummary.latest.metric }}</h2><p>{{ store.telemetrySummary.latest.assetCode }} · {{ store.telemetrySummary.latest.metricKey || '未定义监测项目' }}</p><time>{{ new Date(store.telemetrySummary.latest.recordedAt).toLocaleString('zh-CN') }}</time><b :class="store.telemetrySummary.latest.quality">{{ qualityLabel(store.telemetrySummary.latest.quality) }}</b><div class="quality-donut" :style="qualityDonut"><span>{{ goodRate }}%</span><small>可信率</small></div></template><div v-else class="empty-state">暂无最新样本。</div></article>
+      <article class="panel latest-reading-panel">
+        <h2>最新采集样本</h2>
+        <template v-if="store.telemetrySummary.latest">
+          <strong>{{ store.telemetrySummary.latest.value }}<small>{{ store.telemetrySummary.latest.unit }}</small></strong>
+          <h3>{{ store.telemetrySummary.latest.metric }}</h3>
+          <p>{{ store.telemetrySummary.latest.assetCode }} · {{ store.telemetrySummary.latest.metricKey || '未定义监测项目' }}</p>
+          <time>{{ new Date(store.telemetrySummary.latest.recordedAt).toLocaleString('zh-CN') }}</time>
+          <b :class="store.telemetrySummary.latest.quality">{{ qualityLabel(store.telemetrySummary.latest.quality) }}</b>
+          <div class="query-quality"><span>当前查询样本良好率</span><strong>{{ goodRate }}%</strong><small>良好 {{ store.telemetrySummary.qualityCounts.good }} / 全部 {{ store.telemetrySummary.sampleCount }}</small></div>
+        </template>
+        <div v-else class="empty-state">暂无最新样本。</div>
+      </article>
     </section>
 
     <section class="table-panel telemetry-table">
+      <nav class="history-pagination" aria-label="历史采集记录分页">
+        <span>第 {{ historyPage }} / {{ pageCount }} 页 · 每页 100 条</span>
+        <button type="button" :disabled="store.telemetryInsightsLoading || historyPage <= 1" @click="changePage(historyPage - 1)">上一页</button>
+        <button type="button" :disabled="store.telemetryInsightsLoading || historyPage >= pageCount" @click="changePage(historyPage + 1)">下一页</button>
+      </nav>
+      <header class="panel-head"><h2>采集记录</h2><span>本页 {{ store.telemetryInsights.length }} 条 / 共 {{ store.telemetryInsightsTotal }} 条</span></header>
       <div class="table-head"><span>采集时间</span><span>资产 / 指标</span><span>数值</span><span>质量</span><span>事件编号</span></div>
       <div v-for="item in store.telemetryInsights" :key="item.id" class="table-row"><time>{{ new Date(item.recordedAt).toLocaleString('zh-CN') }}</time><div><strong>{{ item.metric }}</strong><small>{{ item.assetCode }} · {{ item.metricKey || '未定义' }}</small></div><b>{{ item.value }} {{ item.unit }}</b><span :class="['badge', `quality-${item.quality}`]">{{ qualityLabel(item.quality) }}</span><code>{{ item.eventId || '历史记录' }}</code></div>
       <div v-if="!store.telemetryInsights.length" class="empty-state">当前筛选条件下没有遥测记录。</div>
     </section>
   </AppShell>
 </template>
+
+<style scoped>
+.history-events { padding: 16px 20px; border-top: 1px solid var(--ops-line); }
+.history-events h3 { margin: 0 0 8px; font-size: 14px; }
+.history-events p, .history-events time, .history-events span { color: var(--ops-muted); font-size: 12px; line-height: 1.7; }
+.history-events article { display: grid; gap: 5px; padding: 10px 0; border-top: 1px solid var(--ops-line); overflow-wrap: anywhere; }
+.history-events strong { font-size: 13px; }
+.latest-reading-panel h2 { font-size: 16px; margin: 0 0 16px; }
+.latest-reading-panel h3 { font-size: 16px; margin: 12px 0; }
+.query-quality { display: grid; gap: 8px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--ops-line); }
+.query-quality span, .query-quality small { color: var(--ops-muted); font-size: 12px; }
+.query-quality strong { font-size: 24px; }
+.history-pagination { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px; border-bottom: 1px solid var(--ops-line); }
+.history-pagination span { margin-right: auto; color: var(--ops-muted); font-size: 12px; }
+.history-pagination button { min-height: 44px; padding: 8px 16px; }
+.telemetry-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+  padding: 20px !important;
+  background: var(--ops-panel) !important;
+}
+.telemetry-filters label { display: grid; gap: 8px; min-width: 0; padding: 0; }
+.telemetry-filters input, .telemetry-filters select { width: 100%; min-width: 0; min-height: 44px; }
+.telemetry-filter-actions { grid-column: auto; display: flex; gap: 10px; align-items: end; justify-content: flex-end; }
+.telemetry-filter-actions button { min-height: 44px; white-space: nowrap; }
+.insight-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.insight-metrics article { min-width: 0; padding: 22px; }
+.insight-metrics strong { font-size: clamp(24px, 2.5vw, 38px); overflow-wrap: anywhere; }
+.telemetry-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: 20px; }
+.telemetry-layout > article { min-width: 0; }
+.telemetry-chart-panel .panel-head p { color: var(--ops-muted); font-size: 12px; line-height: 1.6; margin: 8px 0 0; }
+.telemetry-table .panel-head { gap: 12px; flex-wrap: wrap; }
+.telemetry-table .panel-head > span { color: var(--ops-muted); font-size: 12px; }
+.telemetry-table .table-head, .telemetry-table .table-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(140px, 1.2fr) minmax(90px, .7fr) 76px minmax(100px, 1fr); gap: 16px; }
+.telemetry-table .table-row > * { min-width: 0; overflow-wrap: anywhere; }
+.telemetry-table code { font-size: 11px; color: var(--ops-muted); white-space: normal; }
+@container (max-width: 1000px) {
+  .telemetry-filters { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .telemetry-layout { grid-template-columns: minmax(0, 1fr); }
+  .telemetry-table .table-head { display: none !important; }
+  .telemetry-table .table-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 80px; }
+  .telemetry-table .table-row > time { grid-column: 1 / -1; color: var(--ops-muted); font-size: 12px; }
+  .telemetry-table .table-row > code { grid-column: 1 / -1; }
+  .insight-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (max-width: 480px) {
+  .telemetry-filters { grid-template-columns: minmax(0, 1fr) !important; }
+  .telemetry-filter-actions { justify-content: stretch; }
+  .telemetry-filter-actions button { flex: 1; }
+  .telemetry-table .table-row { grid-template-columns: minmax(0, 1fr) 80px; }
+  .telemetry-table .table-row > div { grid-column: 1 / -1; }
+}
+</style>

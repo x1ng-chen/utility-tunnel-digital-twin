@@ -3,7 +3,58 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const webUrl = process.env.E2E_WEB_URL || 'http://127.0.0.1:5173';
+// Local regression can target the disposable API without changing frontend .env.
+test.beforeEach(async ({ page }) => {
+  if (process.env.E2E_API_URL) {
+    await page.context().addInitScript((url) => localStorage.setItem('vue-api-url', url), process.env.E2E_API_URL);
+  }
+});
 const adminPassword = '123';
+
+test('历史分析跨页查询与完整 CSV 下载', async ({ page, request }) => {
+  const base = process.env.E2E_API_URL || 'http://127.0.0.1:8000/api';
+  const login = await request.post(`${base}/auth/login/`, { data: { email: 'admin', password: adminPassword } });
+  expect(login.ok()).toBe(true);
+  const token = (await login.json()).accessToken;
+  const headers = { Authorization: `Bearer ${token}` };
+  const run = Date.now();
+  const readings = Array.from({ length: 125 }, (_, index) => ({
+    eventId: `history-browser-${run}-${index}`, assetCode: 'ENV-01', metricKey: 'temperature',
+    metric: '环境温度', value: 20 + index / 100, unit: '°C', quality: 'good',
+    recordedAt: new Date(run - (124 - index) * 60000).toISOString(),
+  }));
+  for (let index = 0; index < readings.length; index += 100) {
+    const result = await request.post(`${base}/telemetry/`, { headers, data: { readings: readings.slice(index, index + 100) } });
+    expect(result.ok(), await result.text()).toBe(true);
+  }
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await page.goto(`${webUrl}/telemetry?assetCode=ENV-01&metricKey=temperature`);
+  const paging = page.getByRole('navigation', { name: '历史采集记录分页' });
+  await expect(paging).toContainText('第 1 / 2 页');
+  await expect(page.locator('.telemetry-table .table-row')).toHaveCount(100);
+  await paging.getByRole('button', { name: '下一页' }).click();
+  await expect(paging).toContainText('第 2 / 2 页');
+  const count = await page.locator('.telemetry-table .table-row').count();
+  expect(count).toBeGreaterThanOrEqual(25);
+  expect(count).toBeLessThan(100);
+  await expect(paging.getByRole('button', { name: '下一页' })).toBeDisabled();
+  await paging.getByRole('button', { name: '上一页' }).click();
+  await expect(paging).toContainText('第 1 / 2 页');
+  await expect(page.locator('.telemetry-history-chart canvas')).toBeVisible();
+  await expect(page.getByRole('region', { name: '趋势时段告警事件' })).not.toContainText('加载失败');
+  const downloadEvent = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出全部历史记录', exact: true }).click();
+  const download = await downloadEvent;
+  expect(await download.failure()).toBeNull();
+  expect(download.suggestedFilename()).toContain('utility-tunnel-telemetry-');
+  const csv = fs.readFileSync(await download.path(), 'utf8');
+  expect(csv).toContain('recorded_at');
+  for (const reading of readings) expect(csv).toContain(reading.eventId);
+});
 const mapTilePattern = /https?:\/\/(?:[^/]+\.)?tile\.openstreetmap\.org\/.*/i;
 const transparentMapTile = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -47,30 +98,87 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
   const consoleErrors = trackConsoleErrors(page);
   await isolateMapTiles(page);
   await page.goto(webUrl);
-  await expect(page.getByRole('heading', { name: /让每一米管廊/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '进入运维中枢' })).toBeVisible();
   await expect(page.getByRole('button', { name: '演示工作区' })).toHaveCount(0);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
   await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
 
+  const alarmNode = page.locator('.map-node.alarm').filter({ hasText: 'FAN-01' });
+  await expect(alarmNode).toHaveCount(1);
+  await alarmNode.click();
+  await expect(page).toHaveURL(/\/twin-3d\?asset=FAN-01/);
+  await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
+
   await page.getByRole('button', { name: '设备台账' }).click({ force: true });
   await expect(page.getByRole('heading', { name: '设备台账' })).toBeVisible();
   expect(await page.getByLabel('设备空间定位图').getByRole('button').count()).toBeGreaterThan(0);
-  await page.getByLabel('搜索设备').fill('SEEP-W01');
+  await page.getByRole('textbox', { name: '搜索设备', exact: true }).fill('SEEP-W01');
   await expect(page.getByRole('complementary').getByRole('heading', { name: '水位传感器', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '定位 水位传感器' }).click({ force: true });
   await expect(page.getByText('PC0 / ADC1_IN10', { exact: true })).toBeVisible();
-  await page.getByLabel('搜索设备').fill('NO-SUCH-ASSET');
+  await page.getByRole('textbox', { name: '搜索设备', exact: true }).fill('NO-SUCH-ASSET');
   await expect(page.getByText('没有匹配的设备节点，请调整搜索条件。')).toBeVisible();
 
   await page.getByRole('button', { name: '数据洞察' }).click();
   await expect(page.getByRole('heading', { name: '数据洞察' })).toBeVisible();
-  await expect(page.getByText('运行数据', { exact: true })).toBeVisible();
+  await expect(page.getByText('样本总量', { exact: true })).toBeVisible();
   expect(consoleErrors).toEqual([]);
 });
 
-test('滚轮在页面边界按导航顺序切换业务页面', async ({ page }) => {
+test('未知页面不会空白且可以恢复到有效页面', async ({ page }) => {
+  await page.goto(`${webUrl}/missing-page`);
+  await expect(page.getByLabel('账号或邮箱')).toBeVisible();
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码').fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  for (const viewport of [{ width: 1440, height: 960 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto(`${webUrl}/missing-page/nested`);
+    await expect(page.getByRole('heading', { name: '页面未找到' })).toBeVisible();
+    await expect(page.locator('.page-identity strong')).toHaveText('页面未找到');
+    await page.getByRole('link', { name: '返回运行总览', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  }
+});
+
+test('阈值版本冲突保留草稿并允许显式载入最新值后保存', async ({ page }) => {
+  let current = { key: 'temperature', label: '测试温度', unit: '℃', warning: 30, alarm: 40, version: 1 };
+  const writes = [];
+  await page.route('**/thresholds/', (route) => route.fulfill({ json: { items: [current] } }));
+  await page.route('**/thresholds/temperature/', (route) => {
+    const payload = route.request().postDataJSON();
+    writes.push(payload);
+    if (writes.length === 1) {
+      current = { ...current, warning: 32, version: 2 };
+      return route.fulfill({ status: 409, json: { detail: '配置版本已变化' } });
+    }
+    current = { ...current, ...payload, version: 3 };
+    return route.fulfill({ json: current });
+  });
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码').fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await page.getByRole('button', { name: '系统配置', exact: true }).click();
+  const row = page.locator('.threshold-row').filter({ hasText: '测试温度' });
+  await row.getByLabel('测试温度预警值').fill('31');
+  await row.getByRole('button', { name: '保存设置', exact: true }).click();
+  await expect(row.getByText('配置已更新，请核对最新值后再修改。')).toBeVisible();
+  await expect(row.getByLabel('测试温度预警值')).toHaveValue('31');
+  await expect(row.getByRole('button', { name: '保存设置', exact: true })).toBeDisabled();
+  expect(writes).toEqual([{ warning: 31, alarm: 40, version: 1 }]);
+  await row.getByRole('button', { name: '放弃草稿，载入最新值', exact: true }).click();
+  await expect(row.getByLabel('测试温度预警值')).toHaveValue('32');
+  await row.getByLabel('测试温度预警值').fill('33');
+  await row.getByRole('button', { name: '保存设置', exact: true }).click();
+  await expect(page.getByText('测试温度 已保存', { exact: true })).toBeVisible();
+  expect(writes).toEqual([{ warning: 31, alarm: 40, version: 1 }, { warning: 33, alarm: 40, version: 2 }]);
+});
+
+test('滚轮到达页面边界不会跳页，导航点击仍可正常切换', async ({ page }) => {
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
@@ -80,6 +188,14 @@ test('滚轮在页面边界按导航顺序切换业务页面', async ({ page }) 
   const viewport = page.viewportSize();
   await page.mouse.move(viewport.width / 2, viewport.height / 2);
   await page.mouse.wheel(0, 220);
+  // Allow any legacy wheel debounce to fire before checking the route.
+  await page.waitForTimeout(1200);
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.mouse.wheel(0, -220);
+  await page.waitForTimeout(1200);
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.getByRole('navigation').getByRole('button', { name: '告警中心', exact: true }).click();
   await expect(page).toHaveURL(/\/alerts$/);
   await expect(page.getByRole('heading', { name: '告警中心' })).toBeVisible();
   await expect(page.getByRole('navigation').getByRole('button', { name: '告警中心' })).toHaveAttribute('aria-current', 'page');
@@ -178,8 +294,8 @@ test('告警可携带处置上下文直达三维实体模型', async ({ page }) 
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
   await page.getByRole('button', { name: '告警中心' }).click();
-  const firstAlert = page.locator('.table-row').first();
-  await expect(firstAlert.getByText('ALM-260826-001', { exact: true })).toBeVisible();
+  const firstAlert = page.locator('.table-row').filter({ hasText: 'ALM-260826-001' }).first();
+  await expect(firstAlert).toBeVisible();
   await firstAlert.getByRole('button', { name: '三维定位' }).click();
   await expect(page).toHaveURL(/\/twin-3d\?asset=CTRL-01/);
   const inspector = page.locator('.twin-inspector');
@@ -247,18 +363,18 @@ test('账号密码登录后可读取运行数据并写入审计', async ({ page 
   await page.getByLabel('密码').fill('demo-password-2026');
   await page.getByRole('button', { name: /安全登录/ }).click();
   await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
-  await expect(page.getByText('链路在线', { exact: true })).toBeVisible();
+  await expect(page.locator('.status-pill')).toHaveText('数据服务已连接');
 
   await page.getByRole('button', { name: '数据洞察' }).click();
   await expect(page.getByRole('heading', { name: '数据洞察' })).toBeVisible();
-  await expect(page.getByText('运行数据', { exact: true })).toBeVisible();
-  await page.locator('.governance-nav summary').click();
+  await expect(page.getByText('样本总量', { exact: true })).toBeVisible();
+  await expect(page.locator('.governance-nav')).toBeVisible();
   await page.getByRole('button', { name: '审计追踪' }).click();
   await expect(page.getByText('用户登录系统', { exact: true }).first()).toBeVisible();
   expect(consoleErrors).toEqual([]);
 });
 
-test('操作反馈在页面上方显示并在两秒内自动关闭', async ({ page }) => {
+test('操作反馈在页面上方显示并在三秒后自动关闭', async ({ page }) => {
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
@@ -267,7 +383,12 @@ test('操作反馈在页面上方显示并在两秒内自动关闭', async ({ pa
   const notice = page.getByRole('status').filter({ hasText: '报表已生成' });
   await expect(notice).toBeVisible();
   await expect(notice.getByText('操作已完成', { exact: true })).toBeVisible();
-  await expect(notice).toHaveCount(0, { timeout: 3200 });
+  const box = await notice.boundingBox();
+  expect(box.y).toBeLessThan(page.viewportSize().height / 3);
+  await page.waitForTimeout(1500);
+  await expect(notice).toBeVisible();
+  // Three-second display plus the exit transition and runner scheduling.
+  await expect(notice).toHaveCount(0, { timeout: 3000 });
 });
 
 test('运维员可确认告警、生成工单并推进处置流程', async ({ page }) => {
@@ -316,12 +437,15 @@ test('运维员可确认告警、生成工单并推进处置流程', async ({ pa
   await page.getByRole('button', { name: '数据洞察' }).click();
   await page.getByLabel('资产').selectOption('ENV-01');
   await page.getByRole('button', { name: '查询数据' }).click();
-  await expect(page.getByText('环境温度', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: '环境温度', exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: '重置' }).click();
   await expect(page.getByRole('button', { name: '查询数据' })).toBeVisible();
 
-  await page.locator('.governance-nav summary').click();
+  await expect(page.locator('.governance-nav')).toBeVisible();
   await page.getByRole('button', { name: '审计追踪' }).click();
+  // Use the control's accessible name: its wrapping label also contains all
+  // option text, so an exact label-text query is not a stable selector.
+  await page.getByRole('combobox', { name: '操作类型', exact: true }).selectOption('alert');
   await expect(page.getByText('确认告警', { exact: true }).first()).toBeVisible();
   expect(consoleErrors).toEqual([]);
 });
@@ -358,12 +482,31 @@ test('注册申请须经管理员批准后才能登录使用', async ({ page }) 
   await adminPage.getByLabel('密码').fill(adminPassword);
   await adminPage.getByRole('button', { name: /安全登录/ }).click();
   await expect(adminPage.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible({ timeout: 15_000 });
-  await adminPage.locator('.governance-nav summary').click();
+  await expect(adminPage.locator('.governance-nav')).toBeVisible();
   await adminPage.getByRole('button', { name: '系统配置' }).click();
   const applicationRow = adminPage.locator('.registration-request-row').filter({ hasText: account });
   await expect(applicationRow).toBeVisible();
-  await applicationRow.getByRole('button', { name: '批准并创建账号' }).click();
+  let releaseApproval;
+  const approvalGate = new Promise((resolve) => { releaseApproval = resolve; });
+  let approvalRequests = 0;
+  await adminPage.route('**/admin/registration-requests/*/', async (route) => {
+    if (route.request().method() === 'PATCH') {
+      approvalRequests += 1;
+      await approvalGate;
+    }
+    await route.continue();
+  });
+  try {
+    await applicationRow.getByRole('button', { name: '批准并创建账号' }).click();
+    await expect.poll(() => approvalRequests).toBe(1);
+    await expect(applicationRow.getByRole('button', { name: '批准并创建账号' })).toBeDisabled();
+    await expect(applicationRow.getByRole('button', { name: '不予批准', exact: true })).toBeDisabled();
+    await expect(adminPage.getByText('正在处理账号申请，请稍候…')).toBeVisible();
+  } finally {
+    releaseApproval();
+  }
   await expect(applicationRow).toHaveCount(0);
+  expect(approvalRequests).toBe(1);
   const setupLink = await adminPage.locator('.inline-message[role="status"] a').getAttribute('href');
   expect(setupLink).toBeTruthy();
   await adminPage.close();
@@ -389,7 +532,7 @@ test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await page.locator('.governance-nav summary').click();
+  await expect(page.locator('.governance-nav')).toBeVisible();
   await page.getByRole('button', { name: '资产配置' }).click();
   await expect(page.getByRole('heading', { name: '资产主数据' })).toBeVisible();
   await page.getByRole('button', { name: '新建资产' }).click();
@@ -406,17 +549,23 @@ test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }
   await page.getByLabel('经度').fill('121.474500');
   await page.getByRole('button', { name: '创建资产' }).click();
   await expect(page.getByText(`${assetCode} 已创建。`)).toBeVisible();
-  await expect(page.getByText('乐观锁 v1')).toBeVisible();
+  await expect(page.getByText('数据版本 1', { exact: true })).toBeVisible();
   await page.getByLabel('资产名称').fill('端到端环境节点（已校核）');
   await page.getByRole('button', { name: '保存变更' }).click();
   await expect(page.getByText(`${assetCode} 已保存，当前版本 v2。`)).toBeVisible();
-  await expect(page.getByText('乐观锁 v2')).toBeVisible();
+  await expect(page.getByText('数据版本 2', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: '空间配置' }).click();
   await expect(page.getByRole('heading', { name: '空间数据管理' })).toBeVisible();
-  await page.getByLabel('对象名称').fill('端到端管廊段');
+  await page.getByLabel('对象名称').fill('端到端设备安装点');
   await page.getByLabel('对象编码').fill(featureCode);
-  await page.getByRole('button', { name: '保存为待审核对象' }).click();
+  await page.getByLabel('来源依据', { exact: true }).fill('端到端登记记录');
+  // Coordinates must be supplied explicitly; never rely on a fabricated default.
+  await expect(page.getByLabel('纬度', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('经度', { exact: true })).toHaveValue('');
+  await page.getByLabel('纬度', { exact: true }).fill('31.230800');
+  await page.getByLabel('经度', { exact: true }).fill('121.474500');
+  await page.getByRole('button', { name: /保存待审核点位/ }).click();
   await expect(page.getByText('已建立 1 个待审核空间对象。')).toBeVisible();
   await page.getByRole('button', { name: '审核并发布' }).click();
   await expect(page.getByText(`${featureCode} 已通过审核并发布到运维地图。`)).toBeVisible();
@@ -433,7 +582,7 @@ test('管理员可校验、启用三维模型版本并由孪生页面鉴权加�
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await page.locator('.governance-nav summary').click();
+  await expect(page.locator('.governance-nav')).toBeVisible();
   await page.getByRole('button', { name: '系统配置' }).click();
   await expect(page.getByText('三维模型版本', { exact: true })).toBeVisible();
   await expect(page.getByText('正在读取模型版本…', { exact: true })).toHaveCount(0, { timeout: 15_000 });
@@ -479,4 +628,54 @@ test('管理员可校验、启用三维模型版本并由孪生页面鉴权加�
   await page.mouse.up({ button: 'right' });
   await expect.poll(() => canvas.getAttribute('data-camera-target')).not.toBe(targetBeforePan);
   expect(consoleErrors).toEqual([]);
+});
+
+test('非空历史告警在趋势图上叠加', async ({ page, request }) => {
+  const base = process.env.E2E_API_URL || 'http://127.0.0.1:8000/api';
+  const login = await request.post(`${base}/auth/login/`, { data: { email: 'admin', password: adminPassword } });
+  expect(login.ok()).toBe(true);
+  const token = (await login.json()).accessToken;
+  const headers = { Authorization: `Bearer ${token}` };
+  const suffix = `${Date.now()}`.slice(-8);
+  const assetCode = `ALRT-OVL-${suffix}`;
+  // A dedicated asset isolates the telemetry and threshold alerts from the seed
+  // assets, so ENV-01's latest metric and the seeded alert list stay unchanged.
+  const created = await request.post(`${base}/assets/`, { headers, data: {
+    code: assetCode, name: '告警叠加验证节点', zone: 'UT-ZA', type: '环境测点',
+    integrationStatus: 'verified', locationSource: 'configured',
+    mesh: `MESH_ALRT_OVL_${suffix}`, latitude: 31.2308, longitude: 121.4745,
+  } });
+  expect(created.ok(), await created.text()).toBe(true);
+  const run = Date.now();
+  // Breach/normal pairs create resolved threshold alerts inside the trend window;
+  // ending on a normal reading leaves no persistent open alert.
+  const readings = Array.from({ length: 12 }, (_, index) => ({
+    eventId: `alert-overlay-${run}-${index}`,
+    assetCode, metricKey: 'humidity', metric: '环境湿度',
+    value: index % 2 === 0 ? 78 : 60, unit: '%RH', quality: 'good',
+    recordedAt: new Date(run - (11 - index) * 60000).toISOString(),
+  }));
+  const result = await request.post(`${base}/telemetry/`, { headers, data: { readings } });
+  expect(result.ok(), await result.text()).toBe(true);
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await page.goto(`${webUrl}/telemetry?assetCode=${assetCode}&metricKey=humidity`);
+  await expect(page.locator('.telemetry-history-chart canvas')).toBeVisible();
+  const eventsRegion = page.getByRole('region', { name: '趋势时段告警事件' });
+  await expect(eventsRegion).not.toContainText('加载失败');
+  await expect(eventsRegion).not.toContainText('没有匹配事件');
+  await expect(eventsRegion.getByText(/ALM-AUTO-/).first()).toBeVisible();
+  // Chart-level evidence: the component exposes the alert-marker contract on the
+  // DOM, proving the rendered chart received the markers (not just the list).
+  const host = page.locator('.telemetry-history-chart-host');
+  await expect(host).toHaveAttribute('data-markline-count', '6');
+  const marklineTimes = ((await host.getAttribute('data-markline-times')) || '').split(',').map(Number);
+  expect(marklineTimes).toHaveLength(6);
+  expect(marklineTimes.every(Number.isFinite)).toBe(true);
+  // Switching to a query with no matching alerts clears the stale markers.
+  await page.goto(`${webUrl}/telemetry?assetCode=ENV-01&metricKey=temperature`);
+  await expect(page.getByRole('region', { name: '趋势时段告警事件' })).toContainText('没有匹配事件');
 });

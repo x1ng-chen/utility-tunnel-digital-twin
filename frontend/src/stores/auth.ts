@@ -91,6 +91,13 @@ export const useAuthStore = defineStore('auth', () => {
 });
 
 function axiosMessage(cause: unknown): string {
-  if (typeof cause === 'object' && cause && 'response' in cause) return String((cause as { response?: { data?: { message?: string } } }).response?.data?.message || '登录失败，请检查账号或服务地址。');
-  return '登录服务暂不可用，请稍后重试。';
+  if (typeof cause === 'object' && cause) {
+    const failure = cause as { code?: string; response?: { status?: number; data?: { message?: string } } };
+    if (failure.response) {
+      if ((failure.response.status ?? 0) >= 500) return '登录服务异常，请联系管理员检查后端服务后重试。';
+      return failure.response.data?.message || '登录失败，请检查账号或服务地址。';
+    }
+    if (failure.code === 'ECONNABORTED' || failure.code === 'ETIMEDOUT') return '登录连接超时，请检查网络和后端服务后重试。';
+  }
+  return '无法连接登录服务，请确认后端已启动、网络及服务地址正确后重试。';
 }

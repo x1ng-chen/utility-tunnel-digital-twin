@@ -1,9 +1,11 @@
 import io
+import csv
 import json
 import struct
 import tempfile
 from datetime import datetime, timedelta
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -33,6 +35,31 @@ class OperationsApiTests(TestCase):
 
     def auth(self, user):
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {Token.objects.get_or_create(user=user)[0].key}')
+
+    def test_alert_history_filters_by_device_and_time(self):
+        other = Asset.objects.create(code='OTHER', name='其他设备', zone='UT-ZA', asset_type='测点')
+        Alert.objects.create(code='OTHER-ALERT', asset=other, severity='warning', category='设备', title='其他事件', detail='', opened_at='2026-08-26T00:00:00Z')
+        self.auth(self.operator)
+        result = self.client.get('/api/alerts/', {'assetCode': self.asset.code, 'openedFrom': '2026-08-25T00:00:00Z', 'openedTo': '2026-08-27T00:00:00Z'})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual([item['code'] for item in result.json()['items']], ['ALM-1'])
+        self.assertEqual(result.json()['total'], 1)
+        self.assertEqual(self.client.get('/api/alerts/', {'assetCode': 'missing'}).json()['total'], 0)
+        self.assertEqual(self.client.get('/api/alerts/', {'assetCode': self.asset.code, 'openedFrom': '2026-08-27T00:00:00Z'}).json()['total'], 0)
+
+    def test_alert_history_device_set_is_filtered_before_pagination(self):
+        other = Asset.objects.create(code='OTHER', name='其他设备', zone='UT-ZA', asset_type='测点')
+        Alert.objects.bulk_create([
+            Alert(code=f'UNRELATED-{index}', asset=other, severity='warning', category='设备', title='其他事件', detail='', opened_at=timezone.now())
+            for index in range(105)
+        ])
+        self.auth(self.operator)
+        result = self.client.get('/api/alerts/', {'assetCodes': f'{self.asset.code},UNKNOWN', 'pageSize': 100})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()['total'], 1)
+        self.assertEqual(result.json()['items'][0]['code'], 'ALM-1')
+        for value in ['', 'FAN-01,', ',FAN-01', ','.join(['X'] * 101)]:
+            self.assertEqual(self.client.get('/api/alerts/', {'assetCodes': value}).status_code, 400)
 
     def test_health_is_public(self):
         response = self.client.get('/api/health/')
@@ -342,6 +369,35 @@ class OperationsApiTests(TestCase):
             self.assertEqual(self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'wrong-password'}, format='json').status_code, 401)
         finally:
             cache.clear()
+
+    def test_telemetry_export_contains_full_history_and_immutable_snapshot(self):
+        Telemetry.objects.bulk_create([
+            Telemetry(asset=self.asset, event_id=f'csv-{i}', metric_key='temperature',
+                      metric='=unsafe', value=i, unit='°C', quality='good', recorded_at=timezone.now())
+            for i in range(125)
+        ])
+        self.auth(self.operator)
+        response = self.client.post('/api/report-exports/', {'report': 'telemetry'}, format='json', HTTP_IDEMPOTENCY_KEY='history-csv-1')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['rowCount'], 125)
+        path = f"/api/report-exports/{response.json()['id']}/download/"
+        download = self.client.get(path)
+        self.assertEqual(download.status_code, 200)
+        rows = list(csv.DictReader(io.StringIO(download.content.decode('utf-8-sig'))))
+        self.assertEqual(len(rows), 125)
+        self.assertEqual(rows[0]['asset__code'], self.asset.code)
+        self.assertEqual(rows[0]['metric'], "'=unsafe")
+        self.assertIn('ingested_at', rows[0])
+        Telemetry.objects.all().delete()
+        self.assertEqual(self.client.get(path).content, download.content)
+        repeated = self.client.post('/api/report-exports/', {'report': 'telemetry'}, format='json', HTTP_IDEMPOTENCY_KEY='history-csv-1')
+        self.assertEqual(repeated.json()['id'], response.json()['id'])
+        outsider = User.objects.create_user(username='outsider')
+        Profile.objects.create(user=outsider, display_name='查看者', role=Profile.Role.VIEWER)
+        self.auth(outsider)
+        self.assertEqual(self.client.get(path).status_code, 403)
+        self.client.credentials()
+        self.assertIn(self.client.post('/api/report-exports/', {'report': 'telemetry'}, format='json').status_code, [401, 403])
 
     def test_read_api_contract_and_report_export(self):
         threshold = Threshold.objects.create(key='temperature', label='温度', warning=28, alarm=32, unit='°C')
@@ -992,6 +1048,15 @@ class OperationsApiTests(TestCase):
             response = self.client.post('/api/report-exports/', {'report': 'daily'}, format='json')
         self.assertEqual(response.status_code, 500)
         self.assertFalse(ReportExport.objects.filter(report_type='daily').exists())
+
+    def test_report_export_concurrent_key_cannot_return_another_report_type(self):
+        self.auth(self.operator)
+        conflicting = SimpleNamespace(requested_by_id=self.operator.pk, report_type='assets')
+        with patch('operations.views.ReportExport.objects.filter') as lookup, patch('operations.views._build_report_csv', side_effect=IntegrityError('concurrent key')):
+            lookup.return_value.first.side_effect = [None, conflicting]
+            response = self.client.post('/api/report-exports/', {'report': 'telemetry'}, format='json', HTTP_IDEMPOTENCY_KEY='racing-report')
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(ReportExport.objects.count(), 0)
 
     def test_report_export_is_idempotent(self):
         self.auth(self.operator)

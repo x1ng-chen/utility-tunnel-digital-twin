@@ -23,7 +23,8 @@
 html, body, #app { min-height: 100%; background: var(--ops-bg); color: var(--ops-text); }
 html, body { max-width: 100%; overflow-x: clip; }
 body { margin: 0; font-size: 14px; line-height: 1.5; }
-body::after { content: ""; position: fixed; inset: 0; z-index: 9998; pointer-events: none; opacity: .16; background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,.28) 3px 4px); mix-blend-mode: multiply; }
+/* Keep texture in the backdrop; never rasterize readable content with overlays. */
+body::after { content: none; }
 button, input, select, textarea { font: inherit; border-radius: 0 !important; }
 button { cursor: pointer; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--ops-signal); outline-offset: 2px; }
@@ -32,7 +33,7 @@ code, data, samp, time, .eyebrow, .badge, .status-pill, .connection, .metric-car
 .app-shell { min-height: 100vh; background: var(--ops-bg); }
 .sidebar { width: var(--ops-sidebar); padding: 0 !important; overflow: hidden; background: #0a111e !important; border-right: 1px solid var(--ops-line) !important; box-shadow: none !important; }
 .brand { min-height: 76px; padding: 14px 20px !important; border-bottom: 1px solid var(--ops-line); }
-.brand-mark { border-radius: 0 !important; background: var(--ops-signal) !important; box-shadow: none !important; }
+.brand-mark { border-radius: 0; background: var(--ops-signal); box-shadow: none; }
 .brand b { font-size: 18px !important; letter-spacing: .12em !important; }
 .side-caption, .eyebrow { color: var(--ops-muted) !important; font-size: 12px !important; letter-spacing: .16em !important; text-transform: uppercase; }
 .eyebrow { display: none !important; }

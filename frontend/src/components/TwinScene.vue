@@ -5,6 +5,7 @@ import { Box3, BoxGeometry, Color, DirectionalLight, Fog, Group, HemisphereLight
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Alert, Asset } from '../types';
+import { cameraFitDistance } from '../utils/cameraFit';
 import { modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
 
 const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string }>();
@@ -261,12 +262,13 @@ function resetView() {
   if (bounds && !bounds.isEmpty()) {
     const sphere = bounds.getBoundingSphere(new Sphere());
     sceneRadius = Math.max(sphere.radius, .2);
-    const distance = Math.max(sceneRadius * 2.25, .8);
+    const distance = cameraFitDistance(sceneRadius, camera.fov, camera.aspect);
     controls.target.copy(sphere.center);
     camera.position.copy(sphere.center.clone().add(new Vector3(1, .68, 1).normalize().multiplyScalar(distance)));
     controls.minDistance = Math.max(.002, sceneRadius * .0008);
-    controls.maxDistance = Math.max(20, sceneRadius * 12);
+    controls.maxDistance = Math.max(20, sceneRadius * 12, distance * 2);
     camera.near = Math.max(.005, sceneRadius / 500);
+    camera.far = Math.max(200, controls.maxDistance + sceneRadius * 2);
   } else {
     sceneRadius = 18;
     camera.position.set(18, 13, 22);
@@ -540,7 +542,13 @@ defineExpose({ resetView, focusAsset, zoomBy, setNavigationMode, reloadModel, mo
     <div ref="host" class="twin-canvas" aria-label="综合管廊三维数字孪生场景" role="application" />
     <div class="twin-model-state"><i :class="modelState" /><span>{{ modelMessage }}</span><em v-if="performanceMode === 'reduced'">流畅模式</em></div>
     <div v-if="modelState === 'loading'" class="twin-model-progress" role="progressbar" aria-label="三维模型加载进度" :aria-valuenow="modelProgress" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${Math.max(modelProgress, 6)}%` }" /></div>
-    <div class="twin-camera-controls" role="group" aria-label="三维自由视角控制"><button type="button" aria-label="放大三维模型" title="放大" @click="zoomBy(.62)"><ZoomIn /></button><button type="button" aria-label="缩小三维模型" title="缩小" @click="zoomBy(1.55)"><ZoomOut /></button><button type="button" :class="{ active: navigationMode === 'pan' }" aria-label="启用自由平移" title="左键自由平移" @click="setNavigationMode('pan')"><Hand /></button><button type="button" :class="{ active: navigationMode === 'orbit' }" aria-label="启用自由旋转" title="左键自由旋转" @click="setNavigationMode('orbit')"><Orbit /></button><button type="button" aria-label="显示完整三维模型" title="显示全景" @click="resetView"><Home /></button></div>
+    <div class="twin-camera-controls" role="group" aria-label="三维自由视角控制">
+      <button type="button" aria-label="放大三维模型" title="放大" @click="zoomBy(.62)"><ZoomIn /></button>
+      <button type="button" aria-label="缩小三维模型" title="缩小" @click="zoomBy(1.55)"><ZoomOut /></button>
+      <button type="button" :class="{ active: navigationMode === 'pan' }" :aria-pressed="navigationMode === 'pan'" aria-label="启用自由平移" title="左键自由平移" @click="setNavigationMode('pan')"><Hand /></button>
+      <button type="button" :class="{ active: navigationMode === 'orbit' }" :aria-pressed="navigationMode === 'orbit'" aria-label="启用自由旋转" title="左键自由旋转" @click="setNavigationMode('orbit')"><Orbit /></button>
+      <button type="button" aria-label="显示完整三维模型" title="显示全景" @click="resetView"><Home /></button>
+    </div>
     <div class="twin-scene-tip">{{ navigationMode === 'pan' ? '左键自由平移 · 右键旋转' : '左键旋转 · 右键自由平移' }} · 滚轮指向缩放 · 方向键平移</div>
   </div>
 </template>

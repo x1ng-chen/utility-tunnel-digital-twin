@@ -54,6 +54,7 @@ page-*.png
 ~$*.docx
 *.tmp
 .playwright-cli/
+.runtime/
 output/playwright/
 test-results/
 

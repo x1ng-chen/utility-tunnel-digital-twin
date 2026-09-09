@@ -1,11 +1,11 @@
 # 软件验收清单
 
-> 版本：P0–P3 · 更新：2026-08-30
+> 版本：P0–P3 · 更新：2026-09-08；此表列验收要求，并非完成勾选表。
 
 | 类别 | 验收项 | 可验证证据 |
 | --- | --- | --- |
 | P0 范围 | README、架构、接口与演示边界没有 SQLite/待实施的冲突表述 | `README.md`、`docs/api-contract.md`、`docs/software-platform.md` |
-| P1 接入 | 前端使用构建时固定的 Django API；人员令牌只写当前会话，IoTDA 使用仅限遥测 POST 的机器密钥 | `frontend/src/services/api.ts`、`frontend/src/stores/auth.ts`、`operations/authentication.py` |
+| P1 接入 | 前端连接 Django API，核验构建地址与浏览器地址覆盖；人员令牌只写当前会话，IoTDA 使用仅限遥测 POST 的机器密钥 | `frontend/src/services/api.ts`、`frontend/src/stores/auth.ts`、`operations/authentication.py` |
 | P1 业务 | 告警确认、来源工单、手工工单、受控流转、阈值、导出均经服务端 RBAC、事务与审计；提交复核和完成复核强制填写说明并形成工单处理时间线 | API 冒烟脚本、`WorkOrderEvent` 与 `audit_log` |
 | P1 数据库 | 迁移、种子、最小权限运行账号、备份恢复步骤可复现 | `migrations/`、`deploy/postgres/provision.sql`、部署手册 |
 | P0 上线预检 | 正式流量前验证生产安全配置、TLS 反向代理信任、数据库 TLS、共享缓存、数据库连通性和迁移状态 | `python manage.py production_preflight`、`deploy/postgres/provision.sql` |
