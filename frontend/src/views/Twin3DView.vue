@@ -21,8 +21,12 @@ const selectedCode = ref(store.assets.some((asset) => asset.code === requestedCo
 const scene = ref<InstanceType<typeof TwinScene>>();
 const autoLocate = ref(true);
 const autoLocateMessage = ref('');
-function pauseAutoLocate() {
+function pauseAutoLocate(event?: Event) {
   if (!autoLocate.value) return;
+  // The fullscreen auto-locate switch lives inside the stage, so its own clicks
+  // would otherwise pause auto-locate through the stage's pointerdown capture
+  // and keep the checkbox stuck. Let that control operate without pausing.
+  if (event?.target instanceof Element && event.target.closest('.twin-fullscreen-autolocate')) return;
   autoLocate.value = false;
   autoLocateMessage.value = '手动查看中，自动定位已暂停。';
 }
@@ -30,8 +34,12 @@ watch(() => store.alerts.map(alert => ({ ...alert })), (next, previous) => {
   if (!previous || !autoLocate.value || store.source !== 'api' || store.offline) return;
   const alert = newTwinAlert(next, previous, store.assets.map(asset => asset.code));
   if (!alert?.assetCode) return;
-  selectedCode.value = alert.assetCode;
-  scene.value?.focusAsset(alert.assetCode);
+  // Route the focus through the selectedCode watcher so the camera only jumps
+  // once. When the alert targets the already-selected asset that watcher does
+  // not fire, so focus it directly to keep the operator oriented on the fresh
+  // incident without a duplicate focusAsset call.
+  if (selectedCode.value === alert.assetCode) scene.value?.focusAsset(alert.assetCode);
+  else selectedCode.value = alert.assetCode;
   autoLocateMessage.value = `新告警 ${alert.code}：已定位 ${alert.assetCode}`;
 });
 const query = ref('');
@@ -99,7 +107,14 @@ const navigationContext = computed(() => {
   return '';
 });
 
-function select(code: string) { pauseAutoLocate(); selectedCode.value = code; scene.value?.focusAsset(code); }
+function select(code: string) {
+  pauseAutoLocate();
+  // Re-selecting the current asset should recentre it, but a new selection
+  // must not fire focusAsset twice (once here and once via the selectedCode
+  // watcher in TwinScene). Only the already-selected path focuses directly.
+  if (selectedCode.value === code) { scene.value?.focusAsset(code); return; }
+  selectedCode.value = code;
+}
 function inspectRisk(direction: 1 | -1) {
   const assets = riskAssets.value;
   if (!assets.length) return;
@@ -258,6 +273,10 @@ onBeforeUnmount(() => {
           <div class="twin-quick-switch-tools"><div class="twin-quick-switch-heading"><span>设备快速切换 · {{ visibleAssets.length }}/{{ store.assets.length }}</span><b>{{ selectedAssetName || '请选择设备' }}</b></div><div class="twin-switch-filters" role="group" aria-label="按运行状态筛选设备"><button v-for="filter in filterOptions" :key="filter.value" :class="{ selected: stateFilter === filter.value }" type="button" @pointerdown.stop @click.stop="stateFilter = filter.value">{{ filter.label }}</button></div></div>
           <div class="twin-quick-switch-list"><button v-for="asset in visibleAssets" :key="asset.id" :class="[resolveTwinVisualState(asset, store.alerts), { selected: asset.code === selectedCode }]" :aria-label="`选择 ${asset.name}，设备编码 ${asset.code}`" :title="`${asset.name} · ${asset.zone}`" @pointerdown.stop @click.stop="select(asset.code)"><i /><span><b>{{ asset.code }}</b><small>{{ asset.name }}</small></span></button></div>
         </nav>
+        <div v-if="fullscreenActive" class="twin-fullscreen-autolocate" role="group" aria-label="全屏新告警自动定位">
+          <label><input v-model="autoLocate" type="checkbox" @change="autoLocateMessage = autoLocate ? '将定位新产生或升级的告警。' : '自动定位已关闭。'" /> 新告警自动定位</label>
+          <button v-if="!autoLocate" type="button" @click="autoLocate = true; autoLocateMessage = '已恢复新告警自动定位。'">恢复自动定位</button>
+        </div>
         <div v-if="finePointer" class="twin-fullscreen-fx" :class="{ active: fullscreenPointer.active, pressed: fullscreenPointer.pressed, dragging: fullscreenPointer.draggingSwitcher }" aria-hidden="true" :style="{ transform: `translate3d(${fullscreenPointer.x}px, ${fullscreenPointer.y}px, 0)` }">
           <i v-for="(point, index) in fullscreenTrail" :key="index" class="twin-fx-trail" :style="{ transform: `translate3d(${point.x - fullscreenPointer.x}px, ${point.y - fullscreenPointer.y}px, 0) scale(${point.scale})`, opacity: point.opacity }" />
           <i class="twin-fx-ring" /><i class="twin-fx-dot" /><i v-if="fullscreenPulse" :key="fullscreenPulse.key" class="twin-fx-pulse" :style="{ '--twin-pulse-x': `${fullscreenPulse.x - fullscreenPointer.x}px`, '--twin-pulse-y': `${fullscreenPulse.y - fullscreenPointer.y}px` }" />
@@ -324,4 +343,14 @@ onBeforeUnmount(() => {
   .twin-risk-hud button { grid-template-columns: 7px minmax(0, 1fr); gap: 5px; }
   .twin-risk-hud small { grid-column: 2; }
 }
+.twin-fullscreen-autolocate { position: absolute; z-index: 9; bottom: 150px; left: 22px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 9px 12px; border: 1px solid #3d5d7c; border-radius: 10px; background: #091727f2; box-shadow: 0 10px 26px #0005; }
+.twin-fullscreen-autolocate label { display: inline-flex; align-items: center; gap: 7px; min-height: 28px; color: #c7daf1; font-size: 11px; cursor: pointer; }
+.twin-fullscreen-autolocate input { width: 15px; height: 15px; min-height: 0; margin: 0; padding: 0; }
+.twin-fullscreen-autolocate button { min-height: 28px; padding: 0 10px; border: 1px solid #397b78; border-radius: 7px; background: #103b42; color: #9de8d8; font-size: 10px; font-weight: 800; cursor: pointer; }
+.twin-fullscreen-autolocate button:hover, .twin-fullscreen-autolocate button:focus-visible { border-color: #6adfca; background: #16554f; color: #fff; outline: 0; }
+/* During twin fullscreen the stage draws its own pointer, trail, drag and pulse
+   feedback. Keep the site-wide experience cursor from stacking a second ring on
+   top (and hiding those states); its container stays mounted for the global
+   cursor regression but contributes no visual while the scene is fullscreen. */
+.twin-stage-panel.twin-fullscreen-active :deep(.experience-cursor) > * { display: none; }
 </style>

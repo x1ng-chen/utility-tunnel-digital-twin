@@ -395,6 +395,10 @@ function loadModel() {
     modelMessage.value = '实体模型加载超时，已切换到安全预览，可重新检测';
     applyVisualState();
     resetView();
+    // The GLTF success/error paths restore focus after a late model ready; the
+    // timeout fallback must do the same so a new-alarm auto-locate that arrived
+    // while the model was still loading is not silently dropped.
+    if (props.selectedCode) focusAsset(props.selectedCode);
   }, 25_000);
   new GLTFLoader().load(props.modelUrl || twinModelUrl, (gltf) => {
     if (loadToken !== modelLoadToken || !scene) return;
