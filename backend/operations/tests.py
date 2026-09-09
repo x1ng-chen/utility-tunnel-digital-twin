@@ -61,6 +61,23 @@ class OperationsApiTests(TestCase):
         for value in ['', 'FAN-01,', ',FAN-01', ','.join(['X'] * 101)]:
             self.assertEqual(self.client.get('/api/alerts/', {'assetCodes': value}).status_code, 400)
 
+    def test_alerts_paginate_beyond_one_hundred_without_overlap(self):
+        page_asset = Asset.objects.create(code='PAGE-ASSET', name='分页资产', zone='UT-ZA', asset_type='测点')
+        Alert.objects.bulk_create([
+            Alert(code=f'PAGE-{index}', asset=page_asset, severity='warning', category='设备', title='分页', detail='', opened_at=timezone.now())
+            for index in range(101)
+        ])
+        self.auth(self.operator)
+        page1 = self.client.get('/api/alerts/', {'assetCode': page_asset.code, 'page': 1, 'pageSize': 100}).json()
+        page2 = self.client.get('/api/alerts/', {'assetCode': page_asset.code, 'page': 2, 'pageSize': 100}).json()
+        ids1 = [item['id'] for item in page1['items']]
+        ids2 = [item['id'] for item in page2['items']]
+        self.assertEqual(page1['total'], 101)
+        self.assertEqual(len(ids1), 100)
+        self.assertEqual(len(ids2), 1)
+        self.assertEqual(ids1, sorted(ids1, reverse=True))
+        self.assertFalse(set(ids1) & set(ids2))
+
     def test_health_is_public(self):
         response = self.client.get('/api/health/')
         self.assertEqual(response.status_code, 200)
