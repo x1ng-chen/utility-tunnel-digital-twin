@@ -4,6 +4,7 @@ import mqtt from 'mqtt';
 import { z } from 'zod';
 import { createDeviceCredentials } from './auth.js';
 import { createDjangoForwarder } from './django.js';
+import { addCalculatedOxygenConcentration } from './telemetry.js';
 
 const environment = z.object({
   LOCAL_MQTT_URL: z.string().url().default('mqtt://127.0.0.1:1883'),
@@ -145,7 +146,7 @@ local.on('connect', () => {
 local.on('message', (_topic, payload) => {
   let telemetry;
   try {
-    telemetry = telemetrySchema.parse(JSON.parse(payload.toString('utf8')));
+    telemetry = addCalculatedOxygenConcentration(telemetrySchema.parse(JSON.parse(payload.toString('utf8'))));
   } catch (error) {
     console.warn('Rejected invalid local telemetry:', error instanceof Error ? error.message : error);
     return;

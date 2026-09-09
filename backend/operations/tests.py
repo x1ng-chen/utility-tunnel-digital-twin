@@ -130,6 +130,67 @@ class OperationsApiTests(TestCase):
         self.assertTrue(command['cmdId'].startswith('platform-'))
         self.assertTrue(AuditLog.objects.filter(action='controller.command.sent', resource_id='CTRL-01').exists())
 
+    @patch('operations.views.publish_controller_command')
+    def test_operator_can_start_the_fan_with_the_bounded_relay_command(self, publish_command):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        publish_command.return_value = {
+            'schema': 'ut.command.ack.v1', 'cmdId': 'platform-command', 'status': 'accepted', 'reason': 'relay_active',
+        }
+        self.auth(self.operator)
+
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'relay_on'}, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        command = publish_command.call_args.args[0]
+        self.assertEqual(command['action'], 'relay_on')
+        self.assertEqual(command['ttlMs'], 10000)
+
+    @patch('operations.views.publish_controller_command')
+    def test_operator_can_set_validated_fan_pwm(self, publish_command):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        publish_command.return_value = {
+            'schema': 'ut.command.ack.v1', 'cmdId': 'platform-command', 'status': 'accepted', 'reason': 'fan_pwm_set',
+        }
+        self.auth(self.operator)
+
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'fan_pwm', 'dutyPercent': 60}, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        command = publish_command.call_args.args[0]
+        self.assertEqual(command['action'], 'fan_pwm')
+        self.assertEqual(command['dutyPercent'], 60)
+
+    @patch('operations.views.publish_controller_command')
+    def test_operator_can_set_validated_second_fan_pwm(self, publish_command):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        publish_command.return_value = {
+            'schema': 'ut.command.ack.v1', 'cmdId': 'platform-command', 'status': 'accepted', 'reason': 'fan2_pwm_set',
+        }
+        self.auth(self.operator)
+
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'fan2_pwm', 'dutyPercent': 30}, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        command = publish_command.call_args.args[0]
+        self.assertEqual(command['action'], 'fan2_pwm')
+        self.assertEqual(command['dutyPercent'], 30)
+
+    def test_fan_pwm_rejects_out_of_range_duty(self):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        self.auth(self.operator)
+
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'fan_pwm', 'dutyPercent': 101}, format='json')
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_second_fan_pwm_rejects_missing_duty(self):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        self.auth(self.operator)
+
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'fan2_pwm'}, format='json')
+
+        self.assertEqual(response.status_code, 400)
+
     def test_viewer_cannot_send_controller_command(self):
         viewer = User.objects.create_user(username='viewer@example.com', email='viewer@example.com', password='demo-password')
         Profile.objects.create(user=viewer, display_name='查看者', role=Profile.Role.VIEWER)
@@ -1096,14 +1157,14 @@ class OperationsApiTests(TestCase):
     def test_seed_demo_assigns_distinct_twin_positions(self):
         call_command('seed_demo', stdout=io.StringIO())
         self.assertTrue(User.objects.get(username='admin').check_password('123'))
-        self.assertEqual(Asset.objects.count(), 18)
+        self.assertEqual(Asset.objects.count(), 19)
         positions = list(Asset.objects.exclude(code__startswith='LEVEL-L').values_list('code', 'position'))
-        self.assertEqual(len(positions), 13)
-        self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 13)
+        self.assertEqual(len(positions), 14)
+        self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 14)
         water = Asset.objects.get(hardware_code='H-04')
         self.assertEqual(water.integration_status, Asset.IntegrationStatus.CALIBRATION_REQUIRED)
         self.assertEqual(float(water.latitude), 31.230505)
-        self.assertEqual(Asset.objects.filter(latitude__isnull=False, longitude__isnull=False).count(), 13)
+        self.assertEqual(Asset.objects.filter(latitude__isnull=False, longitude__isnull=False).count(), 14)
 
     def test_e2e_cleanup_removes_legacy_and_timestamped_twin_test_assets(self):
         Asset.objects.create(code='ENV-E2E', name='旧版回归资产', zone='UT-ZA', asset_type='测试')
@@ -1290,4 +1351,4 @@ class OperationsApiTests(TestCase):
         self.assertIsNone(order.completed_at)
         self.assertIsNone(order.reviewed_by)
         self.assertEqual(order.version, 1)
-        self.assertEqual(HardwareBinding.objects.filter(status=HardwareBinding.Status.RESERVED).count(), 18)
+        self.assertEqual(HardwareBinding.objects.filter(status=HardwareBinding.Status.RESERVED).count(), 19)

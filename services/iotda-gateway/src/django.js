@@ -13,7 +13,17 @@ export const DJANGO_METRIC_LABELS = {
   temperature: '环境温度',
   humidity: '环境湿度',
   'water.raw': '水位 ADC',
+  'level.detected': '液位检测',
+  'smoke.alarm': '烟雾告警',
+  'flame.alarm': '火焰告警',
+  'oxygen.raw': '氧传感器 ADC',
+  'oxygen.voltage': '氧传感器电压',
+  'oxygen.concentration': '氧气浓度（电压换算）',
   'vibration.alarm': '振动锁存',
+  'supply.voltage': '供电电压',
+  'motor.current': '电机电流',
+  power: '功率',
+  'rotational.speed': '转速',
 };
 
 const ASSET_CODE_PATTERN = /^[A-Z0-9][A-Z0-9_-]{1,39}$/;

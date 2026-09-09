@@ -21,7 +21,7 @@ describe('operations store', () => {
 
   it('starts with the connected demo model', () => {
     const store = useOperationsStore();
-    expect(store.assets).toHaveLength(18);
+    expect(store.assets).toHaveLength(19);
     expect(store.openAlerts).toBe(2);
     expect(store.activeOrders).toBe(2);
   });

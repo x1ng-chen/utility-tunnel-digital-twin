@@ -16,9 +16,12 @@ const SAMPLE = {
     { assetCode: 'ENV-01', metric: 'temperature', value: 29.5, unit: 'degC', quality: 'good' },
     { assetCode: 'ENV-01', metric: 'humidity', value: 63, unit: '%RH', quality: 'good' },
     { assetCode: 'SEEP-W01', metric: 'water.raw', value: 640, unit: 'adc', quality: 'good' },
+    { assetCode: 'LEVEL-L01', metric: 'level.detected', value: 1, unit: 'bool', quality: 'good' },
     { assetCode: 'CTRL-01', metric: 'vibration.alarm', value: 0, unit: 'bool', quality: 'good' },
   ],
 };
+
+const SAMPLE_READING_COUNT = SAMPLE.readings.length;
 
 function singleReading(value) {
   return { schema: 'ut.telemetry.v1', readings: [{ assetCode: 'ENV-01', metric: 'temperature', value, unit: 'degC', quality: 'good' }] };
@@ -72,14 +75,17 @@ function loginResponse(response, token) {
 
 test('maps device units and display names onto the Django contract', () => {
   const batch = toDjangoBatch(SAMPLE, { deviceId: 'CTRL-01', receivedAt: RECEIVED_AT });
-  assert.equal(batch.readings.length, 4);
+  assert.equal(batch.readings.length, 5);
   assert.equal(batch.skipped.length, 0);
-  const [temperature, humidity, water, vibration] = batch.readings;
+  const [temperature, humidity, water, level, vibration] = batch.readings;
   assert.equal(temperature.unit, DJANGO_UNIT_MAP.degC);
   assert.equal(temperature.metric, '环境温度');
   assert.equal(humidity.unit, '%RH');
   assert.equal(water.metricKey, 'water.raw');
   assert.equal(water.unit, 'adc');
+  assert.equal(level.metricKey, 'level.detected');
+  assert.equal(level.metric, '液位检测');
+  assert.equal(level.unit, 'bool');
   assert.equal(vibration.metricKey, 'vibration.alarm');
   assert.equal(vibration.metric, '振动锁存');
   assert.equal(temperature.recordedAt, RECEIVED_AT.toISOString());
@@ -148,11 +154,11 @@ test('delivers telemetry to the Django ingest API with a service account', async
       maxRetryDelayMs: 20,
     });
     forwarder.forward(SAMPLE, RECEIVED_AT);
-    await waitFor(() => forwarder.counters.delivered === 4);
+    await waitFor(() => forwarder.counters.delivered === SAMPLE_READING_COUNT);
     const telemetryCalls = server.seen.filter((record) => record.url === '/api/telemetry/');
     assert.equal(telemetryCalls.length, 1);
     assert.equal(telemetryCalls[0].headers.authorization, 'Bearer token-1');
-    assert.equal(telemetryCalls[0].body.readings.length, 4);
+    assert.equal(telemetryCalls[0].body.readings.length, SAMPLE_READING_COUNT);
     assert.equal(forwarder.counters.queued, 0);
     forwarder.close();
   } finally {
@@ -205,7 +211,7 @@ test('re-authenticates and replays the batch when the ingest token expires', asy
       maxRetryDelayMs: 20,
     });
     forwarder.forward(SAMPLE, RECEIVED_AT);
-    await waitFor(() => forwarder.counters.delivered === 4);
+    await waitFor(() => forwarder.counters.delivered === SAMPLE_READING_COUNT);
     assert.equal(loginCount, 2);
     const telemetryCalls = server.seen.filter((record) => record.url === '/api/telemetry/');
     assert.equal(telemetryCalls.length, 2);
@@ -243,7 +249,7 @@ test('retries a transient server error until it succeeds', async () => {
       maxRetryDelayMs: 20,
     });
     forwarder.forward(SAMPLE, RECEIVED_AT);
-    await waitFor(() => forwarder.counters.delivered === 4);
+    await waitFor(() => forwarder.counters.delivered === SAMPLE_READING_COUNT);
     assert.ok(forwarder.counters.retries >= 1);
     assert.equal(failures, 2);
     forwarder.close();
@@ -277,8 +283,8 @@ test('replays the same eventIds after a concurrency conflict', async () => {
       maxRetryDelayMs: 20,
     });
     forwarder.forward(SAMPLE, RECEIVED_AT);
-    await waitFor(() => forwarder.counters.delivered === 4);
-    assert.equal(forwarder.counters.duplicates, 4);
+    await waitFor(() => forwarder.counters.delivered === SAMPLE_READING_COUNT);
+    assert.equal(forwarder.counters.duplicates, SAMPLE_READING_COUNT);
     const telemetryCalls = server.seen.filter((record) => record.url === '/api/telemetry/');
     assert.equal(telemetryCalls.length, 2);
     assert.deepEqual(telemetryCalls[0].body, telemetryCalls[1].body);

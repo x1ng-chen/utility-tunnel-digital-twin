@@ -109,7 +109,7 @@ def is_admin(request) -> bool:
     return role(request) == Profile.Role.ADMINISTRATOR
 
 
-CONTROLLER_LED_ACTIONS = {'led_red', 'led_green', 'led_blue', 'led_off'}
+CONTROLLER_ACTIONS = {'led_red', 'led_green', 'led_blue', 'led_off', 'relay_on', 'relay_off', 'fan_pwm', 'fan2_pwm'}
 
 
 def work_order_code() -> str:
@@ -661,7 +661,7 @@ class AdminUserDetailView(APIView):
 
 
 class ControllerCommandView(APIView):
-    """Publish the small, reviewed set of safe demonstration LED actions."""
+    """Publish the small, reviewed set of safe demonstration actuator actions."""
 
     permission_classes = [IsAuthenticated]
 
@@ -672,8 +672,12 @@ class ControllerCommandView(APIView):
             return error_response('not_found', 'This controller is not configured for platform commands.', 404)
         payload = object_payload(request)
         action = payload.get('action') if payload else None
-        if action not in CONTROLLER_LED_ACTIONS:
-            return error_response('invalid_request', 'Only approved lighting test actions are available.', 400)
+        if action not in CONTROLLER_ACTIONS:
+            return error_response('invalid_request', 'Only approved controller actions are available.', 400)
+        duty_percent = payload.get('dutyPercent') if payload else None
+        if action in {'fan_pwm', 'fan2_pwm'}:
+            if isinstance(duty_percent, bool) or not isinstance(duty_percent, int) or not 0 <= duty_percent <= 100:
+                return error_response('invalid_request', 'PWM dutyPercent must be an integer from 0 to 100.', 400)
         if not Asset.objects.filter(code=asset_code, is_active=True).exists():
             return error_response('not_found', 'The controller asset is not active.', 404)
 
@@ -683,17 +687,19 @@ class ControllerCommandView(APIView):
             'action': action,
             'ttlMs': 10000,
         }
+        if action in {'fan_pwm', 'fan2_pwm'}:
+            command['dutyPercent'] = duty_percent
         try:
             acknowledgement = publish_controller_command(command)
         except CommandDispatchError as exc:
             audit(request.user, 'controller.command.failed', 'asset', asset_code, {
-                'cmdId': command['cmdId'], 'action': action, 'reason': str(exc),
+                'cmdId': command['cmdId'], 'action': action, 'dutyPercent': duty_percent, 'reason': str(exc),
             }, request_id(request))
             return error_response('command_unavailable', 'The local controller command broker is unavailable.', 503)
 
         outcome = acknowledgement.get('status') if acknowledgement else 'ack_timeout'
         audit(request.user, 'controller.command.sent', 'asset', asset_code, {
-            'cmdId': command['cmdId'], 'action': action, 'outcome': outcome,
+            'cmdId': command['cmdId'], 'action': action, 'dutyPercent': duty_percent, 'outcome': outcome,
             'ackReason': acknowledgement.get('reason') if acknowledgement else '',
         }, request_id(request))
         return Response({
