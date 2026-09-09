@@ -20,3 +20,9 @@ tools/model_floor_audit.py text eol=lf
 tools/repair_model_v10.py text eol=lf
 tools/verify_model_v10.py text eol=lf
 tools/check-model-v10.mjs text eol=lf
+model/utility-tunnel-annular-v11-candidate.blend filter=lfs diff=lfs merge=lfs -text
+model/utility-tunnel-annular-v11-candidate.glb filter=lfs diff=lfs merge=lfs -text
+model/sources/2026-09-08-iteration-input.blend filter=lfs diff=lfs merge=lfs -text
+model/previews/v11-*.png filter=lfs diff=lfs merge=lfs -text
+model/v11-*.json text eol=lf
+model/asset-map-v11-candidate.json text eol=lf

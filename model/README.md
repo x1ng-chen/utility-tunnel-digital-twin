@@ -1,5 +1,11 @@
 # 综合管廊实体样品模型
 
+## 最新审查归档：V11（2026-09-09，进行中）
+
+今日气泵装配及液位检测端/空心接口成果归档为 `utility-tunnel-annular-v11-candidate.blend` / `.glb`。
+该候选仍有 L01 阀体冲突、其他传感器支撑和标签问题，不替换 V07 网页运行基线，不可直接加工。
+范围、复现与证据见 [V11 审查报告](quality-report-v11-candidate.md)。V10 历史归档不变。
+
 ## 当前网页运行时基线：V07（2026-09-02）
 
 `utility-tunnel-annular-v07-final.blend` 与

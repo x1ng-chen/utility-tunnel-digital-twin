@@ -1,0 +1,150 @@
+{
+  "date": "2026-09-09",
+  "stage": "structural_refinement",
+  "status": "AWAITING_VISUAL_AND_CONNECTION_REVIEW",
+  "source": "_qa_iteration_20260908\\live-before-iteration.blend",
+  "sourceSha256": "d48a8f13a1e8fafebcbd409c0a75d65d6731a6b97dca955f3e42286a14f460e7",
+  "members": [
+    "GEO_AIR_PUMP_01_DIAPHRAGM",
+    "GEO_AIR_PUMP_01_INLET",
+    "GEO_AIR_PUMP_01_OUTLET",
+    "GEO_AIR_PUMP_01_SCREW_BL",
+    "GEO_AIR_PUMP_01_SCREW_BR",
+    "GEO_AIR_PUMP_01_SCREW_TL",
+    "GEO_AIR_PUMP_01_SCREW_TR"
+  ],
+  "delta": [
+    -0.13500000536441803,
+    -0.10125000029802322,
+    0.0
+  ],
+  "beforeContacts": {
+    "GEO_AIR_PUMP_01_DIAPHRAGM": [],
+    "GEO_AIR_PUMP_01_INLET": [],
+    "GEO_AIR_PUMP_01_OUTLET": [],
+    "GEO_AIR_PUMP_01_SCREW_BL": [],
+    "GEO_AIR_PUMP_01_SCREW_BR": [],
+    "GEO_AIR_PUMP_01_SCREW_TL": [],
+    "GEO_AIR_PUMP_01_SCREW_TR": []
+  },
+  "afterContacts": {
+    "GEO_AIR_PUMP_01_DIAPHRAGM": [
+      "GEO_AIRFLOW_ARROW_02",
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_INLET": [
+      "MESH_AIR_FLOW_METER_01",
+      "MESH_AIR_IN_01_SAFE_ROUTE",
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_OUTLET": [
+      "GEO_AIR_CHECK_VALVE_01_ARROW",
+      "MESH_AIR_CHECK_VALVE_01",
+      "MESH_AIR_IN_01_SAFE_ROUTE",
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_SCREW_BL": [
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_SCREW_BR": [
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_SCREW_TL": [
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_SCREW_TR": [
+      "MESH_AIR_PUMP_01"
+    ]
+  },
+  "unchangedMeshes": 522,
+  "floor": {
+    "method": "triangle clipping against actual floor-top triangular prisms",
+    "floorTop": 0.19589924812316895,
+    "tolerance": 1e-05,
+    "topTriangles": 152,
+    "checkedMeshes": 526,
+    "exceptions": {
+      "MESH_RING_FLOOR": "Reference slab itself",
+      "MESH_BASE_01": "Designed foundation below the reference slab",
+      "GEO_UT_RING_RENDER_GROUND": "Presentation ground below foundation"
+    },
+    "findings": [],
+    "status": "PASS"
+  },
+  "newContacts": {
+    "GEO_AIR_PUMP_01_DIAPHRAGM": [
+      "GEO_AIRFLOW_ARROW_02",
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_INLET": [
+      "MESH_AIR_FLOW_METER_01",
+      "MESH_AIR_IN_01_SAFE_ROUTE",
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_OUTLET": [
+      "GEO_AIR_CHECK_VALVE_01_ARROW",
+      "MESH_AIR_CHECK_VALVE_01",
+      "MESH_AIR_IN_01_SAFE_ROUTE",
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_SCREW_BL": [
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_SCREW_BR": [
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_SCREW_TL": [
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_SCREW_TR": [
+      "MESH_AIR_PUMP_01"
+    ]
+  },
+  "scope": "Air pump accessories only; contact sets include intended joints and require review",
+  "freshImportFloor": {
+    "method": "triangle clipping against actual floor-top triangular prisms",
+    "floorTop": 0.19589924812316895,
+    "tolerance": 1e-05,
+    "topTriangles": 152,
+    "checkedMeshes": 526,
+    "exceptions": {
+      "MESH_RING_FLOOR": "Reference slab itself",
+      "MESH_BASE_01": "Designed foundation below the reference slab",
+      "GEO_UT_RING_RENDER_GROUND": "Presentation ground below foundation"
+    },
+    "findings": [],
+    "status": "PASS"
+  },
+  "exportSha256": "3206df03c9e0a5aa5653736c0ae253ba5d54e48bd44977dc8deed6e94e1ececc",
+  "freshImportContacts": {
+    "GEO_AIR_PUMP_01_DIAPHRAGM": [
+      "GEO_AIRFLOW_ARROW_02",
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_INLET": [
+      "MESH_AIR_FLOW_METER_01",
+      "MESH_AIR_IN_01_SAFE_ROUTE",
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_OUTLET": [
+      "GEO_AIR_CHECK_VALVE_01_ARROW",
+      "MESH_AIR_CHECK_VALVE_01",
+      "MESH_AIR_IN_01_SAFE_ROUTE",
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_SCREW_BL": [
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_SCREW_BR": [
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_SCREW_TL": [
+      "MESH_AIR_PUMP_01"
+    ],
+    "GEO_AIR_PUMP_01_SCREW_TR": [
+      "MESH_AIR_PUMP_01"
+    ]
+  },
+  "connectionChecks": "PASS: all seven attachments contact body; both ports contact air route",
+  "contactSheet": "paired-contact-sheet.png: before above, after below; front/top/hero"
+}
