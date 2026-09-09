@@ -106,6 +106,7 @@ export const useOperationsStore = defineStore('operations', () => {
       syncError.value = '';
       lastSyncedAt.value = new Date().toISOString();
       tick();
+      recalculateAssetSummary();
       return;
     }
     loading.value = true;
@@ -508,7 +509,7 @@ function seedHardwareBindings(): HardwareBinding[] {
 }
 function seedAlerts(): Alert[] { return [{ id: 1, code: 'ALM-260826-003', assetCode: 'SEEP-W01', severity: 'warning', category: '水浸趋势', status: 'open', title: '水浸趋势异常', detail: '渗水趋势上升，需确认现场情况并安排巡检。', openedAt: '2026-08-26T00:00:00Z' }, { id: 2, code: 'ALM-260826-002', assetCode: 'FAN-01', severity: 'critical', category: '设备反馈', status: 'acknowledged', title: '风机反馈丢失', detail: '执行反馈暂未返回，正在等待工单复核。', openedAt: '2026-08-26T00:00:00Z', acknowledgedBy: '运维员' }, { id: 3, code: 'ALM-260826-001', assetCode: 'CTRL-01', severity: 'warning', category: '通信质量', status: 'open', title: '控制器通信质量波动', detail: '控制器出现短时延迟抖动，建议建立巡检工单并观察后续遥测。', openedAt: '2026-08-26T00:00:00Z' }]; }
 function seedOrders(): WorkOrder[] { return [{ id: 1, code: 'WO-260826-08', sourceAlertId: 1, assetCode: 'SEEP-W01', title: '检查 UT-ZB 接水盘与水位探针', priority: 'high', status: 'open', createdAt: '2026-08-26T00:00:00Z', updatedAt: '2026-08-26T00:00:00Z', version: 1 }, { id: 2, code: 'WO-260826-06', sourceAlertId: 2, assetCode: 'FAN-01', title: '复核风机反馈与现场状态', priority: 'urgent', status: 'in_progress', assigneeName: '运维组 A', createdAt: '2026-08-26T00:00:00Z', updatedAt: '2026-08-26T00:00:00Z', version: 1 }]; }
-function seedThresholds(): Threshold[] { return [{ key: 'temperature', label: '环境温度', warning: 28, alarm: 32, unit: '°C', version: 1 }, { key: 'humidity', label: '环境湿度', warning: 75, alarm: 85, unit: '%RH', version: 1 }, { key: 'water', label: '水浸趋势', warning: 20, alarm: 45, unit: '秒', version: 1 }, { key: 'level.detected', label: '液位检测', warning: 0.5, alarm: 0.9, unit: 'bool', version: 1 }]; }
+function seedThresholds(): Threshold[] { return [{ key: 'temperature', label: '环境温度', warning: 28, alarm: 32, unit: '°C', version: 1 }, { key: 'humidity', label: '环境湿度', warning: 75, alarm: 85, unit: '%RH', version: 1 }, { key: 'water', label: '水浸趋势', warning: 20, alarm: 45, unit: '秒', version: 1 }, { key: 'smoke.alarm', label: '烟雾告警', warning: 0.5, alarm: 0.9, unit: 'bool', version: 1 }, { key: 'flame.alarm', label: '火焰告警', warning: 0.5, alarm: 0.9, unit: 'bool', version: 1 }, { key: 'level.detected', label: '液位检测', warning: 0.5, alarm: 0.9, unit: 'bool', version: 1 }]; }
 function seedTelemetry(): Telemetry[] {
   const now = Date.now();
   return Array.from({ length: 24 }, (_, index) => ({ id: index + 1, eventId: `demo:temperature:${index + 1}`, assetCode: 'ENV-01', metricKey: 'temperature', metric: '环境温度', value: Number((25.4 + Math.sin(index / 3) * 3.2).toFixed(2)), unit: '°C', quality: index === 7 ? 'suspect' : 'good', recordedAt: new Date(now - index * 5 * 60_000).toISOString(), ingestedAt: new Date(now - index * 5 * 60_000 + 500).toISOString() }));
