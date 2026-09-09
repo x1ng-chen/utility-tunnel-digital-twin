@@ -1,5 +1,7 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 
+export type ControllerAction = 'led_red' | 'led_green' | 'led_blue' | 'led_off' | 'relay_on' | 'relay_off' | 'fan_pwm' | 'fan2_pwm';
+
 const localStorageRef = typeof window !== 'undefined' ? window.localStorage : null;
 const sessionStorageRef = typeof window !== 'undefined' ? window.sessionStorage : null;
 const fallbackBaseUrl = typeof window !== 'undefined' && window.location.protocol === 'https:'
@@ -88,7 +90,7 @@ export const api = {
   reviewRegistrationRequest: (id: number, payload: { status: 'approved' | 'rejected'; reviewNote?: string }) => client.patch(`/admin/registration-requests/${id}/`, payload),
   reissueRegistrationSetupToken: (id: number) => client.post(`/admin/registration-requests/${id}/setup-token/`),
   dashboard: () => client.get('/dashboard/'),
-  controllerLedTest: (action: 'led_red' | 'led_green' | 'led_blue' | 'led_off') => client.post('/controllers/CTRL-01/commands/', { action }),
+  controllerCommand: (action: ControllerAction, dutyPercent?: number) => client.post('/controllers/CTRL-01/commands/', { action, ...(dutyPercent == null ? {} : { dutyPercent }) }),
   twinModelReadiness: () => client.get('/twin/model-readiness/'),
   twinModels: (params?: Record<string, string | number>) => client.get('/twin/models/', { params }),
   uploadTwinModel: (payload: FormData) => client.post('/twin/models/', payload, { timeout: 60000 }),

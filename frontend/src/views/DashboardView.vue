@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Download, Lightbulb, RefreshCw, TrendingUp } from 'lucide-vue-next';
+import { Download, Fan, Lightbulb, RefreshCw, TrendingUp } from 'lucide-vue-next';
 import AppShell from '../components/AppShell.vue';
 import DashboardSignal from '../components/DashboardSignal.vue';
-import { api } from '../services/api';
+import { api, type ControllerAction } from '../services/api';
 import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
 import { presentAudit } from '../utils/audit';
@@ -20,7 +20,20 @@ const exporting = ref(false);
 const commandError = ref('');
 const commandResult = ref('');
 const commandSending = ref(false);
-const canControlLighting = computed(() => store.source === 'api' && !store.offline && ['operator', 'administrator'].includes(auth.user?.role || ''));
+const canControlEquipment = computed(() => store.source === 'api' && !store.offline && ['operator', 'administrator'].includes(auth.user?.role || ''));
+const fanLive = computed(() => {
+  const latest = (assetCode: string, metricKey: string) => store.telemetry
+    .filter((item) => item.assetCode === assetCode && (item.metricKey === metricKey || item.metric === metricKey))
+    .sort((left, right) => new Date(right.recordedAt).getTime() - new Date(left.recordedAt).getTime())[0];
+  return {
+    fan1: { rpm: latest('FAN-01', 'rotational.speed'), current: latest('FAN-01', 'motor.current'), power: latest('FAN-01', 'power') },
+    fan2: { rpm: latest('FAN-02', 'rotational.speed'), current: latest('FAN-02', 'motor.current'), power: latest('FAN-02', 'power') },
+  };
+});
+
+function fanValue(value: number | undefined, digits = 0) {
+  return value == null ? '—' : value.toFixed(digits);
+}
 
 async function sync() {
   reportError.value = '';
@@ -40,20 +53,20 @@ async function report() {
   }
 }
 
-async function testLighting(action: 'led_red' | 'led_green' | 'led_blue' | 'led_off') {
-  if (!canControlLighting.value || commandSending.value) return;
+async function sendControllerCommand(action: ControllerAction, dutyPercent?: number) {
+  if (!canControlEquipment.value || commandSending.value) return;
   commandError.value = '';
   commandResult.value = '';
   commandSending.value = true;
   try {
-    const response = await api.controllerLedTest(action);
+    const response = await api.controllerCommand(action, dutyPercent);
     const ack = response.data.ack as { status?: string; reason?: string } | null;
     commandResult.value = ack?.status === 'accepted'
       ? `设备已确认：${ack.reason || action}`
       : '命令已交给 MQTT，等待设备回执。';
     await store.refresh('api');
   } catch (cause) {
-    commandError.value = cause instanceof Error ? cause.message : '灯带命令下发失败，请稍后重试。';
+    commandError.value = cause instanceof Error ? cause.message : '设备命令下发失败，请稍后重试。';
   } finally {
     commandSending.value = false;
   }
@@ -88,7 +101,7 @@ async function testLighting(action: 'led_red' | 'led_green' | 'led_blue' | 'led_
       </article>
       <DashboardSignal :selected="store.dashboard.telemetry" :samples="store.telemetry" :offline="signalOffline" :threshold="signalThreshold" />
     </section>
-    <section class="dashboard-grid lower-grid"><article class="panel activity-panel"><div class="panel-head"><div><span class="eyebrow">ACTIVITY STREAM</span><h2>最新运行动态</h2></div><RouterLink to="/audit">审计追踪 →</RouterLink></div><div v-for="item in store.audit.slice(0, 4)" :key="item.id" class="activity-item"><i /><time>{{ new Date(item.occurredAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time><div><b>{{ presentAudit(item).title }}</b><p>{{ presentAudit(item).description }}</p></div></div><div v-if="!store.audit.length" class="empty-state">当前暂无审计记录。</div></article><article class="panel control-panel"><div class="panel-head"><div><span class="eyebrow">CTRL-01 · MQTT</span><h2>灯带联调</h2></div><Lightbulb /></div><p>仅限已登录的运维员或管理员；每次操作均生成唯一命令并写入审计。</p><div class="lighting-actions"><button :disabled="!canControlLighting || commandSending" @click="testLighting('led_blue')">蓝色</button><button :disabled="!canControlLighting || commandSending" @click="testLighting('led_green')">绿色</button><button :disabled="!canControlLighting || commandSending" @click="testLighting('led_red')">红色</button><button :disabled="!canControlLighting || commandSending" @click="testLighting('led_off')">熄灭</button></div><small v-if="!canControlLighting">请使用在线 API 模式并以运维员或管理员身份登录。</small><b v-if="commandResult" class="command-ok">{{ commandResult }}</b><b v-if="commandError" class="command-error">{{ commandError }}</b></article></section>
+    <section class="dashboard-grid lower-grid"><article class="panel activity-panel"><div class="panel-head"><div><span class="eyebrow">ACTIVITY STREAM</span><h2>最新运行动态</h2></div><RouterLink to="/audit">审计追踪 →</RouterLink></div><div v-for="item in store.audit.slice(0, 4)" :key="item.id" class="activity-item"><i /><time>{{ new Date(item.occurredAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time><div><b>{{ presentAudit(item).title }}</b><p>{{ presentAudit(item).description }}</p></div></div><div v-if="!store.audit.length" class="empty-state">当前暂无审计记录。</div></article><article class="panel control-panel"><div class="panel-head"><div><span class="eyebrow">CTRL-01 · MQTT</span><h2>双风机控制</h2></div><Fan /></div><p>两台风机共用继电器总使能，转速与电流独立采集，PWM 可分别调节。</p><div class="fan-live-grid"><div><b>FAN-01</b><strong>{{ fanValue(fanLive.fan1.rpm?.value) }}<small> RPM</small></strong><span>{{ fanValue(fanLive.fan1.current?.value, 2) }} mA · {{ fanValue(fanLive.fan1.power?.value, 3) }} W</span></div><div><b>FAN-02</b><strong>{{ fanValue(fanLive.fan2.rpm?.value) }}<small> RPM</small></strong><span>{{ fanValue(fanLive.fan2.current?.value, 2) }} mA · {{ fanValue(fanLive.fan2.power?.value, 3) }} W</span></div></div><span class="control-group-title"><Fan />共用电源</span><div class="fan-actions"><button :disabled="!canControlEquipment || commandSending" @click="sendControllerCommand('relay_on')">{{ commandSending ? '下发中…' : '启动风扇（10秒）' }}</button><button class="stop-action" :disabled="!canControlEquipment || commandSending" @click="sendControllerCommand('relay_off')">立即停止</button></div><span class="control-group-title"><Fan />风机 1 转速</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="sendControllerCommand('fan_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="sendControllerCommand('fan_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="sendControllerCommand('fan_pwm', 100)">100%</button></div><span class="control-group-title"><Fan />风机 2 转速</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="sendControllerCommand('fan2_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="sendControllerCommand('fan2_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="sendControllerCommand('fan2_pwm', 100)">100%</button></div><span class="control-group-title"><Lightbulb />灯带联调</span><div class="lighting-actions"><button :disabled="!canControlEquipment || commandSending" @click="sendControllerCommand('led_blue')">蓝色</button><button :disabled="!canControlEquipment || commandSending" @click="sendControllerCommand('led_green')">绿色</button><button :disabled="!canControlEquipment || commandSending" @click="sendControllerCommand('led_red')">红色</button><button :disabled="!canControlEquipment || commandSending" @click="sendControllerCommand('led_off')">熄灭</button></div><small v-if="!canControlEquipment">请使用在线 API 模式并以运维员或管理员身份登录。</small><b v-if="commandResult" class="command-ok">{{ commandResult }}</b><b v-if="commandError" class="command-error">{{ commandError }}</b></article></section>
   </AppShell>
 </template>
 
