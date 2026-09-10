@@ -1,0 +1,14 @@
+{
+  "freshGLBImport": true,
+  "registeredAssets": 79,
+  "meshCount": 736,
+  "triangles": 172581,
+  "nonFiniteVertices": false,
+  "zeroAreaLocalFaces": 0,
+  "belowGround": [],
+  "distinctHardwareSurfaceCollisions": [],
+  "environmentalSensorCount": 30,
+  "environmentalSensorMinCenterDistance": 0.06448177277615842,
+  "scope": "Core-to-core surface intersection and Z checks only; containment, all supports, wiring topology and fabrication clearances require further review",
+  "status": "CANDIDATE_REVIEW_NOT_MANUFACTURING_PASS"
+}

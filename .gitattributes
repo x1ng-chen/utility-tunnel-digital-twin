@@ -26,3 +26,6 @@ model/sources/2026-09-08-iteration-input.blend filter=lfs diff=lfs merge=lfs -te
 model/previews/v11-*.png filter=lfs diff=lfs merge=lfs -text
 model/v11-*.json text eol=lf
 model/asset-map-v11-candidate.json text eol=lf
+model/utility-tunnel-annular-v12-candidate.blend filter=lfs diff=lfs merge=lfs -text
+model/utility-tunnel-annular-v12-candidate.glb filter=lfs diff=lfs merge=lfs -text
+model/previews/v12-*.png filter=lfs diff=lfs merge=lfs -text
