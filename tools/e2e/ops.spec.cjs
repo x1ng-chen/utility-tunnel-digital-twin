@@ -578,7 +578,12 @@ test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }
 });
 
 test('管理员可校验、启用三维模型版本并由孪生页面鉴权加载', async ({ page }) => {
-  test.setTimeout(90_000);
+  // This is an end-to-end release path: it uploads and validates a GLB,
+  // activates it, waits for Three.js to load it, then proves camera controls.
+  // GitHub's software WebGL runner can take longer than the general UI budget;
+  // keep the allowance local to this heavyweight workflow instead of masking
+  // timeouts in ordinary interaction tests.
+  test.setTimeout(180_000);
   const consoleErrors = trackConsoleErrors(page);
   const version = `e2e-model-${Date.now()}`;
   await page.goto(webUrl);
