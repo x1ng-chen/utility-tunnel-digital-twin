@@ -17,6 +17,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy/start-local.ps1 -Chec
 ```
 
 - 前端：http://127.0.0.1:5173/；后端：http://127.0.0.1:8000/api。
+- `daphne` 接管 `manage.py runserver`，同一进程提供 HTTP 与 WebSocket；请安装当前锁定依赖。脚本会复用旧的健康服务，不会主动将运行中的旧 WSGI 进程替换为 ASGI；更新后需确认原进程归属再人工重启。HTTP 就绪本身不证明 WebSocket 已连接。
 - 已就绪服务直接复用，不重复启动；端口被其他服务占用或 API 未就绪时明确失败，不杀进程、不换端口。
 - 新服务在后台启动，日志放在 `.runtime/`（已忽略，不提交）；启动进程编号显示在终端中。
 - 缺少迁移时停止并提示，须人工确认数据库后执行迁移。不会重置账号、密码或数据。

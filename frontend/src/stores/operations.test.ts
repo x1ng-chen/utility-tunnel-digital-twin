@@ -1,12 +1,58 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useAuthStore } from './auth';
-import { reconcileRecords, summarizeTelemetry, useOperationsStore } from './operations';
+import { reconcileRecords, summarizeTelemetry, upsertRealtimeRecord, useOperationsStore } from './operations';
+import * as realtimeService from '../services/realtime';
 import { api } from '../services/api';
 
 describe('operations store', () => {
   beforeEach(() => setActivePinia(createPinia()));
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it('upserts a live delta without dropping unrelated records or replacing identity', () => {
+    const retained = { id: 1, status: 'open' };
+    const unrelated = { id: 2, status: 'open' };
+    const current = [retained, unrelated];
+    const updated = upsertRealtimeRecord(current, { id: 1, status: 'resolved' });
+    expect(updated).toBe(current);
+    expect(updated[0]).toBe(retained);
+    expect(updated[1]).toBe(unrelated);
+    expect(retained.status).toBe('resolved');
+    const inserted = upsertRealtimeRecord(updated, { id: 3, status: 'open' });
+    expect(inserted.map(item => item.id)).toEqual([3, 1, 2]);
+    expect(inserted[1]).toBe(retained);
+    expect(inserted[2]).toBe(unrelated);
+    expect(upsertRealtimeRecord(inserted, { id: 4, status: 'open' }, 3).map(item => item.id)).toEqual([4, 3, 1]);
+  });
+
+  it('reapplies a push received during a stale REST live snapshot', async () => {
+    const auth = useAuthStore();
+    await auth.login('', '', 'viewer', 'demo');
+    const store = useOperationsStore();
+    store.source = 'api';
+    vi.stubGlobal('window', { sessionStorage: { getItem: () => 'unit-test-token' } });
+    let options!: realtimeService.RealtimeClientOptions;
+    vi.spyOn(realtimeService, 'createRealtimeClient').mockImplementation((value) => {
+      options = value;
+      return { connect: vi.fn(), disconnect: vi.fn(), getState: () => 'idle', getLastSeq: () => 0 };
+    });
+    store.startRealtime();
+    const old = { ...store.alerts[0]! };
+    const other = { ...store.alerts[1]! };
+    let resolveAlerts!: (value: never) => void;
+    vi.spyOn(api, 'dashboard').mockResolvedValue({ data: store.dashboard } as never);
+    vi.spyOn(api, 'assets').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'alerts').mockImplementation(() => new Promise(resolve => { resolveAlerts = resolve; }));
+    vi.spyOn(api, 'workOrders').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'telemetry').mockResolvedValue({ data: { items: [] } } as never);
+    const pending = store.refreshLive();
+    await options.onEvent!({ epoch: 'test', seq: 1, type: 'alert', entityId: old.id, version: '2', updatedAt: null, payload: { ...old, status: 'resolved' } });
+    resolveAlerts({ data: { items: [old, other] } } as never);
+    await pending;
+    expect(store.alerts.find(item => item.id === old.id)?.status).toBe('resolved');
+    expect(store.alerts.some(item => item.id === other.id)).toBe(true);
+    store.stopRealtime();
+  });
 
   it('treats repeated identical notices as new feedback events', () => {
     const store = useOperationsStore();

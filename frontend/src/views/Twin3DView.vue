@@ -5,11 +5,11 @@ import { Camera, Expand, MapPin, RefreshCw, RotateCcw, Search } from 'lucide-vue
 import { useRoute, useRouter } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
 import TwinScene from '../components/TwinScene.vue';
-import OpsChart from '../components/ui/OpsChart.vue';
+import TelemetryTrendChart from '../components/TelemetryTrendChart.vue';
 import { useOperationsStore } from '../stores/operations';
 import { api } from '../services/api';
 import { newTwinAlert } from '../utils/newTwinAlert';
-import { selectSignalWindow } from '../utils/dashboardSignal';
+import { twinTelemetryTrend } from '../utils/twinTelemetryTrend';
 import { activeTwinAlerts, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelDelivery, twinStateLabel, type TwinModelBindingReport, type TwinModelReadinessResponse, type TwinVisualState } from '../services/twin3d';
 
 const store = useOperationsStore();
@@ -66,9 +66,8 @@ const selectedAlerts = computed(() => selectedAsset.value ? activeTwinAlerts(sel
 const primaryAlert = computed(() => selectedAsset.value ? primaryTwinAlert(selectedAsset.value.code, store.alerts) : null);
 const selectedOrders = computed(() => selectedAsset.value ? store.workOrders.filter((order) => order.assetCode === selectedAsset.value?.code) : []);
 const selectedTelemetry = computed(() => selectedAsset.value ? store.telemetry.find((reading) => reading.assetCode === selectedAsset.value?.code) : null);
-const selectedTelemetryWindow = computed(() => selectSignalWindow(store.telemetry, selectedTelemetry.value ?? null));
-const selectedTelemetryLabels = computed(() => selectedTelemetryWindow.value.map((item) => new Date(item.recordedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })));
-const selectedTelemetrySeries = computed(() => [{ name: selectedTelemetry.value?.metric || '设备遥测', data: selectedTelemetryWindow.value.map((item) => item.value), color: '#38bdf8' }]);
+const selectedTelemetrySeries = computed(() => twinTelemetryTrend(store.telemetry, selectedTelemetry.value ?? null));
+const selectedTelemetrySampleCount = computed(() => selectedTelemetrySeries.value.reduce((count, series) => count + series.data.filter(point => point[1] !== null).length, 0));
 const visibleAssets = computed(() => store.assets.filter((asset) => {
   const matchesQuery = !query.value || `${asset.code} ${asset.name} ${asset.zone}`.toLowerCase().includes(query.value.toLowerCase());
   return matchesQuery && (stateFilter.value === 'all' || resolveTwinVisualState(asset, store.alerts) === stateFilter.value);
@@ -292,9 +291,10 @@ onBeforeUnmount(() => {
           <div class="twin-inspector-grid"><div><span>所在区域</span><b>{{ selectedAsset.zone }}</b></div><div><span>实体模型</span><b>{{ selectedAsset.mesh || '待绑定' }}</b></div><div><span>最新上报</span><b>{{ formatTime(selectedAsset.lastSeenAt) }}</b></div><div><span>当前遥测</span><b>{{ selectedTelemetry ? `${selectedTelemetry.value} ${selectedTelemetry.unit}` : '暂无数据' }}</b></div></div>
           <section class="twin-detail-section">
             <span class="eyebrow">实时数据</span>
-            <p v-if="selectedTelemetry" class="twin-empty">{{ selectedTelemetry.metric }} · {{ selectedTelemetry.unit }} · {{ selectedTelemetryWindow.length }} 条同类有效样本</p>
-            <OpsChart v-if="selectedTelemetryWindow.length > 1 && !compactLayout" compact :labels="selectedTelemetryLabels" :series="selectedTelemetrySeries" />
-            <p v-else class="twin-empty">{{ !selectedTelemetryWindow.length ? '当前设备暂无可绘制遥测。' : selectedTelemetryWindow.length === 1 ? '仅有一个有效测点，暂无连续趋势。' : '窄屏已收起趋势图，可前往数据洞察查看。' }}</p>
+            <p v-if="selectedTelemetry" class="twin-empty">{{ selectedTelemetry.metric }} · {{ selectedTelemetry.unit }} · {{ selectedTelemetrySampleCount }} 条同类有效样本（当前已加载数据）</p>
+            <TelemetryTrendChart v-if="selectedTelemetrySampleCount && !compactLayout" :series="selectedTelemetrySeries" :unit="selectedTelemetry?.unit || ''" />
+            <p v-if="!selectedTelemetrySampleCount || compactLayout" class="twin-empty">{{ !selectedTelemetrySampleCount ? '当前设备暂无可绘制遥测。' : '窄屏已收起趋势图，可前往数据洞察查看。' }}</p>
+            <p v-else class="twin-empty">{{ selectedTelemetrySampleCount === 1 ? '仅有一个有效测点，暂无连续趋势。' : '按真实时间间隔绘制；缺失样本保留断点，不插值。' }}</p>
           </section>
           <section class="twin-detail-section"><span class="eyebrow">当前告警</span><div v-if="primaryAlert" class="twin-alert-summary"><b>{{ primaryAlert.severity === 'critical' ? '严重告警' : primaryAlert.severity === 'warning' ? '待处置告警' : '提示告警' }} · {{ primaryAlert.code }}</b><strong>{{ primaryAlert.title }}</strong><p>{{ primaryAlert.detail }}</p><button type="button" class="twin-alert-action" @click="openAlertCenter">进入告警中心处置</button></div><p v-else class="twin-empty">当前设备没有未关闭告警。</p></section>
           <section class="twin-detail-section"><span class="eyebrow">关联工单</span><p v-if="selectedOrders.length" class="twin-order-summary"><b>{{ selectedOrders[0].code }}</b>{{ selectedOrders[0].title }}</p><p v-else class="twin-empty">当前设备没有关联工单。</p></section>

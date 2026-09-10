@@ -363,7 +363,10 @@ test('账号密码登录后可读取运行数据并写入审计', async ({ page 
   await page.getByLabel('密码').fill('demo-password-2026');
   await page.getByRole('button', { name: /安全登录/ }).click();
   await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
-  await expect(page.locator('.status-pill')).toHaveText('数据服务已连接');
+  // The shell intentionally exposes both the data-service and realtime-feed
+  // states. Scope this assertion to the data-service indicator rather than
+  // relying on their incidental DOM count/order.
+  await expect(page.locator('.status-pill[title^="数据服务最近同步"]')).toHaveText('数据服务已连接');
 
   await page.getByRole('button', { name: '数据洞察' }).click();
   await expect(page.getByRole('heading', { name: '数据洞察' })).toBeVisible();
@@ -744,4 +747,34 @@ test('筛选条件写入URL并在刷新后恢复', async ({ page }) => {
   await page.reload();
   await expect(page.getByRole('combobox', { name: '资产' })).toHaveValue('ENV-01');
   await expect(page.getByLabel('监测项目')).toHaveValue('temperature');
+});
+
+test('已认证浏览器通过 WebSocket 接收新告警，而非等待轮询快照', async ({ page, request }) => {
+  const base = process.env.E2E_API_URL || 'http://127.0.0.1:8000/api';
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await expect(page.locator('[title="实时推送已连接"]')).toBeVisible();
+
+  const login = await request.post(`${base}/auth/login/`, { data: { email: 'admin', password: adminPassword } });
+  expect(login.ok()).toBe(true);
+  const headers = { Authorization: `Bearer ${(await login.json()).accessToken}` };
+  const suffix = `${Date.now()}`.slice(-8);
+  const assetCode = `WS-EVT-${suffix}`;
+  const asset = await request.post(`${base}/assets/`, { headers, data: {
+    code: assetCode, name: '实时推送验证节点', zone: 'UT-ZA', type: '环境测点',
+    integrationStatus: 'verified', locationSource: 'configured',
+    mesh: `MESH_WS_${suffix}`, latitude: 31.2307, longitude: 121.4744,
+  } });
+  expect(asset.ok(), await asset.text()).toBe(true);
+  const reading = await request.post(`${base}/telemetry/`, { headers, data: { readings: [{
+    eventId: `ws-alert-${suffix}`, assetCode, metricKey: 'temperature', metric: '环境温度',
+    value: 99, unit: '°C', quality: 'good', recordedAt: new Date().toISOString(),
+  }] } });
+  expect(reading.ok(), await reading.text()).toBe(true);
+
+  await page.goto(`${webUrl}/alerts`);
+  await expect(page.getByRole('region', { name: '告警记录' })).toContainText(assetCode);
 });

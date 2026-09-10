@@ -18,7 +18,9 @@ const combined = `${api}\n${web}\n${nginx}\n${compose}\n${grants}\n${backup}\n${
 const checks = [
   ['API uses a non-root runtime user', /USER utilitytunnel/],
   ['API exposes a database-aware readiness probe', /HEALTHCHECK[\s\S]*\/api\/ready\//],
-  ['API uses production Gunicorn', /gunicorn config\.wsgi:application/],
+  ['API serves HTTP and WebSocket using ASGI', /exec daphne .*config\.asgi:application/],
+  ['Nginx upgrades WebSocket connections', /location \/ws\/[\s\S]*proxy_set_header Upgrade \$http_upgrade;[\s\S]*proxy_set_header Connection \$connection_upgrade;/],
+  ['Nginx explicitly allows same-host secure WebSocket', /connect-src 'self' https: wss:\/\/\$http_host;/],
   ['web build is configured for relative API routing', /VITE_API_BASE_URL=\/api/],
   ['Nginx forwards the API route', /location \/api\/[\s\S]*proxy_pass http:\/\/api:8000\/api\//],
   ['Nginx provides SPA fallback', /try_files \$uri \$uri\/ \/index\.html/],

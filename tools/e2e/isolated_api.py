@@ -45,6 +45,7 @@ def main():
         configuration.MEDIA_ROOT = root / 'media'
         configuration.ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
         configuration.CORS_ALLOWED_ORIGINS = ['http://127.0.0.1:5173', 'http://localhost:5173']
+        configuration.WEBSOCKET_ALLOWED_ORIGINS = list(configuration.CORS_ALLOWED_ORIGINS)
         django.setup()
         call_command('migrate', interactive=False, verbosity=0)
         call_command('seed_demo')

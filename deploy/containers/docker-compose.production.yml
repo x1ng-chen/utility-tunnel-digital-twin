@@ -15,6 +15,7 @@ services:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set-in-secret-store}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?set-public-api-host}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set-public-web-origin}
+      WEBSOCKET_ALLOWED_ORIGINS: ${WEBSOCKET_ALLOWED_ORIGINS:-}
       DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:?set-public-web-origin}
       DATABASE_URL: ${DATABASE_URL:?set-rds-tls-connection-string}
       DJANGO_CACHE_BACKEND: ${DJANGO_CACHE_BACKEND:?set-shared-cache-backend}

@@ -32,6 +32,7 @@ from .command_dispatch import CommandDispatchError, publish_controller_command
 from .connectivity import count_online_assets, mark_assets_connected
 from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder, WorkOrderEvent
 from .permissions import AuthenticatedRead, TelemetryPermission
+from .realtime import publish_alert, publish_alert_by_id, publish_asset, publish_telemetry, publish_work_order
 from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, HardwareBindingMutationSerializer, HardwareBindingSerializer, RegistrationRequestSerializer, ReportExportSerializer, SpatialFeatureMutationSerializer, SpatialFeatureSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, TwinModelReleaseSerializer, WorkOrderSerializer, hardware_connectivity
 from .services import actor_name, audit
 from .telemetry_rules import evaluate_threshold
@@ -1050,6 +1051,7 @@ class AssetListView(APIView):
                 audit(request.user, 'asset.created', 'asset', asset.pk, {'code': asset.code, 'hardwareCode': asset.hardware_code}, request_id(request))
         except IntegrityError:
             return error_response('conflict', 'Asset code or hardware code already exists.', 409)
+        publish_asset(asset)
         return Response(AssetSerializer(asset).data, status=201)
 
 
@@ -1095,6 +1097,7 @@ class AssetDetailView(APIView):
                 audit(request.user, 'asset.updated', 'asset', asset.pk, {'code': asset.code, 'fields': changed_fields, 'version': asset.version}, request_id(request))
         except IntegrityError:
             return error_response('conflict', 'Asset code or hardware code already exists.', 409)
+        publish_asset(asset)
         return Response(AssetSerializer(asset).data)
 
 
@@ -1335,6 +1338,7 @@ class AlertAcknowledgeView(APIView):
             alert.acknowledged_by = request.user
             alert.save(update_fields=['status', 'acknowledged_at', 'acknowledged_by'])
             audit(request.user, 'alert.acknowledged', 'alert', alert.pk, {'code': alert.code}, request_id(request))
+        publish_alert(alert)
         return Response(AlertSerializer(alert).data)
 
 
@@ -1364,6 +1368,7 @@ class AlertWorkOrderView(APIView):
             if existing:
                 return Response(WorkOrderSerializer(existing).data)
             return error_response('conflict', 'A linked work order already exists.', 409)
+        publish_work_order(order)
         return Response(WorkOrderSerializer(order).data, status=201)
 
 
@@ -1451,6 +1456,7 @@ class WorkOrderListView(APIView):
                 if existing and existing.created_by_id == request.user.pk:
                     return Response(WorkOrderSerializer(existing).data, status=200)
             return error_response('conflict', 'Work order could not be created because a unique value already exists.', 409)
+        publish_work_order(order)
         response = Response(WorkOrderSerializer(order).data, status=201)
         if request_key:
             response['Idempotency-Key'] = request_key
@@ -1494,6 +1500,8 @@ class WorkOrderTransitionView(APIView):
                 return error_response('invalid_request', 'version must be a number.', 400)
             if requested_version < 1:
                 return error_response('invalid_request', 'version must be a positive number.', 400)
+        resolved_alert = None
+        normalized_asset = None
         with transaction.atomic():
             order = WorkOrder.objects.select_for_update(of=('self',)).select_related('source_alert', 'asset').filter(pk=pk).first()
             if not order:
@@ -1517,15 +1525,22 @@ class WorkOrderTransitionView(APIView):
                     order.source_alert.status = Alert.Status.RESOLVED
                     order.source_alert.resolved_at = timezone.now()
                     order.source_alert.save(update_fields=['status', 'resolved_at'])
+                    resolved_alert = order.source_alert
                     if not Alert.objects.filter(asset=order.asset, status__in=[Alert.Status.OPEN, Alert.Status.ACKNOWLEDGED]).exclude(pk=order.source_alert_id).exists():
                         order.asset.status = Asset.Status.NORMAL
                         order.asset.save(update_fields=['status', 'updated_at'])
+                        normalized_asset = order.asset
             order.version += 1
             # Keep the runtime database role least-privileged: transition writes
             # only the lifecycle fields instead of every model column.
             order.save(update_fields=['status', 'assignee', 'completed_at', 'reviewed_by', 'version', 'updated_at'])
             WorkOrderEvent.objects.create(work_order=order, event_type=WorkOrderEvent.EventType.TRANSITION, from_status=previous, to_status=target, note=note, actor=request.user)
             audit(request.user, 'work_order.transitioned', 'work_order', order.pk, {'from': previous, 'to': target, 'hasNote': bool(note)}, request_id(request))
+        publish_work_order(order)
+        if resolved_alert:
+            publish_alert(resolved_alert)
+        if normalized_asset:
+            publish_asset(normalized_asset)
         return Response(WorkOrderSerializer(order).data)
 
 
@@ -1582,6 +1597,9 @@ class TelemetryListView(APIView):
                         )
 
                 stored = []
+                created_readings = []
+                changed_alert_ids = []
+                changed_asset_ids = set()
                 created_count = 0
                 duplicate_count = 0
                 rule_counts = {}
@@ -1602,18 +1620,33 @@ class TelemetryListView(APIView):
                         quality=item['quality'],
                         recorded_at=item['recordedAt'],
                     )
+                    before_asset = (asset.status, asset.last_seen_at)
                     if asset.last_seen_at is None or item['recordedAt'] > asset.last_seen_at:
                         asset.last_seen_at = item['recordedAt']
                         asset.save(update_fields=['last_seen_at', 'updated_at'])
                     threshold = thresholds.get(item['metricKey'])
-                    action = evaluate_threshold(reading, threshold, request.user, request_id(request)).action if threshold else 'no_rule'
+                    result = evaluate_threshold(reading, threshold, request.user, request_id(request)) if threshold else None
+                    action = result.action if result else 'no_rule'
+                    if result and result.alert_id and result.action in {'created', 'escalated', 'deescalated', 'resolved'}:
+                        changed_alert_ids.append(result.alert_id)
+                    if (asset.status, asset.last_seen_at) != before_asset:
+                        changed_asset_ids.add(asset.pk)
                     rule_counts[action] = rule_counts.get(action, 0) + 1
                     stored.append(reading)
+                    created_readings.append(reading)
                     created_count += 1
                 if created_count:
                     audit(request.user, 'telemetry.batch_ingested', 'telemetry_batch', '', {'created': created_count, 'duplicates': duplicate_count, 'rules': rule_counts}, request_id(request))
         except IntegrityError:
             return error_response('conflict', 'Telemetry ingestion conflicted with a concurrent request. Retry the same eventId values.', 409)
+        # Fan out only after the transaction committed so live subscribers never
+        # observe a change that later rolled back.
+        for reading in created_readings:
+            publish_telemetry(reading)
+        for alert_id in changed_alert_ids:
+            publish_alert_by_id(alert_id)
+        for asset in Asset.objects.filter(pk__in=changed_asset_ids):
+            publish_asset(asset)
         return Response({
             'items': TelemetrySerializer(stored, many=True).data,
             'created': created_count,

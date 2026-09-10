@@ -13,6 +13,9 @@
 
 ## 运行边界
 
+- API 使用单进程 Daphne ASGI，同时提供 HTTP 与 `/ws/events/`。本地和 CI 的 `manage.py runserver` 由 `daphne` 接管；更新依赖与代码后，旧 WSGI 服务需人工确认后重启，脚本不会强制停止已有服务。
+- 当前实时事件缓冲区与 channel layer 仅在进程内共享；禁止增加 API 副本或另启动 WSGI worker 后仍假定推送完整。独立 `connectivity-monitor` 的更新暂依赖前端 REST 周期补读，不属于实时推送已验收范围。跨进程持久事件与补读游标需后续独立实现；只替换 Redis channel layer 不足以解决游标一致性。
+- 外层 HTTPS 代理必须同样转发 `/ws/` 的 Upgrade/Connection，保留浏览器 Origin 和公开 Host；设置 `WEBSOCKET_ALLOWED_ORIGINS` 可收紧源站名单（默认沿用 CORS，生产仅接受 HTTPS Origin）。Nginx CSP 允许同公开 Host 的 `wss`，不开放任意 WebSocket 域名。
 - `web` 容器仅公开本地回环端口，Django API 仅加入容器内部网络。
 - `connectivity-monitor` 每 15 秒执行一次心跳巡检；超过硬件绑定约定周期会置离线并创建通信告警，遥测恢复后自动关闭告警。可通过 `DEVICE_OFFLINE_GRACE_MULTIPLIER`、`DEVICE_OFFLINE_MIN_GRACE_SECONDS` 和 `CONNECTIVITY_RECONCILE_INTERVAL_SECONDS` 调整。
 - API 使用非 root 用户、只读文件系统与临时 `/tmp`；数据库必须使用 TLS 与最小权限账号。

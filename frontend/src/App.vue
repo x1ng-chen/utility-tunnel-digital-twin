@@ -17,6 +17,7 @@ watch(() => auth.isAuthenticated, (isAuthenticated) => {
   if (!isAuthenticated) {
     if (liveTimer) window.clearInterval(liveTimer);
     liveTimer = undefined;
+    operations.stopRealtime();
     if (router.currentRoute.value.path !== '/login') void router.replace('/login');
   } else {
     startLiveRefresh();
@@ -29,8 +30,11 @@ watch(() => operations.noticeRevision, () => {
 });
 function startLiveRefresh() {
   if (liveTimer || !auth.isAuthenticated) return;
+  operations.startRealtime();
   liveTimer = window.setInterval(() => {
-    if (document.visibilityState === 'visible') void operations.refreshLive();
+    // WebSocket is primary. REST is a bounded recovery path for a disconnected
+    // stream, not a disguised two-second polling implementation.
+    if (document.visibilityState === 'visible' && operations.realtimeState !== 'connected') void operations.refreshLive();
   }, 2000);
 }
 function handleVisibility() {
@@ -46,6 +50,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (noticeTimer) window.clearTimeout(noticeTimer);
   if (liveTimer) window.clearInterval(liveTimer);
+  operations.stopRealtime();
   document.removeEventListener('visibilitychange', handleVisibility);
 });
 </script>

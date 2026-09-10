@@ -31,6 +31,14 @@ const router = useRouter();
 const auth = useAuthStore();
 const operations = useOperationsStore();
 const dataService = computed(() => serviceStatus(operations.source, operations.offline, operations.lastSyncedAt));
+const realtimeFeed = computed(() => {
+  const state = operations.realtimeState;
+  if (operations.source !== 'api') return null;
+  if (state === 'connected') return { tone: 'online', label: '实时推送已连接' };
+  if (state === 'cursor_invalid') return { tone: 'pending', label: '正在补读实时快照' };
+  if (state === 'connecting' || state === 'reconnecting') return { tone: 'pending', label: '实时推送连接中' };
+  return { tone: 'offline', label: '实时推送断开，REST 补读中' };
+});
 const now = useNow({ interval: 1000 });
 const collapsed = useLocalStorage('ops.sidebar.collapsed', false);
 const searchOpen = ref(false);
@@ -217,6 +225,9 @@ function alertCount(path: string) {
           <div class="topbar-clock"><strong>{{ clock }}</strong><small>{{ date }}</small></div>
           <span :class="['status-pill', dataService.tone]" :title="operations.lastSyncedAt ? `数据服务最近同步：${new Date(operations.lastSyncedAt).toLocaleString('zh-CN')}；不代表现场设备在线` : '尚未完成数据同步'">
             <WifiOff v-if="dataService.tone !== 'online'" /><Wifi v-else />数据服务{{ dataService.label }}
+          </span>
+          <span v-if="realtimeFeed" :class="['status-pill', realtimeFeed.tone]" :title="realtimeFeed.label">
+            <WifiOff v-if="realtimeFeed.tone === 'offline'" /><Wifi v-else />{{ realtimeFeed.label }}
           </span>
           <div class="top-avatar" :title="`${userName} · ${userRole}`">{{ userName.slice(0, 1) }}</div>
           <button class="compact-logout" type="button" title="退出登录" aria-label="退出登录" @click="logout"><LogOut /></button>

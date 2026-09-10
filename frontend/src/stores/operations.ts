@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
-import { api } from '../services/api';
+import { api, getApiBaseUrl } from '../services/api';
+import { createRealtimeClient, type RealtimeEvent } from '../services/realtime';
 import { useAuthStore } from './auth';
 import type { Alert, Asset, AssetMutation, AuditEntry, Dashboard, HardwareBinding, SpatialFeature, Telemetry, TelemetryIngestResult, TelemetryQuery, TelemetryReading, TelemetrySummary, Threshold, WorkOrder } from '../types';
 
@@ -48,6 +49,16 @@ export function reconcileRecords<T extends { id: number | string }>(current: T[]
   });
 }
 
+/** A live delta is not a replacement snapshot. Keep unrelated records. */
+export function upsertRealtimeRecord<T extends { id: number | string }>(current: T[], incoming: T, limit = 1000): T[] {
+  const retained = current.find((item) => item.id === incoming.id);
+  if (retained) {
+    Object.assign(retained, incoming);
+    return current;
+  }
+  return [incoming, ...current].slice(0, limit);
+}
+
 export const useOperationsStore = defineStore('operations', () => {
   const auth = useAuthStore();
   const dashboard = ref<Dashboard>({ assets: { total: 19, online: 7 }, health: { value: 100 }, openAlerts: 2, activeWorkOrders: 2, telemetry: { id: 1, assetCode: 'ENV-01', metric: '环境温度', value: 26.4, unit: '°C', quality: 'good', recordedAt: new Date().toISOString() } });
@@ -82,6 +93,10 @@ export const useOperationsStore = defineStore('operations', () => {
   const openAlerts = computed(() => alerts.value.filter((item) => item.status === 'open').length);
   const activeOrders = computed(() => workOrders.value.filter((item) => !['completed', 'cancelled'].includes(item.status)).length);
   let liveRefreshPromise: Promise<void> | null = null;
+  let liveRefreshId = 0;
+  let snapshotRequestId = 0;
+  let realtimeRevision = 0;
+  const realtimeChanges: Array<{ revision: number; event: RealtimeEvent }> = [];
 
   function expireApiSession() {
     auth.expireSession();
@@ -100,6 +115,7 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function refresh(mode: 'demo' | 'api' = source.value) {
+    if (mode !== source.value) stopRealtime();
     source.value = mode;
     if (mode === 'demo') {
       offline.value = false;
@@ -111,14 +127,20 @@ export const useOperationsStore = defineStore('operations', () => {
     }
     loading.value = true;
     syncError.value = '';
+    const snapshotRevision = realtimeRevision;
+    const requestId = ++snapshotRequestId;
     try {
       const listParams = { page: 1, pageSize: 100 };
       const gisStatus = auth.user?.role === 'administrator' ? 'all' : 'published';
       const [dashboardResponse, assetsResponse, alertsResponse, ordersResponse, thresholdsResponse, telemetryResponse, auditResponse, gisResponse, bindingsResponse] = await Promise.all([api.dashboard(), api.assets(listParams), api.alerts(listParams), api.workOrders(listParams), api.thresholds(), api.telemetry(listParams), api.audit(listParams), api.gisFeatures({ status: gisStatus }), api.hardwareBindings(listParams)]);
+      if (requestId !== snapshotRequestId || source.value !== 'api' || !auth.isAuthenticated) return;
       dashboard.value = dashboardResponse.data; assets.value = reconcileRecords(assets.value, assetsResponse.data.items); alerts.value = reconcileRecords(alerts.value, alertsResponse.data.items); workOrders.value = reconcileRecords(workOrders.value, ordersResponse.data.items); thresholds.value = thresholdsResponse.data.items; telemetry.value = reconcileRecords(telemetry.value, telemetryResponse.data.items); audit.value = reconcileRecords(audit.value, auditResponse.data.items); spatialFeatures.value = reconcileRecords(spatialFeatures.value, normalizeSpatialFeatures(gisResponse.data.features)); hardwareBindings.value = reconcileRecords(hardwareBindings.value, bindingsResponse.data.items);
+      replayRealtimeChanges(snapshotRevision);
       offline.value = false;
       lastSyncedAt.value = new Date().toISOString();
+      startRealtime();
     } catch (cause: unknown) {
+      if (requestId !== snapshotRequestId) return;
       if (responseStatus(cause) === 401) {
         expireApiSession();
       } else {
@@ -133,31 +155,92 @@ export const useOperationsStore = defineStore('operations', () => {
   async function refreshLive() {
     if (source.value !== 'api' || !auth.isAuthenticated) return;
     if (liveRefreshPromise) return liveRefreshPromise;
+    const snapshotRevision = realtimeRevision;
+    const requestId = ++snapshotRequestId;
+    const ownLiveRefreshId = ++liveRefreshId;
     liveRefreshPromise = (async () => {
       try {
         const listParams = { page: 1, pageSize: 100 };
         const [dashboardResponse, assetsResponse, alertsResponse, ordersResponse, telemetryResponse] = await Promise.all([
           api.dashboard(), api.assets(listParams), api.alerts(listParams), api.workOrders(listParams), api.telemetry(listParams),
         ]);
+        if (requestId !== snapshotRequestId || source.value !== 'api' || !auth.isAuthenticated) return;
         dashboard.value = dashboardResponse.data;
         assets.value = reconcileRecords(assets.value, assetsResponse.data.items);
         alerts.value = reconcileRecords(alerts.value, alertsResponse.data.items);
         workOrders.value = reconcileRecords(workOrders.value, ordersResponse.data.items);
         telemetry.value = reconcileRecords(telemetry.value, telemetryResponse.data.items);
         offline.value = false;
+        replayRealtimeChanges(snapshotRevision);
         syncError.value = '';
         lastSyncedAt.value = new Date().toISOString();
       } catch (cause: unknown) {
+        if (requestId !== snapshotRequestId) return;
         if (responseStatus(cause) === 401) expireApiSession();
         else {
           offline.value = true;
           syncError.value = apiErrorMessage(cause);
         }
       } finally {
-        liveRefreshPromise = null;
+        if (liveRefreshId === ownLiveRefreshId) liveRefreshPromise = null;
       }
     })();
     return liveRefreshPromise;
+  }
+
+  const realtimeState = ref<'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'cursor_invalid'>('idle');
+  let realtimeClient: ReturnType<typeof createRealtimeClient> | null = null;
+
+  function applyRealtimeEvent(event: RealtimeEvent) {
+    if (source.value !== 'api' || !auth.isAuthenticated) throw new Error('实时会话已结束');
+    realtimeRevision += 1;
+    realtimeChanges.push({ revision: realtimeRevision, event });
+    if (realtimeChanges.length > 2000) realtimeChanges.splice(0, realtimeChanges.length - 2000);
+    applyRealtimePayload(event);
+  }
+
+  function replayRealtimeChanges(afterRevision: number) {
+    for (const change of realtimeChanges) {
+      if (change.revision > afterRevision) applyRealtimePayload(change.event);
+    }
+  }
+
+  function applyRealtimePayload(event: RealtimeEvent) {
+    const payload = event.payload;
+    switch (event.type) {
+      case 'telemetry': telemetry.value = upsertRealtimeRecord(telemetry.value, payload as Telemetry); break;
+      case 'alert': alerts.value = upsertRealtimeRecord(alerts.value, payload as Alert); break;
+      case 'asset': assets.value = upsertRealtimeRecord(assets.value, payload as Asset); break;
+      case 'workOrder': workOrders.value = upsertRealtimeRecord(workOrders.value, payload as WorkOrder); break;
+    }
+    lastSyncedAt.value = new Date().toISOString();
+  }
+
+  function startRealtime() {
+    if (source.value !== 'api' || realtimeClient) return;
+    const token = typeof window !== 'undefined' ? window.sessionStorage.getItem('ut-django-token') : null;
+    if (!token) return;
+    realtimeClient = createRealtimeClient({
+      apiBaseUrl: getApiBaseUrl(),
+      getToken: () => (typeof window !== 'undefined' ? window.sessionStorage.getItem('ut-django-token') : null),
+      onEvent: applyRealtimeEvent,
+      onStateChange: (state) => { realtimeState.value = state; },
+      onUnauthorized: () => { expireApiSession(); },
+      onCursorInvalid: async () => {
+        await refreshLive();
+        if (offline.value || !auth.isAuthenticated || source.value !== 'api') throw new Error('实时快照恢复失败');
+      },
+    });
+    realtimeClient.connect();
+  }
+
+  function stopRealtime() {
+    snapshotRequestId += 1;
+    liveRefreshId += 1;
+    liveRefreshPromise = null;
+    realtimeClient?.disconnect();
+    realtimeClient = null;
+    realtimeState.value = 'disconnected';
   }
 
   function tick() {
@@ -184,7 +267,10 @@ export const useOperationsStore = defineStore('operations', () => {
     const response = source.value === 'api' ? await runApiMutation(() => api.createAlertWorkOrder(alert.id)) : null;
     const now = new Date().toISOString();
     const next: WorkOrder = response?.data ?? { id: nextLocalId(), code: `WO-${now.slice(2, 10).replaceAll('-', '')}-${String(localSequence).padStart(2, '0')}`, sourceAlertId: alert.id, assetCode: alert.assetCode, title: `处置 ${alert.code}：${alert.title}`, priority: alert.severity === 'critical' ? 'urgent' : 'high', status: 'open', createdAt: now, updatedAt: now, version: 1 };
-    workOrders.value.unshift(next);
+    // The API mutation may publish the same record over the authenticated
+    // WebSocket before its HTTP response returns. Upsert makes that race
+    // idempotent instead of rendering two cards for the one work order.
+    workOrders.value = upsertRealtimeRecord(workOrders.value, next);
     if (source.value === 'demo') appendAudit('work_order.created_from_alert', 'work_order', next.id, { alertCode: alert.code, assetCode: alert.assetCode });
     else await syncAudit();
     notice.value = '已创建关联工单';
@@ -254,7 +340,9 @@ export const useOperationsStore = defineStore('operations', () => {
       updatedAt: now,
       version: 1,
     };
-    workOrders.value.unshift(next);
+    // Keep manual creation idempotent for the same REST/WebSocket race as
+    // alert-originated work orders.
+    workOrders.value = upsertRealtimeRecord(workOrders.value, next);
     if (source.value === 'demo') appendAudit('work_order.created_manual', 'work_order', next.id, { assetCode: next.assetCode, priority: next.priority });
     else await syncAudit();
     notice.value = `${next.code} 已创建`;
@@ -422,7 +510,7 @@ export const useOperationsStore = defineStore('operations', () => {
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
-  return { dashboard, assets, spatialFeatures, hardwareBindings, alerts, workOrders, thresholds, telemetry, telemetryInsights, telemetryInsightsTotal, telemetrySummary, telemetryInsightsLoading, telemetryInsightsError, audit, loading, source, offline, syncError, lastSyncedAt, notice, noticeRevision, openAlerts, activeOrders, refresh, refreshLive, tick, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, importGisFeatures, updateGisFeature, createHardwareBinding, transition, updateThreshold, createReport, ingestTelemetry, loadTelemetryInsights };
+  return { dashboard, assets, spatialFeatures, hardwareBindings, alerts, workOrders, thresholds, telemetry, telemetryInsights, telemetryInsightsTotal, telemetrySummary, telemetryInsightsLoading, telemetryInsightsError, audit, loading, source, offline, syncError, lastSyncedAt, notice, noticeRevision, openAlerts, activeOrders, refresh, refreshLive, tick, realtimeState, startRealtime, stopRealtime, acknowledge, createAlertOrder, createWorkOrder, createAsset, updateAsset, importGisFeatures, updateGisFeature, createHardwareBinding, transition, updateThreshold, createReport, ingestTelemetry, loadTelemetryInsights };
 });
 
 function telemetryMatchesQuery(item: Telemetry, query: TelemetryQuery): boolean {

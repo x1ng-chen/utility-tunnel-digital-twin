@@ -43,6 +43,8 @@ if IS_PRODUCTION and '*' in ALLOWED_HOSTS:
     raise RuntimeError('DJANGO_ALLOWED_HOSTS must not contain a wildcard in production.')
 
 INSTALLED_APPS = [
+    # Override Django's WSGI-only runserver for both local and isolated E2E.
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -158,6 +160,14 @@ if IS_PRODUCTION and not raw_cors_origins:
 CORS_ALLOWED_ORIGINS = parse_origins(raw_cors_origins, 'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173', 'CORS_ALLOWED_ORIGINS')
 if IS_PRODUCTION and any(not origin.lower().startswith('https://') for origin in CORS_ALLOWED_ORIGINS):
     raise RuntimeError('Production CORS_ALLOWED_ORIGINS must use HTTPS origins.')
+# WebSocket handshakes carry an Origin header but cannot set CORS response
+# headers, so the live feed reuses the same governed origin allow-list by
+# default and can be tightened independently when a deployment separates the
+# realtime host from the REST host.
+raw_ws_origins = os.getenv('WEBSOCKET_ALLOWED_ORIGINS', '').strip()
+WEBSOCKET_ALLOWED_ORIGINS = parse_origins(raw_ws_origins, ','.join(CORS_ALLOWED_ORIGINS), 'WEBSOCKET_ALLOWED_ORIGINS')
+if IS_PRODUCTION and any(not origin.lower().startswith('https://') for origin in WEBSOCKET_ALLOWED_ORIGINS):
+    raise RuntimeError('Production WEBSOCKET_ALLOWED_ORIGINS must use HTTPS origins.')
 raw_csrf_origins = os.getenv('DJANGO_CSRF_TRUSTED_ORIGINS', '').strip()
 if IS_PRODUCTION and not raw_csrf_origins:
     raise RuntimeError('DJANGO_CSRF_TRUSTED_ORIGINS is required in production.')
@@ -227,6 +237,10 @@ if IS_PRODUCTION and (not CACHE_BACKEND or CACHE_BACKEND.endswith('LocMemCache')
 if not CACHE_LOCATION:
     raise ValueError('DJANGO_CACHE_LOCATION must not be empty.')
 CACHES = {'default': {'BACKEND': CACHE_BACKEND, 'LOCATION': CACHE_LOCATION}}
+# In-process channel layer for the live feed. Publishing and consuming must run
+# in one process; production would swap this for a shared layer (Redis) only if
+# multi-worker realtime fan-out is required.
+CHANNEL_LAYERS = {'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}}
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if os.getenv('DJANGO_TRUST_PROXY_SSL', 'false').lower() in {'1', 'true', 'yes'} else None
 LOGGING = {
     'version': 1,
