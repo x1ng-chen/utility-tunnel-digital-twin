@@ -807,6 +807,31 @@ test('三维页在 3 秒内将实时新告警定位到已绑定设备', async ({
   const login = await request.post(`${base}/auth/login/`, { data: { email: 'admin', password: adminPassword } });
   expect(login.ok()).toBe(true);
   const headers = { Authorization: `Bearer ${(await login.json()).accessToken}` };
+  // Playwright's default assertion polling backs off to one-second intervals.
+  // That makes an event received just before the three-second boundary appear
+  // late to the test process, even though the browser rendered it on time.
+  // Capture the actual DOM-mutation timestamp in the page before the write,
+  // then compare it with the durable API-acceptance boundary below.
+  await page.evaluate(() => {
+    const message = '已定位 ENV-01';
+    const readStatus = () => Array.from(document.querySelectorAll('[role="status"]'))
+      .some((element) => element.textContent?.includes(message));
+    window.__twinAutoLocateProbe = new Promise((resolve) => {
+      let observer;
+      const finish = (observedAt) => {
+        observer?.disconnect();
+        window.clearTimeout(timeout);
+        resolve(observedAt);
+      };
+      const check = () => {
+        if (readStatus()) finish(performance.timeOrigin + performance.now());
+      };
+      observer = new MutationObserver(check);
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+      const timeout = window.setTimeout(() => finish(null), 15_000);
+      check();
+    });
+  });
   const reading = await request.post(`${base}/telemetry/`, { headers, data: { readings: [{
     eventId: `ws-twin-locate-${Date.now()}`,
     // ENV-01 is a required node of the released V07 GLB, so this proves an
@@ -820,8 +845,10 @@ test('三维页在 3 秒内将实时新告警定位到已绑定设备', async ({
   // variable HTTP ingest duration itself in a browser push-latency SLA.
   const propagationStartedAt = Date.now();
 
-  await expect(page.getByRole('group', { name: '新告警自动定位' })).toContainText(/已定位 ENV-01/, { timeout: 3_000 });
-  expect(Date.now() - propagationStartedAt).toBeLessThan(3_000);
+  const observedAt = await page.evaluate(() => window.__twinAutoLocateProbe);
+  expect(observedAt).not.toBeNull();
+  expect(observedAt - propagationStartedAt).toBeLessThan(3_000);
+  await expect(page.getByRole('group', { name: '新告警自动定位' })).toContainText(/已定位 ENV-01/);
   // Keep the visual focus verification independent from the push budget: GPU
   // render scheduling may delay this status node, but must never drop it.
   await expect(page.locator('.twin-focus-status')).toContainText('ENV-01', { timeout: 10_000 });
