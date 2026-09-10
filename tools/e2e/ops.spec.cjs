@@ -790,3 +790,34 @@ test('已认证浏览器在 3 秒内通过 WebSocket 接收新告警，而非等
   await expect(alertsRegion).toContainText(assetCode, { timeout: 3_000 });
   expect(Date.now() - propagationStartedAt).toBeLessThan(3_000);
 });
+
+test('三维页在 3 秒内将实时新告警定位到已绑定设备', async ({ page, request }) => {
+  const base = process.env.E2E_API_URL || 'http://127.0.0.1:8000/api';
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await expect(page.locator('[title="实时推送已连接"]')).toBeVisible();
+  await page.getByRole('button', { name: '三维孪生' }).click();
+  await expect(page.locator('.twin-model-readiness.loaded').getByText('模型已加载', { exact: true })).toBeVisible({ timeout: 60_000 });
+  const autoLocate = page.getByRole('checkbox', { name: '新告警自动定位' });
+  await expect(autoLocate).toBeChecked();
+
+  const login = await request.post(`${base}/auth/login/`, { data: { email: 'admin', password: adminPassword } });
+  expect(login.ok()).toBe(true);
+  const headers = { Authorization: `Bearer ${(await login.json()).accessToken}` };
+  const propagationStartedAt = Date.now();
+  const reading = await request.post(`${base}/telemetry/`, { headers, data: { readings: [{
+    eventId: `ws-twin-locate-${Date.now()}`,
+    // ENV-01 is a required node of the released V07 GLB, so this proves an
+    // actual model binding rather than a list-only alert reaction.
+    assetCode: 'ENV-01', metricKey: 'temperature', metric: '环境温度',
+    value: 99, unit: '°C', quality: 'good', recordedAt: new Date().toISOString(),
+  }] } });
+  expect(reading.ok(), await reading.text()).toBe(true);
+
+  await expect(page.getByRole('group', { name: '新告警自动定位' })).toContainText(/已定位 ENV-01/, { timeout: 3_000 });
+  await expect(page.locator('.twin-focus-status')).toContainText('ENV-01');
+  expect(Date.now() - propagationStartedAt).toBeLessThan(3_000);
+});

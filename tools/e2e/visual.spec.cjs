@@ -127,6 +127,11 @@ test('全部业务页面在窄屏保留全宽内容与底部导航', async ({ pa
           .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
           .map((animation) => animation.finished.catch(() => {})));
       });
+      // Vite applies the command-shell stylesheet during application startup.
+      // Wait for the required mobile positioning rule before measuring geometry:
+      // otherwise a one-frame, pre-style shell can produce a false layout
+      // regression while the rendered screen is already correct.
+      await expect(page.locator('.command-sidebar')).toHaveCSS('position', 'fixed');
       const dimensions = await page.evaluate(() => {
         const sidebar = document.querySelector('.command-sidebar').getBoundingClientRect();
         const main = document.querySelector('.command-main').getBoundingClientRect();
