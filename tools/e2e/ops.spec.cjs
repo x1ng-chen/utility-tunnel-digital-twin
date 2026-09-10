@@ -754,7 +754,7 @@ test('筛选条件写入URL并在刷新后恢复', async ({ page }) => {
   await expect(page.getByLabel('监测项目')).toHaveValue('temperature');
 });
 
-test('已认证浏览器通过 WebSocket 接收新告警，而非等待轮询快照', async ({ page, request }) => {
+test('已认证浏览器在 3 秒内通过 WebSocket 接收新告警，而非等待轮询快照', async ({ page, request }) => {
   const base = process.env.E2E_API_URL || 'http://127.0.0.1:8000/api';
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
@@ -762,6 +762,12 @@ test('已认证浏览器通过 WebSocket 接收新告警，而非等待轮询快
   await page.getByRole('button', { name: /安全登录/ }).click();
   await expect(page).toHaveURL(/dashboard/);
   await expect(page.locator('[title="实时推送已连接"]')).toBeVisible();
+  // Keep the alert view open before the write. This makes the assertion prove
+  // the pushed upsert path; navigating after a write could pass via its
+  // ordinary REST initial-load request instead.
+  await page.getByRole('button', { name: '告警中心' }).click();
+  const alertsRegion = page.getByRole('region', { name: '告警记录' });
+  await expect(alertsRegion).toBeVisible();
 
   const login = await request.post(`${base}/auth/login/`, { data: { email: 'admin', password: adminPassword } });
   expect(login.ok()).toBe(true);
@@ -774,12 +780,13 @@ test('已认证浏览器通过 WebSocket 接收新告警，而非等待轮询快
     mesh: `MESH_WS_${suffix}`, latitude: 31.2307, longitude: 121.4744,
   } });
   expect(asset.ok(), await asset.text()).toBe(true);
+  const propagationStartedAt = Date.now();
   const reading = await request.post(`${base}/telemetry/`, { headers, data: { readings: [{
     eventId: `ws-alert-${suffix}`, assetCode, metricKey: 'temperature', metric: '环境温度',
     value: 99, unit: '°C', quality: 'good', recordedAt: new Date().toISOString(),
   }] } });
   expect(reading.ok(), await reading.text()).toBe(true);
 
-  await page.goto(`${webUrl}/alerts`);
-  await expect(page.getByRole('region', { name: '告警记录' })).toContainText(assetCode);
+  await expect(alertsRegion).toContainText(assetCode, { timeout: 3_000 });
+  expect(Date.now() - propagationStartedAt).toBeLessThan(3_000);
 });
