@@ -55,6 +55,7 @@ page-*.png
 *.tmp
 .playwright-cli/
 .runtime/
+.worktrees/
 output/playwright/
 test-results/
 
