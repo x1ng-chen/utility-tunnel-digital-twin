@@ -5,6 +5,7 @@
 #define UI_COMMAND_TIMEOUT_MS 5000U
 #define UI_SELECTION_ANIMATION_MS 140U
 #define UI_PAGE_ANIMATION_MS 180U
+#define UI_COMMAND_ID_SIZE 40U
 
 static UiEffect effect(UiEffectKind kind, uint8_t action, uint8_t value)
 {
@@ -85,22 +86,40 @@ static void start_page_animation(UiState *state, uint32_t now_ms)
   state->animation_end_ms = now_ms + UI_PAGE_ANIMATION_MS;
 }
 
+static void clear_command_lifecycle(UiState *state)
+{
+  state->command_phase = UI_CMD_IDLE;
+  state->command_started_ms = 0U;
+  state->pending_action = UI_ACTION_NONE;
+  state->pending_value = 0U;
+  state->active_command_id[0] = '\0';
+}
+
+static uint8_t command_send_allowed(const UiState *state)
+{
+  return (state->control.mqtt_online != 0U) && (state->control.safety_locked == 0U);
+}
+
 static void return_home(UiState *state, uint32_t now_ms)
 {
   state->page = UI_HOME;
   state->selected_row = 0U;
   state->dialog = UI_DIALOG_NONE;
-  state->command_phase = UI_CMD_IDLE;
-  state->pending_action = UI_ACTION_NONE;
-  state->pending_value = 0U;
+  if (state->command_phase != UI_CMD_SENDING) clear_command_lifecycle(state);
   start_page_animation(state, now_ms);
 }
 
 static UiEffect send_pending_command(UiState *state, uint32_t now_ms)
 {
+  if (!command_send_allowed(state)) {
+    clear_command_lifecycle(state);
+    state->dialog = UI_DIALOG_NONE;
+    return effect(UI_EFFECT_DIRTY, 0U, 0U);
+  }
   state->dialog = UI_DIALOG_NONE;
   state->command_phase = UI_CMD_SENDING;
   state->command_started_ms = now_ms;
+  state->active_command_id[0] = '\0';
   return effect(UI_EFFECT_SEND_COMMAND, state->pending_action, state->pending_value);
 }
 
@@ -110,8 +129,7 @@ void UiState_Init(UiState *state)
   (void)memset(state, 0, sizeof(*state));
   state->page = UI_HOME;
   state->dialog = UI_DIALOG_NONE;
-  state->command_phase = UI_CMD_IDLE;
-  state->pending_action = UI_ACTION_NONE;
+  clear_command_lifecycle(state);
 }
 
 UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms)
@@ -129,8 +147,7 @@ UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms)
   if (state->dialog == UI_DIALOG_CONFIRM) {
     if ((event == UI_EVT_LEFT) || (event == UI_EVT_UP) || (event == UI_EVT_DOWN)) {
       state->dialog = UI_DIALOG_NONE;
-      state->command_phase = UI_CMD_IDLE;
-      state->pending_action = UI_ACTION_NONE;
+      clear_command_lifecycle(state);
       return effect(UI_EFFECT_DIRTY, 0U, 0U);
     }
     if ((event == UI_EVT_PRESS) || (event == UI_EVT_RIGHT)) return send_pending_command(state, now_ms);
@@ -182,6 +199,7 @@ UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms)
 
   selected_action = action_for_selection(state);
   if (selected_action == UI_ACTION_NONE) return effect(UI_EFFECT_NONE, 0U, 0U);
+  if (!command_send_allowed(state)) return effect(UI_EFFECT_DIRTY, 0U, 0U);
 
   state->pending_action = (uint8_t)selected_action;
   state->pending_value = 0U;
@@ -199,4 +217,37 @@ void UiState_Tick(UiState *state, uint32_t now_ms)
       ((uint32_t)(now_ms - state->command_started_ms) >= UI_COMMAND_TIMEOUT_MS)) {
     state->command_phase = UI_CMD_TIMEOUT;
   }
+}
+
+void UiState_SetControlAvailability(UiState *state, uint8_t mqtt_online, uint8_t safety_locked)
+{
+  if (state == 0) return;
+  state->control.mqtt_online = mqtt_online ? 1U : 0U;
+  state->control.safety_locked = safety_locked ? 1U : 0U;
+}
+
+uint8_t UiState_CommandDispatched(UiState *state, const char *command_id)
+{
+  uint8_t index;
+
+  if ((state == 0) || (command_id == 0) || (state->command_phase != UI_CMD_SENDING) ||
+      (state->active_command_id[0] != '\0') || (command_id[0] == '\0')) return 0U;
+
+  for (index = 0U; index < (UI_COMMAND_ID_SIZE - 1U); ++index) {
+    state->active_command_id[index] = command_id[index];
+    if (command_id[index] == '\0') return 1U;
+  }
+  state->active_command_id[0] = '\0';
+  return 0U;
+}
+
+uint8_t UiState_HandleAcknowledgement(UiState *state, const char *command_id, uint8_t accepted)
+{
+  if ((state == 0) || (command_id == 0) || (state->command_phase != UI_CMD_SENDING) ||
+      (state->active_command_id[0] == '\0') || (strcmp(state->active_command_id, command_id) != 0)) {
+    return 0U;
+  }
+
+  state->command_phase = accepted ? UI_CMD_ACCEPTED : UI_CMD_REJECTED;
+  return 1U;
 }

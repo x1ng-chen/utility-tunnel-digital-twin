@@ -29,6 +29,30 @@ def require_contains(line: str, expected: str) -> None:
         raise AssertionError(f"expected {expected!r} in {line!r}")
 
 
+def start_critical_command(port: serial.Serial, command_id: str) -> None:
+    send_and_read(port, "#UITEST RESET")
+    require_contains(send_and_read(port, "#UITEST MQTT 1"), "command=idle")
+    for _ in range(3):
+        send_and_read(port, "#UITEST DOWN")
+    require_contains(send_and_read(port, "#UITEST PRESS"), "page=fans")
+    require_contains(send_and_read(port, "#UITEST DOWN"), "row=1")
+    require_contains(send_and_read(port, "#UITEST PRESS"), "dialog=confirm")
+    require_contains(send_and_read(port, "#UITEST PRESS"), "command=sending")
+    require_contains(send_and_read(port, f"#UITEST BIND {command_id}"), "command=sending")
+
+
+def enter_critical_fans_row(port: serial.Serial, mqtt_online: bool = False, safety_locked: bool = False) -> None:
+    send_and_read(port, "#UITEST RESET")
+    if mqtt_online:
+        require_contains(send_and_read(port, "#UITEST MQTT 1"), "command=idle")
+    if safety_locked:
+        require_contains(send_and_read(port, "#UITEST SAFETY 1"), "command=idle")
+    for _ in range(3):
+        send_and_read(port, "#UITEST DOWN")
+    require_contains(send_and_read(port, "#UITEST PRESS"), "page=fans")
+    require_contains(send_and_read(port, "#UITEST DOWN"), "row=1")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", required=True, help="Node B USART1 port, for example COM6")
@@ -41,16 +65,31 @@ def main() -> None:
         require_contains(send_and_read(port, "#UITEST DOWN"), "row=1")
         require_contains(send_and_read(port, "#UITEST LONG_PRESS"), "page=home row=0")
 
-        # Row 3 is FANS. Both-start is a critical command, so the first
-        # press opens confirmation and the second one sends it.
-        send_and_read(port, "#UITEST RESET")
-        for _ in range(3):
-            send_and_read(port, "#UITEST DOWN")
-        require_contains(send_and_read(port, "#UITEST PRESS"), "page=fans")
-        require_contains(send_and_read(port, "#UITEST DOWN"), "row=1")
-        require_contains(send_and_read(port, "#UITEST PRESS"), "dialog=confirm")
+        # A long press must only change navigation while a dispatched command
+        # waits for its acknowledgement; a new press cannot send another one.
+        start_critical_command(port, "keep-1")
+        require_contains(send_and_read(port, "#UITEST LONG_PRESS"), "page=home row=0 dialog=none command=sending")
         require_contains(send_and_read(port, "#UITEST PRESS"), "command=sending")
+
+        # Only the currently bound command ID can complete the lifecycle.
+        require_contains(send_and_read(port, "#UITEST ACK another-1 ACCEPT"), "command=sending")
+        require_contains(send_and_read(port, "#UITEST ACK keep-1 ACCEPT"), "command=accepted")
+
+        start_critical_command(port, "reject-1")
+        require_contains(send_and_read(port, "#UITEST ACK reject-1 REJECT"), "command=rejected")
+
+        start_critical_command(port, "timeout-1")
         require_contains(send_and_read(port, "#UITEST TICK 5000"), "command=timeout")
+        require_contains(send_and_read(port, "#UITEST ACK timeout-1 ACCEPT"), "command=timeout")
+
+        # Offline MQTT and the active safety lock leave navigation readable but
+        # prevent a critical row from opening a confirmation or sending.
+        enter_critical_fans_row(port)
+        require_contains(send_and_read(port, "#UITEST MQTT 0"), "command=idle")
+        require_contains(send_and_read(port, "#UITEST PRESS"), "dialog=none command=idle")
+
+        enter_critical_fans_row(port, mqtt_online=True, safety_locked=True)
+        require_contains(send_and_read(port, "#UITEST PRESS"), "dialog=none command=idle")
 
     print("UiState serial probe: PASS")
 

@@ -66,6 +66,11 @@ typedef struct {
 } UiEffect;
 
 typedef struct {
+  uint8_t mqtt_online;
+  uint8_t safety_locked;
+} UiControlAvailability;
+
+typedef struct {
   UiPage page;
   uint8_t selected_row;
   UiDialog dialog;
@@ -75,10 +80,15 @@ typedef struct {
   uint32_t command_started_ms;
   uint8_t pending_action;
   uint8_t pending_value;
+  UiControlAvailability control;
+  char active_command_id[40];
 } UiState;
 
 void UiState_Init(UiState *state);
 UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms);
 void UiState_Tick(UiState *state, uint32_t now_ms);
+void UiState_SetControlAvailability(UiState *state, uint8_t mqtt_online, uint8_t safety_locked);
+uint8_t UiState_CommandDispatched(UiState *state, const char *command_id);
+uint8_t UiState_HandleAcknowledgement(UiState *state, const char *command_id, uint8_t accepted);
 
 #endif /* UI_STATE_H */

@@ -175,12 +175,27 @@ static void UiTest_HandleLine(void)
 {
   UiInputEvent event = UI_EVT_NONE;
   unsigned long elapsed_ms;
+  unsigned int enabled;
+  char command_id[40];
+  char acknowledgement[16];
 
   if (strcmp(ui_test_line, "#UITEST RESET") == 0) {
     UiState_Init(&ui_test_state);
   } else if (sscanf(ui_test_line, "#UITEST TICK %lu", &elapsed_ms) == 1) {
     /* TICK is a deterministic elapsed interval for the diagnostic adapter. */
     UiState_Tick(&ui_test_state, ui_test_state.command_started_ms + (uint32_t)elapsed_ms);
+  } else if (sscanf(ui_test_line, "#UITEST BIND %39s", command_id) == 1) {
+    (void)UiState_CommandDispatched(&ui_test_state, command_id);
+  } else if (sscanf(ui_test_line, "#UITEST ACK %39s %15s", command_id, acknowledgement) == 2) {
+    if (strcmp(acknowledgement, "ACCEPT") == 0) {
+      (void)UiState_HandleAcknowledgement(&ui_test_state, command_id, 1U);
+    } else if (strcmp(acknowledgement, "REJECT") == 0) {
+      (void)UiState_HandleAcknowledgement(&ui_test_state, command_id, 0U);
+    }
+  } else if (sscanf(ui_test_line, "#UITEST MQTT %u", &enabled) == 1) {
+    UiState_SetControlAvailability(&ui_test_state, enabled ? 1U : 0U, ui_test_state.control.safety_locked);
+  } else if (sscanf(ui_test_line, "#UITEST SAFETY %u", &enabled) == 1) {
+    UiState_SetControlAvailability(&ui_test_state, ui_test_state.control.mqtt_online, enabled ? 1U : 0U);
   } else if (strcmp(ui_test_line, "#UITEST UP") == 0) {
     event = UI_EVT_UP;
   } else if (strcmp(ui_test_line, "#UITEST DOWN") == 0) {
