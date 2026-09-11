@@ -1,17 +1,22 @@
 #include <Arduino.h>
+#include <EEPROM.h>
 #include <ESP8266WiFi.h>
+#include <WiFiUdp.h>
 #include <PubSubClient.h>
+
+#include "mqtt_discovery.h"
 
 #if __has_include("secrets.h")
 #include "secrets.h"
 #else
 #define WIFI_SSID "replace-me"
 #define WIFI_PASSWORD "replace-me"
-#define MQTT_HOST "192.168.1.10"
-#define MQTT_PORT 1883
 #define MQTT_USERNAME ""
 #define MQTT_PASSWORD ""
-#define DEVICE_ID "CTRL-01"
+#endif
+
+#ifndef BUILD_DEVICE_ID
+#define BUILD_DEVICE_ID "CTRL-01"
 #endif
 
 namespace {
@@ -21,8 +26,11 @@ constexpr uint32_t kReconnectIntervalMs = 5000;
 constexpr size_t kMaxSerialFrame = 768;
 constexpr uint8_t kPendingFrameCapacity = 8;
 constexpr uint8_t kLedPin = 2;
+constexpr uint16_t kDiscoveryPort = 4210;
+constexpr size_t kMaxDiscoveryPacket = 96;
 
 WiFiClient networkClient;
+WiFiUDP discoveryUdp;
 PubSubClient mqtt(networkClient);
 String serialFrame;
 String telemetryTopic;
@@ -35,12 +43,78 @@ uint8_t pendingHead = 0;
 uint8_t pendingCount = 0;
 uint32_t lastWiFiAttempt = 0;
 uint32_t lastMqttAttempt = 0;
+BrokerEndpoint brokerEndpoint{};
+BrokerEndpoint savedBrokerEndpoint{};
+bool brokerAvailable = false;
+bool savedBrokerAvailable = false;
+bool discoveryListening = false;
+
+IPAddress brokerIp() {
+  return IPAddress(brokerEndpoint.address[0], brokerEndpoint.address[1],
+                   brokerEndpoint.address[2], brokerEndpoint.address[3]);
+}
+
+void selectBroker(const BrokerEndpoint& endpoint) {
+  if (brokerAvailable && endpointEquals(endpoint, brokerEndpoint)) return;
+  if (mqtt.connected()) mqtt.disconnect();
+  brokerEndpoint = endpoint;
+  brokerAvailable = true;
+  mqtt.setServer(brokerIp(), brokerEndpoint.port);
+  lastMqttAttempt = millis() - kReconnectIntervalMs;
+  Serial.printf("#DISCOVERY broker=%s:%u\r\n", brokerIp().toString().c_str(), brokerEndpoint.port);
+}
+
+void persistBrokerAfterSuccessfulConnection() {
+  if (!brokerAvailable || (savedBrokerAvailable && endpointEquals(brokerEndpoint, savedBrokerEndpoint))) return;
+  const StoredBrokerEndpoint stored = makeStoredEndpoint(brokerEndpoint);
+  EEPROM.put(0, stored);
+  if (!EEPROM.commit()) {
+    Serial.println("#ERROR broker_persist_failed");
+    return;
+  }
+  savedBrokerEndpoint = brokerEndpoint;
+  savedBrokerAvailable = true;
+  Serial.println("#DISCOVERY broker_saved");
+}
+
+void handleDiscovery() {
+  if (WiFi.status() != WL_CONNECTED) {
+    if (discoveryListening) {
+      discoveryUdp.stop();
+      discoveryListening = false;
+    }
+    return;
+  }
+  if (!discoveryListening) {
+    if (!discoveryUdp.begin(kDiscoveryPort)) {
+      Serial.println("#ERROR discovery_listen_failed");
+      return;
+    }
+    discoveryListening = true;
+    Serial.printf("#DISCOVERY listening udp=%u\r\n", kDiscoveryPort);
+  }
+
+  const int packetSize = discoveryUdp.parsePacket();
+  if (packetSize <= 0) return;
+  char packet[kMaxDiscoveryPacket];
+  const int bytesRead = discoveryUdp.read(packet, sizeof(packet));
+  if (bytesRead <= 0 || packetSize > static_cast<int>(sizeof(packet))) return;
+  const IPAddress sender = discoveryUdp.remoteIP();
+  const uint8_t senderAddress[] = {sender[0], sender[1], sender[2], sender[3]};
+  BrokerEndpoint discovered{};
+  if (parseDiscoveryPacket(packet, static_cast<size_t>(bytesRead), senderAddress, &discovered)) {
+    selectBroker(discovered);
+  }
+}
 
 void printStatus() {
-  Serial.printf("#STATUS wifi=%s ip=%s rssi=%d mqtt=%s queued=%u heap=%u\r\n",
+  const String broker = brokerAvailable
+                            ? brokerIp().toString() + ":" + String(brokerEndpoint.port)
+                            : "unknown";
+  Serial.printf("#STATUS wifi=%s ip=%s rssi=%d mqtt=%s broker=%s queued=%u heap=%u\r\n",
                 WiFi.status() == WL_CONNECTED ? "up" : "down",
                 WiFi.localIP().toString().c_str(), WiFi.RSSI(),
-                mqtt.connected() ? "up" : "down", pendingCount, ESP.getFreeHeap());
+                mqtt.connected() ? "up" : "down", broker.c_str(), pendingCount, ESP.getFreeHeap());
 }
 
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
@@ -67,12 +141,12 @@ void connectWiFi() {
 }
 
 void connectMqtt() {
-  if (WiFi.status() != WL_CONNECTED || mqtt.connected() ||
+  if (WiFi.status() != WL_CONNECTED || !brokerAvailable || mqtt.connected() ||
       millis() - lastMqttAttempt < kReconnectIntervalMs) return;
   lastMqttAttempt = millis();
   const bool connected = strlen(MQTT_USERNAME) == 0
-                             ? mqtt.connect(DEVICE_ID, statusTopic.c_str(), 1, true, "offline")
-                             : mqtt.connect(DEVICE_ID, MQTT_USERNAME, MQTT_PASSWORD,
+                             ? mqtt.connect(BUILD_DEVICE_ID, statusTopic.c_str(), 1, true, "offline")
+                             : mqtt.connect(BUILD_DEVICE_ID, MQTT_USERNAME, MQTT_PASSWORD,
                                             statusTopic.c_str(), 1, true, "offline", true);
   if (!connected) {
     Serial.printf("#MQTT connect_failed state=%d\r\n", mqtt.state());
@@ -80,6 +154,7 @@ void connectMqtt() {
   }
   mqtt.subscribe(commandTopic.c_str(), 1);
   mqtt.publish(statusTopic.c_str(), "online", true);
+  persistBrokerAfterSuccessfulConnection();
   Serial.println("#MQTT connected");
 }
 
@@ -155,20 +230,28 @@ void setup() {
   Serial.begin(kSerialBaud);
   Serial.setTimeout(50);
   serialFrame.reserve(kMaxSerialFrame);
-  telemetryTopic = String("ut/v1/") + DEVICE_ID + "/telemetry";
-  commandTopic = String("ut/v1/") + DEVICE_ID + "/cmd/#";
-  commandAckTopic = String("ut/v1/") + DEVICE_ID + "/cmd_ack";
-  statusTopic = String("ut/v1/") + DEVICE_ID + "/status";
-  mqtt.setServer(MQTT_HOST, MQTT_PORT);
+  telemetryTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/telemetry";
+  commandTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/cmd/#";
+  commandAckTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/cmd_ack";
+  statusTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/status";
   mqtt.setCallback(onMqttMessage);
   mqtt.setBufferSize(1024);
   mqtt.setKeepAlive(30);
-  Serial.println("#BOOT esp8266-01s mqtt-uart-bridge v1");
+  EEPROM.begin(sizeof(StoredBrokerEndpoint));
+  StoredBrokerEndpoint stored{};
+  EEPROM.get(0, stored);
+  if (loadStoredEndpoint(stored, &savedBrokerEndpoint)) {
+    savedBrokerAvailable = true;
+    selectBroker(savedBrokerEndpoint);
+    Serial.println("#DISCOVERY restored_saved_broker");
+  }
+  Serial.printf("#BOOT esp8266-01s mqtt-uart-bridge v2 device=%s\r\n", BUILD_DEVICE_ID);
   connectWiFi();
 }
 
 void loop() {
   connectWiFi();
+  handleDiscovery();
   connectMqtt();
   if (mqtt.connected()) {
     mqtt.loop();

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import mqtt from 'mqtt';
 import { z } from 'zod';
 import { createDeviceCredentials } from './auth.js';
+import { startDiscoveryBroadcaster } from './discovery.js';
 import { createDjangoForwarder } from './django.js';
 import { addCalculatedOxygenConcentration } from './telemetry.js';
 
@@ -11,6 +12,10 @@ const environment = z.object({
   LOCAL_MQTT_USERNAME: z.string().optional(),
   LOCAL_MQTT_PASSWORD: z.string().optional(),
   LOCAL_DEVICE_ID: z.string().regex(/^[a-z0-9-]{1,64}$/i).default('CTRL-01'),
+  MQTT_DISCOVERY_ENABLED: z.enum(['true', 'false']).default('true'),
+  MQTT_DISCOVERY_PORT: z.coerce.number().int().min(1).max(65535).default(4210),
+  MQTT_DISCOVERY_INTERVAL_MS: z.coerce.number().int().min(250).max(60000).default(3000),
+  MQTT_PUBLIC_PORT: z.coerce.number().int().min(1).max(65535).default(1884),
   IOTDA_ENABLED: z.enum(['true', 'false']).default('true'),
   IOTDA_HOST: z.string().min(4).optional(),
   IOTDA_PORT: z.coerce.number().int().min(1).max(65535).default(8883),
@@ -44,6 +49,14 @@ if (!configResult.success) {
   throw new Error(`Invalid IoTDA gateway configuration: ${configResult.error.issues.map((issue) => issue.path.join('.')).join(', ')}`);
 }
 const config = configResult.data;
+
+const discovery = config.MQTT_DISCOVERY_ENABLED === 'true'
+  ? startDiscoveryBroadcaster({
+    mqttPort: config.MQTT_PUBLIC_PORT,
+    discoveryPort: config.MQTT_DISCOVERY_PORT,
+    intervalMs: config.MQTT_DISCOVERY_INTERVAL_MS,
+  })
+  : null;
 
 // Dual-output sinks: Huawei Cloud IoTDA and/or the Django ingest API. At
 // least one must stay enabled; keeping both disabled would silently drop
@@ -176,6 +189,7 @@ if (django) {
 }
 
 const shutdown = () => {
+  if (discovery) discovery.close();
   local.end(true);
   if (cloud) cloud.end(true);
   if (django) django.close();

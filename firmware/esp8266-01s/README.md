@@ -21,9 +21,20 @@
 
 ## 配置、编译和烧录
 
-1. 将 `include/secrets.example.h` 复制为 `include/secrets.h`，只填本地 Wi-Fi 和本地 MQTT Broker；不要写入华为云密钥。
-2. 执行 `pio run` 编译。
-3. ESP-01S 进入烧录模式后执行 `pio run -t upload --upload-port COMx`。
+1. 将 `include/secrets.example.h` 复制为 `include/secrets.h`，只填本地 Wi-Fi 与可选的本地 MQTT 用户名/密码；不要填写电脑 IP，也不要写入华为云密钥。
+2. 按设备选择构建：`pio run -e esp01_ctrl01` 或 `pio run -e esp01_ctrl02`。
+3. ESP-01S 进入烧录模式后执行 `pio run -e esp01_ctrl01 -t upload --upload-port COMx`（第二块改为 `esp01_ctrl02`）。
 4. GPIO0 恢复高电平并重启，执行 `pio device monitor -p COMx -b 9600`。
 
-串口输入 `STATUS` 可查看 Wi-Fi、IP、RSSI、MQTT 和可用堆。STM32 发送一行 `ut.telemetry.v1` JSON 后，固件发布到 `ut/v1/CTRL-01/telemetry`；收到的命令以 `MQTT|topic|payload` 格式转发给 STM32。
+电脑上的 IoTDA 网关会每 3 秒向 UDP `4210` 广播本地 MQTT 服务。ESP 使用广播包的来源 IP 与其中的端口连接 Broker，因此手机热点重新分配电脑 IP 后不需要重新编译。只有 MQTT 连接成功后，端点才会连同版本和 CRC 写入 EEPROM；下次启动先尝试已保存端点，同时继续监听新广播并自动切换。
+
+串口输入 `STATUS` 可查看 Wi-Fi、ESP IP、RSSI、MQTT、当前 Broker 与可用堆。STM32 发送一行 `ut.telemetry.v1` JSON 后，固件发布到对应设备的 `ut/v1/<DEVICE_ID>/telemetry`；收到的命令以 `MQTT|topic|payload` 格式转发给 STM32。
+
+正常启动时可观察到：
+
+```text
+#DISCOVERY listening udp=4210
+#DISCOVERY broker=<电脑当前IP>:1884
+#MQTT connected
+#DISCOVERY broker_saved
+```

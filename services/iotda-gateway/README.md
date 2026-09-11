@@ -17,6 +17,17 @@
 当前开发机将 Mosquitto 的容器端口 `1883` 映射到宿主机端口 `1884`，因此
 `LOCAL_MQTT_URL` 使用 `mqtt://127.0.0.1:1884`。
 
+网关默认还会每 3 秒向每个可用 IPv4 网卡的定向广播地址发送 UDP `4210` 报文，向 ESP8266 公告宿主机可访问的 MQTT 端口 `1884`。ESP 从 UDP 来源地址得到电脑当前 IP，因此手机热点 DHCP 地址变化后无需重新烧录。相关配置为：
+
+```ini
+MQTT_DISCOVERY_ENABLED=true
+MQTT_DISCOVERY_PORT=4210
+MQTT_DISCOVERY_INTERVAL_MS=3000
+MQTT_PUBLIC_PORT=1884
+```
+
+`MQTT_PUBLIC_PORT` 是 ESP 从局域网访问 Windows 宿主机时使用的端口，不是容器内部端口。成功启动日志包含 `MQTT discovery broadcasting UDP/4210 for local MQTT/1884.`。该发现协议只适用于隔离台架局域网，不应跨公网使用。
+
 网关使用华为云规定的 `deviceId_0_0_YYYYMMDDHH` ClientId 和 HMAC-SHA256 密码，并强制校验 TLS 服务端证书。首期使用 `$oc/devices/{device_id}/sys/messages/up` 上报原始遥测，无需先冻结产品属性模型；产品模型确认后可再映射为 properties/report。
 
 ## 平台路（Django 转发）细节
