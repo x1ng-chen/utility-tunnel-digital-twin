@@ -1,4 +1,5 @@
 #include "main.h"
+#include "joystick.h"
 #include "st7735.h"
 #include "ui_state.h"
 
@@ -158,6 +159,24 @@ static const char *UiTest_CommandName(UiCommandPhase phase)
   return ((uint8_t)phase < (sizeof(names) / sizeof(names[0]))) ? names[phase] : "unknown";
 }
 
+static const char *Joystick_EventName(UiInputEvent event)
+{
+  static const char *const names[] = {
+    "NONE", "UP", "DOWN", "LEFT", "RIGHT", "PRESS", "LONG_PRESS",
+  };
+  return ((uint8_t)event < (sizeof(names) / sizeof(names[0]))) ? names[event] : "NONE";
+}
+
+static void JoystickTest_Report(UiInputEvent event)
+{
+  char message[32];
+  const int length = snprintf(message, sizeof(message), "#JOY %s\r\n", Joystick_EventName(event));
+
+  if ((length > 0) && (length < (int)sizeof(message))) {
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
+  }
+}
+
 static void UiTest_Report(void)
 {
   char message[96];
@@ -176,10 +195,19 @@ static void UiTest_HandleLine(void)
   UiInputEvent event = UI_EVT_NONE;
   unsigned long elapsed_ms;
   unsigned int enabled;
+  unsigned int x;
+  unsigned int y;
+  unsigned int switch_released;
+  unsigned long now_ms;
   char command_id[40];
   char acknowledgement[16];
 
-  if (strcmp(ui_test_line, "#UITEST RESET") == 0) {
+  if (sscanf(ui_test_line, "#JOYTEST %u %u %u %lu", &x, &y, &switch_released, &now_ms) == 4) {
+    if ((x > 4095U) || (y > 4095U) || (switch_released > 1U)) return;
+    JoystickTest_Report(Joystick_TestSample((uint16_t)x, (uint16_t)y, (uint8_t)switch_released,
+                                            (uint32_t)now_ms));
+    return;
+  } else if (strcmp(ui_test_line, "#UITEST RESET") == 0) {
     UiState_Init(&ui_test_state);
   } else if (sscanf(ui_test_line, "#UITEST TICK %lu", &elapsed_ms) == 1) {
     /* TICK is a deterministic elapsed interval for the diagnostic adapter. */
@@ -260,6 +288,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   UiState_Init(&ui_test_state);
+  Joystick_Init();
   if (HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U) != HAL_OK) Error_Handler();
   ST7735_Init();
   DrawStatus(received_count, &peer);
@@ -268,8 +297,11 @@ int main(void)
   for (;;)
   {
     const uint32_t now = HAL_GetTick();
+    UiInputEvent event;
     PollUiTest();
     PollEsp(&received_count, &peer);
+    event = Joystick_Poll(now);
+    if (event != UI_EVT_NONE) (void)UiState_Handle(&ui_test_state, event, now);
     UiState_Tick(&ui_test_state, now);
     if ((now - last_heartbeat) >= ESP_HEARTBEAT_INTERVAL_MS)
     {
