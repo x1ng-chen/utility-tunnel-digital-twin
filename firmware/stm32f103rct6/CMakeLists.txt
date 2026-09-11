@@ -51,6 +51,8 @@ add_executable(${CMAKE_PROJECT_NAME})
 
 if(FIRMWARE_VARIANT STREQUAL "node_a")
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE NODE_A_FIRMWARE=1)
+elseif(FIRMWARE_VARIANT STREQUAL "node_b")
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE NODE_B_FIRMWARE=1)
 endif()
 
 # Add STM32CubeMX generated sources
@@ -65,6 +67,7 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_menu.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_state.c"
 )
 
 # The display driver sends every pixel over software SPI. Keep the rest of

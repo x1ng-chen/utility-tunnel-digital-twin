@@ -1,5 +1,6 @@
 #include "main.h"
 #include "st7735.h"
+#include "ui_state.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -8,6 +9,7 @@
 #define ESP_HEARTBEAT_INTERVAL_MS 2000U
 #define LED_INTERVAL_MS 500U
 #define ESP_RX_LINE_SIZE 256U
+#define UI_TEST_LINE_SIZE 48U
 
 typedef struct
 {
@@ -22,6 +24,9 @@ static uint8_t esp_rx_character;
 static volatile char esp_rx_line[ESP_RX_LINE_SIZE];
 static volatile uint16_t esp_rx_length;
 static volatile uint8_t esp_rx_line_ready;
+static UiState ui_test_state;
+static char ui_test_line[UI_TEST_LINE_SIZE];
+static uint8_t ui_test_length;
 
 void SystemClock_Config(void);
 void Error_Handler(void);
@@ -32,6 +37,7 @@ static void DrawStatus(uint32_t received_count, const PeerReading *peer);
 static void UpdatePeerDisplay(uint32_t received_count, const PeerReading *peer);
 static void SendHeartbeat(void);
 static void PollEsp(uint32_t *received_count, PeerReading *peer);
+static void PollUiTest(void);
 
 static void DrawStatus(uint32_t received_count, const PeerReading *peer)
 {
@@ -131,6 +137,86 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
   }
 }
 
+static const char *UiTest_PageName(UiPage page)
+{
+  static const char *const names[] = {
+    "home", "overview", "monitor", "alerts", "fans", "light_sound", "network", "settings",
+  };
+  return ((uint8_t)page < (sizeof(names) / sizeof(names[0]))) ? names[page] : "unknown";
+}
+
+static const char *UiTest_DialogName(UiDialog dialog)
+{
+  return (dialog == UI_DIALOG_CONFIRM) ? "confirm" : "none";
+}
+
+static const char *UiTest_CommandName(UiCommandPhase phase)
+{
+  static const char *const names[] = {
+    "idle", "confirm", "sending", "accepted", "rejected", "timeout",
+  };
+  return ((uint8_t)phase < (sizeof(names) / sizeof(names[0]))) ? names[phase] : "unknown";
+}
+
+static void UiTest_Report(void)
+{
+  char message[96];
+  const int length = snprintf(message, sizeof(message),
+    "#UI page=%s row=%u dialog=%s command=%s\r\n",
+    UiTest_PageName(ui_test_state.page), (unsigned int)ui_test_state.selected_row,
+    UiTest_DialogName(ui_test_state.dialog), UiTest_CommandName(ui_test_state.command_phase));
+
+  if ((length > 0) && (length < (int)sizeof(message))) {
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
+  }
+}
+
+static void UiTest_HandleLine(void)
+{
+  UiInputEvent event = UI_EVT_NONE;
+  unsigned long elapsed_ms;
+
+  if (strcmp(ui_test_line, "#UITEST RESET") == 0) {
+    UiState_Init(&ui_test_state);
+  } else if (sscanf(ui_test_line, "#UITEST TICK %lu", &elapsed_ms) == 1) {
+    /* TICK is a deterministic elapsed interval for the diagnostic adapter. */
+    UiState_Tick(&ui_test_state, ui_test_state.command_started_ms + (uint32_t)elapsed_ms);
+  } else if (strcmp(ui_test_line, "#UITEST UP") == 0) {
+    event = UI_EVT_UP;
+  } else if (strcmp(ui_test_line, "#UITEST DOWN") == 0) {
+    event = UI_EVT_DOWN;
+  } else if (strcmp(ui_test_line, "#UITEST LEFT") == 0) {
+    event = UI_EVT_LEFT;
+  } else if (strcmp(ui_test_line, "#UITEST RIGHT") == 0) {
+    event = UI_EVT_RIGHT;
+  } else if (strcmp(ui_test_line, "#UITEST PRESS") == 0) {
+    event = UI_EVT_PRESS;
+  } else if (strcmp(ui_test_line, "#UITEST LONG_PRESS") == 0) {
+    event = UI_EVT_LONG_PRESS;
+  } else {
+    return;
+  }
+
+  if (event != UI_EVT_NONE) (void)UiState_Handle(&ui_test_state, event, HAL_GetTick());
+  UiTest_Report();
+}
+
+static void PollUiTest(void)
+{
+  uint8_t character;
+
+  while (HAL_UART_Receive(&huart1, &character, 1U, 0U) == HAL_OK) {
+    if (character == '\n') {
+      ui_test_line[ui_test_length] = '\0';
+      UiTest_HandleLine();
+      ui_test_length = 0U;
+    } else if (character != '\r') {
+      if (ui_test_length < (UI_TEST_LINE_SIZE - 1U)) ui_test_line[ui_test_length++] = (char)character;
+      else ui_test_length = 0U;
+    }
+  }
+}
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *uart)
 {
   if (uart->Instance != USART2) return;
@@ -158,6 +244,7 @@ int main(void)
   MX_GPIO_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
+  UiState_Init(&ui_test_state);
   if (HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U) != HAL_OK) Error_Handler();
   ST7735_Init();
   DrawStatus(received_count, &peer);
@@ -166,7 +253,9 @@ int main(void)
   for (;;)
   {
     const uint32_t now = HAL_GetTick();
+    PollUiTest();
     PollEsp(&received_count, &peer);
+    UiState_Tick(&ui_test_state, now);
     if ((now - last_heartbeat) >= ESP_HEARTBEAT_INTERVAL_MS)
     {
       SendHeartbeat();
