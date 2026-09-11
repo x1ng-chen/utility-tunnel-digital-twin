@@ -10,10 +10,25 @@ import serial
 
 
 CASES = [
+    ("#JOYTEST RESET\n", "NONE"),
     ("#JOYTEST 2048 2048 1 0\n", "NONE"),
     ("#JOYTEST 3600 2048 1 10\n", "RIGHT"),
-    ("#JOYTEST 2048 400 1 20\n", "UP"),
-    ("#JOYTEST 2048 2048 0 30\n", "PRESS"),
+    ("#JOYTEST 3600 2048 1 360\n", "NONE"),
+    ("#JOYTEST 400 2048 1 370\n", "LEFT"),
+    ("#JOYTEST 400 2048 1 720\n", "NONE"),
+    ("#JOYTEST 2048 3600 1 730\n", "DOWN"),
+    ("#JOYTEST 2048 3600 1 1080\n", "DOWN"),
+    ("#JOYTEST RESET\n", "NONE"),
+    ("#JOYTEST 2048 2048 0 0\n", "NONE"),
+    ("#JOYTEST 2048 2048 0 25\n", "NONE"),
+    ("#JOYTEST 2048 2048 1 30\n", "NONE"),
+    ("#JOYTEST 2048 2048 1 55\n", "PRESS"),
+    ("#JOYTEST RESET\n", "NONE"),
+    ("#JOYTEST 2048 2048 0 0\n", "NONE"),
+    ("#JOYTEST 2048 2048 0 25\n", "NONE"),
+    ("#JOYTEST 2048 2048 0 1025\n", "LONG_PRESS"),
+    ("#JOYTEST 2048 2048 1 1030\n", "NONE"),
+    ("#JOYTEST 2048 2048 1 1055\n", "NONE"),
 ]
 
 

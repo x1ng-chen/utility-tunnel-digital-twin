@@ -202,10 +202,14 @@ static void UiTest_HandleLine(void)
   char command_id[40];
   char acknowledgement[16];
 
-  if (sscanf(ui_test_line, "#JOYTEST %u %u %u %lu", &x, &y, &switch_released, &now_ms) == 4) {
+  if (strcmp(ui_test_line, "#JOYTEST RESET") == 0) {
+    Joystick_TestReset(2048U, 2048U);
+    JoystickTest_Report(UI_EVT_NONE);
+    return;
+  } else if (sscanf(ui_test_line, "#JOYTEST %u %u %u %lu", &x, &y, &switch_released, &now_ms) == 4) {
     if ((x > 4095U) || (y > 4095U) || (switch_released > 1U)) return;
-    JoystickTest_Report(Joystick_TestSample((uint16_t)x, (uint16_t)y, (uint8_t)switch_released,
-                                            (uint32_t)now_ms));
+    JoystickTest_Report(Joystick_TestProcessSample((uint16_t)x, (uint16_t)y,
+                                                   (uint8_t)switch_released, (uint32_t)now_ms));
     return;
   } else if (strcmp(ui_test_line, "#UITEST RESET") == 0) {
     UiState_Init(&ui_test_state);
@@ -298,10 +302,10 @@ int main(void)
   {
     const uint32_t now = HAL_GetTick();
     UiInputEvent event;
-    PollUiTest();
-    PollEsp(&received_count, &peer);
     event = Joystick_Poll(now);
     if (event != UI_EVT_NONE) (void)UiState_Handle(&ui_test_state, event, now);
+    PollUiTest();
+    PollEsp(&received_count, &peer);
     UiState_Tick(&ui_test_state, now);
     if ((now - last_heartbeat) >= ESP_HEARTBEAT_INTERVAL_MS)
     {

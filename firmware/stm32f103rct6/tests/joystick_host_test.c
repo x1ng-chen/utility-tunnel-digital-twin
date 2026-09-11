@@ -11,14 +11,18 @@
 
 int main(void)
 {
-  CHECK(Joystick_TestSample(2048U, 2048U, 1U, 0U) == UI_EVT_NONE);
-  CHECK(Joystick_TestSample(3600U, 2048U, 1U, 10U) == UI_EVT_RIGHT);
-  CHECK(Joystick_TestSample(2048U, 400U, 1U, 20U) == UI_EVT_UP);
-  CHECK(Joystick_TestSample(2048U, 2048U, 0U, 30U) == UI_EVT_PRESS);
-
   Joystick_TestReset(2048U, 2048U);
   CHECK(Joystick_TestProcessSample(2048U, 2048U, 1U, 0U) == UI_EVT_NONE);
   CHECK(Joystick_TestProcessSample(3600U, 2048U, 1U, 10U) == UI_EVT_RIGHT);
+  CHECK(Joystick_TestProcessSample(3600U, 2048U, 1U, 360U) == UI_EVT_NONE);
+  CHECK(Joystick_TestProcessSample(400U, 2048U, 1U, 370U) == UI_EVT_LEFT);
+  CHECK(Joystick_TestProcessSample(400U, 2048U, 1U, 720U) == UI_EVT_NONE);
+  CHECK(Joystick_TestProcessSample(2048U, 3600U, 1U, 730U) == UI_EVT_DOWN);
+  CHECK(Joystick_TestProcessSample(2048U, 3600U, 1U, 1080U) == UI_EVT_DOWN);
+  CHECK(Joystick_TestProcessSample(2048U, 3600U, 1U, 1180U) == UI_EVT_DOWN);
+
+  Joystick_TestReset(2048U, 2048U);
+  CHECK(Joystick_TestProcessSample(3600U, 2048U, 1U, 0U) == UI_EVT_RIGHT);
   CHECK(Joystick_TestProcessSample(2450U, 2048U, 1U, 100U) == UI_EVT_NONE);
   CHECK(Joystick_TestProcessSample(2400U, 2048U, 1U, 110U) == UI_EVT_NONE);
   CHECK(Joystick_TestProcessSample(2048U, 400U, 1U, 120U) == UI_EVT_UP);
@@ -31,10 +35,23 @@ int main(void)
   CHECK(Joystick_TestProcessSample(2048U, 2048U, 1U, 0U) == UI_EVT_NONE);
   CHECK(Joystick_TestProcessSample(2048U, 2048U, 0U, 10U) == UI_EVT_NONE);
   CHECK(Joystick_TestProcessSample(2048U, 2048U, 0U, 34U) == UI_EVT_NONE);
-  CHECK(Joystick_TestProcessSample(2048U, 2048U, 0U, 35U) == UI_EVT_PRESS);
+  CHECK(Joystick_TestProcessSample(2048U, 2048U, 0U, 35U) == UI_EVT_NONE);
   CHECK(Joystick_TestProcessSample(2048U, 2048U, 0U, 1034U) == UI_EVT_NONE);
   CHECK(Joystick_TestProcessSample(2048U, 2048U, 0U, 1035U) == UI_EVT_LONG_PRESS);
   CHECK(Joystick_TestProcessSample(2048U, 2048U, 0U, 2035U) == UI_EVT_NONE);
+  CHECK(Joystick_TestProcessSample(2048U, 2048U, 1U, 2040U) == UI_EVT_NONE);
+  CHECK(Joystick_TestProcessSample(2048U, 2048U, 1U, 2065U) == UI_EVT_NONE);
+
+  Joystick_TestReset(2048U, 2048U);
+  CHECK(Joystick_TestProcessSample(2048U, 3600U, 1U, 0U) == UI_EVT_DOWN);
+  CHECK(Joystick_TestProcessSample(2048U, 3600U, 1U, 350U) == UI_EVT_DOWN);
+  CHECK(Joystick_TestProcessSample(2048U, 3600U, 1U, 450U) == UI_EVT_DOWN);
+
+  Joystick_TestReset(2048U, 2048U);
+  CHECK(Joystick_TestProcessSample(2048U, 2048U, 0U, 0U) == UI_EVT_NONE);
+  CHECK(Joystick_TestProcessSample(2048U, 2048U, 0U, 25U) == UI_EVT_NONE);
+  CHECK(Joystick_TestProcessSample(2048U, 2048U, 1U, 30U) == UI_EVT_NONE);
+  CHECK(Joystick_TestProcessSample(2048U, 2048U, 1U, 55U) == UI_EVT_PRESS);
 
   (void)puts("Joystick host test: PASS");
   return 0;

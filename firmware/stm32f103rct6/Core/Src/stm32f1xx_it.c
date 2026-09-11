@@ -20,6 +20,9 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f1xx_it.h"
+#ifdef NODE_B_FIRMWARE
+#include "joystick.h"
+#endif
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
@@ -217,6 +220,13 @@ void EXTI9_5_IRQHandler(void)
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_6);
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_7);
 }
+
+#ifdef NODE_B_FIRMWARE
+void DMA1_Channel1_IRQHandler(void)
+{
+  Joystick_DmaIrqHandler();
+}
+#endif
 
 /* USER CODE BEGIN 1 */
 
