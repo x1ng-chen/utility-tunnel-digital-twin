@@ -23,6 +23,7 @@ namespace {
 // Match the STM32 USART2 configuration in led_blink.ioc.
 constexpr uint32_t kSerialBaud = 9600;
 constexpr uint32_t kReconnectIntervalMs = 5000;
+constexpr uint32_t kWiFiConnectTimeoutMs = 30000;
 constexpr size_t kMaxSerialFrame = 768;
 constexpr uint8_t kPendingFrameCapacity = 8;
 constexpr uint8_t kLedPin = 2;
@@ -43,6 +44,7 @@ uint8_t pendingHead = 0;
 uint8_t pendingCount = 0;
 uint32_t lastWiFiAttempt = 0;
 uint32_t lastMqttAttempt = 0;
+bool wifiAttemptActive = false;
 BrokerEndpoint brokerEndpoint{};
 BrokerEndpoint savedBrokerEndpoint{};
 bool brokerAvailable = false;
@@ -111,9 +113,9 @@ void printStatus() {
   const String broker = brokerAvailable
                             ? brokerIp().toString() + ":" + String(brokerEndpoint.port)
                             : "unknown";
-  Serial.printf("#STATUS wifi=%s ip=%s rssi=%d mqtt=%s broker=%s queued=%u heap=%u\r\n",
+  Serial.printf("#STATUS wifi=%s wifi_code=%d ip=%s rssi=%d mqtt=%s broker=%s queued=%u heap=%u\r\n",
                 WiFi.status() == WL_CONNECTED ? "up" : "down",
-                WiFi.localIP().toString().c_str(), WiFi.RSSI(),
+                static_cast<int>(WiFi.status()), WiFi.localIP().toString().c_str(), WiFi.RSSI(),
                 mqtt.connected() ? "up" : "down", broker.c_str(), pendingCount, ESP.getFreeHeap());
 }
 
@@ -127,7 +129,15 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
 }
 
 void connectWiFi() {
-  if (WiFi.status() == WL_CONNECTED || millis() - lastWiFiAttempt < kReconnectIntervalMs) return;
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiAttemptActive = false;
+    return;
+  }
+  if (wifiAttemptActive && millis() - lastWiFiAttempt < kWiFiConnectTimeoutMs) return;
+  if (wifiAttemptActive) {
+    Serial.printf("#WIFI retry status=%d\r\n", static_cast<int>(WiFi.status()));
+    WiFi.disconnect(false);
+  }
   lastWiFiAttempt = millis();
   if (strcmp(WIFI_SSID, "replace-me") == 0) {
     Serial.println("#ERROR create include/secrets.h before deployment");
@@ -137,6 +147,7 @@ void connectWiFi() {
   WiFi.persistent(false);
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  wifiAttemptActive = true;
   Serial.println("#WIFI connecting");
 }
 
