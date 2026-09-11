@@ -57,7 +57,7 @@
 
 实际 frontend/package.json：Vue 3、Vite、TypeScript、Pinia、Vue Router、Three.js、ECharts/vue-echarts、Leaflet、Axios、Lucide、VueUse，已有 Tailwind/PostCSS。**当前依赖没有 Element Plus，不要按旧技术栈图片谎称已使用。**
 
-后端：Django `>=5.2.17,<5.3`、DRF、psycopg、django-cors-headers、python-dotenv、gunicorn、paho-mqtt。生产目标 PostgreSQL 16/PostGIS，局部开发/隔离测试 SQLite；Docker/Nginx 已有部署制品。保持现有栈，不随意替换框架或升级依赖。
+后端：Django `>=5.2.17,<5.3`、DRF、psycopg、django-cors-headers、python-dotenv、gunicorn、paho-mqtt。生产目标为 PostgreSQL 16；当前 GIS 使用校验后的 GeoJSON/JSONB，不部署 PostGIS。局部开发/隔离测试 SQLite；Docker/Nginx 已有部署制品。保持现有栈，不随意替换框架或升级依赖。
 
 前端重构曾选用 `industrial-brutalist-ui` skill，走深色工业控制台方向；自动化使用 `playwright` skill。接手者按自身环境读取完整 skill 指令，用户的中文、简洁、可读、性能要求高于装饰性风格规则。参考 ActiveTheory 不等于复制对方受保护源码。
 

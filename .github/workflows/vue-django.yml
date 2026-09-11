@@ -182,6 +182,9 @@ jobs:
           assert acknowledged.status_code == 200, acknowledged.content;
           linked = client.post(f'/api/alerts/{alert.pk}/work-order/', format='json', HTTP_HOST='localhost');
           assert linked.status_code in {200, 201}, linked.content"
+      - name: Verify runtime model publication permissions
+        shell: bash
+        run: DATABASE_URL="$CI_RUNTIME_URL" python manage.py verify_runtime_model_permissions
       - name: Verify schema and destructive writes are denied
         shell: bash
         run: |

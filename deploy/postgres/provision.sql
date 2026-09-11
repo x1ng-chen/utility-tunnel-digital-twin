@@ -1,6 +1,8 @@
--- Run once *after Django migrations and seed_demo* in the managed PostgreSQL
--- console as the project database owner. The application runtime account is
--- intentionally separate from the migration/release identity.
+-- Run once after Django migrations in the managed PostgreSQL console as the
+-- project database owner. Production must not run seed_demo; create the first
+-- administrator through the controlled production-account process instead.
+-- The application runtime account is intentionally separate from the
+-- migration/release identity.
 -- Replace the bracketed values outside of source control. Do not paste a real
 -- password into this file or commit it after editing.
 --
@@ -93,10 +95,14 @@ GRANT INSERT (asset_id, protocol, device_identifier, endpoint,
 GRANT UPDATE (asset_id, protocol, device_identifier, endpoint,
   expected_interval_seconds, status, last_heartbeat_at, version, updated_at)
   ON operations_hardwarebinding TO ut_runtime;
-GRANT INSERT (version, model_file, original_name, sha256, size_bytes, notes,
-  status, uploaded_by_id, activated_by_id, activated_at, created_at)
+GRANT INSERT (version, model_file, original_name, sha256, size_bytes,
+  node_count, mesh_count, named_node_count, node_names,
+  node_inventory_available, duplicate_node_names, missing_asset_codes,
+  is_compatible, notes, status, uploaded_by_id, activated_by_id, activated_at,
+  created_at)
   ON operations_twinmodelrelease TO ut_runtime;
-GRANT UPDATE (status, activated_by_id, activated_at)
+GRANT UPDATE (status, missing_asset_codes, is_compatible, activated_by_id,
+  activated_at)
   ON operations_twinmodelrelease TO ut_runtime;
 
 -- BigAutoField-backed inserts need sequence usage, but the API must not be

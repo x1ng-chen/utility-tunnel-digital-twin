@@ -188,6 +188,18 @@ if INGEST_API_KEY and len(INGEST_API_KEY) < 32:
     raise ValueError('DJANGO_INGEST_API_KEY must contain at least 32 characters when configured.')
 if not INGEST_PRINCIPAL_USERNAME:
     raise ValueError('DJANGO_INGEST_PRINCIPAL_USERNAME must not be empty.')
+CONNECTIVITY_MONITOR_TOKEN = os.getenv('CONNECTIVITY_MONITOR_TOKEN', '').strip()
+CONNECTIVITY_MONITOR_URL = os.getenv('CONNECTIVITY_MONITOR_URL', 'http://api:8000/api/internal/connectivity/reconcile/').strip()
+try:
+    CONNECTIVITY_RECONCILE_INTERVAL_SECONDS = int(os.getenv('CONNECTIVITY_RECONCILE_INTERVAL_SECONDS', '15'))
+except ValueError as exc:
+    raise ValueError('CONNECTIVITY_RECONCILE_INTERVAL_SECONDS must be an integer.') from exc
+if IS_PRODUCTION and len(CONNECTIVITY_MONITOR_TOKEN) < 32:
+    raise RuntimeError('CONNECTIVITY_MONITOR_TOKEN must contain at least 32 characters in production.')
+if not CONNECTIVITY_MONITOR_URL.startswith(('http://', 'https://')):
+    raise ValueError('CONNECTIVITY_MONITOR_URL must be an HTTP(S) URL.')
+if not 5 <= CONNECTIVITY_RECONCILE_INTERVAL_SECONDS <= 3600:
+    raise ValueError('CONNECTIVITY_RECONCILE_INTERVAL_SECONDS must be between 5 and 3600.')
 REGISTRATION_SETUP_TTL_SECONDS = int(os.getenv('REGISTRATION_SETUP_TTL_SECONDS', '86400'))
 if REGISTRATION_SETUP_TTL_SECONDS <= 0:
     raise ValueError('REGISTRATION_SETUP_TTL_SECONDS must be greater than zero.')

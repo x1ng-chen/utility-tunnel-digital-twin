@@ -7,7 +7,7 @@ import io
 import json
 from math import isfinite
 import re
-from secrets import token_urlsafe
+from secrets import compare_digest, token_urlsafe
 import struct
 from uuid import uuid4
 from django.conf import settings
@@ -29,7 +29,7 @@ from rest_framework.views import APIView
 
 from .authentication import BearerTokenAuthentication, IngestApiKeyAuthentication
 from .command_dispatch import CommandDispatchError, publish_controller_command
-from .connectivity import count_online_assets, mark_assets_connected
+from .connectivity import count_online_assets, mark_assets_connected, reconcile_connectivity
 from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder, WorkOrderEvent
 from .permissions import AuthenticatedRead, TelemetryPermission
 from .realtime import publish_alert, publish_alert_by_id, publish_asset, publish_telemetry, publish_work_order
@@ -1544,6 +1544,36 @@ class WorkOrderTransitionView(APIView):
         return Response(WorkOrderSerializer(order).data)
 
 
+class InternalConnectivityReconcileView(APIView):
+    """Run heartbeat reconciliation in the API process that owns live clients.
+
+    The monitor is a separate container so it must not mutate connectivity
+    state locally and then publish into its own in-memory channel layer.  It
+    invokes this endpoint over the Docker-only API network; the public Nginx
+    route explicitly rejects it.  A dedicated high-entropy token keeps the
+    endpoint unavailable to ordinary users even if network policy is later
+    changed incorrectly.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        expected = settings.CONNECTIVITY_MONITOR_TOKEN
+        supplied = request.headers.get('X-Connectivity-Monitor-Token', '')
+        if not expected:
+            return error_response('service_unavailable', 'Connectivity monitor is not configured.', 503)
+        if not supplied or not compare_digest(supplied, expected):
+            return error_response('forbidden', 'Connectivity monitor authentication failed.', 403)
+        result = reconcile_connectivity()
+        return Response({
+            'online': result.online,
+            'offline': result.offline,
+            'alertsCreated': result.alerts_created,
+            'alertsResolved': result.alerts_resolved,
+        })
+
+
 class TelemetryListView(APIView):
     authentication_classes = [IngestApiKeyAuthentication, BearerTokenAuthentication]
     permission_classes = [TelemetryPermission]
@@ -1578,7 +1608,6 @@ class TelemetryListView(APIView):
                 invalid_assets = sorted(code for code in asset_codes if code not in assets or not assets[code].is_active)
                 if invalid_assets:
                     return error_response('validation_error', 'Telemetry references missing or inactive assets.', 400, {'assetCode': invalid_assets})
-                mark_assets_connected(assets.values(), request.user, request_id(request))
                 metric_keys = {item['metricKey'] for item in validated}
                 thresholds = Threshold.objects.filter(key__in=metric_keys).in_bulk(field_name='key')
                 unit_errors = sorted({item['metricKey'] for item in validated if item['metricKey'] in thresholds and item['unit'] != thresholds[item['metricKey']].unit})
@@ -1596,10 +1625,16 @@ class TelemetryListView(APIView):
                             {'eventId': item['eventId']},
                         )
 
+                # Only a fully validated, idempotent batch is allowed to renew
+                # heartbeat state or resolve a communication alert.  Returning
+                # an input error from inside ``atomic`` otherwise commits
+                # earlier writes, which would make an invalid payload look like
+                # a truthful device recovery.
+                connectivity_changes = mark_assets_connected(assets.values(), request.user, request_id(request))
                 stored = []
                 created_readings = []
-                changed_alert_ids = []
-                changed_asset_ids = set()
+                changed_alert_ids = set(connectivity_changes.changed_alert_ids)
+                changed_asset_ids = set(connectivity_changes.changed_asset_ids)
                 created_count = 0
                 duplicate_count = 0
                 rule_counts = {}
@@ -1628,7 +1663,7 @@ class TelemetryListView(APIView):
                     result = evaluate_threshold(reading, threshold, request.user, request_id(request)) if threshold else None
                     action = result.action if result else 'no_rule'
                     if result and result.alert_id and result.action in {'created', 'escalated', 'deescalated', 'resolved'}:
-                        changed_alert_ids.append(result.alert_id)
+                        changed_alert_ids.add(result.alert_id)
                     if (asset.status, asset.last_seen_at) != before_asset:
                         changed_asset_ids.add(asset.pk)
                     rule_counts[action] = rule_counts.get(action, 0) + 1
@@ -1639,14 +1674,23 @@ class TelemetryListView(APIView):
                     audit(request.user, 'telemetry.batch_ingested', 'telemetry_batch', '', {'created': created_count, 'duplicates': duplicate_count, 'rules': rule_counts}, request_id(request))
         except IntegrityError:
             return error_response('conflict', 'Telemetry ingestion conflicted with a concurrent request. Retry the same eventId values.', 409)
-        # Fan out only after the transaction committed so live subscribers never
-        # observe a change that later rolled back.
-        for reading in created_readings:
-            publish_telemetry(reading)
-        for alert_id in changed_alert_ids:
-            publish_alert_by_id(alert_id)
-        for asset in Asset.objects.filter(pk__in=changed_asset_ids):
-            publish_asset(asset)
+        # Fan out only after the *outer* transaction committed so live
+        # subscribers never observe a change that later rolls back.  This also
+        # covers callers using the view inside an outer atomic block.
+        created_readings = tuple(created_readings)
+        changed_alert_ids = tuple(sorted(changed_alert_ids))
+        changed_asset_ids = tuple(sorted(changed_asset_ids))
+
+        def publish_committed_batch():
+            for reading in created_readings:
+                publish_telemetry(reading)
+            for alert_id in changed_alert_ids:
+                publish_alert_by_id(alert_id)
+            for asset in Asset.objects.filter(pk__in=changed_asset_ids).order_by('pk'):
+                publish_asset(asset)
+
+        if created_readings or changed_alert_ids or changed_asset_ids:
+            transaction.on_commit(publish_committed_batch)
         return Response({
             'items': TelemetrySerializer(stored, many=True).data,
             'created': created_count,

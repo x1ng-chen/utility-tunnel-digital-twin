@@ -6,17 +6,19 @@
 
 ## 1. 托管 PostgreSQL
 
-1. 创建 PostgreSQL 18 实例和数据库 `utility_tunnel`，启用 TLS、每日自动备份与至少 7 天保留。
+1. 创建 **PostgreSQL 16** 实例和数据库 `utility_tunnel`，启用 TLS、每日自动备份与至少 7 天保留。当前 Django 模型把受控 GIS 几何保存为经过校验的 WGS84 GeoJSON/JSONB，**不依赖 PostGIS**；不得为本版本的应用运行 `CREATE EXTENSION postgis`，也不得把扩展创建权限授予 `ut_runtime`。若后续经评审的迁移确实引入 GIS 空间索引或拓扑查询，再在 PostgreSQL 16 兼容的托管实例中单独启用 PostGIS，并更新迁移、最小权限 SQL 和恢复演练。
 2. 使用 Django 迁移身份（数据库所有者或专用发布账号）运行：
 
 ```bash
 cd backend
 python -m pip install --require-hashes -r requirements.lock
 python manage.py migrate
-python manage.py seed_demo
+python manage.py createsuperuser
 ```
 
-3. 迁移完成后，以数据库所有者身份在平台 SQL 控制台执行 [`deploy/postgres/provision.sql`](../deploy/postgres/provision.sql)，为 Django API 创建 `ut_runtime` 最小权限账号。脚本会撤销通用表写入权限，仅授予 `backend/operations/views.py` 当前 ORM 路径所需的列级权限。
+> 生产环境严禁执行 `python manage.py seed_demo`。首个管理员只能在受控终端通过 `createsuperuser` 或已审批的账号开通流程创建；演示种子仅限本地开发和隔离自动化数据库。
+
+3. 迁移完成并创建首个受控管理员后，以数据库所有者身份在平台 SQL 控制台执行 [`deploy/postgres/provision.sql`](../deploy/postgres/provision.sql)，为 Django API 创建 `ut_runtime` 最小权限账号。脚本会撤销通用表写入权限，仅授予 `backend/operations/views.py` 当前 ORM 路径所需的列级权限。
 4. 将 API 的 `DATABASE_URL` 配置为 `ut_runtime` 的 TLS 连接串。运行时账号不应拥有 `CREATE`、`DROP`、数据库管理员或角色管理权限；后续新增表或写入列时，必须随发布 SQL 显式审查并补充授权。
 
 ## 2. API 环境
@@ -25,15 +27,17 @@ python manage.py seed_demo
 
 - `DATABASE_URL`：只允许 TLS 的运行时账号连接串；
 - `DJANGO_SECRET_KEY`：每个环境独立、至少 32 个随机字符；
-- `DJANGO_ENV=production`、`DJANGO_ALLOWED_HOSTS` 和 `CORS_ALLOWED_ORIGINS`；
+- `DJANGO_ENV=production`、`DJANGO_ALLOWED_HOSTS` 和 `CORS_ALLOWED_ORIGINS`；`DJANGO_ALLOWED_HOSTS` 只能填写精确的公开域名/IP（不含协议、不得使用 `*`），首项作为 API 容器就绪检查的 `Host` 头。健康检查仍连接容器内 `127.0.0.1`，不要为了探针而把 `localhost` 或任意主机加入公开白名单；
 - `DJANGO_CSRF_TRUSTED_ORIGINS`：与前端 HTTPS Origin 精确匹配；生产环境不得使用开发机 Origin；
-- `DJANGO_SECURE_SSL_REDIRECT=true`、`DJANGO_ENABLE_HSTS=true` 与 `DJANGO_TRUST_PROXY_SSL=true`：本项目的 Nginx TLS 终止架构必须信任 `X-Forwarded-Proto`，避免 HTTPS 重定向循环；
+- `DJANGO_SECURE_SSL_REDIRECT=true`、`DJANGO_ENABLE_HSTS=true` 与 `DJANGO_TRUST_PROXY_SSL=true`：在本项目的固定链路“公网 TLS 边缘代理 → 回环 `127.0.0.1:8080` 内层 Nginx → Docker 内部 Django”中启用。内层 Nginx 不转发请求携带的 `X-Forwarded-Proto`，而是在受限回环跳点固定生成 `https` 后再交给 Django，避免任意客户端伪造该头造成安全请求误判；
+- `DJANGO_TRUST_PROXY_HEADERS=false`：保持关闭。当前部署并未实现可验证来源的客户端 IP 传递，不能因为启用了 HTTPS 代理信任就同时信任用户可伪造的 `X-Forwarded-For`；如确需基于真实客户端地址限流，必须另行评审边缘代理源地址限制、头部清洗和 API 中的受信任代理策略；
+- `CONNECTIVITY_MONITOR_TOKEN`：由密钥管理服务注入、至少 32 个随机字符。独立监测容器只可经 Docker 内网以该令牌请求 API 进程执行巡检；该接口不经公网 Nginx 暴露。监测命令和 API 健康检查均会在受控内部请求中显式标注 `X-Forwarded-Proto: https`，以避免 HTTPS 强制跳转到无 TLS 的容器端口；`CONNECTIVITY_RECONCILE_INTERVAL_SECONDS` 默认 15，允许范围 5–3600 秒；
 - `DATABASE_URL`：`ut_runtime` 的 PostgreSQL TLS 连接串；
 - `API_TOKEN_TTL_SECONDS`、`API_TOKEN_RENEWAL_WINDOW_SECONDS`、`LOGIN_RATE_LIMIT`、`REGISTRATION_RATE_LIMIT`、`PASSWORD_SETUP_RATE_LIMIT` 与 `PASSWORD_CHANGE_RATE_LIMIT`：按安全策略设置；人员令牌在临近过期时于重新登录中提前轮换，登录、注册申请、一次性密码设置和已认证改密分别限流，避免不同入口互相消耗安全预算；
 - `DJANGO_MAX_REQUEST_BYTES` 与 `DJANGO_MAX_REQUEST_FIELDS`：限制单次请求体大小和字段数量，防止异常请求耗尽内存；
 - `TWIN_MODEL_MAX_BYTES`：三维 GLB 上传上限，默认 32 MB；反向代理请求体上限必须不小于该值；
 - `DJANGO_CACHE_BACKEND` 与 `DJANGO_CACHE_LOCATION`：登录限流必须使用跨进程共享缓存；如果使用 Django 内置 `DatabaseCache`，迁移后执行一次 `python manage.py createcachetable <cache_table>`；
-- `SEED_ADMIN_*`：仅首次种子初始化使用，之后从运行环境移除。
+- `SEED_ADMIN_*`：生产环境不得设置或使用；它们只允许出现在本地开发或隔离自动化数据库的演示种子配置中。
 
 启动后依次检查：
 
@@ -42,6 +46,10 @@ GET /api/health/   # 进程存活
 GET /api/ready/    # 数据库可用
 POST /api/auth/login/
 ```
+
+### HTTPS 代理信任边界
+
+`web` 服务只发布到宿主机回环地址 `127.0.0.1:8080`。公网入口必须由同一受控主机上的 TLS 终止代理、负载均衡器或 CDN 接收，并在到达该回环端口前完成 HTTP→HTTPS 重定向；禁止将 `8080`、API 容器 `8000` 或 Docker 网络直接暴露给公网。外层代理应清除客户端自带的 `X-Forwarded-Proto`、`X-Forwarded-For` 与 `X-Real-IP`，自行生成所需的日志/追踪头。内层 Nginx 只把自己生成的 `X-Forwarded-Proto: https` 发送给 Django，因此 Django 信任的是受网络边界保护的内部代理，而不是浏览器提交的任意头部。
 
 上线前在 ECS 应用目录执行一次生产预检（该命令不修改业务数据）：
 
@@ -59,7 +67,7 @@ python manage.py release_preflight --clean-test-data --require-model --format=js
 
 ### 容器化制品
 
-仓库提供无需在开发电脑额外安装服务的部署制品：`deploy/containers/Dockerfile.api`、`Dockerfile.web` 与 `docker-compose.production.yml`。它们以非 root API 用户、只读文件系统、内部 API 网络和回环 Web 端口为默认安全边界；真实 RDS 始终由外部托管，不会被 Compose 以数据卷方式创建。编排中的 `connectivity-monitor` 默认每 15 秒运行心跳巡检，把超时绑定转为离线状态和通信告警；它与 API 使用同一最小权限数据库身份。
+仓库提供无需在开发电脑额外安装服务的部署制品：`deploy/containers/Dockerfile.api`、`Dockerfile.web` 与 `docker-compose.production.yml`。它们以非 root API 用户、只读文件系统、内部 API 网络和回环 Web 端口为默认安全边界；真实 RDS 始终由外部托管，不会被 Compose 以数据卷方式创建。编排中的 `connectivity-monitor` 默认每 15 秒请求 API 进程运行心跳巡检，把超时绑定转为离线状态和通信告警；它不直接写业务库，因此告警与设备状态会在同一 API 进程的 WebSocket 事件总线中发布。此保证只适用于当前单 API 进程部署；横向扩容前必须先实施持久 outbox 与跨进程消息代理。
 
 在具备 Docker 和华为云环境变量的 ECS 上，按 [容器部署说明](../deploy/containers/README.md) 执行。构建完成后必须在 API 容器内运行：
 

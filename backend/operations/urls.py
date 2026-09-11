@@ -1,10 +1,11 @@
 from django.urls import path
-from .views import AdminRegistrationRequestDetailView, AdminRegistrationRequestListView, AdminRegistrationSetupTokenView, AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, ControllerCommandView, DashboardView, HardwareBindingDetailView, HardwareBindingListView, HealthView, LoginView, LogoutView, MeView, PasswordChangeView, ReadyView, RegistrationPasswordSetupView, RegistrationRequestView, ReportExportDownloadView, ReportExportView, SpatialFeatureDetailView, SpatialFeatureImportView, SpatialFeatureListView, TelemetryListView, TelemetrySummaryView, ThresholdDetailView, ThresholdListView, TwinModelFileView, TwinModelReadinessView, TwinModelReleaseActivateView, TwinModelReleaseListView, WorkOrderListView, WorkOrderTransitionView
+from .views import AdminRegistrationRequestDetailView, AdminRegistrationRequestListView, AdminRegistrationSetupTokenView, AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, ControllerCommandView, DashboardView, HardwareBindingDetailView, HardwareBindingListView, HealthView, InternalConnectivityReconcileView, LoginView, LogoutView, MeView, PasswordChangeView, ReadyView, RegistrationPasswordSetupView, RegistrationRequestView, ReportExportDownloadView, ReportExportView, SpatialFeatureDetailView, SpatialFeatureImportView, SpatialFeatureListView, TelemetryListView, TelemetrySummaryView, ThresholdDetailView, ThresholdListView, TwinModelFileView, TwinModelReadinessView, TwinModelReleaseActivateView, TwinModelReleaseListView, WorkOrderListView, WorkOrderTransitionView
 
 
 urlpatterns = [
     path('health/', HealthView.as_view()),
     path('ready/', ReadyView.as_view()),
+    path('internal/connectivity/reconcile/', InternalConnectivityReconcileView.as_view()),
     path('auth/login/', LoginView.as_view()),
     path('auth/registration-requests/', RegistrationRequestView.as_view()),
     path('auth/registration-requests/setup/', RegistrationPasswordSetupView.as_view()),

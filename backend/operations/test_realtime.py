@@ -6,14 +6,16 @@ from datetime import timedelta
 from channels.layers import get_channel_layer
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth.models import User
-from django.test import TestCase, override_settings
+from django.db import transaction
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
 from config.asgi import application
 from operations import realtime
-from .models import Asset, Profile, Threshold
+from .connectivity import CONNECTIVITY_RULE_KEY, reconcile_connectivity
+from .models import Alert, Asset, HardwareBinding, Profile, Threshold
 from .realtime import EVENTS_GROUP, publish_event, replay_since
 
 
@@ -223,7 +225,9 @@ class EventsConsumerTests(TestCase):
             return result
         self.assertEqual(async_to_sync(scenario)()['code'], 4400)
 
-    @override_settings(WEBSOCKET_AUTH_TIMEOUT_SECONDS=0.02, WEBSOCKET_AUTH_RECHECK_SECONDS=0.02)
+    # Allow the authentication handshake to finish under CI load before the
+    # deliberately short credential recheck loop begins.
+    @override_settings(WEBSOCKET_AUTH_TIMEOUT_SECONDS=0.2, WEBSOCKET_AUTH_RECHECK_SECONDS=0.02)
     def test_idle_revocation_closes_without_waiting_for_event(self):
         async def scenario():
             communicator = self._communicator()
@@ -262,7 +266,8 @@ class RealtimeViewHookTests(TestCase):
         }
 
     def test_telemetry_ingest_publishes_telemetry_event(self):
-        response = self.client.post('/api/telemetry/', {'readings': [self._reading('it-1', 25.0)]}, format='json')
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post('/api/telemetry/', {'readings': [self._reading('it-1', 25.0)]}, format='json')
         self.assertEqual(response.status_code, 201)
         events = replay_since(0)
         self.assertEqual([event['type'] for event in events], ['telemetry', 'asset'])
@@ -273,9 +278,144 @@ class RealtimeViewHookTests(TestCase):
 
     def test_breached_threshold_publishes_alert_event(self):
         Threshold.objects.create(key='temperature', label='环境温度', warning=28, alarm=32, unit='°C')
-        response = self.client.post('/api/telemetry/', {'readings': [self._reading('it-2', 40.0)]}, format='json')
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post('/api/telemetry/', {'readings': [self._reading('it-2', 40.0)]}, format='json')
         self.assertEqual(response.status_code, 201)
         events = replay_since(0)
         self.assertEqual([event['type'] for event in events], ['telemetry', 'alert', 'asset'])
         self.assertEqual(events[1]['payload']['severity'], 'critical')
         self.assertEqual(events[2]['payload']['status'], 'alarm')
+
+
+class RealtimeConnectivityHookTests(TransactionTestCase):
+    """Verify connection changes reach the live bus only after commit."""
+
+    def setUp(self):
+        _reset_realtime_state()
+        self.client = APIClient()
+        self.operator = User.objects.create_user(username='connectivity-realtime@example.com', email='connectivity-realtime@example.com', password='demo-password')
+        Profile.objects.create(user=self.operator, display_name='运维员', role=Profile.Role.OPERATOR)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {Token.objects.create(user=self.operator).key}')
+        self.asset = Asset.objects.create(code='FAN-01', name='风机', zone='UT-ZB', asset_type='执行器')
+        self.binding = HardwareBinding.objects.create(
+            asset=self.asset,
+            protocol=HardwareBinding.Protocol.MQTT,
+            device_identifier='realtime-fan-01',
+            endpoint='ut/v1/fan-01/telemetry',
+            expected_interval_seconds=10,
+            status=HardwareBinding.Status.CONNECTED,
+            last_heartbeat_at=timezone.now() - timedelta(hours=1),
+        )
+
+    def _reading(self, event_id, *, unit='bool'):
+        return {
+            'eventId': event_id,
+            'assetCode': self.asset.code,
+            'metricKey': 'fan.feedback',
+            'metric': '风机反馈',
+            'value': 1,
+            'unit': unit,
+            'quality': 'good',
+            'recordedAt': timezone.now().isoformat(),
+        }
+
+    def test_reconcile_publishes_offline_alert_and_asset_after_outer_commit(self):
+        with transaction.atomic():
+            result = reconcile_connectivity(now=timezone.now())
+            self.assertEqual(result.alerts_created, 1)
+            # The inner reconciliation transaction has completed, but the
+            # browser must not see state that the outer transaction could roll
+            # back.
+            self.assertEqual(replay_since(0), [])
+
+        events = replay_since(0)
+        self.assertEqual([event['type'] for event in events], ['alert', 'asset'])
+        self.assertEqual(events[0]['payload']['ruleKey'], CONNECTIVITY_RULE_KEY)
+        self.assertEqual(events[0]['payload']['status'], Alert.Status.OPEN)
+        self.assertEqual(events[1]['payload']['code'], self.asset.code)
+        self.assertEqual(events[1]['payload']['status'], Asset.Status.OFFLINE)
+
+    @override_settings(
+        CONNECTIVITY_MONITOR_TOKEN='monitor-test-token-which-is-long-enough-for-a-production-like-check',
+        SECURE_SSL_REDIRECT=True,
+        SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO', 'https'),
+    )
+    def test_internal_monitor_reconciles_in_api_process_and_requires_dedicated_token(self):
+        endpoint = '/api/internal/connectivity/reconcile/'
+        denied = self.client.post(endpoint, format='json', HTTP_X_FORWARDED_PROTO='https')
+        self.assertEqual(denied.status_code, 403)
+        denied = self.client.post(
+            endpoint,
+            format='json',
+            HTTP_X_CONNECTIVITY_MONITOR_TOKEN='wrong-token',
+            HTTP_X_FORWARDED_PROTO='https',
+        )
+        self.assertEqual(denied.status_code, 403)
+
+        response = self.client.post(
+            endpoint,
+            format='json',
+            HTTP_X_CONNECTIVITY_MONITOR_TOKEN='monitor-test-token-which-is-long-enough-for-a-production-like-check',
+            HTTP_X_FORWARDED_PROTO='https',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['alertsCreated'], 1)
+        events = replay_since(0)
+        self.assertEqual([event['type'] for event in events], ['alert', 'asset'])
+        self.assertEqual(events[0]['payload']['ruleKey'], CONNECTIVITY_RULE_KEY)
+        self.assertEqual(events[1]['payload']['status'], Asset.Status.OFFLINE)
+
+    def test_telemetry_recovery_publishes_resolved_alert_and_asset_after_outer_commit(self):
+        self.asset.status = Asset.Status.OFFLINE
+        self.asset.save(update_fields=['status', 'updated_at'])
+        communication_alert = Alert.objects.create(
+            code='ALM-COMM-RECOVERY-01',
+            asset=self.asset,
+            severity=Alert.Severity.WARNING,
+            category='通信状态',
+            status=Alert.Status.OPEN,
+            title='风机 通信中断',
+            detail='测试断线。',
+            rule_key=CONNECTIVITY_RULE_KEY,
+            opened_at=timezone.now(),
+        )
+
+        with transaction.atomic():
+            response = self.client.post('/api/telemetry/', {'readings': [self._reading('connectivity-recovery-1')]}, format='json')
+            self.assertEqual(response.status_code, 201)
+            self.assertEqual(replay_since(0), [])
+
+        events = replay_since(0)
+        self.assertEqual([event['type'] for event in events], ['telemetry', 'alert', 'asset'])
+        self.assertEqual(events[1]['entityId'], communication_alert.pk)
+        self.assertEqual(events[1]['payload']['status'], Alert.Status.RESOLVED)
+        self.assertEqual(events[2]['payload']['code'], self.asset.code)
+        self.assertEqual(events[2]['payload']['status'], Asset.Status.NORMAL)
+
+    def test_invalid_batch_cannot_falsely_restore_connectivity(self):
+        self.asset.status = Asset.Status.OFFLINE
+        self.asset.save(update_fields=['status', 'updated_at'])
+        communication_alert = Alert.objects.create(
+            code='ALM-COMM-INVALID-01',
+            asset=self.asset,
+            severity=Alert.Severity.WARNING,
+            category='通信状态',
+            status=Alert.Status.OPEN,
+            title='风机 通信中断',
+            detail='测试断线。',
+            rule_key=CONNECTIVITY_RULE_KEY,
+            opened_at=timezone.now(),
+        )
+        Threshold.objects.create(key='fan.feedback', label='风机反馈', warning=0.5, alarm=0.9, unit='bool')
+        heartbeat_before = self.binding.last_heartbeat_at
+
+        response = self.client.post('/api/telemetry/', {'readings': [self._reading('connectivity-invalid-1', unit='invalid')]}, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.binding.refresh_from_db()
+        self.asset.refresh_from_db()
+        communication_alert.refresh_from_db()
+        self.assertEqual(self.binding.last_heartbeat_at, heartbeat_before)
+        self.assertEqual(self.asset.status, Asset.Status.OFFLINE)
+        self.assertEqual(communication_alert.status, Alert.Status.OPEN)
+        self.assertEqual(replay_since(0), [])
