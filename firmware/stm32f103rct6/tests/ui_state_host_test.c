@@ -10,7 +10,7 @@
   } \
 } while (0)
 
-static int start_critical_command(UiState *state, const char *command_id)
+static int start_critical_sending(UiState *state)
 {
   UiEffect next;
 
@@ -27,6 +27,12 @@ static int start_critical_command(UiState *state, const char *command_id)
   next = UiState_Handle(state, UI_EVT_PRESS, 7U);
   CHECK(next.kind == UI_EFFECT_SEND_COMMAND);
   CHECK(state->command_phase == UI_CMD_SENDING);
+  return 0;
+}
+
+static int start_critical_command(UiState *state, const char *command_id)
+{
+  if (start_critical_sending(state) != 0) return 1;
   CHECK(UiState_CommandDispatched(state, command_id) == 1U);
   return 0;
 }
@@ -48,6 +54,11 @@ int main(void)
 {
   UiState state;
   UiEffect next;
+  static const char maximum_command_id[] = "012345678901234567890123456789012345678";
+  static const char over_capacity_command_id[] = "0123456789012345678901234567890123456789";
+
+  _Static_assert(sizeof(maximum_command_id) == 40U, "maximum command ID must be 39 characters");
+  _Static_assert(sizeof(over_capacity_command_id) == 41U, "over-capacity command ID must be 40 characters");
 
   if (start_critical_command(&state, "keep-1") != 0) return 1;
   next = UiState_Handle(&state, UI_EVT_LONG_PRESS, 8U);
@@ -73,6 +84,16 @@ int main(void)
   CHECK(state.command_phase == UI_CMD_TIMEOUT);
   CHECK(UiState_HandleAcknowledgement(&state, "timeout-1", 1U) == 0U);
   CHECK(state.command_phase == UI_CMD_TIMEOUT);
+
+  if (start_critical_sending(&state) != 0) return 1;
+  CHECK(UiState_CommandDispatched(&state, maximum_command_id) == 1U);
+  CHECK(strcmp(state.active_command_id, maximum_command_id) == 0);
+  CHECK(UiState_HandleAcknowledgement(&state, maximum_command_id, 1U) == 1U);
+  CHECK(state.command_phase == UI_CMD_ACCEPTED);
+
+  if (start_critical_sending(&state) != 0) return 1;
+  CHECK(UiState_CommandDispatched(&state, over_capacity_command_id) == 0U);
+  CHECK(state.active_command_id[0] == '\0');
 
   if (move_to_critical_fans_row(&state) != 0) return 1;
   next = UiState_Handle(&state, UI_EVT_PRESS, 6U);

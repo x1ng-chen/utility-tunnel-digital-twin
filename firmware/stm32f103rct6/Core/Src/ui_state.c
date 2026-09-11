@@ -237,6 +237,8 @@ uint8_t UiState_CommandDispatched(UiState *state, const char *command_id)
     state->active_command_id[index] = command_id[index];
     if (command_id[index] == '\0') return 1U;
   }
+  state->active_command_id[UI_COMMAND_ID_SIZE - 1U] = '\0';
+  if (command_id[UI_COMMAND_ID_SIZE - 1U] == '\0') return 1U;
   state->active_command_id[0] = '\0';
   return 0U;
 }
