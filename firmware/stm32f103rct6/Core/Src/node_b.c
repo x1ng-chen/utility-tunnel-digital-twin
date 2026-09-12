@@ -1,6 +1,7 @@
 #include "main.h"
 #include "joystick.h"
 #include "st7735.h"
+#include "st7735_bus.h"
 #include "ui_state.h"
 
 #include <stdio.h>
@@ -28,6 +29,7 @@ static volatile uint8_t esp_rx_line_ready;
 static UiState ui_test_state;
 static char ui_test_line[UI_TEST_LINE_SIZE];
 static uint8_t ui_test_length;
+static uint16_t display_test_remaining;
 
 void SystemClock_Config(void);
 void Error_Handler(void);
@@ -190,6 +192,20 @@ static void UiTest_Report(void)
   }
 }
 
+static void DisplayTest_Report(void)
+{
+  St7735BusStats stats;
+  char message[180];
+  St7735Bus_GetStats(&stats);
+  const int length = snprintf(message, sizeof(message),
+    "#DISPLAY sysclk=%lu spi_hz=%lu dma_frames=%lu dma_timeouts=%lu worst_frame_us=%lu dma_errors=%lu\r\n",
+    (unsigned long)HAL_RCC_GetSysClockFreq(), (unsigned long)stats.spi_hz,
+    (unsigned long)stats.dma_frames, (unsigned long)stats.dma_timeouts,
+    (unsigned long)stats.worst_frame_us, (unsigned long)stats.dma_errors);
+  if (length > 0 && length < (int)sizeof(message))
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
+}
+
 static void UiTest_HandleLine(void)
 {
   UiInputEvent event = UI_EVT_NONE;
@@ -202,7 +218,13 @@ static void UiTest_HandleLine(void)
   char command_id[40];
   char acknowledgement[16];
 
-  if (strcmp(ui_test_line, "#JOYTEST RESET") == 0) {
+  if (strcmp(ui_test_line, "#DISPLAYTEST RUN") == 0) {
+    display_test_remaining = 1003U;
+    return;
+  } else if (strcmp(ui_test_line, "#DISPLAYTEST") == 0) {
+    DisplayTest_Report();
+    return;
+  } else if (strcmp(ui_test_line, "#JOYTEST RESET") == 0) {
     Joystick_TestReset(2048U, 2048U);
     JoystickTest_Report(UI_EVT_NONE);
     return;
@@ -307,6 +329,20 @@ int main(void)
     PollUiTest();
     PollEsp(&received_count, &peer);
     UiState_Tick(&ui_test_state, now);
+    /* One diagnostic transfer per loop keeps input and ESP polling scheduled. */
+    if (display_test_remaining) {
+      if (display_test_remaining > 3U) {
+        ST7735_FillRect(0, 32, LCD_WIDTH, 8,
+                       (display_test_remaining & 1U) ? LCD_RED : LCD_BLUE);
+      } else {
+        static const uint16_t colors[] = {LCD_BLUE, LCD_GREEN, LCD_RED};
+        ST7735_Clear(colors[display_test_remaining - 1U]);
+      }
+      if (--display_test_remaining == 0U) {
+        DisplayTest_Report();
+        DrawStatus(received_count, &peer);
+      }
+    }
     if ((now - last_heartbeat) >= ESP_HEARTBEAT_INTERVAL_MS)
     {
       SendHeartbeat();
@@ -324,17 +360,25 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef oscillator = {0};
   RCC_ClkInitTypeDef clock = {0};
-  oscillator.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_PeriphCLKInitTypeDef peripheral_clock = {0};
+  oscillator.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  oscillator.HSEState = RCC_HSE_ON;
+  oscillator.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
   oscillator.HSIState = RCC_HSI_ON;
   oscillator.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  oscillator.PLL.PLLState = RCC_PLL_NONE;
+  oscillator.PLL.PLLState = RCC_PLL_ON;
+  oscillator.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  oscillator.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&oscillator) != HAL_OK) Error_Handler();
   clock.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-  clock.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  clock.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   clock.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  clock.APB1CLKDivider = RCC_HCLK_DIV1;
+  clock.APB1CLKDivider = RCC_HCLK_DIV2;
   clock.APB2CLKDivider = RCC_HCLK_DIV1;
-  if (HAL_RCC_ClockConfig(&clock, FLASH_LATENCY_0) != HAL_OK) Error_Handler();
+  if (HAL_RCC_ClockConfig(&clock, FLASH_LATENCY_2) != HAL_OK) Error_Handler();
+  peripheral_clock.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+  peripheral_clock.AdcClockSelection = RCC_ADCPCLK2_DIV6;
+  if (HAL_RCCEx_PeriphCLKConfig(&peripheral_clock) != HAL_OK) Error_Handler();
 }
 
 static void MX_GPIO_Init(void)
@@ -349,7 +393,8 @@ static void MX_GPIO_Init(void)
   gpio.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &gpio);
 
-  gpio.Pin = TFT_SCL_Pin | TFT_SDA_Pin | TFT_RES_Pin | TFT_DC_Pin | TFT_CS_Pin | TFT_BLK_Pin;
+  /* PA5/PA7 are configured by the SPI1 bus; PA6 remains unused. */
+  gpio.Pin = TFT_RES_Pin | TFT_DC_Pin | TFT_CS_Pin | TFT_BLK_Pin;
   gpio.Mode = GPIO_MODE_OUTPUT_PP;
   gpio.Pull = GPIO_NOPULL;
   gpio.Speed = GPIO_SPEED_FREQ_HIGH;

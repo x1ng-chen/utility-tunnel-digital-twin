@@ -22,6 +22,7 @@
 #include "stm32f1xx_it.h"
 #ifdef NODE_B_FIRMWARE
 #include "joystick.h"
+#include "st7735_bus.h"
 #endif
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -225,6 +226,10 @@ void EXTI9_5_IRQHandler(void)
 void DMA1_Channel1_IRQHandler(void)
 {
   Joystick_DmaIrqHandler();
+}
+void DMA1_Channel3_IRQHandler(void)
+{
+  St7735Bus_DmaIrqHandler();
 }
 #endif
 

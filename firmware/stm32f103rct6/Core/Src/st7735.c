@@ -7,6 +7,12 @@
  */
 #include "st7735.h"
 #include "st7735_font.h"
+#include <stddef.h>
+#ifdef NODE_B_FIRMWARE
+#include "st7735_bus.h"
+static uint8_t line_buffers[2][ST7735_BUS_BUFFER_BYTES];
+static uint8_t transfer_failed;
+#endif
 
 /* Direct BSRR writes replace HAL_GPIO_WritePin in the pixel hot path. */
 static inline __attribute__((always_inline)) void gpio_set(uint16_t pin)
@@ -22,6 +28,9 @@ static inline __attribute__((always_inline)) void gpio_reset(uint16_t pin)
 /* ============ GPIO 初始化 ============ */
 static void ST7735_GPIO_Init(void)
 {
+#ifdef NODE_B_FIRMWARE
+    St7735Bus_Init();
+#else
     __HAL_RCC_GPIOB_CLK_ENABLE();
     GPIO_InitTypeDef gpio = {0};
     gpio.Pin   = LCD_SCK_PIN | LCD_MOSI_PIN | LCD_DC_PIN | LCD_RES_PIN
@@ -33,9 +42,11 @@ static void ST7735_GPIO_Init(void)
     /* CS 拉低常使能，BLK 拉高背光亮 */
     HAL_GPIO_WritePin(LCD_PORT, LCD_CS_PIN, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(LCD_PORT, LCD_BLK_PIN, GPIO_PIN_SET);
+#endif
 }
 
 /* ============ 软件 SPI ============ */
+#ifndef NODE_B_FIRMWARE
 static void spi_write_byte(uint8_t b)
 {
     for (int i = 0; i < 8; i++) {
@@ -46,18 +57,27 @@ static void spi_write_byte(uint8_t b)
         gpio_set(LCD_SCK_PIN);
     }
 }
+#endif
 
 /* ============ 写命令 / 写数据 ============ */
 static void ST7735_Cmd(uint8_t cmd)
 {
+#ifdef NODE_B_FIRMWARE
+    if (!transfer_failed && !St7735Bus_WriteByte(cmd, 0U)) transfer_failed = 1U;
+#else
     gpio_reset(LCD_DC_PIN);   /* DC=0 命令 */
     spi_write_byte(cmd);
+#endif
 }
 
 static void ST7735_Data(uint8_t data)
 {
+#ifdef NODE_B_FIRMWARE
+    if (!transfer_failed && !St7735Bus_WriteByte(data, 1U)) transfer_failed = 1U;
+#else
     gpio_set(LCD_DC_PIN);     /* DC=1 数据 */
     spi_write_byte(data);
+#endif
 }
 
 /* ============ 复位 ============ */
@@ -72,6 +92,9 @@ static void ST7735_Reset(void)
 /* ============ 设置地址窗口 ============ */
 static void ST7735_SetWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 {
+#ifdef NODE_B_FIRMWARE
+    transfer_failed = 0U;
+#endif
     uint16_t xs = x0 + LCD_X_OFFSET, xe = x1 + LCD_X_OFFSET;
     uint16_t ys = y0 + LCD_Y_OFFSET, ye = y1 + LCD_Y_OFFSET;
 
@@ -86,15 +109,129 @@ static void ST7735_SetWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
     ST7735_Cmd(0x2C);                       /* RAMWR 写显存 */
 }
 
-/* ============ 填充矩形 ============ */
+typedef struct {
+    int x, y, w, h;
+    uint32_t source_x, source_y;
+} ClipRect;
+
+static uint8_t Clip(int x, int y, int w, int h, ClipRect *r)
+{
+    /* Widen before adding: negative origins and INT_MAX dimensions are legal. */
+    int64_t right = (int64_t)x + w, bottom = (int64_t)y + h;
+    if (w <= 0 || h <= 0 || x >= LCD_WIDTH || y >= LCD_HEIGHT || right <= 0 || bottom <= 0)
+        return 0U;
+    r->x = x < 0 ? 0 : x;
+    r->y = y < 0 ? 0 : y;
+    r->w = (int)(right > LCD_WIDTH ? LCD_WIDTH : right) - r->x;
+    r->h = (int)(bottom > LCD_HEIGHT ? LCD_HEIGHT : bottom) - r->y;
+    r->source_x = (uint32_t)((int64_t)r->x - x);
+    r->source_y = (uint32_t)((int64_t)r->y - y);
+    return 1U;
+}
+
+typedef struct {
+    const uint16_t *pixels;
+    const uint8_t *glyph;
+    uint32_t stride, source_x, source_y, width;
+    uint16_t color, bg;
+    uint8_t glyph_bytes;
+} PixelSource;
+
+static uint16_t PixelAt(const PixelSource *source, uint32_t col, uint32_t row)
+{
+    const size_t x = source->source_x + col;
+    const size_t y = source->source_y + row;
+    if (source->pixels) return source->pixels[y * source->stride + x];
+    if (source->glyph) return (source->glyph[y * source->glyph_bytes + x / 8U] &
+                              (0x80U >> (x % 8U))) ? source->color : source->bg;
+    return source->color;
+}
+
+static void StreamPixels(const PixelSource *source, uint32_t count)
+{
+    uint32_t col = 0U, row = 0U;
+#ifdef NODE_B_FIRMWARE
+    uint32_t offset = 0U;
+    unsigned buffer = 0U;
+    if (transfer_failed) return;
+    if (!St7735Bus_BeginData()) { transfer_failed = 1U; return; }
+    while (offset < count) {
+        const uint32_t n = count - offset > 128U ? 128U : count - offset;
+        /* Prepare the other buffer while DMA retains ownership of this one. */
+        for (uint32_t i = 0; i < n; ++i) {
+            const uint16_t pixel = PixelAt(source, col, row);
+            if (++col == source->width) { col = 0U; ++row; }
+            line_buffers[buffer][2U * i] = (uint8_t)(pixel >> 8U);
+            line_buffers[buffer][2U * i + 1U] = (uint8_t)pixel;
+        }
+        if (!St7735Bus_Wait() || !St7735Bus_WriteAsync(line_buffers[buffer], (uint16_t)(n * 2U))) {
+            transfer_failed = 1U;
+            return;
+        }
+        offset += n;
+        buffer ^= 1U;
+    }
+    if (!St7735Bus_Wait()) transfer_failed = 1U;
+#else
+    for (uint32_t i = 0; i < count; ++i) {
+        const uint16_t pixel = PixelAt(source, col, row);
+        if (++col == source->width) { col = 0U; ++row; }
+        ST7735_Data((uint8_t)(pixel >> 8U));
+        ST7735_Data((uint8_t)pixel);
+    }
+#endif
+}
+
+static void DrawSource(const ClipRect *rect, PixelSource *source)
+{
+#ifdef NODE_B_FIRMWARE
+    const uint32_t started = St7735Bus_Cycles();
+#endif
+    source->source_x = rect->source_x;
+    source->source_y = rect->source_y;
+    source->width = (uint32_t)rect->w;
+    ST7735_SetWindow((uint16_t)rect->x, (uint16_t)rect->y,
+                    (uint16_t)(rect->x + rect->w - 1), (uint16_t)(rect->y + rect->h - 1));
+    StreamPixels(source, (uint32_t)rect->w * (uint32_t)rect->h);
+#ifdef NODE_B_FIRMWARE
+    if (!transfer_failed) St7735Bus_RecordFrame(started);
+#endif
+}
+
+void ST7735_WritePixels(const uint16_t *pixels, uint32_t count)
+{
+    PixelSource source = {0};
+    if (!pixels || !count || count > (uint32_t)LCD_WIDTH * LCD_HEIGHT) return;
+    source.pixels = pixels;
+    source.width = source.stride = count;
+#ifdef NODE_B_FIRMWARE
+    const uint32_t started = St7735Bus_Cycles();
+    transfer_failed = 0U;
+#endif
+    StreamPixels(&source, count);
+#ifdef NODE_B_FIRMWARE
+    if (!transfer_failed) St7735Bus_RecordFrame(started);
+#endif
+}
+
 void ST7735_FillRect(int x, int y, int w, int h, uint16_t color)
 {
-    ST7735_SetWindow(x, y, x + w - 1, y + h - 1);
-    uint32_t n = (uint32_t)w * h;
-    for (uint32_t i = 0; i < n; i++) {
-        ST7735_Data(color >> 8);
-        ST7735_Data(color & 0xFF);
-    }
+    ClipRect rect;
+    PixelSource source = {0};
+    if (!Clip(x, y, w, h, &rect)) return;
+    source.color = color;
+    DrawSource(&rect, &source);
+}
+
+void ST7735_BlitRgb565(int x, int y, int w, int h, const uint16_t *pixels)
+{
+    ClipRect rect;
+    PixelSource source = {0};
+    if (!pixels || !Clip(x, y, w, h, &rect)) return;
+    if ((size_t)w > SIZE_MAX / sizeof(*pixels) / (size_t)h) return;
+    source.pixels = pixels;
+    source.stride = (uint32_t)w;
+    DrawSource(&rect, &source);
 }
 
 /* ============ 初始化 ============ */
@@ -150,16 +287,14 @@ void ST7735_Clear(uint16_t color)
 
 void ST7735_DrawGlyph16(int x, int y, const uint8_t glyph[32], uint16_t color, uint16_t bg)
 {
-    int row, col;
-    ST7735_SetWindow(x, y, x + 15, y + 15);
-    for (row = 0; row < 16; row++) {
-        for (col = 0; col < 16; col++) {
-            const uint8_t bits = glyph[row * 2 + col / 8];
-            const uint16_t pixel = (bits & (0x80 >> (col % 8))) ? color : bg;
-            ST7735_Data(pixel >> 8);
-            ST7735_Data(pixel & 0xFF);
-        }
-    }
+    ClipRect rect;
+    PixelSource source = {0};
+    if (!glyph || !Clip(x, y, 16, 16, &rect)) return;
+    source.glyph = glyph;
+    source.glyph_bytes = 2U;
+    source.color = color;
+    source.bg = bg;
+    DrawSource(&rect, &source);
 }
 
 /* ============ 显示字符（8x16，带背景色） ============ */
@@ -168,17 +303,14 @@ void ST7735_DrawChar(int x, int y, char c, uint16_t color, uint16_t bg)
     if (c < 0x20 || c > 0x7E) {
         c = ' ';                            /* 非 ASCII 用空格替代 */
     }
-    const unsigned char *glyph = FONT8x8[c - 0x20];
-
-    ST7735_SetWindow(x, y, x + 7, y + 7);
-    for (int row = 0; row < 8; row++) {
-        unsigned char bits = glyph[row];
-        for (int col = 0; col < 8; col++) {
-            uint16_t c2 = (bits & (0x80 >> col)) ? color : bg;
-            ST7735_Data(c2 >> 8);
-            ST7735_Data(c2 & 0xFF);
-        }
-    }
+    ClipRect rect;
+    PixelSource source = {0};
+    if (!Clip(x, y, 8, 8, &rect)) return;
+    source.glyph = FONT8x8[c - 0x20];
+    source.glyph_bytes = 1U;
+    source.color = color;
+    source.bg = bg;
+    DrawSource(&rect, &source);
 }
 
 /* ============ 显示字符串 ============ */
