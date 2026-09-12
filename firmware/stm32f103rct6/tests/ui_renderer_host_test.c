@@ -151,6 +151,17 @@ static int has_rect(int x, int y, int w, int h)
   return 0;
 }
 
+static int has_rect_color(int x, int y, int w, int h, uint16_t color)
+{
+  uint16_t index;
+  for (index = 0U; index < rect_count && index < (uint16_t)(sizeof(rects) / sizeof(rects[0])); ++index) {
+    if ((rects[index].x == x) && (rects[index].y == y) &&
+        (rects[index].w == w) && (rects[index].h == h) &&
+        (rects[index].color == color)) return 1;
+  }
+  return 0;
+}
+
 static int check_display_glyph_coverage(void)
 {
   UiState state;
@@ -421,6 +432,87 @@ static int check_safety_lock_priority_and_control_style(void)
   return 0;
 }
 
+static int check_safety_locked_selection_animation_color(void)
+{
+  UiState state;
+  UiSnapshot snapshot;
+  UiRendererStats stats;
+  const uint16_t danger = 0xF9A6U;
+
+  UiState_Init(&state);
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+  state.page = UI_FANS;
+  UiState_SetControlAvailability(&state, 0U, 1U);
+  UiRenderer_Init();
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 0U) == 1U);
+  CHECK(has_rect_color(2, 34, 3, 18, danger));
+
+  state.selected_row = 1U;
+  state.animation_start_ms = 100U;
+  state.animation_end_ms = 240U;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 100U) == 1U);
+  UiRenderer_GetStats(&stats);
+  CHECK(has_rect_color(2, stats.last_selection_y, 3, 18, danger));
+
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 116U) == 1U);
+  UiRenderer_GetStats(&stats);
+  CHECK(stats.last_selection_y > 34 && stats.last_selection_y < 54);
+  CHECK(has_rect_color(2, stats.last_selection_y, 3, 18, danger));
+
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 240U) == 1U);
+  UiRenderer_GetStats(&stats);
+  CHECK(stats.last_selection_y == 54);
+  CHECK(has_rect_color(2, 54, 3, 18, danger));
+  return 0;
+}
+
+static int check_fan_control_visible_field_comparator(void)
+{
+  UiState state;
+  UiSnapshot snapshot;
+
+  UiState_Init(&state);
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+  state.page = UI_FANS;
+  snapshot.fans[0].quality = UI_QUALITY_VALID;
+  UiRenderer_Init();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 0U) == 1U);
+
+  snapshot.fans[0].target_duty_percent = 60U;
+  snapshot.fans[0].actual_rpm = 2400U;
+  snapshot.fans[0].voltage_mv = 11900U;
+  snapshot.fans[0].current_ma = 280U;
+  snapshot.fans[0].quality = UI_QUALITY_STALE;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 1U) == 0U);
+  CHECK(rect_count == 0U);
+
+  snapshot.fans[0].running = 1U;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 2U) == 1U);
+  CHECK(has_rect(8, 34, 116, 18));
+  CHECK(string_was_drawn("F1 ON 0%"));
+
+  state.page = UI_MONITOR;
+  state.selected_row = 3U;
+  state.animation_start_ms = 10U;
+  state.animation_end_ms = 190U;
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 190U) == 1U);
+  snapshot.fans[0].actual_rpm = 2500U;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 191U) == 1U);
+  CHECK(has_rect(9, 52, 115, 14));
+  snapshot.fans[0].current_ma = 300U;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 192U) == 1U);
+  CHECK(has_rect(9, 68, 115, 14));
+  return 0;
+}
+
 static int check_mixed_alarm_sources_and_names(void)
 {
   UiState state;
@@ -459,6 +551,33 @@ static int check_mixed_alarm_sources_and_names(void)
   CHECK(string_was_drawn("OK 6"));
   CHECK(string_was_drawn("WARN 1"));
   CHECK(string_was_drawn("ALARM 1"));
+  return 0;
+}
+
+static int check_alarm_source_overflow_summary(void)
+{
+  UiState state;
+  UiSnapshot snapshot;
+  char line[320];
+
+  UiState_Init(&state);
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+  state.page = UI_ALERTS;
+  snapshot.warning_sources = UI_ALARM_SOURCE_MASK;
+  snapshot.critical_sources = UI_ALARM_SOURCE_OXYGEN | UI_ALARM_SOURCE_SMOKE;
+  snapshot.alarm_severity = UI_ALARM_CRITICAL;
+  UiRenderer_Init();
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 0U) == 1U);
+  CHECK(string_was_drawn("O2 CRITICAL"));
+  CHECK(string_was_drawn("SMOKE CRITICAL"));
+  CHECK(string_was_drawn("TEMP WARNING"));
+  CHECK(string_was_drawn("+5 MORE"));
+  CHECK(!string_was_drawn("O2 WARNING"));
+  CHECK(!string_was_drawn("SMOKE WARNING"));
+  CHECK(UiRenderer_DescribeLayout(&state, &snapshot, line, sizeof(line)) > 0U);
+  CHECK(strstr(line, "warning=6") != NULL);
+  CHECK(strstr(line, "critical=2") != NULL);
   return 0;
 }
 
@@ -685,7 +804,10 @@ int main(void)
   if (check_selection_animation_merges_visible_telemetry() != 0) return 1;
   if (check_field_level_dirty_rectangles() != 0) return 1;
   if (check_safety_lock_priority_and_control_style() != 0) return 1;
+  if (check_safety_locked_selection_animation_color() != 0) return 1;
+  if (check_fan_control_visible_field_comparator() != 0) return 1;
   if (check_mixed_alarm_sources_and_names() != 0) return 1;
+  if (check_alarm_source_overflow_summary() != 0) return 1;
   (void)puts("UiRenderer host test: PASS");
   return 0;
 }

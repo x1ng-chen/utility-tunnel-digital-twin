@@ -336,12 +336,9 @@ static uint8_t reading_changed(const UiReading *left, const UiReading *right)
   return (left->value != right->value) || (left->quality != right->quality);
 }
 
-static uint8_t fan_changed(const UiFanSnapshot *left, const UiFanSnapshot *right)
+static uint8_t fan_control_row_changed(const UiFanSnapshot *left, const UiFanSnapshot *right)
 {
-  return (left->target_duty_percent != right->target_duty_percent) ||
-         (left->running != right->running) || (left->actual_rpm != right->actual_rpm) ||
-         (left->voltage_mv != right->voltage_mv) || (left->current_ma != right->current_ma) ||
-         (left->quality != right->quality);
+  return left->running != right->running;
 }
 
 static uint8_t time_changed(const UiSnapshot *left, const UiSnapshot *right)
@@ -447,6 +444,13 @@ static uint8_t controls_disabled(const UiState *state)
          ((state->page == UI_FANS) || (state->page == UI_LIGHT_SOUND));
 }
 
+static uint16_t selection_bar_color(const UiState *state)
+{
+  if (controls_disabled(state)) return UI_COLOR_DANGER;
+  if (state->option_editing) return UI_COLOR_WARNING;
+  return UI_COLOR_ACCENT;
+}
+
 static void draw_title(int16_t offset, const char *title)
 {
   const int16_t width = text_width(title);
@@ -466,14 +470,14 @@ static void draw_list_row(int16_t offset, int16_t y, const char *label, uint8_t 
 }
 
 static void draw_control_list_row(int16_t offset, int16_t y, const char *label,
-                                  uint8_t selected, uint8_t disabled)
+                                  uint8_t selected, const UiState *state)
 {
+  const uint8_t disabled = controls_disabled(state);
   const uint16_t fill = (selected && !disabled) ? 0x2145U : UI_COLOR_PANEL;
   const uint16_t color = disabled ? UI_COLOR_MUTED : (selected ? LCD_WHITE : UI_COLOR_MUTED);
   ST7735_FillRect(offset + 8, y, 116, UI_ROW_HEIGHT - 2, fill);
   if (selected) {
-    ST7735_FillRect(offset + 2, y, 3, UI_ROW_HEIGHT - 2,
-                    disabled ? UI_COLOR_DANGER : UI_COLOR_ACCENT);
+    ST7735_FillRect(offset + 2, y, 3, UI_ROW_HEIGHT - 2, selection_bar_color(state));
   }
   draw_text((int16_t)(offset + 12), (int16_t)(y + 1), label, color, fill);
 }
@@ -652,10 +656,12 @@ static void draw_alert_sources(int16_t offset, const UiSnapshot *snapshot)
   };
   uint32_t critical = critical_sources(snapshot);
   uint32_t warning = warning_only_sources(snapshot);
+  const uint8_t total_sources = popcount8(critical | warning);
+  const uint8_t detail_limit = (total_sources > 4U) ? 3U : 4U;
   uint8_t source;
   uint8_t row = 0U;
   ST7735_FillRect(offset + 8, 70, 112, 42, UI_COLOR_BACKGROUND);
-  for (source = 0U; (source < 8U) && (row < 4U); ++source) {
+  for (source = 0U; (source < 8U) && (row < detail_limit); ++source) {
     char line[24];
     const uint32_t bit = 1UL << source;
     if ((critical & bit) == 0U) continue;
@@ -664,7 +670,7 @@ static void draw_alert_sources(int16_t offset, const UiSnapshot *snapshot)
                       UI_COLOR_DANGER, UI_COLOR_BACKGROUND);
     ++row;
   }
-  for (source = 0U; (source < 8U) && (row < 4U); ++source) {
+  for (source = 0U; (source < 8U) && (row < detail_limit); ++source) {
     char line[24];
     const uint32_t bit = 1UL << source;
     if ((warning & bit) == 0U) continue;
@@ -672,6 +678,12 @@ static void draw_alert_sources(int16_t offset, const UiSnapshot *snapshot)
     ST7735_DrawString(offset + 8, (int)(72 + row * 10U), line,
                       UI_COLOR_WARNING, UI_COLOR_BACKGROUND);
     ++row;
+  }
+  if (row < total_sources) {
+    char line[24];
+    (void)snprintf(line, sizeof(line), "+%u MORE", (unsigned int)(total_sources - row));
+    ST7735_DrawString(offset + 8, (int)(72 + row * 10U), line,
+                      UI_COLOR_WARNING, UI_COLOR_BACKGROUND);
   }
   if (row == 0U) {
     ST7735_DrawString(offset + 8, 82, "NO ACTIVE ALARM", LCD_GREEN, UI_COLOR_BACKGROUND);
@@ -702,9 +714,7 @@ static void draw_fan_row(int16_t offset, uint8_t row, const UiState *state,
     const uint16_t color = disabled ? UI_COLOR_MUTED : (selected ? LCD_WHITE : UI_COLOR_MUTED);
     ST7735_FillRect(offset + 8, y, 116, UI_ROW_HEIGHT - 2, fill);
     if (selected) {
-      ST7735_FillRect(offset + 2, y, 3, UI_ROW_HEIGHT - 2,
-                      disabled ? UI_COLOR_DANGER :
-                      (state->option_editing ? UI_COLOR_WARNING : UI_COLOR_ACCENT));
+      ST7735_FillRect(offset + 2, y, 3, UI_ROW_HEIGHT - 2, selection_bar_color(state));
     }
     (void)snprintf(label, sizeof(label), "F%u %s %u%%",
                    (unsigned int)(fan_index + 1U), snapshot->fans[fan_index].running ? "ON" : "OFF",
@@ -717,7 +727,7 @@ static void draw_fan_row(int16_t offset, uint8_t row, const UiState *state,
   } else {
     (void)snprintf(label, sizeof(label), "全部停止");
   }
-  draw_control_list_row(offset, y, label, selected, disabled);
+  draw_control_list_row(offset, y, label, selected, state);
 }
 
 static void draw_fans(int16_t offset, const UiState *state, const UiSnapshot *snapshot)
@@ -743,9 +753,7 @@ static void draw_light_row(int16_t offset, uint8_t row, uint8_t selected,
   const uint16_t color = disabled ? UI_COLOR_MUTED : (selected ? LCD_WHITE : UI_COLOR_MUTED);
   ST7735_FillRect(offset + 8, y[row], 116, 24, fill);
   if (selected) {
-    ST7735_FillRect(offset + 2, y[row], 3, 24,
-                    disabled ? UI_COLOR_DANGER :
-                    (state->option_editing ? UI_COLOR_WARNING : UI_COLOR_ACCENT));
+    ST7735_FillRect(offset + 2, y[row], 3, 24, selection_bar_color(state));
   }
   if (row == 0U) {
     const uint8_t mode = ((uint8_t)state->led_mode_option < 8U) ? (uint8_t)state->led_mode_option : 0U;
@@ -875,7 +883,7 @@ static void redraw_selection_rows(const UiState *state, const UiSnapshot *snapsh
   }
   if (animated_y != target_y) {
     ST7735_FillRect(2, target_y, 3, bar_height, UI_COLOR_BACKGROUND);
-    ST7735_FillRect(2, animated_y, 3, bar_height, UI_COLOR_ACCENT);
+    ST7735_FillRect(2, animated_y, 3, bar_height, selection_bar_color(state));
   }
 }
 
@@ -1031,7 +1039,7 @@ static uint8_t redraw_snapshot_delta(const UiState *state, const UiSnapshot *sna
     }
   } else if (state->page == UI_FANS) {
     for (row = 0U; row < 2U; ++row) {
-      if (fan_changed(&snapshot->fans[row], &renderer.snapshot.fans[row])) {
+      if (fan_control_row_changed(&snapshot->fans[row], &renderer.snapshot.fans[row])) {
         const uint8_t display_row = (row == 0U) ? 0U : 3U;
         if ((already_drawn_rows & (1U << display_row)) != 0U) continue;
         invalidate((UiDirtyRect){2, (int16_t)(UI_ROWS_TOP + display_row * UI_ROW_HEIGHT),
@@ -1324,7 +1332,7 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
       invalidate((UiDirtyRect){2, renderer.selection_drawn_y, 3, bar_height});
       invalidate((UiDirtyRect){2, next_y, 3, bar_height});
       ST7735_FillRect(2, renderer.selection_drawn_y, 3, bar_height, UI_COLOR_BACKGROUND);
-      ST7735_FillRect(2, next_y, 3, bar_height, UI_COLOR_ACCENT);
+      ST7735_FillRect(2, next_y, 3, bar_height, selection_bar_color(state));
     }
     renderer.selection_drawn_y = next_y;
     renderer.stats.last_selection_y = next_y;
