@@ -151,3 +151,9 @@ void St7735Bus_GetStats(St7735BusStats *stats)
     *stats = counters;
     stats->spi_hz = HAL_RCC_GetPCLK2Freq() / (2U << ((SPI1->CR1 & SPI_CR1_BR) >> 3U));
 }
+
+void St7735Bus_ResetStats(void)
+{
+    /* Only foreground code mutates counters; the DMA IRQ publishes bus state. */
+    counters = (St7735BusStats){0};
+}

@@ -4,6 +4,17 @@ import re
 import time
 import serial
 
+
+def validate_display_stats(fields, run):
+    assert int(fields['sysclk']) == 72000000
+    assert int(fields['spi_hz']) == 18000000
+    assert int(fields['dma_timeouts']) == 0
+    assert int(fields['dma_errors']) == 0
+    if run:
+        assert int(fields['dma_frames']) == 1003
+        assert 0 < int(fields['worst_frame_us']) <= 22000
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--port', required=True)
 parser.add_argument('--run', action='store_true')
@@ -18,12 +29,10 @@ with serial.Serial(args.port, 9600, timeout=0.2) as port:
             continue
         print(line)
         fields = dict(re.findall(r'(\w+)=(\d+)', line))
-        assert int(fields['sysclk']) == 72000000, line
-        assert int(fields['spi_hz']) == 18000000, line
-        assert int(fields['dma_timeouts']) == 0, line
-        if args.run:
-            assert int(fields['dma_frames']) >= 1003, line
-            assert 0 < int(fields['worst_frame_us']) <= 22000, line
+        try:
+            validate_display_stats(fields, args.run)
+        except (AssertionError, KeyError, ValueError) as error:
+            raise AssertionError(line) from error
         break
     else:
         raise AssertionError('No #DISPLAYTEST response (command absent or board unavailable)')

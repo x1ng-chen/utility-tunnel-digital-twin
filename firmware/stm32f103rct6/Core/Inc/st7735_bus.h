@@ -27,4 +27,6 @@ void St7735Bus_DmaIrqHandler(void);
 uint32_t St7735Bus_Cycles(void);
 void St7735Bus_RecordFrame(uint32_t started_cycles);
 void St7735Bus_GetStats(St7735BusStats *stats);
+/* Foreground diagnostic hook; call only between completed drawing primitives. */
+void St7735Bus_ResetStats(void);
 #endif

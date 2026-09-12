@@ -91,6 +91,10 @@ int main(void) {
     SPI1->SR = SPI_SR_TXE;
     assert(St7735Bus_WriteByte(0x2C, 0));
     assert((uint8_t)SPI1->DR == 0x2C);
+    St7735Bus_ResetStats();
+    St7735Bus_GetStats(&stats);
+    assert(stats.dma_frames == 0 && stats.dma_timeouts == 0 && stats.dma_errors == 0);
+    assert(stats.worst_frame_us == 0 && stats.spi_hz == 18000000);
     puts("Display bus test: PASS");
     return 0;
 }

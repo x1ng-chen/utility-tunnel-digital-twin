@@ -13,3 +13,5 @@ gcc -std=c11 -D_GNU_SOURCE -DNODE_B_FIRMWARE -DSTM32F103xE -DUSE_HAL_DRIVER -O2 
     Core/Src/st7735_bus_node_b.c tests/display_bus_host_test.c -Wl,--gc-sections -o "$out/bus"
 "$out/bus"
 python3 tests/display_clock_host_test.py
+python3 tests/display_run_host_test.py
+python3 tests/display_serial_probe_host_test.py

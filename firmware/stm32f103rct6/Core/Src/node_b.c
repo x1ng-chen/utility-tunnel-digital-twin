@@ -12,6 +12,9 @@
 #define LED_INTERVAL_MS 500U
 #define ESP_RX_LINE_SIZE 256U
 #define UI_TEST_LINE_SIZE 48U
+#define DISPLAY_TEST_DIRTY_COUNT 1000U
+#define DISPLAY_TEST_COLOR_COUNT 3U
+#define DISPLAY_TEST_PRIMITIVE_COUNT (DISPLAY_TEST_DIRTY_COUNT + DISPLAY_TEST_COLOR_COUNT)
 
 typedef struct
 {
@@ -29,7 +32,8 @@ static volatile uint8_t esp_rx_line_ready;
 static UiState ui_test_state;
 static char ui_test_line[UI_TEST_LINE_SIZE];
 static uint8_t ui_test_length;
-static uint16_t display_test_remaining;
+static uint16_t display_test_completed;
+static uint8_t display_test_active;
 
 void SystemClock_Config(void);
 void Error_Handler(void);
@@ -206,6 +210,31 @@ static void DisplayTest_Report(void)
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
 }
 
+static void DisplayTest_BeginRun(void)
+{
+  St7735Bus_ResetStats();
+  display_test_completed = 0U;
+  display_test_active = 1U;
+}
+
+/* Return true when this run is complete or has failed. Only an exact one-frame
+ * transition with no new transport fault earns progress. */
+static uint8_t DisplayTest_RecordPrimitive(const St7735BusStats *before,
+                                           const St7735BusStats *after)
+{
+  const uint8_t succeeded =
+    ((uint32_t)(after->dma_frames - before->dma_frames) == 1U) &&
+    ((uint32_t)(after->dma_timeouts - before->dma_timeouts) == 0U) &&
+    ((uint32_t)(after->dma_errors - before->dma_errors) == 0U);
+
+  if (succeeded) ++display_test_completed;
+  if (!succeeded || (display_test_completed == DISPLAY_TEST_PRIMITIVE_COUNT)) {
+    display_test_active = 0U;
+    return 1U;
+  }
+  return 0U;
+}
+
 static void UiTest_HandleLine(void)
 {
   UiInputEvent event = UI_EVT_NONE;
@@ -219,7 +248,7 @@ static void UiTest_HandleLine(void)
   char acknowledgement[16];
 
   if (strcmp(ui_test_line, "#DISPLAYTEST RUN") == 0) {
-    display_test_remaining = 1003U;
+    DisplayTest_BeginRun();
     return;
   } else if (strcmp(ui_test_line, "#DISPLAYTEST") == 0) {
     DisplayTest_Report();
@@ -330,15 +359,19 @@ int main(void)
     PollEsp(&received_count, &peer);
     UiState_Tick(&ui_test_state, now);
     /* One diagnostic transfer per loop keeps input and ESP polling scheduled. */
-    if (display_test_remaining) {
-      if (display_test_remaining > 3U) {
+    if (display_test_active) {
+      St7735BusStats before;
+      St7735BusStats after;
+      St7735Bus_GetStats(&before);
+      if (display_test_completed < DISPLAY_TEST_DIRTY_COUNT) {
         ST7735_FillRect(0, 32, LCD_WIDTH, 8,
-                       (display_test_remaining & 1U) ? LCD_RED : LCD_BLUE);
+                       (display_test_completed & 1U) ? LCD_BLUE : LCD_RED);
       } else {
         static const uint16_t colors[] = {LCD_BLUE, LCD_GREEN, LCD_RED};
-        ST7735_Clear(colors[display_test_remaining - 1U]);
+        ST7735_Clear(colors[display_test_completed - DISPLAY_TEST_DIRTY_COUNT]);
       }
-      if (--display_test_remaining == 0U) {
+      St7735Bus_GetStats(&after);
+      if (DisplayTest_RecordPrimitive(&before, &after)) {
         DisplayTest_Report();
         DrawStatus(received_count, &peer);
       }
