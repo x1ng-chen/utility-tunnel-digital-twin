@@ -253,6 +253,15 @@ test('三维孪生加载正式环形 V07 模型后可完整定位设备并展示
   await expect.poll(() => page.locator('.twin-canvas').getAttribute('data-camera-target')).not.toBe(targetBeforePan);
   await page.getByRole('button', { name: '启用自由旋转' }).click();
   await expect(page.getByRole('button', { name: '启用自由旋转' })).toHaveClass(/active/);
+  // A rotation drag can begin over a bound mesh. It must move the camera
+  // without selecting that mesh and pulling the operator away from the asset
+  // they were already investigating.
+  const selectedBeforeRotateDrag = await page.locator('.twin-focus-status small').textContent();
+  await page.mouse.move(canvasBox.x + canvasBox.width * .5, canvasBox.y + canvasBox.height * .52);
+  await page.mouse.down({ button: 'left' });
+  await page.mouse.move(canvasBox.x + canvasBox.width * .62, canvasBox.y + canvasBox.height * .43, { steps: 4 });
+  await page.mouse.up({ button: 'left' });
+  await expect(page.locator('.twin-focus-status small')).toHaveText(selectedBeforeRotateDrag || '');
   const switcher = page.locator('.twin-quick-switch');
   await expect(page.locator('.twin-model-readiness').getByText('模型已加载', { exact: true })).toBeVisible();
   const modelReadiness = page.locator('.twin-model-readiness.loaded');
@@ -852,4 +861,33 @@ test('三维页在 3 秒内将实时新告警定位到已绑定设备', async ({
   // Keep the visual focus verification independent from the push budget: GPU
   // render scheduling may delay this status node, but must never drop it.
   await expect(page.locator('.twin-focus-status')).toContainText('ENV-01', { timeout: 10_000 });
+});
+
+test('已启用模型文件读取失败时不把预览场景误报为实体模型', async ({ page }) => {
+  await page.route('**/api/twin/model-readiness/', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      status: 'ready',
+      summary: { activeAssetCount: 19, mappedAssetCount: 19, unmappedAssetCount: 0 },
+      missingMeshCodes: [], invalidMeshCodes: [], modelMismatchCodes: [], mappings: [],
+      contract: { nodeNamePattern: 'A-Z, 0-9, hyphen and underscore', nodeNamesUnique: true, modelFileVerified: true, modelNodesCompatible: true, modelNodeInventoryAvailable: true },
+      activeRelease: { id: 987, version: 'simulated-active-release' },
+      updatedAt: new Date().toISOString(),
+    }),
+  }));
+  await page.route('**/api/twin/model-file/**', (route) => route.fulfill({
+    status: 503,
+    contentType: 'application/json',
+    body: JSON.stringify({ error: 'model_storage_unavailable' }),
+  }));
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await page.getByRole('button', { name: '三维孪生' }).click();
+  const readiness = page.locator('.twin-model-readiness');
+  await expect(readiness.getByText('模型文件不可用', { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(readiness.getByText('模型已加载', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.twin-scene')).toHaveAttribute('data-model-state', 'fallback');
+  await expect(page.locator('.twin-live[title*="实体模型文件暂时无法获取"]')).toContainText('模型文件暂不可用');
 });

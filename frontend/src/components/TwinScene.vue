@@ -8,7 +8,7 @@ import type { Alert, Asset } from '../types';
 import { cameraFitDistance } from '../utils/cameraFit';
 import { modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
 
-const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string }>();
+const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string; modelEnabled?: boolean }>();
 const emit = defineEmits<{ select: [code: string]; modelReport: [report: TwinModelBindingReport] }>();
 const host = ref<HTMLDivElement>();
 const modelState = ref<'loading' | 'loaded' | 'fallback'>('loading');
@@ -41,6 +41,7 @@ let modelLoadToken = 0;
 let modelLoadTimeout = 0;
 let sceneRadius = 18;
 let pendingPanGesture: { pointerId: number; startX: number; startY: number; target: Vector3 } | undefined;
+let pendingSelectionGesture: { pointerId: number; startX: number; startY: number; code: string } | undefined;
 
 const colors: Record<TwinVisualState, number> = { normal: 0x4ee7c3, warning: 0xffbb62, alarm: 0xff536f, unknown: 0x6d87aa };
 
@@ -323,10 +324,23 @@ function onCanvasPointerDown(event: PointerEvent) {
   raycaster.setFromCamera(pointer, camera);
   const hit = raycaster.intersectObjects([...assetObjects.values()], true)[0];
   const code = hit?.object.userData.assetCode as string | undefined;
-  if (code) emit('select', code);
+  // Picking used to occur on pointerdown. In rotation mode that meant merely
+  // starting a drag could select a nearby device and reset the camera target.
+  // Keep the candidate and commit it only if pointerup is a short click.
+  if (code) pendingSelectionGesture = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    code,
+  };
 }
 
 function onCanvasPointerUp(event: PointerEvent) {
+  const selection = pendingSelectionGesture;
+  if (selection?.pointerId === event.pointerId) {
+    pendingSelectionGesture = undefined;
+    if (Math.hypot(event.clientX - selection.startX, event.clientY - selection.startY) < 6) emit('select', selection.code);
+  }
   const gesture = pendingPanGesture;
   if (!gesture || gesture.pointerId !== event.pointerId) return;
   pendingPanGesture = undefined;
@@ -355,7 +369,10 @@ function onCanvasPointerUp(event: PointerEvent) {
   publishCameraDistance();
 }
 
-function cancelCanvasPan() { pendingPanGesture = undefined; }
+function cancelCanvasPan() {
+  pendingPanGesture = undefined;
+  pendingSelectionGesture = undefined;
+}
 
 function animate(timestamp = 0) {
   frame = window.requestAnimationFrame(animate);
@@ -386,6 +403,16 @@ function loadModel() {
   modelState.value = 'loading';
   modelMessage.value = '正在加载实体三维模型…';
   window.clearTimeout(modelLoadTimeout);
+  if (props.modelEnabled === false) {
+    makeFallbackScene();
+    publishModelReport('fallback');
+    modelState.value = 'fallback';
+    modelMessage.value = '当前启用模型文件不可用，已保护性切换到预览场景';
+    applyVisualState();
+    resetView();
+    if (props.selectedCode) focusAsset(props.selectedCode);
+    return;
+  }
   modelLoadTimeout = window.setTimeout(() => {
     if (loadToken !== modelLoadToken) return;
     modelLoadToken += 1;
@@ -508,7 +535,9 @@ watch(() => props.selectedCode, (next, previous) => {
   applyVisualState();
   if (next && next !== previous) focusAsset(next);
 });
-watch(() => props.modelUrl, (next, previous) => { if (next && next !== previous) reloadModel(); });
+watch(() => [props.modelUrl, props.modelEnabled], (next, previous) => {
+  if (next[0] !== previous[0] || next[1] !== previous[1]) reloadModel();
+});
 onBeforeUnmount(() => {
   modelLoadToken += 1;
   window.clearTimeout(modelLoadTimeout);
