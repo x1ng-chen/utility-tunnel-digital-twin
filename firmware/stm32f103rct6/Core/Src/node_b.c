@@ -2,6 +2,7 @@
 #include "joystick.h"
 #include "st7735.h"
 #include "st7735_bus.h"
+#include "ui_renderer.h"
 #include "ui_state.h"
 
 #include <stdio.h>
@@ -29,7 +30,8 @@ static uint8_t esp_rx_character;
 static volatile char esp_rx_line[ESP_RX_LINE_SIZE];
 static volatile uint16_t esp_rx_length;
 static volatile uint8_t esp_rx_line_ready;
-static UiState ui_test_state;
+static UiState ui_state;
+static UiSnapshot ui_snapshot;
 static char ui_test_line[UI_TEST_LINE_SIZE];
 static uint8_t ui_test_length;
 static uint16_t display_test_completed;
@@ -40,47 +42,9 @@ void Error_Handler(void);
 static void MX_GPIO_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
-static void DrawStatus(uint32_t received_count, const PeerReading *peer);
-static void UpdatePeerDisplay(uint32_t received_count, const PeerReading *peer);
 static void SendHeartbeat(void);
 static void PollEsp(uint32_t *received_count, PeerReading *peer);
 static void PollUiTest(void);
-
-static void DrawStatus(uint32_t received_count, const PeerReading *peer)
-{
-  ST7735_Clear(LCD_BLACK);
-  ST7735_DrawString(24, 10, "NODE B", LCD_GREEN, LCD_BLACK);
-  ST7735_DrawString(8, 80, "ESP: CTRL-02", LCD_WHITE, LCD_BLACK);
-  UpdatePeerDisplay(received_count, peer);
-}
-
-/* A full 128x128 software-SPI redraw blocks UART polling too long. Keep the
- * fixed labels and update only the three changing text rows on each message. */
-static void UpdatePeerDisplay(uint32_t received_count, const PeerReading *peer)
-{
-  char line[24];
-  long temperature;
-
-  ST7735_FillRect(0, 30, LCD_WIDTH, 22, LCD_BLACK);
-  ST7735_FillRect(0, 52, LCD_WIDTH, 22, LCD_BLACK);
-  ST7735_FillRect(0, 100, LCD_WIDTH, 22, LCD_BLACK);
-  if (peer->online)
-  {
-    temperature = peer->temperature_centi_c;
-    (void)snprintf(line, sizeof(line), "A T:%ld.%02ldC", temperature / 100L,
-                   (temperature < 0L ? -temperature : temperature) % 100L);
-    ST7735_DrawString(4, 34, line, LCD_CYAN, LCD_BLACK);
-    (void)snprintf(line, sizeof(line), "A H:%u.%02u%%", peer->humidity_centi_rh / 100U,
-                   peer->humidity_centi_rh % 100U);
-    ST7735_DrawString(4, 56, line, LCD_WHITE, LCD_BLACK);
-  }
-  else
-  {
-    ST7735_DrawString(8, 38, "A: WAIT DATA", LCD_YELLOW, LCD_BLACK);
-  }
-  (void)snprintf(line, sizeof(line), "RX: %lu", (unsigned long)received_count);
-  ST7735_DrawString(8, 104, line, LCD_GREEN, LCD_BLACK);
-}
 
 static uint8_t DecodePeerReading(const char *line, PeerReading *peer)
 {
@@ -139,30 +103,18 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
     if ((strncmp(line, "MQTT|", 5U) == 0) && DecodePeerReading(line, peer))
     {
       ++*received_count;
-      UpdatePeerDisplay(*received_count, peer);
+      ui_snapshot.temperature_centi_c.value = peer->temperature_centi_c;
+      ui_snapshot.temperature_centi_c.sampled_ms = HAL_GetTick();
+      ui_snapshot.temperature_centi_c.quality = UI_QUALITY_VALID;
+      ui_snapshot.humidity_centi_rh.value = peer->humidity_centi_rh;
+      ui_snapshot.humidity_centi_rh.sampled_ms = HAL_GetTick();
+      ui_snapshot.humidity_centi_rh.quality = UI_QUALITY_VALID;
+      ui_snapshot.connectivity.node_a_online = peer->online;
+      ui_snapshot.connectivity.mqtt_online = 1U;
+      ui_snapshot.connectivity.updated_ms = HAL_GetTick();
+      UiState_SetControlAvailability(&ui_state, 1U, ui_state.control.safety_locked);
     }
   }
-}
-
-static const char *UiTest_PageName(UiPage page)
-{
-  static const char *const names[] = {
-    "home", "overview", "monitor", "alerts", "fans", "light_sound", "network", "settings",
-  };
-  return ((uint8_t)page < (sizeof(names) / sizeof(names[0]))) ? names[page] : "unknown";
-}
-
-static const char *UiTest_DialogName(UiDialog dialog)
-{
-  return (dialog == UI_DIALOG_CONFIRM) ? "confirm" : "none";
-}
-
-static const char *UiTest_CommandName(UiCommandPhase phase)
-{
-  static const char *const names[] = {
-    "idle", "confirm", "sending", "accepted", "rejected", "timeout",
-  };
-  return ((uint8_t)phase < (sizeof(names) / sizeof(names[0]))) ? names[phase] : "unknown";
 }
 
 static const char *Joystick_EventName(UiInputEvent event)
@@ -185,13 +137,12 @@ static void JoystickTest_Report(UiInputEvent event)
 
 static void UiTest_Report(void)
 {
-  char message[96];
-  const int length = snprintf(message, sizeof(message),
-    "#UI page=%s row=%u dialog=%s command=%s\r\n",
-    UiTest_PageName(ui_test_state.page), (unsigned int)ui_test_state.selected_row,
-    UiTest_DialogName(ui_test_state.dialog), UiTest_CommandName(ui_test_state.command_phase));
+  char message[320];
+  size_t length = UiRenderer_DescribeLayout(&ui_state, &ui_snapshot, message, sizeof(message) - 2U);
 
-  if ((length > 0) && (length < (int)sizeof(message))) {
+  if ((length > 0U) && (length < (sizeof(message) - 2U))) {
+    message[length++] = '\r';
+    message[length++] = '\n';
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
   }
 }
@@ -246,6 +197,8 @@ static void UiTest_HandleLine(void)
   unsigned long now_ms;
   char command_id[40];
   char acknowledgement[16];
+  char page_name[16];
+  UiPage target_page;
 
   if (strcmp(ui_test_line, "#DISPLAYTEST RUN") == 0) {
     DisplayTest_BeginRun();
@@ -263,22 +216,32 @@ static void UiTest_HandleLine(void)
                                                    (uint8_t)switch_released, (uint32_t)now_ms));
     return;
   } else if (strcmp(ui_test_line, "#UITEST RESET") == 0) {
-    UiState_Init(&ui_test_state);
+    UiState_Init(&ui_state);
+    (void)memset(&ui_snapshot, 0, sizeof(ui_snapshot));
+    UiRenderer_Init();
+  } else if (sscanf(ui_test_line, "#UITEST GOTO %15s", page_name) == 1) {
+    if (!UiRenderer_PageFromName(page_name, &target_page)) return;
+    ui_state.page = target_page;
+    ui_state.selected_row = 0U;
+    ui_state.dialog = UI_DIALOG_NONE;
+    ui_state.animation_start_ms = HAL_GetTick();
+    ui_state.animation_end_ms = ui_state.animation_start_ms + UI_RENDERER_PAGE_MS;
   } else if (sscanf(ui_test_line, "#UITEST TICK %lu", &elapsed_ms) == 1) {
     /* TICK is a deterministic elapsed interval for the diagnostic adapter. */
-    UiState_Tick(&ui_test_state, ui_test_state.command_started_ms + (uint32_t)elapsed_ms);
+    UiState_Tick(&ui_state, ui_state.command_started_ms + (uint32_t)elapsed_ms);
   } else if (sscanf(ui_test_line, "#UITEST BIND %39s", command_id) == 1) {
-    (void)UiState_CommandDispatched(&ui_test_state, command_id);
+    (void)UiState_CommandDispatched(&ui_state, command_id);
   } else if (sscanf(ui_test_line, "#UITEST ACK %39s %15s", command_id, acknowledgement) == 2) {
     if (strcmp(acknowledgement, "ACCEPT") == 0) {
-      (void)UiState_HandleAcknowledgement(&ui_test_state, command_id, 1U);
+      (void)UiState_HandleAcknowledgement(&ui_state, command_id, 1U);
     } else if (strcmp(acknowledgement, "REJECT") == 0) {
-      (void)UiState_HandleAcknowledgement(&ui_test_state, command_id, 0U);
+      (void)UiState_HandleAcknowledgement(&ui_state, command_id, 0U);
     }
   } else if (sscanf(ui_test_line, "#UITEST MQTT %u", &enabled) == 1) {
-    UiState_SetControlAvailability(&ui_test_state, enabled ? 1U : 0U, ui_test_state.control.safety_locked);
+    ui_snapshot.connectivity.mqtt_online = enabled ? 1U : 0U;
+    UiState_SetControlAvailability(&ui_state, enabled ? 1U : 0U, ui_state.control.safety_locked);
   } else if (sscanf(ui_test_line, "#UITEST SAFETY %u", &enabled) == 1) {
-    UiState_SetControlAvailability(&ui_test_state, ui_test_state.control.mqtt_online, enabled ? 1U : 0U);
+    UiState_SetControlAvailability(&ui_state, ui_state.control.mqtt_online, enabled ? 1U : 0U);
   } else if (strcmp(ui_test_line, "#UITEST UP") == 0) {
     event = UI_EVT_UP;
   } else if (strcmp(ui_test_line, "#UITEST DOWN") == 0) {
@@ -295,7 +258,7 @@ static void UiTest_HandleLine(void)
     return;
   }
 
-  if (event != UI_EVT_NONE) (void)UiState_Handle(&ui_test_state, event, HAL_GetTick());
+  if (event != UI_EVT_NONE) (void)UiState_Handle(&ui_state, event, HAL_GetTick());
   UiTest_Report();
 }
 
@@ -342,11 +305,13 @@ int main(void)
   MX_GPIO_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
-  UiState_Init(&ui_test_state);
+  UiState_Init(&ui_state);
+  (void)memset(&ui_snapshot, 0, sizeof(ui_snapshot));
   Joystick_Init();
   if (HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U) != HAL_OK) Error_Handler();
   ST7735_Init();
-  DrawStatus(received_count, &peer);
+  UiRenderer_Init();
+  (void)UiRenderer_RenderFrame(&ui_state, &ui_snapshot, HAL_GetTick());
   (void)HAL_UART_Transmit(&huart1, (uint8_t *)"#NODE node-b boot\r\n", 19U, 1000U);
 
   for (;;)
@@ -354,10 +319,10 @@ int main(void)
     const uint32_t now = HAL_GetTick();
     UiInputEvent event;
     event = Joystick_Poll(now);
-    if (event != UI_EVT_NONE) (void)UiState_Handle(&ui_test_state, event, now);
+    if (event != UI_EVT_NONE) (void)UiState_Handle(&ui_state, event, now);
     PollUiTest();
     PollEsp(&received_count, &peer);
-    UiState_Tick(&ui_test_state, now);
+    UiState_Tick(&ui_state, now);
     /* One diagnostic transfer per loop keeps input and ESP polling scheduled. */
     if (display_test_active) {
       St7735BusStats before;
@@ -373,8 +338,12 @@ int main(void)
       St7735Bus_GetStats(&after);
       if (DisplayTest_RecordPrimitive(&before, &after)) {
         DisplayTest_Report();
-        DrawStatus(received_count, &peer);
+        UiRenderer_Init();
+        (void)UiRenderer_RenderFrame(&ui_state, &ui_snapshot, now);
       }
+    }
+    else {
+      (void)UiRenderer_RenderFrame(&ui_state, &ui_snapshot, now);
     }
     if ((now - last_heartbeat) >= ESP_HEARTBEAT_INTERVAL_MS)
     {

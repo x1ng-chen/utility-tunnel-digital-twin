@@ -68,6 +68,12 @@ typedef struct {
 } UiCommandResult;
 
 typedef struct {
+  uint8_t synchronized;
+  uint8_t hour;
+  uint8_t minute;
+} UiClockSnapshot;
+
+typedef struct {
   UiReading temperature_centi_c;
   UiReading humidity_centi_rh;
   UiReading oxygen_milli_percent;
@@ -82,6 +88,7 @@ typedef struct {
   UiActuatorSnapshot actuators;
   UiConnectivitySnapshot connectivity;
   UiCommandResult last_command;
+  UiClockSnapshot clock;
 } UiSnapshot;
 
 #endif /* UI_MODEL_H */

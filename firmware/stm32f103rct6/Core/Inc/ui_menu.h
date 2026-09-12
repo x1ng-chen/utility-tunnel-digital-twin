@@ -1,6 +1,7 @@
-#ifndef __UI_MENU_H
-#define __UI_MENU_H
+#ifndef UI_MENU_H
+#define UI_MENU_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 /*
@@ -31,5 +32,6 @@ void UI_MenuInit(void);
 void UI_MenuSetTelemetry(const UiTelemetry *telemetry);
 void UI_MenuHandleInput(UiInput input);
 void UI_MenuTick(uint32_t nowMs);
+size_t UI_MenuDescribeLayout(char *output, size_t outputSize);
 
-#endif /* __UI_MENU_H */
+#endif /* UI_MENU_H */

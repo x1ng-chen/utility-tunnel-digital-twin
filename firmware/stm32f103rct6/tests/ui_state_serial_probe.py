@@ -29,6 +29,20 @@ def require_contains(line: str, expected: str) -> None:
         raise AssertionError(f"expected {expected!r} in {line!r}")
 
 
+def require_layout(port: serial.Serial, page: str, title: str, rows: int, selected: str) -> None:
+    line = send_and_read(port, f"#UITEST GOTO {page}")
+    for expected in (
+        f"page={page}",
+        f"title={title}",
+        f"rows={rows}",
+        f"selected={selected}",
+        "time=--:--",
+        "mqtt=offline",
+        "dialog=none",
+    ):
+        require_contains(line, expected)
+
+
 def start_critical_command(port: serial.Serial, command_id: str) -> None:
     send_and_read(port, "#UITEST RESET")
     require_contains(send_and_read(port, "#UITEST MQTT 1"), "command=idle")
@@ -61,7 +75,25 @@ def main() -> None:
 
     with serial.Serial(args.port, args.baud, timeout=0.1, write_timeout=1) as port:
         port.reset_input_buffer()
-        assert send_and_read(port, "#UITEST RESET") == "#UI page=home row=0 dialog=none command=idle"
+        require_contains(send_and_read(port, "#UITEST RESET"),
+                         "#UI page=home row=0 dialog=none command=idle")
+
+        layouts = (
+            ("home", "main_menu", 7, "safety_overview"),
+            ("overview", "safety_overview", 1, "overall_status"),
+            ("monitor", "classified_monitoring", 4, "environment"),
+            ("alerts", "alarm_center", 1, "active_alarms"),
+            ("fans", "fan_control", 4, "fan_1_start_stop_30_60_100"),
+            ("light_sound", "led_and_buzzer", 3,
+             "led_modes_off_white_green_yellow_red_blue_breathe_flash"),
+            ("network", "communication_status", 1, "link_summary"),
+            ("settings", "system_settings", 2, "display"),
+        )
+        for layout in layouts:
+            send_and_read(port, "#UITEST RESET")
+            require_layout(port, *layout)
+
+        send_and_read(port, "#UITEST RESET")
         require_contains(send_and_read(port, "#UITEST DOWN"), "row=1")
         require_contains(send_and_read(port, "#UITEST LONG_PRESS"), "page=home row=0")
 
