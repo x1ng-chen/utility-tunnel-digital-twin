@@ -13,6 +13,7 @@
 typedef struct {
   uint32_t rendered_frames;
   uint32_t skipped_frames;
+  uint32_t failed_frames;
   uint32_t dirty_rectangles;
   uint32_t dirty_pixels;
   uint32_t full_screen_redraws;

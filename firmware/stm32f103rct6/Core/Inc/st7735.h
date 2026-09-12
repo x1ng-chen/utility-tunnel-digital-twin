@@ -47,6 +47,10 @@
 #define LCD_MAGENTA 0xF81F
 
 void ST7735_Init(void);                                              /* 初始化 + 清屏 */
+/* Renderer transaction boundary. Once one transfer fails, remaining drawing
+ * calls in the frame are ignored until the next BeginFrame. */
+void ST7735_BeginFrame(void);
+uint8_t ST7735_FrameFailed(void);
 void ST7735_Clear(uint16_t color);                                   /* 清屏 */
 void ST7735_FillRect(int x, int y, int w, int h, uint16_t color);   /* 填充矩形 */
 /* Write RGB565 to the current controller window, MSB first; max one screen. */

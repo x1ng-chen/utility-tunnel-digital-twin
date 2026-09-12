@@ -56,22 +56,87 @@ static UiAction action_for_selection(const UiState *state)
 {
   if (state->page == UI_FANS) {
     switch (state->selected_row) {
-      case 0U: return UI_ACTION_FAN_1_PRESET;
+      case 0U: return UI_ACTION_FAN_1_SET_DUTY;
       case 1U: return UI_ACTION_FANS_BOTH_START;
       case 2U: return UI_ACTION_FANS_ALL_STOP;
-      case 3U: return UI_ACTION_FAN_2_PRESET;
+      case 3U: return UI_ACTION_FAN_2_SET_DUTY;
       default: return UI_ACTION_NONE;
     }
   }
   if (state->page == UI_LIGHT_SOUND) {
     switch (state->selected_row) {
       case 0U: return UI_ACTION_LED_MODE;
-      case 1U: return UI_ACTION_BUZZER_TEST;
-      case 2U: return UI_ACTION_BUZZER_MUTE;
+      case 1U: return UI_ACTION_LED_BRIGHTNESS;
+      case 2U:
+        if (state->buzzer_option == UI_BUZZER_MUTE) return UI_ACTION_BUZZER_MUTE;
+        if (state->buzzer_option == UI_BUZZER_RESTORE) return UI_ACTION_BUZZER_RESTORE;
+        return UI_ACTION_BUZZER_TEST;
       default: return UI_ACTION_NONE;
     }
   }
   return UI_ACTION_NONE;
+}
+
+static uint8_t selection_has_options(const UiState *state)
+{
+  return ((state->page == UI_FANS) &&
+          ((state->selected_row == 0U) || (state->selected_row == 3U))) ||
+         ((state->page == UI_LIGHT_SOUND) && (state->selected_row < 3U));
+}
+
+static uint8_t next_fan_duty(uint8_t duty, int8_t direction)
+{
+  static const uint8_t choices[] = {0U, 30U, 60U, 100U};
+  uint8_t index;
+  for (index = 0U; index < 4U; ++index) {
+    if (choices[index] == duty) break;
+  }
+  if (index >= 4U) index = 0U;
+  index = (direction > 0) ? (uint8_t)((index + 1U) % 4U)
+                          : (uint8_t)((index + 3U) % 4U);
+  return choices[index];
+}
+
+static uint8_t next_brightness(uint8_t brightness, int8_t direction)
+{
+  static const uint8_t choices[] = {25U, 50U, 75U, 100U};
+  uint8_t index;
+  for (index = 0U; index < 4U; ++index) {
+    if (choices[index] == brightness) break;
+  }
+  if (index >= 4U) index = 0U;
+  index = (direction > 0) ? (uint8_t)((index + 1U) % 4U)
+                          : (uint8_t)((index + 3U) % 4U);
+  return choices[index];
+}
+
+static void step_selected_option(UiState *state, int8_t direction)
+{
+  if (state->page == UI_FANS) {
+    const uint8_t fan = (state->selected_row == 0U) ? 0U : 1U;
+    state->fan_duty_option[fan] = next_fan_duty(state->fan_duty_option[fan], direction);
+  } else if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 0U)) {
+    const int16_t next = (int16_t)state->led_mode_option + direction + 8;
+    state->led_mode_option = (UiLedMode)(next % 8);
+  } else if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 1U)) {
+    state->led_brightness_option = next_brightness(state->led_brightness_option, direction);
+  } else if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 2U)) {
+    const int16_t next = (int16_t)state->buzzer_option + direction + 3;
+    state->buzzer_option = (UiBuzzerOption)(next % 3);
+  }
+}
+
+static uint8_t selected_option_value(const UiState *state)
+{
+  if ((state->page == UI_FANS) && (state->selected_row == 0U)) return state->fan_duty_option[0];
+  if ((state->page == UI_FANS) && (state->selected_row == 3U)) return state->fan_duty_option[1];
+  if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 0U)) {
+    return (uint8_t)state->led_mode_option;
+  }
+  if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 1U)) {
+    return state->led_brightness_option;
+  }
+  return 0U;
 }
 
 static void start_selection_animation(UiState *state, uint32_t now_ms)
@@ -105,6 +170,7 @@ static void return_home(UiState *state, uint32_t now_ms)
   state->page = UI_HOME;
   state->selected_row = 0U;
   state->dialog = UI_DIALOG_NONE;
+  state->option_editing = 0U;
   if (state->command_phase != UI_CMD_SENDING) clear_command_lifecycle(state);
   start_page_animation(state, now_ms);
 }
@@ -117,6 +183,7 @@ static UiEffect send_pending_command(UiState *state, uint32_t now_ms)
     return effect(UI_EFFECT_DIRTY, 0U, 0U);
   }
   state->dialog = UI_DIALOG_NONE;
+  state->option_editing = 0U;
   state->command_phase = UI_CMD_SENDING;
   state->command_started_ms = now_ms;
   state->active_command_id[0] = '\0';
@@ -129,6 +196,7 @@ void UiState_Init(UiState *state)
   (void)memset(state, 0, sizeof(*state));
   state->page = UI_HOME;
   state->dialog = UI_DIALOG_NONE;
+  state->led_brightness_option = 25U;
   clear_command_lifecycle(state);
 }
 
@@ -173,6 +241,7 @@ UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms)
     } else {
       return effect(UI_EFFECT_NONE, 0U, 0U);
     }
+    state->option_editing = 0U;
     start_selection_animation(state, now_ms);
     return effect(UI_EFFECT_DIRTY, 0U, 0U);
   }
@@ -184,6 +253,7 @@ UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms)
     } else {
       return effect(UI_EFFECT_NONE, 0U, 0U);
     }
+    state->option_editing = 0U;
     start_selection_animation(state, now_ms);
     return effect(UI_EFFECT_DIRTY, 0U, 0U);
   }
@@ -193,6 +263,7 @@ UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms)
   if (state->page == UI_HOME) {
     state->page = home_destination(state->selected_row);
     state->selected_row = 0U;
+    state->option_editing = 0U;
     start_page_animation(state, now_ms);
     return effect(UI_EFFECT_DIRTY, 0U, 0U);
   }
@@ -201,8 +272,14 @@ UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms)
   if (selected_action == UI_ACTION_NONE) return effect(UI_EFFECT_NONE, 0U, 0U);
   if (!command_send_allowed(state)) return effect(UI_EFFECT_DIRTY, 0U, 0U);
 
+  if ((event == UI_EVT_RIGHT) && selection_has_options(state)) {
+    state->option_editing = 1U;
+    step_selected_option(state, 1);
+    return effect(UI_EFFECT_DIRTY, 0U, 0U);
+  }
+
   state->pending_action = (uint8_t)selected_action;
-  state->pending_value = 0U;
+  state->pending_value = selected_option_value(state);
   if (action_requires_confirmation(selected_action)) {
     state->dialog = UI_DIALOG_CONFIRM;
     state->command_phase = UI_CMD_CONFIRM;

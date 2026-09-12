@@ -15,6 +15,8 @@
 #define LCD_MAGENTA 0xF81FU
 
 void ST7735_Clear(uint16_t color);
+void ST7735_BeginFrame(void);
+uint8_t ST7735_FrameFailed(void);
 void ST7735_FillRect(int x, int y, int w, int h, uint16_t color);
 void ST7735_DrawGlyph16(int x, int y, const uint8_t glyph[32], uint16_t color, uint16_t bg);
 void ST7735_DrawChar(int x, int y, char c, uint16_t color, uint16_t bg);

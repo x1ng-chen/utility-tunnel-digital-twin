@@ -93,6 +93,28 @@ def main() -> None:
             send_and_read(port, "#UITEST RESET")
             require_layout(port, *layout)
 
+        # Horizontal option editing exposes the concrete candidate value in
+        # diagnostics; only PRESS dispatches it.
+        send_and_read(port, "#UITEST RESET")
+        require_contains(send_and_read(port, "#UITEST MQTT 1"), "mqtt=online")
+        for _ in range(3):
+            send_and_read(port, "#UITEST DOWN")
+        send_and_read(port, "#UITEST PRESS")
+        require_contains(send_and_read(port, "#UITEST RIGHT"),
+                         "option=fan1_duty value=30 editing=1")
+        require_contains(send_and_read(port, "#UITEST PRESS"),
+                         "command=sending")
+
+        send_and_read(port, "#UITEST RESET")
+        require_contains(send_and_read(port, "#UITEST MQTT 1"), "mqtt=online")
+        for _ in range(3):
+            send_and_read(port, "#UITEST DOWN")
+        send_and_read(port, "#UITEST PRESS")
+        require_contains(send_and_read(port, "#UITEST RIGHT"), "editing=1")
+        line = send_and_read(port, "#UITEST LEFT")
+        require_contains(line, "page=home row=0")
+        require_contains(line, "editing=0")
+
         send_and_read(port, "#UITEST RESET")
         require_contains(send_and_read(port, "#UITEST DOWN"), "row=1")
         require_contains(send_and_read(port, "#UITEST LONG_PRESS"), "page=home row=0")

@@ -50,6 +50,91 @@ static int move_to_critical_fans_row(UiState *state)
   return 0;
 }
 
+static void enter_page(UiState *state, uint8_t home_row)
+{
+  uint8_t row;
+  UiState_Init(state);
+  UiState_SetControlAvailability(state, 1U, 0U);
+  for (row = 0U; row < home_row; ++row) {
+    (void)UiState_Handle(state, UI_EVT_DOWN, row + 1U);
+  }
+  (void)UiState_Handle(state, UI_EVT_PRESS, home_row + 1U);
+}
+
+static int check_selectable_command_options(void)
+{
+  UiState state;
+  UiEffect next;
+
+  enter_page(&state, 3U);
+  CHECK(state.page == UI_FANS);
+  CHECK(state.fan_duty_option[0] == 0U);
+  next = UiState_Handle(&state, UI_EVT_RIGHT, 10U);
+  CHECK(next.kind == UI_EFFECT_DIRTY);
+  CHECK(state.option_editing == 1U);
+  CHECK(state.fan_duty_option[0] == 30U);
+  next = UiState_Handle(&state, UI_EVT_PRESS, 11U);
+  CHECK(next.kind == UI_EFFECT_SEND_COMMAND);
+  CHECK(next.action == UI_ACTION_FAN_1_SET_DUTY);
+  CHECK(next.value == 30U);
+
+  enter_page(&state, 3U);
+  (void)UiState_Handle(&state, UI_EVT_RIGHT, 12U);
+  next = UiState_Handle(&state, UI_EVT_LEFT, 13U);
+  CHECK(next.kind == UI_EFFECT_GO_HOME);
+  CHECK(state.page == UI_HOME);
+  CHECK(state.option_editing == 0U);
+
+  enter_page(&state, 3U);
+  (void)UiState_Handle(&state, UI_EVT_UP, 20U);
+  CHECK(state.selected_row == 3U);
+  (void)UiState_Handle(&state, UI_EVT_RIGHT, 21U);
+  (void)UiState_Handle(&state, UI_EVT_RIGHT, 22U);
+  next = UiState_Handle(&state, UI_EVT_PRESS, 23U);
+  CHECK(next.kind == UI_EFFECT_SEND_COMMAND);
+  CHECK(next.action == UI_ACTION_FAN_2_SET_DUTY);
+  CHECK(next.value == 60U);
+
+  enter_page(&state, 4U);
+  CHECK(state.page == UI_LIGHT_SOUND);
+  (void)UiState_Handle(&state, UI_EVT_RIGHT, 30U);
+  next = UiState_Handle(&state, UI_EVT_PRESS, 31U);
+  CHECK(next.kind == UI_EFFECT_SEND_COMMAND);
+  CHECK(next.action == UI_ACTION_LED_MODE);
+  CHECK(next.value == UI_LED_WHITE);
+
+  enter_page(&state, 4U);
+  (void)UiState_Handle(&state, UI_EVT_DOWN, 40U);
+  (void)UiState_Handle(&state, UI_EVT_RIGHT, 41U);
+  next = UiState_Handle(&state, UI_EVT_PRESS, 42U);
+  CHECK(next.kind == UI_EFFECT_SEND_COMMAND);
+  CHECK(next.action == UI_ACTION_LED_BRIGHTNESS);
+  CHECK(next.value == 50U);
+
+  enter_page(&state, 4U);
+  (void)UiState_Handle(&state, UI_EVT_DOWN, 50U);
+  (void)UiState_Handle(&state, UI_EVT_DOWN, 51U);
+  next = UiState_Handle(&state, UI_EVT_PRESS, 52U);
+  CHECK(next.kind == UI_EFFECT_SEND_COMMAND);
+  CHECK(next.action == UI_ACTION_BUZZER_TEST);
+
+  enter_page(&state, 4U);
+  (void)UiState_Handle(&state, UI_EVT_UP, 60U);
+  (void)UiState_Handle(&state, UI_EVT_RIGHT, 61U);
+  next = UiState_Handle(&state, UI_EVT_PRESS, 62U);
+  CHECK(next.kind == UI_EFFECT_OPEN_CONFIRM);
+  CHECK(next.action == UI_ACTION_BUZZER_MUTE);
+
+  enter_page(&state, 4U);
+  (void)UiState_Handle(&state, UI_EVT_UP, 70U);
+  (void)UiState_Handle(&state, UI_EVT_RIGHT, 71U);
+  (void)UiState_Handle(&state, UI_EVT_RIGHT, 72U);
+  next = UiState_Handle(&state, UI_EVT_PRESS, 73U);
+  CHECK(next.kind == UI_EFFECT_SEND_COMMAND);
+  CHECK(next.action == UI_ACTION_BUZZER_RESTORE);
+  return 0;
+}
+
 int main(void)
 {
   UiState state;
@@ -59,6 +144,8 @@ int main(void)
 
   _Static_assert(sizeof(maximum_command_id) == 40U, "maximum command ID must be 39 characters");
   _Static_assert(sizeof(over_capacity_command_id) == 41U, "over-capacity command ID must be 40 characters");
+
+  if (check_selectable_command_options() != 0) return 1;
 
   if (start_critical_command(&state, "keep-1") != 0) return 1;
   next = UiState_Handle(&state, UI_EVT_LONG_PRESS, 8U);

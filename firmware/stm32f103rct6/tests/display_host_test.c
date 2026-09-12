@@ -45,6 +45,7 @@ uint8_t St7735Bus_WriteAsync(const uint8_t *bytes, uint16_t length) {
 }
 static void reset(void) {
     assert(!pending); used = chunks = frames = command_bytes = fail_at = 0;
+    ST7735_BeginFrame();
 }
 int main(void) {
     assert(mmap((void *)0x40010000, 65536, PROT_READ|PROT_WRITE,
@@ -68,7 +69,11 @@ int main(void) {
     reset(); fail_at = 2;
     ST7735_Clear(0);
     assert(chunks == 2 && frames == 0);
+    assert(ST7735_FrameFailed());
+    ST7735_FillRect(0, 0, 1, 1, 0xFFFF);
+    assert(chunks == 2 && used == 256);
     reset(); ST7735_FillRect(0, 0, 1, 1, 0xFFFF);
+    assert(!ST7735_FrameFailed());
     assert(used == 2 && frames == 1);
     reset();
     const uint16_t tile[] = {0x0001, 0x0002, 0x0003, 0x0004,

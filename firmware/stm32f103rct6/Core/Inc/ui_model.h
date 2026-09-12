@@ -28,6 +28,19 @@ typedef enum {
   UI_LED_FLASH,
 } UiLedMode;
 
+typedef enum {
+  UI_ALARM_SOURCE_TEMPERATURE = (1U << 0),
+  UI_ALARM_SOURCE_HUMIDITY = (1U << 1),
+  UI_ALARM_SOURCE_OXYGEN = (1U << 2),
+  UI_ALARM_SOURCE_METHANE = (1U << 3),
+  UI_ALARM_SOURCE_CARBON_MONOXIDE = (1U << 4),
+  UI_ALARM_SOURCE_SMOKE = (1U << 5),
+  UI_ALARM_SOURCE_WATER = (1U << 6),
+  UI_ALARM_SOURCE_FLAME = (1U << 7),
+} UiAlarmSource;
+
+#define UI_ALARM_SOURCE_MASK 0xFFU
+
 typedef struct {
   int32_t value;
   uint32_t sampled_ms;
@@ -83,6 +96,10 @@ typedef struct {
   UiReading water_level_raw;
   UiReading flame;
   UiAlarmSeverity alarm_severity;
+  /* warning_sources and critical_sources retain simultaneous severities.
+   * alarm_sources is the legacy combined field accepted until Task 5. */
+  uint32_t warning_sources;
+  uint32_t critical_sources;
   uint32_t alarm_sources;
   UiFanSnapshot fans[2];
   UiActuatorSnapshot actuators;

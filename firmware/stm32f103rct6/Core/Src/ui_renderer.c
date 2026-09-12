@@ -44,9 +44,11 @@ typedef struct {
   uint32_t animation_duration_ms;
   uint32_t next_animation_ms;
   uint8_t cadence_remainder;
+  uint8_t force_full_redraw;
 } UiRendererContext;
 
 static UiRendererContext renderer;
+static uint8_t popcount8(uint32_t value);
 
 static const char *const page_names[] = {
   "home", "overview", "monitor", "alerts", "fans", "light_sound", "network", "settings",
@@ -77,7 +79,7 @@ static const char *const fan_diagnostic_items[] = {
 
 static const char *const light_diagnostic_items[] = {
   "led_modes_off_white_green_yellow_red_blue_breathe_flash",
-  "brightness_25_50_75_100_and_buzzer_test", "buzzer_mute_restore",
+  "brightness_25_50_75_100", "buzzer_test_mute_restore",
 };
 
 static uint8_t page_row_count(UiPage page)
@@ -117,6 +119,60 @@ static const char *selected_name(UiPage page, uint8_t row)
 static const char *dialog_name(UiDialog dialog)
 {
   return (dialog == UI_DIALOG_CONFIRM) ? "confirm" : "none";
+}
+
+static uint32_t warning_sources(const UiSnapshot *snapshot)
+{
+  const uint32_t explicit_sources = snapshot->warning_sources & UI_ALARM_SOURCE_MASK;
+  if ((explicit_sources != 0U) || (snapshot->critical_sources != 0U)) return explicit_sources;
+  return (snapshot->alarm_severity == UI_ALARM_WARNING)
+           ? (snapshot->alarm_sources & UI_ALARM_SOURCE_MASK) : 0U;
+}
+
+static uint32_t critical_sources(const UiSnapshot *snapshot)
+{
+  const uint32_t explicit_sources = snapshot->critical_sources & UI_ALARM_SOURCE_MASK;
+  if ((explicit_sources != 0U) || (snapshot->warning_sources != 0U)) return explicit_sources;
+  return (snapshot->alarm_severity == UI_ALARM_CRITICAL)
+           ? (snapshot->alarm_sources & UI_ALARM_SOURCE_MASK) : 0U;
+}
+
+static uint32_t warning_only_sources(const UiSnapshot *snapshot)
+{
+  return warning_sources(snapshot) & ~critical_sources(snapshot) & UI_ALARM_SOURCE_MASK;
+}
+
+static UiAlarmSeverity effective_severity(const UiSnapshot *snapshot)
+{
+  if (critical_sources(snapshot) != 0U) return UI_ALARM_CRITICAL;
+  if (warning_sources(snapshot) != 0U) return UI_ALARM_WARNING;
+  return snapshot->alarm_severity;
+}
+
+static const char *selected_option_name(const UiState *state)
+{
+  if ((state->page == UI_FANS) && (state->selected_row == 0U)) return "fan1_duty";
+  if ((state->page == UI_FANS) && (state->selected_row == 3U)) return "fan2_duty";
+  if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 0U)) return "led_mode";
+  if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 1U)) return "brightness";
+  if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 2U)) return "buzzer";
+  return "none";
+}
+
+static uint8_t selected_option_value(const UiState *state)
+{
+  if ((state->page == UI_FANS) && (state->selected_row == 0U)) return state->fan_duty_option[0];
+  if ((state->page == UI_FANS) && (state->selected_row == 3U)) return state->fan_duty_option[1];
+  if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 0U)) {
+    return (uint8_t)state->led_mode_option;
+  }
+  if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 1U)) {
+    return state->led_brightness_option;
+  }
+  if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 2U)) {
+    return (uint8_t)state->buzzer_option;
+  }
+  return 0U;
 }
 
 uint8_t UiRenderer_PageFromName(const char *name, UiPage *page)
@@ -165,7 +221,7 @@ size_t UiRenderer_DescribeLayout(const UiState *state, const UiSnapshot *snapsho
   if ((state == NULL) || (snapshot == NULL) || (output == NULL) || (output_size == 0U)) return 0U;
   format_clock(snapshot, time_field);
   length = snprintf(output, output_size,
-                    "#UI page=%s row=%u dialog=%s command=%s title=%s rows=%u selected=%s time=%s mqtt=%s",
+                    "#UI page=%s row=%u dialog=%s command=%s title=%s rows=%u selected=%s time=%s mqtt=%s option=%s value=%u editing=%u warning=%u critical=%u",
                     ((uint8_t)state->page < (uint8_t)(sizeof(page_names) / sizeof(page_names[0])))
                       ? page_names[state->page] : "unknown",
                     (unsigned int)state->selected_row, dialog_name(state->dialog),
@@ -173,7 +229,11 @@ size_t UiRenderer_DescribeLayout(const UiState *state, const UiSnapshot *snapsho
                     ((uint8_t)state->page < (uint8_t)(sizeof(page_titles) / sizeof(page_titles[0])))
                       ? page_titles[state->page] : "unknown",
                     (unsigned int)page_row_count(state->page), selected_name(state->page, state->selected_row),
-                    time_field, snapshot->connectivity.mqtt_online ? "online" : "offline");
+                    time_field, snapshot->connectivity.mqtt_online ? "online" : "offline",
+                    selected_option_name(state), (unsigned int)selected_option_value(state),
+                    (unsigned int)state->option_editing,
+                    (unsigned int)popcount8(warning_only_sources(snapshot)),
+                    (unsigned int)popcount8(critical_sources(snapshot)));
   if (length < 0) {
     output[0] = '\0';
     return 0U;
@@ -253,6 +313,7 @@ static void begin_frame(void)
 {
   renderer.stats.last_dirty_rectangles = 0U;
   renderer.stats.last_dirty_pixels = 0U;
+  ST7735_BeginFrame();
 }
 
 static void invalidate(UiDirtyRect rect)
@@ -368,12 +429,22 @@ static void draw_footer(const UiState *state)
   const char *hint = (state->page == UI_HOME) ? "UP/DN  OK>" : "<BACK  OK";
   uint16_t color = UI_COLOR_MUTED;
   ST7735_FillRect(0, UI_FOOTER_TOP, LCD_WIDTH, LCD_HEIGHT - UI_FOOTER_TOP, UI_COLOR_HEADER);
-  if ((state->control.mqtt_online == 0U) &&
+  if ((state->control.safety_locked != 0U) &&
+      ((state->page == UI_FANS) || (state->page == UI_LIGHT_SOUND))) {
+    hint = "SAFETY LOCKED";
+    color = UI_COLOR_DANGER;
+  } else if ((state->control.mqtt_online == 0U) &&
       ((state->page == UI_FANS) || (state->page == UI_LIGHT_SOUND))) {
     hint = "MQTT LOCKED";
     color = UI_COLOR_WARNING;
   }
   ST7735_DrawString(20, UI_FOOTER_TOP + 2, hint, color, UI_COLOR_HEADER);
+}
+
+static uint8_t controls_disabled(const UiState *state)
+{
+  return ((state->control.mqtt_online == 0U) || (state->control.safety_locked != 0U)) &&
+         ((state->page == UI_FANS) || (state->page == UI_LIGHT_SOUND));
 }
 
 static void draw_title(int16_t offset, const char *title)
@@ -392,6 +463,19 @@ static void draw_list_row(int16_t offset, int16_t y, const char *label, uint8_t 
   draw_text((int16_t)(offset + 12), (int16_t)(y + 1), label,
             selected ? LCD_WHITE : UI_COLOR_MUTED,
             selected ? 0x2145U : UI_COLOR_PANEL);
+}
+
+static void draw_control_list_row(int16_t offset, int16_t y, const char *label,
+                                  uint8_t selected, uint8_t disabled)
+{
+  const uint16_t fill = (selected && !disabled) ? 0x2145U : UI_COLOR_PANEL;
+  const uint16_t color = disabled ? UI_COLOR_MUTED : (selected ? LCD_WHITE : UI_COLOR_MUTED);
+  ST7735_FillRect(offset + 8, y, 116, UI_ROW_HEIGHT - 2, fill);
+  if (selected) {
+    ST7735_FillRect(offset + 2, y, 3, UI_ROW_HEIGHT - 2,
+                    disabled ? UI_COLOR_DANGER : UI_COLOR_ACCENT);
+  }
+  draw_text((int16_t)(offset + 12), (int16_t)(y + 1), label, color, fill);
 }
 
 static void draw_home(int16_t offset, uint8_t selected)
@@ -420,21 +504,49 @@ static uint16_t severity_color(UiAlarmSeverity severity)
   return LCD_GREEN;
 }
 
-static void draw_overview_body(int16_t offset, const UiSnapshot *snapshot)
+static uint8_t overview_ok_count(const UiSnapshot *snapshot)
+{
+  return (uint8_t)(8U - popcount8(warning_sources(snapshot) | critical_sources(snapshot)));
+}
+
+static void draw_overview_status(int16_t offset, const UiSnapshot *snapshot)
+{
+  const UiAlarmSeverity severity = effective_severity(snapshot);
+  ST7735_FillRect(offset + 8, 35, 112, 22, UI_COLOR_PANEL);
+  draw_text((int16_t)(offset + 48), 38, severity_text(severity),
+            severity_color(severity), UI_COLOR_PANEL);
+}
+
+static void draw_overview_count(int16_t offset, uint8_t row, const UiSnapshot *snapshot)
 {
   char value[24];
-  const uint8_t active = popcount8(snapshot->alarm_sources);
-  const uint8_t warning = (snapshot->alarm_severity == UI_ALARM_WARNING) ? active : 0U;
-  const uint8_t alarm = (snapshot->alarm_severity == UI_ALARM_CRITICAL) ? active : 0U;
-  ST7735_FillRect(offset + 8, 35, 112, 22, UI_COLOR_PANEL);
-  draw_text((int16_t)(offset + 48), 38, severity_text(snapshot->alarm_severity),
-            severity_color(snapshot->alarm_severity), UI_COLOR_PANEL);
-  (void)snprintf(value, sizeof(value), "OK %u", (unsigned int)(8U - active));
-  ST7735_DrawString(offset + 10, 66, value, LCD_GREEN, UI_COLOR_BACKGROUND);
-  (void)snprintf(value, sizeof(value), "WARN %u", (unsigned int)warning);
-  ST7735_DrawString(offset + 10, 82, value, UI_COLOR_WARNING, UI_COLOR_BACKGROUND);
-  (void)snprintf(value, sizeof(value), "ALARM %u", (unsigned int)alarm);
-  ST7735_DrawString(offset + 10, 98, value, UI_COLOR_DANGER, UI_COLOR_BACKGROUND);
+  uint8_t count;
+  const char *label;
+  uint16_t color;
+  const int16_t y = (int16_t)(66 + row * 16U);
+  if (row == 0U) {
+    label = "OK";
+    count = overview_ok_count(snapshot);
+    color = LCD_GREEN;
+  } else if (row == 1U) {
+    label = "WARN";
+    count = popcount8(warning_only_sources(snapshot));
+    color = UI_COLOR_WARNING;
+  } else {
+    label = "ALARM";
+    count = popcount8(critical_sources(snapshot));
+    color = UI_COLOR_DANGER;
+  }
+  ST7735_FillRect(offset + 10, y, 100, 8, UI_COLOR_BACKGROUND);
+  (void)snprintf(value, sizeof(value), "%s %u", label, (unsigned int)count);
+  ST7735_DrawString(offset + 10, y, value, color, UI_COLOR_BACKGROUND);
+}
+
+static void draw_overview_body(int16_t offset, const UiSnapshot *snapshot)
+{
+  uint8_t row;
+  draw_overview_status(offset, snapshot);
+  for (row = 0U; row < 3U; ++row) draw_overview_count(offset, row, snapshot);
 }
 
 static void draw_overview(int16_t offset, const UiSnapshot *snapshot)
@@ -525,14 +637,51 @@ static void draw_monitor(int16_t offset, uint8_t selected, const UiSnapshot *sna
   draw_monitor_detail(offset, selected, snapshot);
 }
 
+static void draw_alert_status(int16_t offset, const UiSnapshot *snapshot)
+{
+  const UiAlarmSeverity severity = effective_severity(snapshot);
+  ST7735_FillRect(offset + 8, 38, 112, 26, UI_COLOR_PANEL);
+  draw_text((int16_t)(offset + 48), 40, severity_text(severity),
+            severity_color(severity), UI_COLOR_PANEL);
+}
+
+static void draw_alert_sources(int16_t offset, const UiSnapshot *snapshot)
+{
+  static const char *const names[] = {
+    "TEMP", "HUM", "O2", "CH4", "CO", "SMOKE", "WATER", "FLAME",
+  };
+  uint32_t critical = critical_sources(snapshot);
+  uint32_t warning = warning_only_sources(snapshot);
+  uint8_t source;
+  uint8_t row = 0U;
+  ST7735_FillRect(offset + 8, 70, 112, 42, UI_COLOR_BACKGROUND);
+  for (source = 0U; (source < 8U) && (row < 4U); ++source) {
+    char line[24];
+    const uint32_t bit = 1UL << source;
+    if ((critical & bit) == 0U) continue;
+    (void)snprintf(line, sizeof(line), "%s CRITICAL", names[source]);
+    ST7735_DrawString(offset + 8, (int)(72 + row * 10U), line,
+                      UI_COLOR_DANGER, UI_COLOR_BACKGROUND);
+    ++row;
+  }
+  for (source = 0U; (source < 8U) && (row < 4U); ++source) {
+    char line[24];
+    const uint32_t bit = 1UL << source;
+    if ((warning & bit) == 0U) continue;
+    (void)snprintf(line, sizeof(line), "%s WARNING", names[source]);
+    ST7735_DrawString(offset + 8, (int)(72 + row * 10U), line,
+                      UI_COLOR_WARNING, UI_COLOR_BACKGROUND);
+    ++row;
+  }
+  if (row == 0U) {
+    ST7735_DrawString(offset + 8, 82, "NO ACTIVE ALARM", LCD_GREEN, UI_COLOR_BACKGROUND);
+  }
+}
+
 static void draw_alert_body(int16_t offset, const UiSnapshot *snapshot)
 {
-  char sources[24];
-  ST7735_FillRect(offset + 8, 38, 112, 34, UI_COLOR_PANEL);
-  draw_text((int16_t)(offset + 48), 40, severity_text(snapshot->alarm_severity),
-            severity_color(snapshot->alarm_severity), UI_COLOR_PANEL);
-  (void)snprintf(sources, sizeof(sources), "SOURCES %08lX", (unsigned long)snapshot->alarm_sources);
-  ST7735_DrawString(offset + 8, 82, sources, UI_COLOR_MUTED, UI_COLOR_BACKGROUND);
+  draw_alert_status(offset, snapshot);
+  draw_alert_sources(offset, snapshot);
 }
 
 static void draw_alerts(int16_t offset, const UiSnapshot *snapshot)
@@ -541,80 +690,122 @@ static void draw_alerts(int16_t offset, const UiSnapshot *snapshot)
   draw_alert_body(offset, snapshot);
 }
 
-static void draw_fan_row(int16_t offset, uint8_t row, const UiSnapshot *snapshot, uint8_t selected)
+static void draw_fan_row(int16_t offset, uint8_t row, const UiState *state,
+                         const UiSnapshot *snapshot, uint8_t selected)
 {
   char label[24];
   const int16_t y = (int16_t)(UI_ROWS_TOP + row * UI_ROW_HEIGHT);
+  const uint8_t disabled = controls_disabled(state);
   if (row == 0U || row == 3U) {
     const uint8_t fan_index = (row == 0U) ? 0U : 1U;
-    const uint16_t fill = selected ? 0x2145U : UI_COLOR_PANEL;
+    const uint16_t fill = (selected && !disabled) ? 0x2145U : UI_COLOR_PANEL;
+    const uint16_t color = disabled ? UI_COLOR_MUTED : (selected ? LCD_WHITE : UI_COLOR_MUTED);
     ST7735_FillRect(offset + 8, y, 116, UI_ROW_HEIGHT - 2, fill);
-    if (selected) ST7735_FillRect(offset + 2, y, 3, UI_ROW_HEIGHT - 2, UI_COLOR_ACCENT);
-    (void)snprintf(label, sizeof(label), "F%u %s RUN/STOP",
-                   (unsigned int)(fan_index + 1U), snapshot->fans[fan_index].running ? "ON" : "OFF");
-    ST7735_DrawString(offset + 12, y + 1, label, selected ? LCD_WHITE : UI_COLOR_MUTED, fill);
-    ST7735_DrawString(offset + 12, y + 9, "30 60 100%", selected ? LCD_WHITE : UI_COLOR_MUTED, fill);
+    if (selected) {
+      ST7735_FillRect(offset + 2, y, 3, UI_ROW_HEIGHT - 2,
+                      disabled ? UI_COLOR_DANGER :
+                      (state->option_editing ? UI_COLOR_WARNING : UI_COLOR_ACCENT));
+    }
+    (void)snprintf(label, sizeof(label), "F%u %s %u%%",
+                   (unsigned int)(fan_index + 1U), snapshot->fans[fan_index].running ? "ON" : "OFF",
+                   (unsigned int)state->fan_duty_option[fan_index]);
+    ST7735_DrawString(offset + 12, y + 1, label, color, fill);
+    ST7735_DrawString(offset + 12, y + 9, "0 30 60 100", color, fill);
     return;
   } else if (row == 1U) {
     (void)snprintf(label, sizeof(label), "两台联动启动");
   } else {
     (void)snprintf(label, sizeof(label), "全部停止");
   }
-  draw_list_row(offset, y, label, selected);
+  draw_control_list_row(offset, y, label, selected, disabled);
 }
 
-static void draw_fans(int16_t offset, uint8_t selected, const UiSnapshot *snapshot)
+static void draw_fans(int16_t offset, const UiState *state, const UiSnapshot *snapshot)
 {
   uint8_t row;
   draw_title(offset, "风机控制");
-  for (row = 0U; row < 4U; ++row) draw_fan_row(offset, row, snapshot, row == selected);
-}
-
-static void draw_light_row(int16_t offset, uint8_t row, uint8_t selected, const UiSnapshot *snapshot)
-{
-  char label[24];
-  static const int16_t y[] = {34, 60, 86};
-  const uint16_t fill = selected ? 0x2145U : UI_COLOR_PANEL;
-  const uint16_t color = selected ? LCD_WHITE : UI_COLOR_MUTED;
-  ST7735_FillRect(offset + 8, y[row], 116, 24, fill);
-  if (selected) ST7735_FillRect(offset + 2, y[row], 3, 24, UI_COLOR_ACCENT);
-  if (row == 0U) {
-    (void)snprintf(label, sizeof(label), "L%u OFF W G Y",
-                   (unsigned int)snapshot->actuators.led_mode);
-    ST7735_DrawString(offset + 12, y[row] + 1, label, color, fill);
-    ST7735_DrawString(offset + 12, y[row] + 11, "R B BRTH FLASH", color, fill);
-  } else if (row == 1U) {
-    (void)snprintf(label, sizeof(label), "L%u 25 50 75",
-                   (unsigned int)snapshot->actuators.led_brightness_percent);
-    ST7735_DrawString(offset + 12, y[row] + 1, label, color, fill);
-    ST7735_DrawString(offset + 12, y[row] + 11, "100 BUZZ TEST", color, fill);
-  } else {
-    (void)snprintf(label, sizeof(label), "BUZZ %s MUTE",
-                   snapshot->actuators.buzzer_muted ? "MUTED" : "ON");
-    ST7735_DrawString(offset + 12, y[row] + 1, label, color, fill);
-    ST7735_DrawString(offset + 12, y[row] + 11, "RESTORE ALARM", color, fill);
+  for (row = 0U; row < 4U; ++row) {
+    draw_fan_row(offset, row, state, snapshot, row == state->selected_row);
   }
 }
 
-static void draw_light_sound(int16_t offset, uint8_t selected, const UiSnapshot *snapshot)
+static void draw_light_row(int16_t offset, uint8_t row, uint8_t selected,
+                           const UiState *state, const UiSnapshot *snapshot)
+{
+  char label[24];
+  static const char *const led_modes[] = {
+    "OFF", "WHITE", "GREEN", "YELLOW", "RED", "BLUE", "BREATHE", "FLASH",
+  };
+  static const char *const buzzer_actions[] = {"TEST", "MUTE", "RESTORE"};
+  static const int16_t y[] = {34, 60, 86};
+  const uint8_t disabled = controls_disabled(state);
+  const uint16_t fill = (selected && !disabled) ? 0x2145U : UI_COLOR_PANEL;
+  const uint16_t color = disabled ? UI_COLOR_MUTED : (selected ? LCD_WHITE : UI_COLOR_MUTED);
+  ST7735_FillRect(offset + 8, y[row], 116, 24, fill);
+  if (selected) {
+    ST7735_FillRect(offset + 2, y[row], 3, 24,
+                    disabled ? UI_COLOR_DANGER :
+                    (state->option_editing ? UI_COLOR_WARNING : UI_COLOR_ACCENT));
+  }
+  if (row == 0U) {
+    const uint8_t mode = ((uint8_t)state->led_mode_option < 8U) ? (uint8_t)state->led_mode_option : 0U;
+    (void)snprintf(label, sizeof(label), "MODE %s", led_modes[mode]);
+    ST7735_DrawString(offset + 12, y[row] + 1, label, color, fill);
+    (void)snprintf(label, sizeof(label), "NOW %u  0..7",
+                   (unsigned int)snapshot->actuators.led_mode);
+    ST7735_DrawString(offset + 12, y[row] + 11, label, color, fill);
+  } else if (row == 1U) {
+    (void)snprintf(label, sizeof(label), "BRIGHT %u%%",
+                   (unsigned int)state->led_brightness_option);
+    ST7735_DrawString(offset + 12, y[row] + 1, label, color, fill);
+    (void)snprintf(label, sizeof(label), "NOW %u 25..100",
+                   (unsigned int)snapshot->actuators.led_brightness_percent);
+    ST7735_DrawString(offset + 12, y[row] + 11, label, color, fill);
+  } else {
+    const uint8_t action = ((uint8_t)state->buzzer_option < 3U) ? (uint8_t)state->buzzer_option : 0U;
+    (void)snprintf(label, sizeof(label), "BUZZ %s", buzzer_actions[action]);
+    ST7735_DrawString(offset + 12, y[row] + 1, label, color, fill);
+    (void)snprintf(label, sizeof(label), "NOW %s/%s", snapshot->actuators.buzzer_on ? "ON" : "OFF",
+                   snapshot->actuators.buzzer_muted ? "MUTED" : "READY");
+    ST7735_DrawString(offset + 12, y[row] + 11, label, color, fill);
+  }
+}
+
+static void draw_light_sound(int16_t offset, const UiState *state, const UiSnapshot *snapshot)
 {
   uint8_t row;
   draw_title(offset, "灯带与蜂鸣器");
-  for (row = 0U; row < 3U; ++row) draw_light_row(offset, row, row == selected, snapshot);
+  for (row = 0U; row < 3U; ++row) {
+    draw_light_row(offset, row, row == state->selected_row, state, snapshot);
+  }
+}
+
+static uint8_t network_row_online(const UiSnapshot *snapshot, uint8_t row)
+{
+  if (row == 0U) return snapshot->connectivity.node_a_online;
+  if (row == 1U) return snapshot->connectivity.gateway_online;
+  if (row == 2U) return snapshot->connectivity.iotda_online;
+  return snapshot->connectivity.mqtt_online;
+}
+
+static void draw_network_row(int16_t offset, uint8_t row, const UiSnapshot *snapshot)
+{
+  static const char *const labels[] = {"NODE-A", "GATEWAY", "IOTDA", "MQTT"};
+  char text[24];
+  const int16_t y = (int16_t)(UI_ROWS_TOP + row * UI_ROW_HEIGHT);
+  (void)snprintf(text, sizeof(text), "%s %s", labels[row],
+                 network_row_online(snapshot, row) ? "ONLINE" : "OFFLINE");
+  ST7735_FillRect(offset + 8, y, 116, UI_ROW_HEIGHT - 2, UI_COLOR_PANEL);
+  ST7735_DrawString(offset + 12, y + 5, text,
+                    network_row_online(snapshot, row) ? LCD_GREEN : UI_COLOR_MUTED,
+                    UI_COLOR_PANEL);
 }
 
 static void draw_network_rows(int16_t offset, const UiSnapshot *snapshot)
 {
-  static const char *const labels[] = {"NODE-A", "GATEWAY", "IOTDA", "MQTT"};
-  const uint8_t online[] = {
-    snapshot->connectivity.node_a_online, snapshot->connectivity.gateway_online,
-    snapshot->connectivity.iotda_online, snapshot->connectivity.mqtt_online,
-  };
   uint8_t row;
   for (row = 0U; row < 4U; ++row) {
-    char text[24];
-    (void)snprintf(text, sizeof(text), "%s %s", labels[row], online[row] ? "ONLINE" : "OFFLINE");
-    draw_list_row(offset, (int16_t)(UI_ROWS_TOP + row * UI_ROW_HEIGHT), text, 0U);
+    draw_network_row(offset, row, snapshot);
   }
 }
 
@@ -637,17 +828,17 @@ static void draw_settings(int16_t offset, uint8_t selected)
   draw_settings_row(offset, 1U, selected == 1U);
 }
 
-static void draw_page(UiPage page, uint8_t selected, const UiSnapshot *snapshot, int16_t offset)
+static void draw_page(const UiState *state, const UiSnapshot *snapshot, int16_t offset)
 {
-  switch (page) {
-    case UI_HOME: draw_home(offset, selected); break;
+  switch (state->page) {
+    case UI_HOME: draw_home(offset, state->selected_row); break;
     case UI_OVERVIEW: draw_overview(offset, snapshot); break;
-    case UI_MONITOR: draw_monitor(offset, selected, snapshot); break;
+    case UI_MONITOR: draw_monitor(offset, state->selected_row, snapshot); break;
     case UI_ALERTS: draw_alerts(offset, snapshot); break;
-    case UI_FANS: draw_fans(offset, selected, snapshot); break;
-    case UI_LIGHT_SOUND: draw_light_sound(offset, selected, snapshot); break;
+    case UI_FANS: draw_fans(offset, state, snapshot); break;
+    case UI_LIGHT_SOUND: draw_light_sound(offset, state, snapshot); break;
     case UI_NETWORK: draw_network(offset, snapshot); break;
-    case UI_SETTINGS: draw_settings(offset, selected); break;
+    case UI_SETTINGS: draw_settings(offset, state->selected_row); break;
     default: break;
   }
 }
@@ -673,11 +864,11 @@ static void redraw_selection_rows(const UiState *state, const UiSnapshot *snapsh
     ST7735_FillRect(2, UI_ROWS_TOP, 122, UI_FOOTER_TOP - UI_ROWS_TOP, UI_COLOR_BACKGROUND);
     draw_monitor_detail(0, new_row, snapshot);
   } else if (state->page == UI_FANS) {
-    draw_fan_row(0, old_row, snapshot, 0U);
-    draw_fan_row(0, new_row, snapshot, 1U);
+    draw_fan_row(0, old_row, state, snapshot, 0U);
+    draw_fan_row(0, new_row, state, snapshot, 1U);
   } else if (state->page == UI_LIGHT_SOUND) {
-    draw_light_row(0, old_row, 0U, snapshot);
-    draw_light_row(0, new_row, 1U, snapshot);
+    draw_light_row(0, old_row, 0U, state, snapshot);
+    draw_light_row(0, new_row, 1U, state, snapshot);
   } else if (state->page == UI_SETTINGS) {
     draw_settings_row(0, old_row, 0U);
     draw_settings_row(0, new_row, 1U);
@@ -692,10 +883,12 @@ static void draw_page_frame(const UiState *state, const UiSnapshot *snapshot, in
 {
   ST7735_FillRect(0, UI_PAGE_TOP, LCD_WIDTH, UI_FOOTER_TOP - UI_PAGE_TOP, UI_COLOR_BACKGROUND);
   if (renderer.page_animation && offset > 0) {
-    draw_page(renderer.previous_page, renderer.previous_row, &renderer.snapshot,
-              (int16_t)(offset - LCD_WIDTH));
+    UiState previous_state = renderer.state;
+    previous_state.page = renderer.previous_page;
+    previous_state.selected_row = renderer.previous_row;
+    draw_page(&previous_state, &renderer.snapshot, (int16_t)(offset - LCD_WIDTH));
   }
-  draw_page(state->page, state->selected_row, snapshot, offset);
+  draw_page(state, snapshot, offset);
 }
 
 static const char *confirmation_action_name(uint8_t action)
@@ -760,16 +953,31 @@ static void redraw_header_delta(const UiSnapshot *snapshot, uint8_t redraw_time,
   }
 }
 
-static uint8_t redraw_snapshot_delta(const UiState *state, const UiSnapshot *snapshot)
+static uint8_t redraw_snapshot_delta(const UiState *state, const UiSnapshot *snapshot,
+                                     uint8_t already_drawn_rows)
 {
   uint8_t redrawn = 0U;
   uint8_t row;
   if (state->page == UI_OVERVIEW) {
-    if ((snapshot->alarm_severity != renderer.snapshot.alarm_severity) ||
-        (snapshot->alarm_sources != renderer.snapshot.alarm_sources)) {
-      invalidate((UiDirtyRect){0, UI_ROWS_TOP, LCD_WIDTH, UI_FOOTER_TOP - UI_ROWS_TOP});
-      ST7735_FillRect(0, UI_ROWS_TOP, LCD_WIDTH, UI_FOOTER_TOP - UI_ROWS_TOP, UI_COLOR_BACKGROUND);
-      draw_overview_body(0, snapshot);
+    if (effective_severity(snapshot) != effective_severity(&renderer.snapshot)) {
+      invalidate((UiDirtyRect){8, 35, 112, 22});
+      draw_overview_status(0, snapshot);
+      redrawn = 1U;
+    }
+    if (overview_ok_count(snapshot) != overview_ok_count(&renderer.snapshot)) {
+      invalidate((UiDirtyRect){10, 66, 100, 8});
+      draw_overview_count(0, 0U, snapshot);
+      redrawn = 1U;
+    }
+    if (popcount8(warning_only_sources(snapshot)) !=
+        popcount8(warning_only_sources(&renderer.snapshot))) {
+      invalidate((UiDirtyRect){10, 82, 100, 8});
+      draw_overview_count(0, 1U, snapshot);
+      redrawn = 1U;
+    }
+    if (popcount8(critical_sources(snapshot)) != popcount8(critical_sources(&renderer.snapshot))) {
+      invalidate((UiDirtyRect){10, 98, 100, 8});
+      draw_overview_count(0, 2U, snapshot);
       redrawn = 1U;
     }
   } else if (state->page == UI_MONITOR) {
@@ -803,50 +1011,118 @@ static uint8_t redraw_snapshot_delta(const UiState *state, const UiSnapshot *sna
                    (snapshot->fans[1].quality != renderer.snapshot.fans[1].quality);
     }
     for (row = 0U; row < monitor_metric_count(selected); ++row) {
-      if (changed[row]) {
+      if (changed[row] && ((already_drawn_rows & (1U << row)) == 0U)) {
         invalidate((UiDirtyRect){9, (int16_t)(52 + row * 16U), 115, 14});
         draw_monitor_metric(0, selected, row, snapshot);
         redrawn = 1U;
       }
     }
   } else if (state->page == UI_ALERTS) {
-    if ((snapshot->alarm_severity != renderer.snapshot.alarm_severity) ||
-        (snapshot->alarm_sources != renderer.snapshot.alarm_sources)) {
-      invalidate((UiDirtyRect){8, 38, 112, 60});
-      ST7735_FillRect(8, 38, 112, 60, UI_COLOR_BACKGROUND);
-      draw_alert_body(0, snapshot);
+    if (effective_severity(snapshot) != effective_severity(&renderer.snapshot)) {
+      invalidate((UiDirtyRect){8, 38, 112, 26});
+      draw_alert_status(0, snapshot);
+      redrawn = 1U;
+    }
+    if ((warning_sources(snapshot) != warning_sources(&renderer.snapshot)) ||
+        (critical_sources(snapshot) != critical_sources(&renderer.snapshot))) {
+      invalidate((UiDirtyRect){8, 70, 112, 42});
+      draw_alert_sources(0, snapshot);
       redrawn = 1U;
     }
   } else if (state->page == UI_FANS) {
     for (row = 0U; row < 2U; ++row) {
       if (fan_changed(&snapshot->fans[row], &renderer.snapshot.fans[row])) {
         const uint8_t display_row = (row == 0U) ? 0U : 3U;
+        if ((already_drawn_rows & (1U << display_row)) != 0U) continue;
         invalidate((UiDirtyRect){2, (int16_t)(UI_ROWS_TOP + display_row * UI_ROW_HEIGHT),
                                  122, UI_ROW_HEIGHT - 2});
-        draw_fan_row(0, display_row, snapshot, display_row == state->selected_row);
+        draw_fan_row(0, display_row, state, snapshot, display_row == state->selected_row);
         redrawn = 1U;
       }
     }
   } else if (state->page == UI_LIGHT_SOUND) {
-    if ((snapshot->actuators.led_mode != renderer.snapshot.actuators.led_mode) ||
-        (snapshot->actuators.led_brightness_percent != renderer.snapshot.actuators.led_brightness_percent) ||
-        (snapshot->actuators.buzzer_on != renderer.snapshot.actuators.buzzer_on) ||
-        (snapshot->actuators.buzzer_muted != renderer.snapshot.actuators.buzzer_muted)) {
-      invalidate((UiDirtyRect){2, UI_ROWS_TOP, 122, 72});
-      ST7735_FillRect(2, UI_ROWS_TOP, 122, 72, UI_COLOR_BACKGROUND);
-      for (row = 0U; row < 3U; ++row) {
-        draw_light_row(0, row, row == state->selected_row, snapshot);
-      }
+    if ((snapshot->actuators.led_mode != renderer.snapshot.actuators.led_mode) &&
+        ((already_drawn_rows & 1U) == 0U)) {
+      invalidate((UiDirtyRect){2, 34, 122, 24});
+      draw_light_row(0, 0U, state->selected_row == 0U, state, snapshot);
+      redrawn = 1U;
+    }
+    if ((snapshot->actuators.led_brightness_percent !=
+         renderer.snapshot.actuators.led_brightness_percent) &&
+        ((already_drawn_rows & 2U) == 0U)) {
+      invalidate((UiDirtyRect){2, 60, 122, 24});
+      draw_light_row(0, 1U, state->selected_row == 1U, state, snapshot);
+      redrawn = 1U;
+    }
+    if (((snapshot->actuators.buzzer_on != renderer.snapshot.actuators.buzzer_on) ||
+         (snapshot->actuators.buzzer_muted != renderer.snapshot.actuators.buzzer_muted)) &&
+        ((already_drawn_rows & 4U) == 0U)) {
+      invalidate((UiDirtyRect){2, 86, 122, 24});
+      draw_light_row(0, 2U, state->selected_row == 2U, state, snapshot);
       redrawn = 1U;
     }
   } else if (state->page == UI_NETWORK) {
-    if ((snapshot->connectivity.node_a_online != renderer.snapshot.connectivity.node_a_online) ||
-        (snapshot->connectivity.gateway_online != renderer.snapshot.connectivity.gateway_online) ||
-        (snapshot->connectivity.iotda_online != renderer.snapshot.connectivity.iotda_online)) {
-      invalidate((UiDirtyRect){2, UI_ROWS_TOP, 122, 78});
-      ST7735_FillRect(2, UI_ROWS_TOP, 122, 78, UI_COLOR_BACKGROUND);
-      draw_network_rows(0, snapshot);
-      redrawn = 1U;
+    for (row = 0U; row < 4U; ++row) {
+      if (network_row_online(snapshot, row) != network_row_online(&renderer.snapshot, row)) {
+        invalidate((UiDirtyRect){2, (int16_t)(UI_ROWS_TOP + row * UI_ROW_HEIGHT),
+                                 122, UI_ROW_HEIGHT - 2});
+        draw_network_row(0, row, snapshot);
+        redrawn = 1U;
+      }
+    }
+  }
+  return redrawn;
+}
+
+static uint8_t option_state_changed(const UiState *state)
+{
+  return (state->option_editing != renderer.state.option_editing) ||
+         (state->fan_duty_option[0] != renderer.state.fan_duty_option[0]) ||
+         (state->fan_duty_option[1] != renderer.state.fan_duty_option[1]) ||
+         (state->led_mode_option != renderer.state.led_mode_option) ||
+         (state->led_brightness_option != renderer.state.led_brightness_option) ||
+         (state->buzzer_option != renderer.state.buzzer_option);
+}
+
+static uint8_t redraw_option_delta(const UiState *state, const UiSnapshot *snapshot)
+{
+  uint8_t redrawn = 0U;
+  if (state->page == UI_FANS) {
+    if ((state->fan_duty_option[0] != renderer.state.fan_duty_option[0]) ||
+        ((state->selected_row == 0U) &&
+         (state->option_editing != renderer.state.option_editing))) {
+      invalidate((UiDirtyRect){2, 34, 122, 18});
+      draw_fan_row(0, 0U, state, snapshot, state->selected_row == 0U);
+      redrawn |= 1U;
+    }
+    if ((state->fan_duty_option[1] != renderer.state.fan_duty_option[1]) ||
+        ((state->selected_row == 3U) &&
+         (state->option_editing != renderer.state.option_editing))) {
+      invalidate((UiDirtyRect){2, 94, 122, 18});
+      draw_fan_row(0, 3U, state, snapshot, state->selected_row == 3U);
+      redrawn |= 8U;
+    }
+  } else if (state->page == UI_LIGHT_SOUND) {
+    if ((state->led_mode_option != renderer.state.led_mode_option) ||
+        ((state->selected_row == 0U) &&
+         (state->option_editing != renderer.state.option_editing))) {
+      invalidate((UiDirtyRect){2, 34, 122, 24});
+      draw_light_row(0, 0U, state->selected_row == 0U, state, snapshot);
+      redrawn |= 1U;
+    }
+    if ((state->led_brightness_option != renderer.state.led_brightness_option) ||
+        ((state->selected_row == 1U) &&
+         (state->option_editing != renderer.state.option_editing))) {
+      invalidate((UiDirtyRect){2, 60, 122, 24});
+      draw_light_row(0, 1U, state->selected_row == 1U, state, snapshot);
+      redrawn |= 2U;
+    }
+    if ((state->buzzer_option != renderer.state.buzzer_option) ||
+        ((state->selected_row == 2U) &&
+         (state->option_editing != renderer.state.option_editing))) {
+      invalidate((UiDirtyRect){2, 86, 122, 24});
+      draw_light_row(0, 2U, state->selected_row == 2U, state, snapshot);
+      redrawn |= 4U;
     }
   }
   return redrawn;
@@ -893,23 +1169,62 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
   uint8_t header_mqtt;
   uint8_t overlay_delta;
   uint8_t footer_delta;
+  uint8_t option_delta;
+  uint8_t control_style_delta;
   uint8_t snapshot_delta_drawn = 0U;
+  uint8_t already_drawn_rows = 0U;
+  uint8_t page_content_current = 0U;
+  UiRendererStats stats_before;
   if ((state == NULL) || (snapshot == NULL)) return 0U;
+  stats_before = renderer.stats;
 
   if (!renderer.initialized) {
     begin_frame();
     invalidate((UiDirtyRect){0, 0, LCD_WIDTH, LCD_HEIGHT});
     ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, UI_COLOR_BACKGROUND);
     draw_header(snapshot);
-    draw_page(state->page, state->selected_row, snapshot, 0);
+    draw_page(state, snapshot, 0);
     draw_footer(state);
     if (overlay_visible(state)) draw_command_overlay(state);
+    if (ST7735_FrameFailed()) {
+      renderer.stats = stats_before;
+      ++renderer.stats.failed_frames;
+      renderer.force_full_redraw = 1U;
+      return 0U;
+    }
     renderer.state = *state;
     renderer.snapshot = *snapshot;
     renderer.selection_drawn_y = row_y(state->page, state->selected_row, state->selected_row);
     renderer.stats.last_selection_y = renderer.selection_drawn_y;
     renderer.stats.last_page_offset = 0;
     renderer.initialized = 1U;
+    renderer.force_full_redraw = 0U;
+    ++renderer.stats.rendered_frames;
+    return 1U;
+  }
+
+  if (renderer.force_full_redraw) {
+    begin_frame();
+    invalidate((UiDirtyRect){0, 0, LCD_WIDTH, LCD_HEIGHT});
+    ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, UI_COLOR_BACKGROUND);
+    draw_header(snapshot);
+    draw_page(state, snapshot, 0);
+    draw_footer(state);
+    if (overlay_visible(state)) draw_command_overlay(state);
+    if (ST7735_FrameFailed()) {
+      renderer.stats = stats_before;
+      ++renderer.stats.failed_frames;
+      renderer.force_full_redraw = 1U;
+      return 0U;
+    }
+    renderer.state = *state;
+    renderer.snapshot = *snapshot;
+    renderer.selection_animation = 0U;
+    renderer.page_animation = 0U;
+    renderer.selection_drawn_y = row_y(state->page, state->selected_row, state->selected_row);
+    renderer.stats.last_selection_y = renderer.selection_drawn_y;
+    renderer.stats.last_page_offset = 0;
+    renderer.force_full_redraw = 0U;
     ++renderer.stats.rendered_frames;
     return 1U;
   }
@@ -948,12 +1263,17 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
   footer_delta = (state->page != renderer.state.page) ||
                  (state->control.mqtt_online != renderer.state.control.mqtt_online) ||
                  (state->control.safety_locked != renderer.state.control.safety_locked);
-  if (header_time || header_mqtt || overlay_delta || footer_delta) frame_needed = 1U;
+  option_delta = option_state_changed(state);
+  control_style_delta = (state->page == renderer.state.page) &&
+                        ((state->page == UI_FANS) || (state->page == UI_LIGHT_SOUND)) &&
+                        (controls_disabled(state) != controls_disabled(&renderer.state));
+  if (header_time || header_mqtt || overlay_delta || footer_delta || option_delta ||
+      control_style_delta) frame_needed = 1U;
 
   if (!frame_needed) {
     /* Snapshot fields not visible on this page do not schedule a transfer. */
     begin_frame();
-    snapshot_delta_drawn = redraw_snapshot_delta(state, snapshot);
+    snapshot_delta_drawn = redraw_snapshot_delta(state, snapshot, 0U);
     if (snapshot_delta_drawn) frame_needed = 1U;
     if (!frame_needed) {
       ++renderer.stats.skipped_frames;
@@ -969,6 +1289,7 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
                                                         renderer.animation_duration_ms, now_ms);
     invalidate((UiDirtyRect){0, UI_PAGE_TOP, LCD_WIDTH, UI_FOOTER_TOP - UI_PAGE_TOP});
     draw_page_frame(state, snapshot, offset);
+    page_content_current = 1U;
     renderer.stats.last_page_offset = offset;
     if (offset == 0) renderer.page_animation = 0U;
   } else if (state->selected_row != renderer.state.selected_row || renderer.selection_animation) {
@@ -992,6 +1313,12 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
         invalidate((UiDirtyRect){2, new_y, 122, bar_height});
       }
       redraw_selection_rows(state, snapshot, renderer.state.selected_row, next_y);
+      if (state->page == UI_MONITOR) {
+        page_content_current = 1U;
+      } else if ((state->page == UI_FANS) || (state->page == UI_LIGHT_SOUND)) {
+        already_drawn_rows = (uint8_t)((1U << renderer.state.selected_row) |
+                                       (1U << state->selected_row));
+      }
     } else {
       const int16_t bar_height = selection_bar_height(state->page);
       invalidate((UiDirtyRect){2, renderer.selection_drawn_y, 3, bar_height});
@@ -1002,8 +1329,28 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
     renderer.selection_drawn_y = next_y;
     renderer.stats.last_selection_y = next_y;
     if (next_y == renderer.selection_to_y) renderer.selection_animation = 0U;
-  } else if (!snapshot_delta_drawn) {
-    (void)redraw_snapshot_delta(state, snapshot);
+  }
+
+  if (control_style_delta && !page_content_current) {
+    const int16_t height = (state->page == UI_FANS) ? 78 : 76;
+    uint8_t row;
+    invalidate((UiDirtyRect){2, UI_ROWS_TOP, 122, height});
+    if (state->page == UI_FANS) {
+      for (row = 0U; row < 4U; ++row) {
+        draw_fan_row(0, row, state, snapshot, row == state->selected_row);
+      }
+    } else {
+      for (row = 0U; row < 3U; ++row) {
+        draw_light_row(0, row, row == state->selected_row, state, snapshot);
+      }
+    }
+    page_content_current = 1U;
+  } else if (option_delta && !page_content_current) {
+    already_drawn_rows |= redraw_option_delta(state, snapshot);
+  }
+
+  if (!snapshot_delta_drawn && !page_content_current) {
+    (void)redraw_snapshot_delta(state, snapshot, already_drawn_rows);
   }
 
   redraw_header_delta(snapshot, header_time, header_mqtt);
@@ -1021,6 +1368,13 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
     }
   } else if (overlay_visible(state)) {
     draw_command_overlay(state);
+  }
+
+  if (ST7735_FrameFailed()) {
+    renderer.stats = stats_before;
+    ++renderer.stats.failed_frames;
+    renderer.force_full_redraw = 1U;
+    return 0U;
   }
 
   renderer.state = *state;

@@ -11,8 +11,18 @@
 #ifdef NODE_B_FIRMWARE
 #include "st7735_bus.h"
 static uint8_t line_buffers[2][ST7735_BUS_BUFFER_BYTES];
-static uint8_t transfer_failed;
 #endif
+static uint8_t frame_failed;
+
+void ST7735_BeginFrame(void)
+{
+    frame_failed = 0U;
+}
+
+uint8_t ST7735_FrameFailed(void)
+{
+    return frame_failed;
+}
 
 /* Direct BSRR writes replace HAL_GPIO_WritePin in the pixel hot path. */
 static inline __attribute__((always_inline)) void gpio_set(uint16_t pin)
@@ -63,7 +73,7 @@ static void spi_write_byte(uint8_t b)
 static void ST7735_Cmd(uint8_t cmd)
 {
 #ifdef NODE_B_FIRMWARE
-    if (!transfer_failed && !St7735Bus_WriteByte(cmd, 0U)) transfer_failed = 1U;
+    if (!frame_failed && !St7735Bus_WriteByte(cmd, 0U)) frame_failed = 1U;
 #else
     gpio_reset(LCD_DC_PIN);   /* DC=0 命令 */
     spi_write_byte(cmd);
@@ -73,7 +83,7 @@ static void ST7735_Cmd(uint8_t cmd)
 static void ST7735_Data(uint8_t data)
 {
 #ifdef NODE_B_FIRMWARE
-    if (!transfer_failed && !St7735Bus_WriteByte(data, 1U)) transfer_failed = 1U;
+    if (!frame_failed && !St7735Bus_WriteByte(data, 1U)) frame_failed = 1U;
 #else
     gpio_set(LCD_DC_PIN);     /* DC=1 数据 */
     spi_write_byte(data);
@@ -92,9 +102,6 @@ static void ST7735_Reset(void)
 /* ============ 设置地址窗口 ============ */
 static void ST7735_SetWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 {
-#ifdef NODE_B_FIRMWARE
-    transfer_failed = 0U;
-#endif
     uint16_t xs = x0 + LCD_X_OFFSET, xe = x1 + LCD_X_OFFSET;
     uint16_t ys = y0 + LCD_Y_OFFSET, ye = y1 + LCD_Y_OFFSET;
 
@@ -153,8 +160,8 @@ static void StreamPixels(const PixelSource *source, uint32_t count)
 #ifdef NODE_B_FIRMWARE
     uint32_t offset = 0U;
     unsigned buffer = 0U;
-    if (transfer_failed) return;
-    if (!St7735Bus_BeginData()) { transfer_failed = 1U; return; }
+    if (frame_failed) return;
+    if (!St7735Bus_BeginData()) { frame_failed = 1U; return; }
     while (offset < count) {
         const uint32_t n = count - offset > 128U ? 128U : count - offset;
         /* Prepare the other buffer while DMA retains ownership of this one. */
@@ -165,13 +172,13 @@ static void StreamPixels(const PixelSource *source, uint32_t count)
             line_buffers[buffer][2U * i + 1U] = (uint8_t)pixel;
         }
         if (!St7735Bus_Wait() || !St7735Bus_WriteAsync(line_buffers[buffer], (uint16_t)(n * 2U))) {
-            transfer_failed = 1U;
+            frame_failed = 1U;
             return;
         }
         offset += n;
         buffer ^= 1U;
     }
-    if (!St7735Bus_Wait()) transfer_failed = 1U;
+    if (!St7735Bus_Wait()) frame_failed = 1U;
 #else
     for (uint32_t i = 0; i < count; ++i) {
         const uint16_t pixel = PixelAt(source, col, row);
@@ -184,6 +191,7 @@ static void StreamPixels(const PixelSource *source, uint32_t count)
 
 static void DrawSource(const ClipRect *rect, PixelSource *source)
 {
+    if (frame_failed) return;
 #ifdef NODE_B_FIRMWARE
     const uint32_t started = St7735Bus_Cycles();
 #endif
@@ -194,7 +202,7 @@ static void DrawSource(const ClipRect *rect, PixelSource *source)
                     (uint16_t)(rect->x + rect->w - 1), (uint16_t)(rect->y + rect->h - 1));
     StreamPixels(source, (uint32_t)rect->w * (uint32_t)rect->h);
 #ifdef NODE_B_FIRMWARE
-    if (!transfer_failed) St7735Bus_RecordFrame(started);
+    if (!frame_failed) St7735Bus_RecordFrame(started);
 #endif
 }
 
@@ -206,11 +214,10 @@ void ST7735_WritePixels(const uint16_t *pixels, uint32_t count)
     source.width = source.stride = count;
 #ifdef NODE_B_FIRMWARE
     const uint32_t started = St7735Bus_Cycles();
-    transfer_failed = 0U;
 #endif
     StreamPixels(&source, count);
 #ifdef NODE_B_FIRMWARE
-    if (!transfer_failed) St7735Bus_RecordFrame(started);
+    if (!frame_failed) St7735Bus_RecordFrame(started);
 #endif
 }
 
@@ -237,6 +244,7 @@ void ST7735_BlitRgb565(int x, int y, int w, int h, const uint16_t *pixels)
 /* ============ 初始化 ============ */
 void ST7735_Init(void)
 {
+    ST7735_BeginFrame();
     ST7735_GPIO_Init();
     ST7735_Reset();
 
@@ -318,6 +326,7 @@ void ST7735_DrawString(int x, int y, const char *str, uint16_t color, uint16_t b
 {
     int cx = x, cy = y;
     while (*str) {
+        if (frame_failed) break;
         if (*str == '\n') {
             cx = x;
             cy += 8;

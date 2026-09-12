@@ -50,14 +50,22 @@ typedef enum {
 
 typedef enum {
   UI_ACTION_NONE = 0,
-  UI_ACTION_FAN_1_PRESET,
+  UI_ACTION_FAN_1_SET_DUTY,
   UI_ACTION_FANS_BOTH_START,
   UI_ACTION_FANS_ALL_STOP,
-  UI_ACTION_FAN_2_PRESET,
+  UI_ACTION_FAN_2_SET_DUTY,
   UI_ACTION_LED_MODE,
+  UI_ACTION_LED_BRIGHTNESS,
   UI_ACTION_BUZZER_TEST,
   UI_ACTION_BUZZER_MUTE,
+  UI_ACTION_BUZZER_RESTORE,
 } UiAction;
+
+typedef enum {
+  UI_BUZZER_TEST = 0,
+  UI_BUZZER_MUTE,
+  UI_BUZZER_RESTORE,
+} UiBuzzerOption;
 
 typedef struct {
   UiEffectKind kind;
@@ -80,6 +88,11 @@ typedef struct {
   uint32_t command_started_ms;
   uint8_t pending_action;
   uint8_t pending_value;
+  uint8_t option_editing;
+  uint8_t fan_duty_option[2];
+  UiLedMode led_mode_option;
+  uint8_t led_brightness_option;
+  UiBuzzerOption buzzer_option;
   UiControlAvailability control;
   char active_command_id[40];
 } UiState;

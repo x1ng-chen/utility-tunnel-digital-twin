@@ -17,48 +17,90 @@ typedef struct {
   int y;
   int w;
   int h;
+  uint16_t color;
 } RecordedRect;
+
+typedef struct {
+  int x;
+  int y;
+  uint16_t color;
+  char text[32];
+} RecordedString;
 
 static RecordedRect rects[256];
 static uint16_t rect_count;
 static uint16_t clear_count;
 static uint16_t question_glyph_count;
-static char drawn_strings[64][32];
+static RecordedString drawn_strings[128];
 static uint16_t drawn_string_count;
+static int fail_after_draw_calls = -1;
+static uint16_t draw_calls;
+static uint8_t injected_frame_failed;
+
+void ST7735_BeginFrame(void)
+{
+  draw_calls = 0U;
+  injected_frame_failed = 0U;
+}
+
+uint8_t ST7735_FrameFailed(void)
+{
+  return injected_frame_failed;
+}
+
+static uint8_t reject_injected_draw(void)
+{
+  if (injected_frame_failed) return 1U;
+  if ((fail_after_draw_calls >= 0) && (draw_calls >= (uint16_t)fail_after_draw_calls)) {
+    injected_frame_failed = 1U;
+    return 1U;
+  }
+  ++draw_calls;
+  return 0U;
+}
 
 void ST7735_Clear(uint16_t color)
 {
+  if (reject_injected_draw()) return;
   (void)color;
   ++clear_count;
 }
 
 void ST7735_FillRect(int x, int y, int w, int h, uint16_t color)
 {
-  (void)color;
+  if (reject_injected_draw()) return;
   if (rect_count < (uint16_t)(sizeof(rects) / sizeof(rects[0]))) {
     rects[rect_count].x = x;
     rects[rect_count].y = y;
     rects[rect_count].w = w;
     rects[rect_count].h = h;
+    rects[rect_count].color = color;
   }
   ++rect_count;
 }
 
 void ST7735_DrawGlyph16(int x, int y, const uint8_t glyph[32], uint16_t color, uint16_t bg)
 {
+  if (reject_injected_draw()) return;
   (void)x; (void)y; (void)glyph; (void)color; (void)bg;
 }
 
 void ST7735_DrawChar(int x, int y, char c, uint16_t color, uint16_t bg)
 {
+  if (reject_injected_draw()) return;
   if (c == '?') ++question_glyph_count;
   (void)x; (void)y; (void)c; (void)color; (void)bg;
 }
 
 void ST7735_DrawString(int x, int y, const char *str, uint16_t color, uint16_t bg)
 {
+  if (reject_injected_draw()) return;
   if ((str != NULL) && (drawn_string_count < (uint16_t)(sizeof(drawn_strings) / sizeof(drawn_strings[0])))) {
-    (void)snprintf(drawn_strings[drawn_string_count], sizeof(drawn_strings[drawn_string_count]), "%s", str);
+    drawn_strings[drawn_string_count].x = x;
+    drawn_strings[drawn_string_count].y = y;
+    drawn_strings[drawn_string_count].color = color;
+    (void)snprintf(drawn_strings[drawn_string_count].text,
+                   sizeof(drawn_strings[drawn_string_count].text), "%s", str);
   }
   ++drawn_string_count;
   (void)x; (void)y; (void)str; (void)color; (void)bg;
@@ -72,6 +114,8 @@ static void reset_display_recording(void)
   question_glyph_count = 0U;
   (void)memset(drawn_strings, 0, sizeof(drawn_strings));
   drawn_string_count = 0U;
+  draw_calls = 0U;
+  injected_frame_failed = 0U;
 }
 
 static int string_was_drawn(const char *expected)
@@ -80,7 +124,29 @@ static int string_was_drawn(const char *expected)
   const uint16_t stored = (drawn_string_count < (uint16_t)(sizeof(drawn_strings) / sizeof(drawn_strings[0])))
     ? drawn_string_count : (uint16_t)(sizeof(drawn_strings) / sizeof(drawn_strings[0]));
   for (index = 0U; index < stored; ++index) {
-    if (strcmp(drawn_strings[index], expected) == 0) return 1;
+    if (strcmp(drawn_strings[index].text, expected) == 0) return 1;
+  }
+  return 0;
+}
+
+static int string_was_drawn_at(const char *expected, int y, uint16_t color)
+{
+  uint16_t index;
+  const uint16_t stored = (drawn_string_count < (uint16_t)(sizeof(drawn_strings) / sizeof(drawn_strings[0])))
+    ? drawn_string_count : (uint16_t)(sizeof(drawn_strings) / sizeof(drawn_strings[0]));
+  for (index = 0U; index < stored; ++index) {
+    if ((drawn_strings[index].y == y) && (drawn_strings[index].color == color) &&
+        (strcmp(drawn_strings[index].text, expected) == 0)) return 1;
+  }
+  return 0;
+}
+
+static int has_rect(int x, int y, int w, int h)
+{
+  uint16_t index;
+  for (index = 0U; index < rect_count && index < (uint16_t)(sizeof(rects) / sizeof(rects[0])); ++index) {
+    if ((rects[index].x == x) && (rects[index].y == y) &&
+        (rects[index].w == w) && (rects[index].h == h)) return 1;
   }
   return 0;
 }
@@ -178,6 +244,221 @@ static int check_layout_contract(void)
   CHECK(strstr(line, "time=09:07") != NULL);
   CHECK(strstr(line, "mqtt=online") != NULL);
   CHECK(strstr(line, "dialog=confirm") != NULL);
+
+  state.page = UI_FANS;
+  state.selected_row = 0U;
+  state.fan_duty_option[0] = 60U;
+  state.option_editing = 1U;
+  CHECK(UiRenderer_DescribeLayout(&state, &snapshot, line, sizeof(line)) > 0U);
+  CHECK(strstr(line, "option=fan1_duty") != NULL);
+  CHECK(strstr(line, "value=60") != NULL);
+  CHECK(strstr(line, "editing=1") != NULL);
+
+  state.page = UI_LIGHT_SOUND;
+  state.selected_row = 2U;
+  state.buzzer_option = UI_BUZZER_RESTORE;
+  state.option_editing = 0U;
+  CHECK(UiRenderer_DescribeLayout(&state, &snapshot, line, sizeof(line)) > 0U);
+  CHECK(strstr(line, "option=buzzer") != NULL);
+  CHECK(strstr(line, "value=2") != NULL);
+  CHECK(strstr(line, "editing=0") != NULL);
+
+  state.page = UI_LIGHT_SOUND;
+  state.selected_row = 1U;
+  CHECK(UiRenderer_DescribeLayout(&state, &snapshot, line, sizeof(line)) > 0U);
+  CHECK(strstr(line, "selected=brightness_25_50_75_100 time=") != NULL);
+  state.selected_row = 2U;
+  CHECK(UiRenderer_DescribeLayout(&state, &snapshot, line, sizeof(line)) > 0U);
+  CHECK(strstr(line, "selected=buzzer_test_mute_restore time=") != NULL);
+  return 0;
+}
+
+static int check_frame_failure_recovery_contract(void)
+{
+  UiState state;
+  UiSnapshot snapshot;
+  UiRendererStats stats;
+
+  UiState_Init(&state);
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+  state.page = UI_MONITOR;
+  snapshot.temperature_centi_c.value = 2100;
+  snapshot.temperature_centi_c.quality = UI_QUALITY_VALID;
+  UiRenderer_Init();
+  reset_display_recording();
+  fail_after_draw_calls = 3;
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 0U) == 0U);
+  UiRenderer_GetStats(&stats);
+  CHECK(stats.failed_frames == 1U);
+  CHECK(stats.rendered_frames == 0U);
+  CHECK(draw_calls == 3U);
+
+  fail_after_draw_calls = -1;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 1U) == 1U);
+  UiRenderer_GetStats(&stats);
+  CHECK(stats.full_screen_redraws == 1U);
+  CHECK(has_full_screen_rect());
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 2U) == 0U);
+  CHECK(!has_full_screen_rect());
+
+  snapshot.temperature_centi_c.value = 2200;
+  fail_after_draw_calls = 1;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 3U) == 0U);
+  UiRenderer_GetStats(&stats);
+  CHECK(stats.failed_frames == 2U);
+  fail_after_draw_calls = -1;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 4U) == 1U);
+  CHECK(has_full_screen_rect());
+  CHECK(string_was_drawn("TEMP 22.00C"));
+  return 0;
+}
+
+static int check_selection_animation_merges_visible_telemetry(void)
+{
+  UiState state;
+  UiSnapshot snapshot;
+  UiState_Init(&state);
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+  state.page = UI_FANS;
+  snapshot.fans[1].quality = UI_QUALITY_VALID;
+  UiRenderer_Init();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 0U) == 1U);
+
+  state.selected_row = 1U;
+  state.animation_start_ms = 100U;
+  state.animation_end_ms = 240U;
+  snapshot.fans[1].running = 1U;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 100U) == 1U);
+  CHECK(has_rect(8, 94, 116, 18));
+  CHECK(string_was_drawn("F2 ON 0%"));
+  return 0;
+}
+
+static int check_field_level_dirty_rectangles(void)
+{
+  UiState state;
+  UiSnapshot snapshot;
+  UiRendererStats stats;
+
+  UiState_Init(&state);
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+  state.page = UI_LIGHT_SOUND;
+  UiRenderer_Init();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 0U) == 1U);
+  snapshot.actuators.led_brightness_percent = 50U;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 1U) == 1U);
+  UiRenderer_GetStats(&stats);
+  CHECK(stats.last_dirty_rectangles == 1U);
+  CHECK(has_rect(8, 60, 116, 24));
+  CHECK(!has_rect(2, 34, 122, 72));
+
+  state.page = UI_NETWORK;
+  state.animation_start_ms = 10U;
+  state.animation_end_ms = 190U;
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 190U) == 1U);
+  snapshot.connectivity.gateway_online = 1U;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 191U) == 1U);
+  UiRenderer_GetStats(&stats);
+  CHECK(stats.last_dirty_rectangles == 1U);
+  CHECK(has_rect(8, 54, 116, 18));
+  CHECK(string_was_drawn("GATEWAY ONLINE"));
+
+  snapshot.connectivity.mqtt_online = 1U;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 192U) == 1U);
+  CHECK(has_rect(8, 94, 116, 18));
+  CHECK(string_was_drawn("MQTT ONLINE"));
+
+  state.page = UI_OVERVIEW;
+  state.animation_start_ms = 200U;
+  state.animation_end_ms = 380U;
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 380U) == 1U);
+  snapshot.warning_sources = UI_ALARM_SOURCE_METHANE;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 381U) == 1U);
+  CHECK(has_rect(8, 35, 112, 22));
+  CHECK(has_rect(10, 66, 100, 8));
+  CHECK(has_rect(10, 82, 100, 8));
+  CHECK(!has_rect(0, 34, 128, 82));
+  return 0;
+}
+
+static int check_safety_lock_priority_and_control_style(void)
+{
+  UiState state;
+  UiSnapshot snapshot;
+  UiRendererStats stats;
+  UiState_Init(&state);
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+  state.page = UI_FANS;
+  UiState_SetControlAvailability(&state, 1U, 0U);
+  UiRenderer_Init();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 0U) == 1U);
+
+  UiState_SetControlAvailability(&state, 0U, 1U);
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 1U) == 1U);
+  UiRenderer_GetStats(&stats);
+  CHECK(string_was_drawn("SAFETY LOCKED"));
+  CHECK(string_was_drawn_at("F1 OFF 0%", 35, 0x8C71U));
+  CHECK(has_rect(8, 34, 116, 18));
+  CHECK(has_rect(8, 54, 116, 18));
+  CHECK(has_rect(8, 74, 116, 18));
+  CHECK(has_rect(8, 94, 116, 18));
+  CHECK(stats.last_dirty_rectangles == 2U);
+
+  UiState_SetControlAvailability(&state, 1U, 0U);
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 2U) == 1U);
+  CHECK(string_was_drawn_at("F1 OFF 0%", 35, LCD_WHITE));
+  return 0;
+}
+
+static int check_mixed_alarm_sources_and_names(void)
+{
+  UiState state;
+  UiSnapshot snapshot;
+  char line[320];
+  UiState_Init(&state);
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+  snapshot.warning_sources = UI_ALARM_SOURCE_METHANE;
+  snapshot.critical_sources = UI_ALARM_SOURCE_SMOKE;
+  snapshot.alarm_severity = UI_ALARM_CRITICAL;
+  state.page = UI_OVERVIEW;
+  UiRenderer_Init();
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 0U) == 1U);
+  CHECK(string_was_drawn("OK 6"));
+  CHECK(string_was_drawn("WARN 1"));
+  CHECK(string_was_drawn("ALARM 1"));
+  CHECK(UiRenderer_DescribeLayout(&state, &snapshot, line, sizeof(line)) > 0U);
+  CHECK(strstr(line, "warning=1") != NULL);
+  CHECK(strstr(line, "critical=1") != NULL);
+
+  state.page = UI_ALERTS;
+  state.animation_start_ms = 10U;
+  state.animation_end_ms = 190U;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 190U) == 1U);
+  CHECK(string_was_drawn("CH4 WARNING"));
+  CHECK(string_was_drawn("SMOKE CRITICAL"));
+
+  snapshot.warning_sources = UI_ALARM_SOURCE_METHANE | UI_ALARM_SOURCE_SMOKE;
+  reset_display_recording();
+  state.page = UI_OVERVIEW;
+  state.animation_start_ms = 200U;
+  state.animation_end_ms = 380U;
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 380U) == 1U);
+  CHECK(string_was_drawn("OK 6"));
+  CHECK(string_was_drawn("WARN 1"));
+  CHECK(string_was_drawn("ALARM 1"));
   return 0;
 }
 
@@ -400,6 +681,11 @@ int main(void)
   if (check_page_animation_and_header_delta() != 0) return 1;
   if (check_page_specific_selection_geometry() != 0) return 1;
   if (check_confirmation_modal_names_critical_action() != 0) return 1;
+  if (check_frame_failure_recovery_contract() != 0) return 1;
+  if (check_selection_animation_merges_visible_telemetry() != 0) return 1;
+  if (check_field_level_dirty_rectangles() != 0) return 1;
+  if (check_safety_lock_priority_and_control_style() != 0) return 1;
+  if (check_mixed_alarm_sources_and_names() != 0) return 1;
   (void)puts("UiRenderer host test: PASS");
   return 0;
 }
