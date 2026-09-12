@@ -949,7 +949,11 @@ class TwinModelReleaseActivateView(APIView):
         if not is_admin(request):
             return error_response('forbidden', '仅管理员可以切换三维模型版本。', 403)
         with transaction.atomic():
-            release = TwinModelRelease.objects.select_for_update().select_related('uploaded_by', 'activated_by').filter(pk=pk).first()
+            # `activated_by` is nullable, so `select_related` builds an outer
+            # join. PostgreSQL rejects a plain FOR UPDATE over that nullable
+            # join side. Lock only the release row; the user relation is read
+            # for serialization and must not participate in the lock.
+            release = TwinModelRelease.objects.select_for_update(of=('self',)).select_related('uploaded_by', 'activated_by').filter(pk=pk).first()
             if not release:
                 return error_response('not_found', '模型版本不存在。', 404)
             if release.status == TwinModelRelease.Status.ACTIVE:
