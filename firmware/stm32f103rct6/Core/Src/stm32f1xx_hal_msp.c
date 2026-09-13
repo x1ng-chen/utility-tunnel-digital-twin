@@ -269,7 +269,11 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+#ifdef NODE_A_FIRMWARE
+    HAL_NVIC_SetPriority(USART2_IRQn, NODE_A_ESP_IRQ_PRIORITY, 0);
+#else
     HAL_NVIC_SetPriority(USART2_IRQn, 1, 0);
+#endif
     HAL_NVIC_EnableIRQ(USART2_IRQn);
   }
 }

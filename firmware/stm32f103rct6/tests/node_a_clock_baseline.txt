@@ -1,0 +1,24 @@
+# Node A clock baseline derived from 998e29e (source model, NOT a hardware measurement)
+revision=998e29e
+system_clock_source=HSI
+hse_state=off (HSI is the system clock)
+hse_hz=8000000
+hsi_hz=8000000
+pll_multiplier=0
+sysclk_hz=8000000
+hclk_hz=8000000
+pclk1_hz=8000000
+pclk2_hz=8000000
+apb1_timer_hz=8000000
+flash_wait_states=0
+adc_source=reset default ADCPRE = /2 (never configured by this revision)
+adc_divider=2
+adc_hz=4000000
+timer_prescaler=0
+timer_period=319
+fan_pwm_hz=25000
+uart_baud=9600
+usart1_brr=833
+usart1_actual_baud=9603.84
+usart1_baud_error_ppm=400
+systick_reload=7999

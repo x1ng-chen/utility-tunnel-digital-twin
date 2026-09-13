@@ -20,7 +20,11 @@ jobs:
     name: Firmware build
     runs-on: ubuntu-latest
     steps:
+      # Full history: the clock baseline check re-derives the pre-retune
+      # configuration from the revision stored in tests/node_a_clock_baseline.txt.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
       - name: Install ARM build toolchain
         run: |
           sudo apt-get update
@@ -32,3 +36,15 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/firmware/stm32f103rct6/cmake/gcc-arm-none-eabi.cmake"
       - name: Build firmware
         run: cmake --build build/firmware --parallel 2
+      - name: Verify the CTRL-01 clock, peripheral, pin and interrupt contract
+        working-directory: firmware/stm32f103rct6
+        run: |
+          sh tests/run_node_a_clock_host.sh
+          sh tests/run_node_a_contract_arm.sh
+      - name: Run the node and display host suites
+        working-directory: firmware/stm32f103rct6
+        run: |
+          sh tests/run_node_a_command_host.sh
+          sh tests/run_display_host.sh
+          sh tests/run_ui_renderer_host.sh
+          sh tests/run_task8_host.sh

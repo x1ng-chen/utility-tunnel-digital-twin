@@ -30,7 +30,7 @@
 #define INA226_CALIBRATION_VALUE          5120U
 #define INA226_CONFIG_AVG16_CONTINUOUS   0x4527U
 #define INA226_CONFIG_RESET              0x8000U
-#define INA226_SAMPLE_COUNT                   3U
+#define INA226_SAMPLE_COUNT     NODE_A_INA226_SAMPLE_COUNT
 #define INA226_SAMPLE_SETTLE_MS              40U
 #define INA226_MAX_BUS_MICROVOLTS       18000000UL
 #define INA226_FAULT_NONE                       0U
@@ -71,7 +71,7 @@
 #define FLAME_ALARM_HOLD_MS               12000U
 #define LEVEL_SAMPLE_INTERVAL_MS            50U
 #define LEVEL_STABLE_SAMPLE_COUNT            4U
-#define GAS_ADC_SAMPLE_COUNT                 64U
+#define GAS_ADC_SAMPLE_COUNT    NODE_A_GAS_ADC_SAMPLE_COUNT
 
 typedef struct
 {
@@ -317,8 +317,25 @@ static void MX_FAN1_PWM_Init(void)
 }
 
 /* The existing Cube package omitted HAL I2C. These deliberately slow,
- * open-drain routines are sufficient for initial SHT30 bring-up at 500 Hz. */
+ * open-drain routines are bounded twice over and are paced by the telemetry
+ * cadence rather than by a 500 Hz loop.
+ *
+ * Structurally, every routine is a fixed-count sequence of bit slots that never
+ * waits on bus state: a line held low by a short or a stuck slave still clocks
+ * out the same number of slots and then fails the acknowledge or CRC check.  In
+ * time, each caller passes an absolute HAL tick deadline that every bit slot
+ * and every byte boundary re-checks, so the whole transaction is capped at the
+ * deadline plus the longest uninterruptible delay on its path (the 20 ms SHT30
+ * conversion delay or the 40 ms INA226 sample settle), and the bus is always
+ * released before returning.  The bus depends on the pull-ups fitted on the
+ * sensor modules; clock stretching is not supported. */
 static void I2c_Delay(void) { HAL_Delay(NODE_A_SOFT_I2C_DELAY_MS); }
+static uint8_t I2c_DeadlineReached(uint32_t deadline_ms)
+{
+  /* Signed difference keeps the comparison correct across the 49.7 day wrap. */
+  return ((int32_t)((uint32_t)HAL_GetTick() - deadline_ms) >= 0) ? 1U : 0U;
+}
+
 static void I2c_Sda(const SoftI2cBus *bus, GPIO_PinState state)
 {
   HAL_GPIO_WritePin(bus->port, bus->sda_pin, state);
@@ -348,11 +365,13 @@ static void I2c_Recover(const SoftI2cBus *bus)
   }
   I2c_Stop(bus);
 }
-static uint8_t I2c_WriteByte(const SoftI2cBus *bus, uint8_t value)
+static uint8_t I2c_WriteByte(const SoftI2cBus *bus, uint8_t value,
+                             uint32_t deadline_ms)
 {
   uint8_t bit;
   for (bit = 0U; bit < 8U; ++bit)
   {
+    if (I2c_DeadlineReached(deadline_ms) != 0U) return 0U;
     I2c_Sda(bus, (value & 0x80U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
     I2c_Delay(); I2c_Scl(bus, GPIO_PIN_SET); I2c_Delay(); I2c_Scl(bus, GPIO_PIN_RESET);
     value <<= 1U;
@@ -362,7 +381,8 @@ static uint8_t I2c_WriteByte(const SoftI2cBus *bus, uint8_t value)
   I2c_Scl(bus, GPIO_PIN_RESET);
   return bit;
 }
-static uint8_t I2c_ReadByte(const SoftI2cBus *bus, uint8_t acknowledge)
+static uint8_t I2c_ReadByte(const SoftI2cBus *bus, uint8_t acknowledge,
+                            uint32_t deadline_ms)
 {
   uint8_t bit;
   uint8_t value = 0U;
@@ -370,7 +390,9 @@ static uint8_t I2c_ReadByte(const SoftI2cBus *bus, uint8_t acknowledge)
   for (bit = 0U; bit < 8U; ++bit)
   {
     value <<= 1U;
-    I2c_Delay(); I2c_Scl(bus, GPIO_PIN_SET); I2c_Delay();
+    I2c_Delay();
+    if (I2c_DeadlineReached(deadline_ms) != 0U) return value;
+    I2c_Scl(bus, GPIO_PIN_SET); I2c_Delay();
     if (HAL_GPIO_ReadPin(bus->port, bus->sda_pin) == GPIO_PIN_SET) value |= 1U;
     I2c_Scl(bus, GPIO_PIN_RESET);
   }
@@ -380,43 +402,47 @@ static uint8_t I2c_ReadByte(const SoftI2cBus *bus, uint8_t acknowledge)
   return value;
 }
 static uint8_t I2c_ReadRegister16(const SoftI2cBus *bus, uint8_t address,
-                                  uint8_t reg, uint16_t *value)
+                                  uint8_t reg, uint16_t *value,
+                                  uint32_t deadline_ms)
 {
   uint8_t high;
   uint8_t low;
   if (value == NULL) return 0U;
   I2c_Start(bus);
-  if (!I2c_WriteByte(bus, (uint8_t)(address << 1U)) || !I2c_WriteByte(bus, reg))
+  if (!I2c_WriteByte(bus, (uint8_t)(address << 1U), deadline_ms) ||
+      !I2c_WriteByte(bus, reg, deadline_ms))
   {
     I2c_Stop(bus);
     return 0U;
   }
   I2c_Start(bus);
-  if (!I2c_WriteByte(bus, (uint8_t)((address << 1U) | 1U)))
+  if (!I2c_WriteByte(bus, (uint8_t)((address << 1U) | 1U), deadline_ms))
   {
     I2c_Stop(bus);
     return 0U;
   }
-  high = I2c_ReadByte(bus, 1U);
-  low = I2c_ReadByte(bus, 0U);
+  high = I2c_ReadByte(bus, 1U, deadline_ms);
+  low = I2c_ReadByte(bus, 0U, deadline_ms);
   I2c_Stop(bus);
+  if (I2c_DeadlineReached(deadline_ms) != 0U) return 0U;
   *value = (uint16_t)(((uint16_t)high << 8U) | low);
   return 1U;
 }
 static uint8_t I2c_WriteRegister16(const SoftI2cBus *bus, uint8_t address,
-                                   uint8_t reg, uint16_t value)
+                                   uint8_t reg, uint16_t value,
+                                   uint32_t deadline_ms)
 {
   I2c_Start(bus);
-  if (!I2c_WriteByte(bus, (uint8_t)(address << 1U)) ||
-      !I2c_WriteByte(bus, reg) ||
-      !I2c_WriteByte(bus, (uint8_t)(value >> 8U)) ||
-      !I2c_WriteByte(bus, (uint8_t)value))
+  if (!I2c_WriteByte(bus, (uint8_t)(address << 1U), deadline_ms) ||
+      !I2c_WriteByte(bus, reg, deadline_ms) ||
+      !I2c_WriteByte(bus, (uint8_t)(value >> 8U), deadline_ms) ||
+      !I2c_WriteByte(bus, (uint8_t)value, deadline_ms))
   {
     I2c_Stop(bus);
     return 0U;
   }
   I2c_Stop(bus);
-  return 1U;
+  return (I2c_DeadlineReached(deadline_ms) == 0U) ? 1U : 0U;
 }
 static uint16_t Median3U16(uint16_t a, uint16_t b, uint16_t c)
 {
@@ -450,23 +476,32 @@ static uint8_t Sht30_Read(const SoftI2cBus *bus, uint8_t address, Sht30Reading *
   uint8_t i;
   uint16_t raw_temperature;
   uint16_t raw_humidity;
+  /* Absolute deadline for the whole read, including the 20 ms conversion
+   * delay.  NODE_A_SHT30_TIMEOUT_MS is contractually larger than the fixed
+   * delay budget of a healthy read, so this only ever fires on a faulty bus,
+   * and the bus is always released before returning. */
+  const uint32_t deadline_ms = HAL_GetTick() + NODE_A_SHT30_TIMEOUT_MS;
 
   reading->online = 0U;
   I2c_Start(bus);
-  if (!I2c_WriteByte(bus, (uint8_t)(address << 1U)) ||
-      !I2c_WriteByte(bus, (uint8_t)(SHT30_COMMAND_HIGH_REPEATABLE >> 8U)) ||
-      !I2c_WriteByte(bus, (uint8_t)SHT30_COMMAND_HIGH_REPEATABLE))
+  if (!I2c_WriteByte(bus, (uint8_t)(address << 1U), deadline_ms) ||
+      !I2c_WriteByte(bus, (uint8_t)(SHT30_COMMAND_HIGH_REPEATABLE >> 8U), deadline_ms) ||
+      !I2c_WriteByte(bus, (uint8_t)SHT30_COMMAND_HIGH_REPEATABLE, deadline_ms))
   {
     I2c_Stop(bus); return 0U;
   }
   I2c_Stop(bus); HAL_Delay(NODE_A_SHT30_MEASUREMENT_DELAY_MS); I2c_Start(bus);
-  if (!I2c_WriteByte(bus, (uint8_t)((address << 1U) | 1U)))
+  if (!I2c_WriteByte(bus, (uint8_t)((address << 1U) | 1U), deadline_ms))
   {
     I2c_Stop(bus); return 0U;
   }
   for (i = 0U; i < sizeof(response); ++i)
-    response[i] = I2c_ReadByte(bus, i < (sizeof(response) - 1U));
+  {
+    if (I2c_DeadlineReached(deadline_ms) != 0U) { I2c_Stop(bus); return 0U; }
+    response[i] = I2c_ReadByte(bus, i < (sizeof(response) - 1U), deadline_ms);
+  }
   I2c_Stop(bus);
+  if (I2c_DeadlineReached(deadline_ms) != 0U) return 0U;
   if (Sht30_Crc(response, 2U) != response[2] || Sht30_Crc(&response[3], 2U) != response[5]) return 0U;
   raw_temperature = (uint16_t)((response[0] << 8U) | response[1]);
   raw_humidity = (uint16_t)((response[3] << 8U) | response[4]);
@@ -476,14 +511,15 @@ static uint8_t Sht30_Read(const SoftI2cBus *bus, uint8_t address, Sht30Reading *
   return 1U;
 }
 static uint8_t Ina226_Configure(const SoftI2cBus *bus, Ina226State *state,
-                                Ina226Reading *reading, uint8_t reset_first)
+                                Ina226Reading *reading, uint8_t reset_first,
+                                uint32_t deadline_ms)
 {
   uint16_t config;
   uint16_t calibration;
   if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_MANUFACTURER_ID,
-                          &reading->manufacturer_id) ||
+                          &reading->manufacturer_id, deadline_ms) ||
       !I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_DIE_ID,
-                          &reading->die_id))
+                          &reading->die_id, deadline_ms))
   {
     reading->fault = INA226_FAULT_COMMUNICATION;
     return 0U;
@@ -498,7 +534,7 @@ static uint8_t Ina226_Configure(const SoftI2cBus *bus, Ina226State *state,
   if (reset_first != 0U)
   {
     if (!I2c_WriteRegister16(bus, INA226_ADDRESS, INA226_REG_CONFIG,
-                            INA226_CONFIG_RESET))
+                            INA226_CONFIG_RESET, deadline_ms))
     {
       reading->fault = INA226_FAULT_COMMUNICATION;
       return 0U;
@@ -506,7 +542,8 @@ static uint8_t Ina226_Configure(const SoftI2cBus *bus, Ina226State *state,
     HAL_Delay(3U);
     state->configured = 0U;
   }
-  if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CONFIG, &config))
+  if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CONFIG, &config,
+                          deadline_ms))
   {
     reading->fault = INA226_FAULT_COMMUNICATION;
     return 0U;
@@ -514,7 +551,7 @@ static uint8_t Ina226_Configure(const SoftI2cBus *bus, Ina226State *state,
   if ((state->configured == 0U) || (config != INA226_CONFIG_AVG16_CONTINUOUS))
   {
     if (!I2c_WriteRegister16(bus, INA226_ADDRESS, INA226_REG_CONFIG,
-                            INA226_CONFIG_AVG16_CONTINUOUS))
+                            INA226_CONFIG_AVG16_CONTINUOUS, deadline_ms))
     {
       reading->fault = INA226_FAULT_CONFIGURATION;
       return 0U;
@@ -522,7 +559,7 @@ static uint8_t Ina226_Configure(const SoftI2cBus *bus, Ina226State *state,
     HAL_Delay(INA226_SAMPLE_SETTLE_MS);
   }
   if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CONFIG,
-                          &reading->config_raw) ||
+                          &reading->config_raw, deadline_ms) ||
       (reading->config_raw != INA226_CONFIG_AVG16_CONTINUOUS))
   {
     reading->fault = INA226_FAULT_CONFIGURATION;
@@ -530,7 +567,7 @@ static uint8_t Ina226_Configure(const SoftI2cBus *bus, Ina226State *state,
     return 0U;
   }
   if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CALIBRATION,
-                          &calibration))
+                          &calibration, deadline_ms))
   {
     reading->fault = INA226_FAULT_COMMUNICATION;
     return 0U;
@@ -542,11 +579,11 @@ static uint8_t Ina226_Configure(const SoftI2cBus *bus, Ina226State *state,
      * Try to restore the calibrated datapath for diagnostics; a module that
      * refuses this write is still usable through the physical R100 shunt. */
     if (I2c_WriteRegister16(bus, INA226_ADDRESS, INA226_REG_CALIBRATION,
-                           INA226_CALIBRATION_VALUE))
+                           INA226_CALIBRATION_VALUE, deadline_ms))
     {
       HAL_Delay(INA226_SAMPLE_SETTLE_MS);
       if (I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CALIBRATION,
-                            &calibration))
+                            &calibration, deadline_ms))
         reading->calibration_raw = calibration;
     }
   }
@@ -555,7 +592,8 @@ static uint8_t Ina226_Configure(const SoftI2cBus *bus, Ina226State *state,
 }
 
 static uint8_t Ina226_ReadSamples(const SoftI2cBus *bus,
-                                  Ina226Reading *reading)
+                                  Ina226Reading *reading,
+                                  uint32_t deadline_ms)
 {
   uint16_t bus_samples[INA226_SAMPLE_COUNT];
   int16_t shunt_samples[INA226_SAMPLE_COUNT];
@@ -567,13 +605,13 @@ static uint8_t Ina226_ReadSamples(const SoftI2cBus *bus,
     uint16_t shunt_word;
     uint16_t current_word;
     if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_BUS_VOLTAGE,
-                           &bus_samples[sample]) ||
+                           &bus_samples[sample], deadline_ms) ||
         !I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_SHUNT_VOLTAGE,
-                           &shunt_word) ||
+                           &shunt_word, deadline_ms) ||
         !I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CURRENT,
-                           &current_word) ||
+                           &current_word, deadline_ms) ||
         !I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_POWER,
-                           &power_samples[sample]))
+                           &power_samples[sample], deadline_ms))
     {
       reading->fault = INA226_FAULT_COMMUNICATION;
       return 0U;
@@ -596,12 +634,16 @@ static uint8_t Ina226_ReadSamples(const SoftI2cBus *bus,
 static uint8_t Ina226_Read(const SoftI2cBus *bus, Ina226State *state,
                            Ina226Reading *reading)
 {
+  /* One deadline covers the whole transfer, so a slow but healthy module is
+   * never cut mid-sequence while a stuck bus still cannot block the loop. */
+  const uint32_t deadline_ms = HAL_GetTick() + NODE_A_INA226_TIMEOUT_MS;
+
   if ((bus == NULL) || (state == NULL) || (reading == NULL)) return 0U;
   memset(reading, 0, sizeof(*reading));
   reading->fault = INA226_FAULT_COMMUNICATION;
   if (state->configured == 0U) I2c_Recover(bus);
-  if (!Ina226_Configure(bus, state, reading, 0U) ||
-      !Ina226_ReadSamples(bus, reading))
+  if (!Ina226_Configure(bus, state, reading, 0U, deadline_ms) ||
+      !Ina226_ReadSamples(bus, reading, deadline_ms))
   {
     state->configured = 0U;
     return 0U;
@@ -615,8 +657,8 @@ static uint8_t Ina226_Read(const SoftI2cBus *bus, Ina226State *state,
      * those words as trustworthy voltage/current/power values. */
     state->configured = 0U;
     I2c_Recover(bus);
-    if (!Ina226_Configure(bus, state, reading, 1U) ||
-        !Ina226_ReadSamples(bus, reading))
+    if (!Ina226_Configure(bus, state, reading, 1U, deadline_ms) ||
+        !Ina226_ReadSamples(bus, reading, deadline_ms))
       return 0U;
     if (NODE_A_INA226_SAMPLE_STUCK_03FF(reading->bus_raw, reading->shunt_raw,
                                         reading->current_raw, reading->power_raw))
@@ -1322,22 +1364,75 @@ static void NodeTest_ReportState(void)
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
 }
 
+/* The APB1 timer clock keeps the x2 boost whenever APB1 is prescaled, so the
+ * fan carrier has to be derived from the prescaler the RCC actually holds. */
+static uint32_t NodeTest_Apb1TimerClock(void)
+{
+  const uint32_t prescaler =
+      (RCC->CFGR & RCC_CFGR_PPRE1) >> RCC_CFGR_PPRE1_Pos;
+  return (prescaler == 0U) ? HAL_RCC_GetPCLK1Freq()
+                           : (HAL_RCC_GetPCLK1Freq() * 2UL);
+}
+
+static uint32_t NodeTest_AdcClock(void)
+{
+  const uint32_t divider =
+      ((((RCC->CFGR & RCC_CFGR_ADCPRE) >> RCC_CFGR_ADCPRE_Pos) + 1UL) * 2UL);
+  return HAL_RCC_GetPCLK2Freq() / divider;
+}
+
+static uint32_t NodeTest_UartBaud(uint32_t pclk, uint32_t brr)
+{
+  /* BRR holds USARTDIV in sixteenths, so PCLK / BRR is the programmed baud. */
+  return (brr == 0U) ? 0U : (pclk / brr);
+}
+
+/* Register-derived clock report.  A bench probe must be able to verify what the
+ * MCU actually programmed, so every frequency here is computed from a
+ * peripheral register readback rather than echoing the compile-time constant
+ * that the probe's own expectations also contain: the RCC divider fields drive
+ * the ADC, WS2812 and fan values, USART1/2->BRR drives the reported baud, and
+ * the raw registers are reported alongside for direct comparison. */
 static void NodeTest_ReportClock(void)
 {
-  char message[240];
+  char message[384];
+  const uint32_t pclk2 = HAL_RCC_GetPCLK2Freq();
+  const uint32_t pclk1 = HAL_RCC_GetPCLK1Freq();
+  const uint32_t uart1_brr = (uint32_t)(USART1->BRR & 0xFFFFU);
+  const uint32_t uart2_brr = (uint32_t)(USART2->BRR & 0xFFFFU);
+  const uint32_t spi_divider =
+      (1UL << (((SPI2->CR1 & SPI_CR1_BR) >> SPI_CR1_BR_Pos) + 1UL));
+  const uint32_t ws_spi_hz = (spi_divider == 0U) ? 0U : (pclk1 / spi_divider);
+  const uint32_t fan_timer_hz = NodeTest_Apb1TimerClock();
+  const uint32_t fan_pwm_hz =
+      fan_timer_hz / (((uint32_t)TIM4->PSC + 1UL) * ((uint32_t)TIM4->ARR + 1UL));
+  const uint32_t ws_cell_ns =
+      (ws_spi_hz == 0U) ? 0U
+                        : (uint32_t)((NODE_A_WS2812_BITS_PER_DATA_BIT *
+                                      1000000000ULL) / ws_spi_hz);
   const int length = snprintf(message, sizeof(message),
-    "#CLOCK sysclk=%lu hclk=%lu pclk1=%lu pclk2=%lu adc=%lu fan_pwm=%lu uart1=%lu uart2=%lu sht30_ms=%lu ws_spi=%lu ws_cell_ns=%lu\r\n",
+    "#CLOCK sysclk=%lu hclk=%lu pclk1=%lu pclk2=%lu adc=%lu fan_pwm=%lu uart1=%lu uart2=%lu sht30_ms=%lu ws_spi=%lu ws_cell_ns=%lu"
+    " rcc_cr=0x%08lX rcc_cfgr=0x%08lX flash_acr=0x%08lX uart1_brr=%lu uart2_brr=%lu tim4_psc=%lu tim4_arr=%lu spi2_cr1=0x%08lX systick_load=%lu\r\n",
     (unsigned long)HAL_RCC_GetSysClockFreq(),
     (unsigned long)HAL_RCC_GetHCLKFreq(),
-    (unsigned long)HAL_RCC_GetPCLK1Freq(),
-    (unsigned long)HAL_RCC_GetPCLK2Freq(),
-    (unsigned long)NODE_A_ADC_CLOCK_HZ,
-    (unsigned long)NODE_A_FAN_PWM_HZ,
-    (unsigned long)NODE_A_UART_BAUD,
-    (unsigned long)NODE_A_UART_BAUD,
+    (unsigned long)pclk1,
+    (unsigned long)pclk2,
+    (unsigned long)NodeTest_AdcClock(),
+    (unsigned long)fan_pwm_hz,
+    (unsigned long)NodeTest_UartBaud(pclk2, uart1_brr),
+    (unsigned long)NodeTest_UartBaud(pclk1, uart2_brr),
     (unsigned long)NODE_A_SHT30_MEASUREMENT_DELAY_MS,
-    (unsigned long)NODE_A_WS2812_SPI_HZ,
-    (unsigned long)NODE_A_WS2812_CELL_NS);
+    (unsigned long)ws_spi_hz,
+    (unsigned long)ws_cell_ns,
+    (unsigned long)RCC->CR,
+    (unsigned long)RCC->CFGR,
+    (unsigned long)FLASH->ACR,
+    (unsigned long)uart1_brr,
+    (unsigned long)uart2_brr,
+    (unsigned long)TIM4->PSC,
+    (unsigned long)TIM4->ARR,
+    (unsigned long)SPI2->CR1,
+    (unsigned long)SysTick->LOAD);
   if ((length > 0) && (length < (int)sizeof(message)))
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
 }
@@ -1598,7 +1693,7 @@ void SystemClock_Config(void)
   clock.AHBCLKDivider = RCC_SYSCLK_DIV1;
   clock.APB1CLKDivider = RCC_HCLK_DIV2;
   clock.APB2CLKDivider = RCC_HCLK_DIV1;
-  if (HAL_RCC_ClockConfig(&clock, FLASH_LATENCY_2) != HAL_OK) Error_Handler();
+  if (HAL_RCC_ClockConfig(&clock, NODE_A_FLASH_LATENCY) != HAL_OK) Error_Handler();
   peripheral_clock.PeriphClockSelection = RCC_PERIPHCLK_ADC;
   peripheral_clock.AdcClockSelection = RCC_ADCPCLK2_DIV6;
   if (HAL_RCCEx_PeriphCLKConfig(&peripheral_clock) != HAL_OK) Error_Handler();
@@ -1736,8 +1831,11 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(FAN1_TACH_GPIO_Port, &gpio);
   gpio.Pin = FAN2_TACH_Pin; gpio.Mode = GPIO_MODE_IT_RISING; gpio.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(FAN2_TACH_GPIO_Port, &gpio);
-  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 2U, 0U);
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, NODE_A_TACH_IRQ_PRIORITY, 0U);
   HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+  /* The software-I2C lines are released high before they become open-drain
+   * outputs; their levels come from the pull-ups fitted on the sensor modules,
+   * since STM32F1 ignores Pull for an open-drain output mode. */
   HAL_GPIO_WritePin(GPIOB, i2c1_bus.scl_pin | i2c1_bus.sda_pin | i2c2_bus.scl_pin | i2c2_bus.sda_pin, GPIO_PIN_SET);
   gpio.Pin = i2c1_bus.scl_pin | i2c1_bus.sda_pin | i2c2_bus.scl_pin | i2c2_bus.sda_pin;
   gpio.Mode = GPIO_MODE_OUTPUT_OD; gpio.Speed = GPIO_SPEED_FREQ_LOW;
@@ -1775,7 +1873,7 @@ static uint8_t GasAdc_ReadRaw(uint32_t adc_channel, uint16_t *raw)
   for (index = 0U; index < GAS_ADC_SAMPLE_COUNT; ++index)
   {
     if (HAL_ADC_Start(&hadc1) != HAL_OK) continue;
-    if (HAL_ADC_PollForConversion(&hadc1, 10U) == HAL_OK)
+    if (HAL_ADC_PollForConversion(&hadc1, NODE_A_GAS_ADC_POLL_TIMEOUT_MS) == HAL_OK)
     {
       sum += HAL_ADC_GetValue(&hadc1);
       ++valid;
