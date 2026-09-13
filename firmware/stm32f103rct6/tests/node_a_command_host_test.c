@@ -33,8 +33,7 @@ static NodeACommandResult apply(const char *json, uint32_t now_ms,
 {
   NodeACommand command;
   NodeACommandResult result;
-  if (NodeACommand_ParseHeader(json, &command) != 1U ||
-      NodeACommand_ParseBody(json, &command) != 1U)
+  if (NodeACommand_Parse(json, &command) != 1U)
   {
     (void)fprintf(stderr, "FAIL: test command did not parse: %s\n", json);
     result.status = NODE_A_STATUS_REJECTED;
@@ -76,6 +75,9 @@ static int test_header_bounds(void)
       "{\"schema\":\"ut.command.v1\",\"cmdId\":\"bad id\"}", &command) == 0U);
   CHECK(NodeACommand_ParseHeader(
       "{\"schema\":\"ut.command.v1\"}", &command) == 0U);
+  CHECK(NodeACommand_ParseHeader(
+      "{\"schema\":\"wrong.v1\",\"cmdId\":\"recover-1\"}", &command) == 0U);
+  CHECK(strcmp(command.command_id, "recover-1") == 0);
   CHECK(NodeACommand_ParseHeader(NULL, &command) == 0U);
   return 0;
 }
@@ -430,6 +432,44 @@ static int test_ack_format_truthfulness(void)
   return 0;
 }
 
+static int test_complete_json_validation_is_atomic(void)
+{
+  static const char *const malformed[] = {
+    "{\"schema\":\"ut.command.v1\",\"cmdId\":\"bad-num\",\"action\":\"fan1_duty\",\"ttlMs\":10000garbage,\"value\":60}",
+    "{\"schema\":\"ut.command.v1\",\"cmdId\":\"missing-comma\",\"action\":\"fan1_duty\",\"ttlMs\":10000 \"value\":60}",
+    "{\"schema\":\"ut.command.v1\",\"cmdId\":\"dup-field\",\"action\":\"fan1_duty\",\"ttlMs\":10000,\"ttlMs\":10000,\"value\":60}",
+    "{\"schema\":\"ut.command.v1\",\"cmdId\":\"unknown-field\",\"action\":\"fan1_duty\",\"ttlMs\":10000,\"value\":60,\"extra\":0}",
+    "{\"schema\":\"ut.command.v1\",\"cmdId\":\"bad-value\",\"action\":\"fan1_duty\",\"ttlMs\":10000,\"value\":60oops,\"dutyPercent\":30}",
+  };
+  unsigned int index;
+  NodeACommand recoverable;
+
+  CHECK(NodeACommand_Parse(
+      "{\"schema\":\"wrong.v1\",\"cmdId\":\"recover-2\","
+      "\"action\":\"fan1_duty\",\"ttlMs\":10000,\"value\":60}",
+      &recoverable) == 0U);
+  CHECK(strcmp(recoverable.command_id, "recover-2") == 0);
+  CHECK(NodeACommand_Parse(
+      "{\"schema\":\"ut.command.v1\",\"cmdId\":\"menu-1\","
+      "\"target\":\"CTRL-01\",\"action\":\"fan1_duty\","
+      "\"value\":60,\"createdAtMs\":1760000000000,\"ttlMs\":10000}",
+      &recoverable) == 1U);
+  CHECK(recoverable.action == NODE_A_ACTION_FAN1_DUTY &&
+        recoverable.value == 60U);
+
+  for (index = 0U; index < sizeof(malformed) / sizeof(malformed[0]); ++index)
+  {
+    NodeAActuatorState actual = default_actuators();
+    NodeACommand command;
+    CHECK(NodeACommand_Parse(malformed[index], &command) == 0U);
+    /* Model the dispatcher boundary: malformed input must never reach Apply. */
+    if (NodeACommand_Parse(malformed[index], &command) != 0U)
+      (void)NodeACommand_Apply(&command, 1U, &SAFE, &actual);
+    CHECK(actual.fan1_pwm_percent == 100U && actual.fan2_pwm_percent == 100U);
+  }
+  return 0;
+}
+
 static int test_active_alarm_rejects_manual_silence_and_visual_override(void)
 {
   static const NodeASafetyState ALARM = {1, 0, 0, 0, 1};
@@ -467,6 +507,7 @@ int main(void)
   if (test_duplicate_atomicity() != 0) return 1;
   if (test_ack_format_truthfulness() != 0) return 1;
   if (test_active_alarm_rejects_manual_silence_and_visual_override() != 0) return 1;
+  if (test_complete_json_validation_is_atomic() != 0) return 1;
   (void)puts("NodeACommand host test: PASS");
   return 0;
 }

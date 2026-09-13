@@ -16,6 +16,7 @@
 #define NODE_A_COMMAND_REASON_MAX    48U
 #define NODE_A_COMMAND_DEDUP_CAPACITY 8U
 #define NODE_A_COMMAND_TTL_MAX_MS    30000U
+#define NODE_A_COMMAND_JSON_MAX      383U
 
 typedef enum {
   NODE_A_ACTION_UNKNOWN = 0,
@@ -108,6 +109,10 @@ typedef struct {
  * schema matches and cmdId is a safe 1..39 character token.  On failure the
  * caller acknowledges `unknown` / `rejected` / `invalid_command`. */
 uint8_t NodeACommand_ParseHeader(const char *json, NodeACommand *command);
+
+/* Parse one complete bounded `ut.command.v1` object.  Unknown or duplicate
+ * fields, malformed delimiters/numbers, and trailing bytes are rejected. */
+uint8_t NodeACommand_Parse(const char *json, NodeACommand *command);
 
 /* Parse the action, value/dutyPercent and ttlMs.  Returns 1 when the action
  * string is readable and ttlMs is in 1..30000.  On failure the caller

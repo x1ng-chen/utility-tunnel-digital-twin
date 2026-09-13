@@ -664,6 +664,9 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
   const char *oxygen_quality;
   const char *methane_quality;
   const char *co_quality;
+  const char *smoke_quality;
+  const char *flame_quality;
+  const char *level_quality;
   const char *fan_quality;
   const char *current_sign;
   const char *power_sign;
@@ -686,8 +689,14 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
   /* The unamplified AO-02 signal uses only a few ADC codes. Keep the trial
    * readings explicitly suspect until a precision ADC/front end is fitted. */
   oxygen_quality = oxygen_online ? "suspect" : "missing";
-  methane_quality = methane_online ? "suspect" : "missing";
+  /* Methane is the only analog gas channel with a completed alarm-response
+   * bench check; oxygen and CO remain telemetry-only until calibrated. */
+  methane_quality = methane_online ? "good" : "missing";
   co_quality = co_online ? "suspect" : "missing";
+  smoke_quality = (smoke_last_sample_at != 0U) ? "good" : "missing";
+  flame_quality = (flame_last_sample_at != 0U) ? "good" : "missing";
+  level_quality = (level_candidate_samples >= LEVEL_STABLE_SAMPLE_COUNT) ?
+                  "good" : "suspect";
   fan_quality = ((fan1_power != NULL) && fan1_power->online) ?
                 (fan1_power->plausible ? "good" : "suspect") : "missing";
   current_abs = ((fan1_power != NULL) ? fan1_power->current_microamps : 0L);
@@ -700,17 +709,18 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
     "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
     "{\"assetCode\":\"ENV-01\",\"metric\":\"temperature\",\"value\":%s%ld.%02ld,\"unit\":\"degC\",\"quality\":\"%s\"},"
     "{\"assetCode\":\"ENV-01\",\"metric\":\"humidity\",\"value\":%lu.%02lu,\"unit\":\"%%RH\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"smoke.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"flame.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"LEVEL-L01\",\"metric\":\"level.detected\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"smoke.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"flame.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"LEVEL-L01\",\"metric\":\"level.detected\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
     "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
     "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"}]}\r\n",
     (unsigned long)sequence,
     temperature_sign, (long)(temperature_abs / 100), (long)(temperature_abs % 100), quality,
     (unsigned long)(readings[0].humidity_centi_rh / 100U),
     (unsigned long)(readings[0].humidity_centi_rh % 100U), quality,
-    (unsigned int)smoke_detected, (unsigned int)flame_detected,
-    (unsigned int)level_is_detected,
+    (unsigned int)smoke_detected, smoke_quality,
+    (unsigned int)flame_detected, flame_quality,
+    (unsigned int)level_is_detected, level_quality,
     (unsigned int)oxygen_raw, oxygen_quality,
     (unsigned long)(oxygen_microvolts / 1000UL),
     (unsigned long)(oxygen_microvolts % 1000UL), oxygen_quality);
@@ -722,12 +732,12 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
   while (esp_rx_count != 0U) Command_Poll();
   length = snprintf(methane_message, sizeof(methane_message),
     "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"flame.rawLevel\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"flame.rawLevel\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
     "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
     "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"},"
     "{\"assetCode\":\"GAS-01\",\"metric\":\"co.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
     "{\"assetCode\":\"GAS-01\",\"metric\":\"co.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"}]}\r\n",
-    (unsigned long)sequence, (unsigned int)flame_raw_level,
+    (unsigned long)sequence, (unsigned int)flame_raw_level, flame_quality,
     (unsigned int)methane_raw, methane_quality,
     (unsigned long)(methane_microvolts / 1000UL),
     (unsigned long)(methane_microvolts % 1000UL), methane_quality,
@@ -742,16 +752,19 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
   while (esp_rx_count != 0U) Command_Poll();
   length = snprintf(gas_status_message, sizeof(gas_status_message),
     "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"}]}\r\n",
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"}]}\r\n",
     (unsigned long)sequence,
-    (unsigned int)oxygen_warning, (unsigned int)oxygen_alarm,
-    (unsigned int)methane_warning, (unsigned int)methane_alarm,
-    (unsigned int)co_warning, (unsigned int)co_alarm);
+    (unsigned int)oxygen_warning, oxygen_quality,
+    (unsigned int)oxygen_alarm, oxygen_quality,
+    (unsigned int)methane_warning, methane_quality,
+    (unsigned int)methane_alarm, methane_quality,
+    (unsigned int)co_warning, co_quality,
+    (unsigned int)co_alarm, co_quality);
   if (length > 0 && length < (int)sizeof(gas_status_message))
   {
     (void)HAL_UART_Transmit(&huart2, (uint8_t *)gas_status_message, (uint16_t)length, 1000U);
@@ -1216,9 +1229,10 @@ static void Command_ProcessPayload(const char *payload, uint32_t received_at)
   NodeACommandResult result;
   uint32_t now;
 
-  if (!NodeACommand_ParseHeader(payload, &command))
+  if (!NodeACommand_Parse(payload, &command))
   {
-    Command_SendAck("unknown", "rejected", "invalid_command", 0U);
+    Command_SendAck((command.command_id[0] != '\0') ? command.command_id : "unknown",
+                    "rejected", "invalid_command", 0U);
     return;
   }
   if (NodeACommand_IsDuplicate(&command_dedup, command.command_id))
@@ -1226,13 +1240,6 @@ static void Command_ProcessPayload(const char *payload, uint32_t received_at)
     Command_SendAck(command.command_id, "duplicate", "cmdId_seen", 0U);
     return;
   }
-  if (!NodeACommand_ParseBody(payload, &command))
-  {
-    NodeACommand_Remember(&command_dedup, command.command_id);
-    Command_SendAck(command.command_id, "rejected", "invalid_or_missing_ttl", 0U);
-    return;
-  }
-
   command.received_at_ms = received_at;
   now = HAL_GetTick();
   Safety_Snapshot(&safety);

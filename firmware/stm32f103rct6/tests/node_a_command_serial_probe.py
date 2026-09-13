@@ -173,6 +173,14 @@ def main() -> None:
         assert ack["status"] == "rejected", ack
         require_state(port, fan1=0)
 
+        # A malformed schema still carries a safe cmdId; the rejection must
+        # echo it so the sender can match the failure.
+        send(port, '#NODETEST CMD {"schema":"wrong.v1","cmdId":"recover-1",'
+             '"action":"fan1_duty","ttlMs":10000,"value":60}')
+        ack = read_ack(port, "recover-1")
+        assert ack["status"] == "rejected" and ack["reason"] == "invalid_command", ack
+        require_state(port, fan1=0)
+
         # Duplicate cmdId is reported once and never re-executed.
         inject(port, "dup-1", "fan1_duty", value=100)
         assert read_ack(port, "dup-1")["status"] == "accepted"
@@ -203,6 +211,14 @@ def main() -> None:
         readings = {r["metric"]: r for f in frames for r in f["readings"]}
         assert readings["target.dutyPercent"]["value"] == 60, readings
         assert readings["led.mode"]["value"] == 3, readings
+        # Alarm flags inherit the corresponding sensor quality. The
+        # uncalibrated oxygen/CO channels must never be advertised as good.
+        assert readings["oxygen.warning"]["quality"] in {"suspect", "missing"}, readings
+        assert readings["oxygen.alarm"]["quality"] in {"suspect", "missing"}, readings
+        assert readings["co.warning"]["quality"] in {"suspect", "missing"}, readings
+        assert readings["co.alarm"]["quality"] in {"suspect", "missing"}, readings
+        assert readings["methane.warning"]["quality"] in {"good", "missing"}, readings
+        assert readings["methane.alarm"]["quality"] in {"good", "missing"}, readings
 
     print("Node A command serial probe: PASS")
 

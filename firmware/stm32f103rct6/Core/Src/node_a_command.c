@@ -132,18 +132,231 @@ static NodeACommandAction ActionFromString(const char *text)
   return NODE_A_ACTION_UNKNOWN;
 }
 
+typedef struct
+{
+  const char *cursor;
+  size_t remaining;
+} JsonCursor;
+
+static void Json_SkipWhitespace(JsonCursor *json)
+{
+  while ((json->remaining != 0U) &&
+         ((*json->cursor == ' ') || (*json->cursor == '\t') ||
+          (*json->cursor == '\r') || (*json->cursor == '\n')))
+  {
+    ++json->cursor;
+    --json->remaining;
+  }
+}
+
+static uint8_t Json_Consume(JsonCursor *json, char expected)
+{
+  Json_SkipWhitespace(json);
+  if ((json->remaining == 0U) || (*json->cursor != expected)) return 0U;
+  ++json->cursor;
+  --json->remaining;
+  return 1U;
+}
+
+static uint8_t Json_ParseToken(JsonCursor *json, char *destination,
+                               size_t destination_size)
+{
+  size_t length = 0U;
+
+  if ((json == NULL) || (destination == NULL) || (destination_size < 2U)) return 0U;
+  Json_SkipWhitespace(json);
+  if ((json->remaining == 0U) || (*json->cursor != '"')) return 0U;
+  ++json->cursor;
+  --json->remaining;
+  while (json->remaining != 0U)
+  {
+    const unsigned char character = (unsigned char)*json->cursor;
+    if (character == '"')
+    {
+      ++json->cursor;
+      --json->remaining;
+      if (length == 0U) return 0U;
+      destination[length] = '\0';
+      return 1U;
+    }
+    if ((character < 0x20U) || (character == '\\') ||
+        (length >= (destination_size - 1U))) return 0U;
+    destination[length++] = (char)character;
+    ++json->cursor;
+    --json->remaining;
+  }
+  return 0U;
+}
+
+static uint8_t Json_ParseUnsigned(JsonCursor *json, uint32_t *value)
+{
+  uint32_t parsed = 0U;
+  uint8_t digits = 0U;
+
+  if ((json == NULL) || (value == NULL)) return 0U;
+  Json_SkipWhitespace(json);
+  while ((json->remaining != 0U) &&
+         (*json->cursor >= '0') && (*json->cursor <= '9'))
+  {
+    const uint8_t digit = (uint8_t)(*json->cursor - '0');
+    if ((parsed > 429496729U) ||
+        ((parsed == 429496729U) && (digit > 5U))) return 0U;
+    parsed = (parsed * 10U) + digit;
+    ++digits;
+    ++json->cursor;
+    --json->remaining;
+  }
+  if (digits == 0U) return 0U;
+  *value = parsed;
+  return 1U;
+}
+
+static uint8_t Json_ParseUnsigned64(JsonCursor *json)
+{
+  uint64_t parsed = 0ULL;
+  uint8_t digits = 0U;
+
+  if (json == NULL) return 0U;
+  Json_SkipWhitespace(json);
+  while ((json->remaining != 0U) &&
+         (*json->cursor >= '0') && (*json->cursor <= '9'))
+  {
+    const uint8_t digit = (uint8_t)(*json->cursor - '0');
+    if ((parsed > 1844674407370955161ULL) ||
+        ((parsed == 1844674407370955161ULL) && (digit > 5U))) return 0U;
+    parsed = (parsed * 10ULL) + digit;
+    ++digits;
+    ++json->cursor;
+    --json->remaining;
+  }
+  return (digits != 0U) ? 1U : 0U;
+}
+
+static uint8_t Json_CompleteCommand(const char *json, NodeACommand *command)
+{
+  JsonCursor input;
+  char key[32];
+  char text[NODE_A_COMMAND_ACTION_MAX];
+  char schema[NODE_A_COMMAND_ACTION_MAX];
+  char command_id[NODE_A_COMMAND_ID_MAX + 1U];
+  char target[16];
+  uint8_t seen_schema = 0U;
+  uint8_t seen_cmd_id = 0U;
+  uint8_t seen_action = 0U;
+  uint8_t seen_target = 0U;
+  uint8_t seen_value = 0U;
+  uint8_t seen_duty = 0U;
+  uint8_t seen_ttl = 0U;
+  uint8_t seen_created = 0U;
+  size_t length = 0U;
+
+  if ((json == NULL) || (command == NULL)) return 0U;
+  while ((length <= NODE_A_COMMAND_JSON_MAX) && (json[length] != '\0')) ++length;
+  if (length > NODE_A_COMMAND_JSON_MAX) return 0U;
+  (void)memset(command, 0, sizeof(*command));
+  (void)memset(schema, 0, sizeof(schema));
+  (void)memset(command_id, 0, sizeof(command_id));
+  input.cursor = json;
+  input.remaining = length;
+  if (!Json_Consume(&input, '{')) return 0U;
+  Json_SkipWhitespace(&input);
+  if ((input.remaining == 0U) || (*input.cursor == '}')) return 0U;
+
+  for (;;)
+  {
+    if (!Json_ParseToken(&input, key, sizeof(key)) ||
+        !Json_Consume(&input, ':')) return 0U;
+    if (strcmp(key, "schema") == 0)
+    {
+      if (seen_schema != 0U || !Json_ParseToken(&input, schema, sizeof(schema))) return 0U;
+      seen_schema = 1U;
+    }
+    else if (strcmp(key, "cmdId") == 0)
+    {
+      if (seen_cmd_id != 0U || !Json_ParseToken(&input, command_id, sizeof(command_id))) return 0U;
+      if (!CommandId_IsSafe(command_id)) return 0U;
+      (void)snprintf(command->command_id, sizeof(command->command_id), "%s", command_id);
+      seen_cmd_id = 1U;
+    }
+    else if (strcmp(key, "target") == 0)
+    {
+      if (seen_target != 0U || !Json_ParseToken(&input, target, sizeof(target)) ||
+          (strcmp(target, "CTRL-01") != 0)) return 0U;
+      seen_target = 1U;
+    }
+    else if (strcmp(key, "action") == 0)
+    {
+      if (seen_action != 0U || !Json_ParseToken(&input, text, sizeof(text))) return 0U;
+      command->action = ActionFromString(text);
+      seen_action = 1U;
+    }
+    else if (strcmp(key, "value") == 0)
+    {
+      if (seen_value != 0U || !Json_ParseUnsigned(&input, &command->value)) return 0U;
+      command->has_value = 1U;
+      seen_value = 1U;
+    }
+    else if (strcmp(key, "dutyPercent") == 0)
+    {
+      if (seen_duty != 0U || !Json_ParseUnsigned(&input, &command->value)) return 0U;
+      command->has_value = 1U;
+      seen_duty = 1U;
+    }
+    else if (strcmp(key, "ttlMs") == 0)
+    {
+      if (seen_ttl != 0U || !Json_ParseUnsigned(&input, &command->ttl_ms)) return 0U;
+      seen_ttl = 1U;
+    }
+    else if (strcmp(key, "createdAtMs") == 0)
+    {
+      if (seen_created != 0U || !Json_ParseUnsigned64(&input)) return 0U;
+      seen_created = 1U;
+    }
+    else
+      return 0U;
+
+    Json_SkipWhitespace(&input);
+    if ((input.remaining == 0U) ||
+        ((*input.cursor != ',') && (*input.cursor != '}'))) return 0U;
+    if (*input.cursor == '}')
+    {
+      ++input.cursor;
+      --input.remaining;
+      break;
+    }
+    ++input.cursor;
+    --input.remaining;
+    Json_SkipWhitespace(&input);
+    if ((input.remaining == 0U) || (*input.cursor == '}')) return 0U;
+  }
+  Json_SkipWhitespace(&input);
+  if (input.remaining != 0U || seen_schema == 0U ||
+      (strcmp(schema, "ut.command.v1") != 0) || seen_cmd_id == 0U ||
+      seen_action == 0U || seen_ttl == 0U || (command->ttl_ms == 0U) ||
+      (command->ttl_ms > NODE_A_COMMAND_TTL_MAX_MS) ||
+      ((seen_value != 0U) && (seen_duty != 0U))) return 0U;
+  return 1U;
+}
+
 uint8_t NodeACommand_ParseHeader(const char *json, NodeACommand *command)
 {
   char schema[NODE_A_COMMAND_ACTION_MAX];
+  char command_id[NODE_A_COMMAND_ID_MAX + 1U];
 
   if ((json == NULL) || (command == NULL)) return 0U;
   (void)memset(command, 0, sizeof(*command));
+  if (Json_ReadString(json, "cmdId", command_id, sizeof(command_id)) &&
+      CommandId_IsSafe(command_id))
+    (void)snprintf(command->command_id, sizeof(command->command_id), "%s", command_id);
   if (!Json_ReadString(json, "schema", schema, sizeof(schema)) ||
       (strcmp(schema, "ut.command.v1") != 0) ||
-      !Json_ReadString(json, "cmdId", command->command_id,
-                       sizeof(command->command_id)) ||
-      !CommandId_IsSafe(command->command_id)) return 0U;
+      (command->command_id[0] == '\0')) return 0U;
   return 1U;
+}
+
+uint8_t NodeACommand_Parse(const char *json, NodeACommand *command)
+{
+  return Json_CompleteCommand(json, command);
 }
 
 uint8_t NodeACommand_ParseBody(const char *json, NodeACommand *command)
