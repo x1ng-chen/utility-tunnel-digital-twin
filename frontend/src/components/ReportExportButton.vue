@@ -1,22 +1,23 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useOperationsStore } from '../stores/operations';
-const props = defineProps<{ report: 'alerts' | 'assets' | 'telemetry'; label: string }>();
+import type { TelemetryQuery } from '../types';
+const props = defineProps<{ report: 'alerts' | 'assets' | 'telemetry'; label: string; filters?: TelemetryQuery }>();
 const store = useOperationsStore();
 const busy = ref(false);
 const error = ref('');
 async function download() {
   if (busy.value || store.offline || store.source !== 'api') return;
   busy.value = true; error.value = '';
-  try { await store.createReport(props.report); }
+  try { await store.createReport(props.report, props.filters); }
   catch { error.value = '导出未完成，请检查网络后重试。'; }
   finally { busy.value = false; }
 }
 </script>
 <template>
   <div class="report-export-action">
-    <button type="button" :disabled="busy || store.offline || store.source !== 'api'" :aria-busy="busy" title="导出服务端全部记录，不受当前页面筛选和分页限制" @click="download">{{ busy ? '正在生成…' : label }}</button>
-    <small>全部记录 · CSV</small>
+    <button type="button" :disabled="busy || store.offline || store.source !== 'api'" :aria-busy="busy" :title="filters ? '将当前已提交筛选固化为可复核 CSV 快照。' : '导出服务端全部记录，不受当前页面筛选和分页限制。'" @click="download">{{ busy ? '正在生成…' : label }}</button>
+    <small>{{ filters ? '当前筛选 · CSV 快照' : '全部记录 · CSV' }}</small>
     <span v-if="error" role="alert">{{ error }}</span>
   </div>
 </template>

@@ -419,10 +419,12 @@ export const useOperationsStore = defineStore('operations', () => {
     dashboard.value = { ...dashboard.value, assets: { total: active.length, online: active.filter((item) => ['normal', 'warning', 'alarm'].includes(item.status)).length } };
   }
 
-  async function createReport(report: ReportKind) {
+  async function createReport(report: ReportKind, filters?: TelemetryQuery) {
     if (report === 'telemetry' && source.value !== 'api') throw new Error('完整历史导出需要连接数据服务。');
+    if (filters && report !== 'telemetry') throw new Error('只有历史遥测支持按当前筛选导出。');
     if (source.value === 'api') {
-      const record = await runApiMutation(() => api.report(report, requestKey('report')));
+      const exportFilters = Object.fromEntries(Object.entries(filters || {}).filter(([, value]) => Boolean(value))) as Record<string, string>;
+      const record = await runApiMutation(() => api.report(report, exportFilters, requestKey('report')));
       const exported = await api.downloadReport(record.data.id);
       downloadBlob(exported.data, record.data.fileName || `utility-tunnel-${report}.csv`);
       await syncAudit();
@@ -430,7 +432,7 @@ export const useOperationsStore = defineStore('operations', () => {
       downloadReport(report);
       appendAudit('report.export', 'report_export', report, { report, format: 'csv' });
     }
-    notice.value = `${{ alerts: '告警', workOrders: '工单', assets: '设备', daily: '运行', telemetry: '历史遥测' }[report]}报表已生成`;
+    notice.value = `${{ alerts: '告警', workOrders: '工单', assets: '设备', daily: '运行', telemetry: '历史遥测' }[report]}${filters && Object.keys(filters).some((key) => Boolean(filters[key as keyof TelemetryQuery])) ? '筛选快照' : '报表'}已生成`;
   }
 
   function appendAudit(action: string, resourceType: string, resourceId: number | string, detail: Record<string, unknown>) {

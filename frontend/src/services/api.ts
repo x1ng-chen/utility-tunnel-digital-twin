@@ -119,7 +119,7 @@ export const api = {
   thresholds: () => client.get('/thresholds/'),
   updateThreshold: (key: string, payload: Record<string, unknown>) => client.put(`/thresholds/${key}/`, payload),
   audit: (params?: Record<string, string | number>) => client.get('/audit/', { params }),
-  report: (report: string, idempotencyKey?: string) => client.post('/report-exports/', { report }, { headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined }),
+  report: (report: string, filters?: Record<string, string>, idempotencyKey?: string) => client.post('/report-exports/', { report, ...(filters && Object.keys(filters).length ? { filters } : {}) }, { headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined }),
   downloadReport: (id: number) => client.get(`/report-exports/${id}/download/`, { responseType: 'blob' }),
 };
 

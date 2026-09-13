@@ -232,7 +232,10 @@ watch(() => store.source, (next, previous) => {
   <AppShell>
     <section class="section-title telemetry-title">
       <div><span class="eyebrow light">运行数据分析</span><h1>数据洞察</h1><p>按采集时间追踪遥测趋势与质量，不承担告警处置或资产维护职责。</p></div>
-      <ReportExportButton report="telemetry" label="导出全部历史记录" />
+      <div class="telemetry-export-actions">
+        <ReportExportButton report="telemetry" label="导出全部历史记录" />
+        <ReportExportButton report="telemetry" label="导出当前筛选快照" :filters="appliedQuery" />
+      </div>
     </section>
 
     <form class="telemetry-filters" @submit.prevent="search">
@@ -306,6 +309,7 @@ watch(() => store.source, (next, previous) => {
 
 <style scoped>
 .history-events { padding: 16px 20px; border-top: 1px solid var(--ops-line); }
+.telemetry-export-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 12px; }
 .history-events h3 { margin: 0 0 8px; font-size: 14px; }
 .history-events p, .history-events time, .history-events span { color: var(--ops-muted); font-size: 12px; line-height: 1.7; }
 .history-events article { display: grid; gap: 5px; padding: 10px 0; border-top: 1px solid var(--ops-line); overflow-wrap: anywhere; }

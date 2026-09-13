@@ -232,7 +232,8 @@ const locations: Array<{ value: LocationSource; label: string }> = [{ value: 'un
 .asset-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 18px; }
 .asset-toolbar input, .asset-toolbar select { width: 100%; min-width: 0; }
 .asset-directory-item { min-height: 74px; padding: 14px 18px; }
-.asset-directory-item > div { min-width: 0; }
+.asset-directory-item > div { min-width: 0; overflow: hidden; }
+.asset-directory-item b, .asset-directory-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asset-directory-item small { font-size: 12px; line-height: 1.6; }
 .editor-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: 12px; padding: 22px; }
 .editor-head h2 { margin: 0; overflow-wrap: anywhere; }

@@ -27,6 +27,18 @@ test('历史分析跨页查询与完整 CSV 下载', async ({ page, request }) =
     const result = await request.post(`${base}/telemetry/`, { headers, data: { readings: readings.slice(index, index + 100) } });
     expect(result.ok(), await result.text()).toBe(true);
   }
+  const otherReading = await request.post(`${base}/telemetry/`, { headers, data: { readings: [{
+    // Keep the exclusion proof within the seeded asset. Creating an extra
+    // active asset here would correctly make the later GLB-contract test
+    // reject the official model, but would turn this export test into hidden
+    // shared state for every following workflow.
+    eventId: `history-other-${run}`, assetCode: 'ENV-01', metricKey: 'export_excluded', metric: '导出排除验证指标',
+    // Keep it outside the live-summary horizon. The test proves CSV filtering,
+    // not a newer operational reading, so it must not replace ENV-01's current
+    // temperature in subsequent operator workflows.
+    value: 99, unit: 'count', quality: 'good', recordedAt: new Date(run - 24 * 60 * 60 * 1000).toISOString(),
+  }] } });
+  expect(otherReading.ok(), await otherReading.text()).toBe(true);
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码', { exact: true }).fill(adminPassword);
@@ -54,6 +66,14 @@ test('历史分析跨页查询与完整 CSV 下载', async ({ page, request }) =
   const csv = fs.readFileSync(await download.path(), 'utf8');
   expect(csv).toContain('recorded_at');
   for (const reading of readings) expect(csv).toContain(reading.eventId);
+  const filteredDownloadEvent = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出当前筛选快照', exact: true }).click();
+  const filteredDownload = await filteredDownloadEvent;
+  expect(await filteredDownload.failure()).toBeNull();
+  expect(filteredDownload.suggestedFilename()).toContain('utility-tunnel-telemetry-filtered-');
+  const filteredCsv = fs.readFileSync(await filteredDownload.path(), 'utf8');
+  for (const reading of readings) expect(filteredCsv).toContain(reading.eventId);
+  expect(filteredCsv).not.toContain(`history-other-${run}`);
 });
 const mapTilePattern = /https?:\/\/(?:[^/]+\.)?tile\.openstreetmap\.org\/.*/i;
 const transparentMapTile = Buffer.from(

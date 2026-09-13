@@ -45,8 +45,23 @@ let pendingSelectionGesture: { pointerId: number; startX: number; startY: number
 
 const colors: Record<TwinVisualState, number> = { normal: 0x4ee7c3, warning: 0xffbb62, alarm: 0xff536f, unknown: 0x6d87aa };
 
+function isFiniteVector(vector: Vector3) {
+  return Number.isFinite(vector.x) && Number.isFinite(vector.y) && Number.isFinite(vector.z);
+}
+
+function boundingSphere(root: Object3D) {
+  const bounds = new Box3().setFromObject(root);
+  if (bounds.isEmpty() || !isFiniteVector(bounds.min) || !isFiniteVector(bounds.max)) return null;
+  const sphere = bounds.getBoundingSphere(new Sphere());
+  return isFiniteVector(sphere.center) && Number.isFinite(sphere.radius) && sphere.radius > 0 ? sphere : null;
+}
+
 function publishCameraDistance() {
   if (!host.value || !camera || !controls) return;
+  // Never leak a corrupt camera coordinate into the DOM contract used by the
+  // control layer or browser checks. resetView() repairs this state before the
+  // next rendered frame, but the attribute must remain meaningful meanwhile.
+  if (!isFiniteVector(camera.position) || !isFiniteVector(controls.target)) return;
   host.value.dataset.cameraDistance = camera.position.distanceTo(controls.target).toFixed(4);
   host.value.dataset.cameraPosition = camera.position.toArray().map((value) => value.toFixed(4)).join(',');
   host.value.dataset.cameraTarget = controls.target.toArray().map((value) => value.toFixed(4)).join(',');
@@ -239,9 +254,10 @@ function focusAsset(code: string | null) {
   if (!code || !camera || !controls) return;
   const object = assetObjects.get(code);
   if (!object) return;
-  const bounds = new Box3().setFromObject(object);
-  const target = bounds.isEmpty() ? object.getWorldPosition(new Vector3()) : bounds.getCenter(new Vector3());
-  const measuredRadius = bounds.isEmpty() ? sceneRadius * .025 : bounds.getBoundingSphere(new Sphere()).radius;
+  const sphere = boundingSphere(object);
+  const objectPosition = object.getWorldPosition(new Vector3());
+  const target = sphere?.center ?? (isFiniteVector(objectPosition) ? objectPosition : controls.target.clone());
+  const measuredRadius = sphere?.radius ?? sceneRadius * .025;
   // Some Blender exports place an equipment marker on a parent node that also
   // owns adjacent meshes.  Do not let that oversized parent bound turn an
   // equipment focus action into another whole-model view.
@@ -259,9 +275,8 @@ function focusAsset(code: string | null) {
 function resetView() {
   if (!camera || !controls) return;
   const root = modelRoot || fallbackSceneRoot;
-  const bounds = root ? new Box3().setFromObject(root) : null;
-  if (bounds && !bounds.isEmpty()) {
-    const sphere = bounds.getBoundingSphere(new Sphere());
+  const sphere = root ? boundingSphere(root) : null;
+  if (sphere) {
     sceneRadius = Math.max(sphere.radius, .2);
     const distance = cameraFitDistance(sceneRadius, camera.fov, camera.aspect);
     controls.target.copy(sphere.center);

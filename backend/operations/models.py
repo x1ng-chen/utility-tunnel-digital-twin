@@ -438,6 +438,10 @@ class ReportExport(models.Model):
         FAILED = 'failed', '失败'
 
     report_type = models.CharField(max_length=40)
+    # The completed CSV is immutable, therefore the query that produced a
+    # filtered telemetry snapshot must be persisted beside it.  This keeps a
+    # downloaded file explainable after the live dataset changes.
+    filters = models.JSONField(default=dict, blank=True, editable=False)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.COMPLETED)
     file_name = models.CharField(max_length=180)
     idempotency_key = models.CharField(max_length=80, unique=True, null=True, blank=True, editable=False)

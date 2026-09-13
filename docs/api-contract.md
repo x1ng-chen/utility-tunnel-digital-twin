@@ -89,8 +89,8 @@
 | `PUT` | `/thresholds/{key}/` | 管理员 | 更新 `{ warning, alarm, version }`，使用乐观锁 |
 | `GET` | `/audit/` | 登录 | `action`、`search`（动作、资源类型/编号或操作者邮箱）、`occurredFrom`、`occurredTo`、`page`、`pageSize` |
 | `GET` | `/report-exports/` | 登录 | 导出操作记录 |
-| `POST` | `/report-exports/` | 登录 | 创建 `{ report: alerts\|workOrders\|assets\|daily }`；可提供 `Idempotency-Key` 防止重复登记 |
-| `GET` | `/report-exports/{id}/download/` | 创建者/管理员 | 返回创建时固化的 UTF-8 CSV 不可变快照；响应含 SHA-256，执行公式注入防护且不受前端分页限制 |
+| `POST` | `/report-exports/` | 登录 | 创建 `{ report: alerts\|workOrders\|assets\|daily\|telemetry, filters? }`；`filters` 仅允许遥测的 `assetCode`、`metricKey`、`quality`、`recordedFrom`、`recordedTo`，按与历史查询相同的规则校验并写入快照；可提供 `Idempotency-Key` 防止重复登记，重复键必须携带相同报告和筛选参数 |
+| `GET` | `/report-exports/{id}/download/` | 创建者/管理员 | 返回创建时固化的 UTF-8 CSV 不可变快照；响应含 SHA-256，执行公式注入防护且不受前端分页限制。遥测筛选快照会保留创建时的筛选条件与结果，不随之后数据变化 |
 | `GET` | `/twin/model-readiness/` | 登录 | 查询设备节点映射和当前三维版本的交付状态 |
 | `GET` | `/twin/models/` | 登录 | 查询三维模型版本、节点/网格统计和设备映射结果 |
 | `POST` | `/twin/models/` | 管理员 | 上传 GLB；校验容器、场景节点、网格引用、重复名称和设备覆盖 |

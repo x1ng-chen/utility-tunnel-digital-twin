@@ -508,6 +508,30 @@ class OperationsApiTests(TestCase):
         self.assertEqual(rows[0]['asset__code'], self.asset.code)
         self.assertEqual(rows[0]['metric'], "'=unsafe")
         self.assertIn('ingested_at', rows[0])
+        other_asset = Asset.objects.create(code='CSV-OTHER', name='导出隔离设备', zone='UT-ZA', asset_type='测试')
+        Telemetry.objects.create(asset=other_asset, event_id='csv-other', metric_key='temperature', metric='环境温度', value=99, unit='°C', quality='good', recorded_at=timezone.now())
+        filtered = self.client.post('/api/report-exports/', {
+            'report': 'telemetry',
+            'filters': {'assetCode': self.asset.code, 'metricKey': 'temperature', 'quality': 'good'},
+        }, format='json', HTTP_IDEMPOTENCY_KEY='history-csv-filtered-1')
+        self.assertEqual(filtered.status_code, 201)
+        self.assertEqual(filtered.json()['filters'], {'assetCode': self.asset.code, 'metricKey': 'temperature', 'quality': 'good'})
+        self.assertEqual(filtered.json()['rowCount'], 125)
+        filtered_download = self.client.get(f"/api/report-exports/{filtered.json()['id']}/download/")
+        filtered_rows = list(csv.DictReader(io.StringIO(filtered_download.content.decode('utf-8-sig'))))
+        self.assertEqual({row['asset__code'] for row in filtered_rows}, {self.asset.code})
+        repeated_filtered = self.client.post('/api/report-exports/', {
+            'report': 'telemetry',
+            'filters': {'quality': 'good', 'metricKey': 'temperature', 'assetCode': self.asset.code},
+        }, format='json', HTTP_IDEMPOTENCY_KEY='history-csv-filtered-1')
+        self.assertEqual(repeated_filtered.status_code, 200)
+        self.assertEqual(repeated_filtered.json()['id'], filtered.json()['id'])
+        self.assertEqual(self.client.post('/api/report-exports/', {
+            'report': 'telemetry', 'filters': {'assetCode': other_asset.code},
+        }, format='json', HTTP_IDEMPOTENCY_KEY='history-csv-filtered-1').status_code, 409)
+        self.assertEqual(self.client.post('/api/report-exports/', {
+            'report': 'telemetry', 'filters': {'unknown': 'value'},
+        }, format='json').status_code, 400)
         Telemetry.objects.all().delete()
         self.assertEqual(self.client.get(path).content, download.content)
         repeated = self.client.post('/api/report-exports/', {'report': 'telemetry'}, format='json', HTTP_IDEMPOTENCY_KEY='history-csv-1')

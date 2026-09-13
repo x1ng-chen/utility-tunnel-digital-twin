@@ -183,11 +183,12 @@ def telemetry_matches(reading, payload) -> bool:
     )
 
 
-def filtered_telemetry(request):
+def filtered_telemetry_params(params):
+    """Apply the one governed telemetry filter contract to any input mapping."""
     queryset = Telemetry.objects.select_related('asset')
-    asset_code = request.query_params.get('assetCode', '').strip()
-    metric_key = request.query_params.get('metricKey', '').strip()
-    quality = request.query_params.get('quality', '').strip()
+    asset_code = str(params.get('assetCode', '')).strip()
+    metric_key = str(params.get('metricKey', '')).strip()
+    quality = str(params.get('quality', '')).strip()
     if asset_code:
         if not re.fullmatch(r'[A-Z0-9][A-Z0-9_-]{1,39}', asset_code):
             return None, error_response('invalid_request', 'assetCode is not valid.', 400)
@@ -200,10 +201,19 @@ def filtered_telemetry(request):
         if quality not in Telemetry.Quality.values:
             return None, error_response('invalid_request', 'quality is not valid.', 400)
         queryset = queryset.filter(quality=quality)
-    recorded_from, error = datetime_filter(request, 'recordedFrom')
+    def parse_time(key):
+        value = str(params.get(key, '')).strip()
+        if not value:
+            return None, None
+        parsed = parse_datetime(value)
+        if parsed is None:
+            return None, error_response('invalid_request', f'{key} must be a valid ISO-8601 datetime.', 400)
+        return timezone.make_aware(parsed, timezone.get_current_timezone()) if timezone.is_naive(parsed) else parsed, None
+
+    recorded_from, error = parse_time('recordedFrom')
     if error:
         return None, error
-    recorded_to, error = datetime_filter(request, 'recordedTo')
+    recorded_to, error = parse_time('recordedTo')
     if error:
         return None, error
     if recorded_from and recorded_to and recorded_from > recorded_to:
@@ -213,6 +223,34 @@ def filtered_telemetry(request):
     if recorded_to:
         queryset = queryset.filter(recorded_at__lte=recorded_to)
     return queryset, None
+
+
+def filtered_telemetry(request):
+    return filtered_telemetry_params(request.query_params)
+
+
+TELEMETRY_EXPORT_FILTER_KEYS = {'assetCode', 'metricKey', 'quality', 'recordedFrom', 'recordedTo'}
+
+
+def telemetry_export_filters(payload):
+    """Normalize and validate an optional immutable CSV snapshot filter."""
+    raw_filters = payload.get('filters', {})
+    if raw_filters is None:
+        raw_filters = {}
+    if not isinstance(raw_filters, Mapping) or any(key not in TELEMETRY_EXPORT_FILTER_KEYS for key in raw_filters):
+        return None, error_response('invalid_request', 'Telemetry export filters are invalid.', 400)
+    normalized = {}
+    for key in TELEMETRY_EXPORT_FILTER_KEYS:
+        value = raw_filters.get(key)
+        if value is None or value == '':
+            continue
+        if not isinstance(value, str):
+            return None, error_response('invalid_request', 'Telemetry export filters must be strings.', 400)
+        normalized_value = value.strip()
+        if normalized_value:
+            normalized[key] = normalized_value
+    _, error = filtered_telemetry_params(normalized)
+    return (None, error) if error else (normalized, None)
 
 
 def _geometry_points(geometry):
@@ -1888,23 +1926,30 @@ class ReportExportView(APIView):
         report_type = report_value.strip()
         if report_type not in {'alerts', 'workOrders', 'assets', 'daily', 'telemetry'}:
             return error_response('invalid_request', 'A valid report type is required.', 400)
+        filters, filter_error = telemetry_export_filters(payload)
+        if filter_error:
+            return filter_error
+        if report_type != 'telemetry' and filters:
+            return error_response('invalid_request', 'Only telemetry exports support filters.', 400)
         if request_key:
             existing = ReportExport.objects.filter(idempotency_key=request_key).first()
             if existing:
                 if existing.requested_by_id != request.user.pk:
                     return error_response('conflict', 'Idempotency-Key is already used by another user.', 409)
-                if existing.report_type != report_type:
-                    return error_response('conflict', 'Idempotency-Key cannot be reused with a different report.', 409)
+                if existing.report_type != report_type or existing.filters != filters:
+                    return error_response('conflict', 'Idempotency-Key cannot be reused with different report parameters.', 409)
                 return Response(ReportExportSerializer(existing).data, status=200)
         try:
             with transaction.atomic():
                 if connection.vendor == 'postgresql':
                     with connection.cursor() as cursor:
                         cursor.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')
-                content, row_count = _build_report_csv(report_type)
+                content, row_count = _build_report_csv(report_type, filters)
+                export_scope = 'filtered' if filters else 'all'
                 record = ReportExport.objects.create(
                     report_type=report_type,
-                    file_name=f'utility-tunnel-{report_type}-{timezone.now():%Y%m%d%H%M%S}.csv',
+                    file_name=f'utility-tunnel-{report_type}-{export_scope}-{timezone.now():%Y%m%d%H%M%S}.csv',
+                    filters=filters,
                     content=content,
                     content_sha256=sha256(content).hexdigest(),
                     row_count=row_count,
@@ -1914,6 +1959,7 @@ class ReportExportView(APIView):
                 )
                 audit(request.user, 'report.export', 'report_export', record.pk, {
                     'report': report_type,
+                    'filters': filters,
                     'rowCount': row_count,
                     'contentSha256': record.content_sha256,
                 }, request_id(request))
@@ -1921,8 +1967,8 @@ class ReportExportView(APIView):
             if request_key:
                 existing = ReportExport.objects.filter(idempotency_key=request_key).first()
                 if existing and existing.requested_by_id == request.user.pk:
-                    if existing.report_type != report_type:
-                        return error_response('conflict', 'Idempotency-Key cannot be reused with a different report.', 409)
+                    if existing.report_type != report_type or existing.filters != filters:
+                        return error_response('conflict', 'Idempotency-Key cannot be reused with different report parameters.', 409)
                     return Response(ReportExportSerializer(existing).data, status=200)
             return error_response('conflict', 'Report export could not be created because a unique value already exists.', 409)
         response = Response(ReportExportSerializer(record).data, status=201)
@@ -1940,10 +1986,13 @@ def _csv_safe(value):
     return f"'{text}" if text.startswith(('=', '+', '-', '@', '\t', '\r')) else text
 
 
-def _report_rows(report_type):
+def _report_rows(report_type, filters=None):
     if report_type == 'telemetry':
         fields = ['id', 'event_id', 'asset__code', 'metric_key', 'metric', 'value', 'unit', 'quality', 'recorded_at', 'ingested_at']
-        return fields, Telemetry.objects.order_by('-recorded_at', '-id').values_list(*fields).iterator(chunk_size=500)
+        queryset, error = filtered_telemetry_params(filters or {})
+        if error:  # Input was validated before the transaction; preserve a fail-closed guard.
+            raise ValueError('Telemetry export filters are invalid.')
+        return fields, queryset.order_by('-recorded_at', '-id').values_list(*fields).iterator(chunk_size=500)
     if report_type == 'assets':
         fields = ['code', 'name', 'zone', 'asset_type', 'status', 'hardware_code', 'integration_status', 'is_active', 'last_seen_at', 'updated_at']
         return fields, Asset.objects.order_by('code').values_list(*fields).iterator(chunk_size=500)
@@ -1958,11 +2007,11 @@ def _report_rows(report_type):
     return fields, iter([row])
 
 
-def _build_report_csv(report_type):
+def _build_report_csv(report_type, filters=None):
     output = io.StringIO(newline='')
     output.write('\ufeff')
     writer = csv.writer(output, lineterminator='\r\n')
-    headers, rows = _report_rows(report_type)
+    headers, rows = _report_rows(report_type, filters)
     writer.writerow(headers)
     row_count = 0
     for row in rows:

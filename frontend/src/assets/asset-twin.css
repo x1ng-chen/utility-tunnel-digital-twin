@@ -4,3 +4,11 @@
    box and makes its label appear clipped at some desktop font metrics. */
 .asset-map-node{width:max-content;min-width:max-content;white-space:nowrap}
 .asset-map-node::after{display:none!important;content:none!important}
+/* Asset names and hardware descriptions originate from managed data. Keep a
+   long value inside its card instead of allowing one record to widen the
+   whole grid and hide neighbouring equipment. The full identity remains
+   available from the selected-device inspector. */
+.asset-grid .asset-card{min-width:0;overflow:hidden}
+.asset-grid .asset-card-copy{flex:1 1 0;min-width:0;overflow:hidden}
+.asset-grid .asset-card-copy h2,.asset-grid .asset-card-copy p{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.asset-grid .asset-card .asset-status{flex:0 0 auto;max-width:5.5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
