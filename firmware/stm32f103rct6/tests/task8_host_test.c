@@ -5,6 +5,19 @@
 #include "menu_command.h"
 #include "network_time.h"
 #include "screen_snapshot.h"
+#include "ui_renderer.h"
+
+void ST7735_Clear(uint16_t color) { (void)color; }
+void ST7735_BeginFrame(void) {}
+uint8_t ST7735_FrameFailed(void) { return 0U; }
+void ST7735_FillRect(int x, int y, int w, int h, uint16_t color)
+{ (void)x; (void)y; (void)w; (void)h; (void)color; }
+void ST7735_DrawGlyph16(int x, int y, const uint8_t glyph[32], uint16_t color, uint16_t bg)
+{ (void)x; (void)y; (void)glyph; (void)color; (void)bg; }
+void ST7735_DrawChar(int x, int y, char c, uint16_t color, uint16_t bg)
+{ (void)x; (void)y; (void)c; (void)color; (void)bg; }
+void ST7735_DrawString(int x, int y, const char *str, uint16_t color, uint16_t bg)
+{ (void)x; (void)y; (void)str; (void)color; (void)bg; }
 
 #define CHECK(condition) do { \
   if (!(condition)) { \
@@ -32,13 +45,21 @@ static int test_snapshot_validation_and_atomicity(void)
   ScreenSnapshotContext context;
   UiSnapshot snapshot;
   UiSnapshot before;
+  UiState state;
   char malformed[sizeof(kSnapshot)];
+  const char truncated[] = "{ \"schema\": \"ut.screen.snapshot.v1\"";
   ScreenSnapshot_Init(&context);
   (void)memset(&snapshot, 0, sizeof(snapshot));
   CHECK(ScreenSnapshot_Apply(&context, kSnapshot, strlen(kSnapshot), 100U, &snapshot) == 1U);
   CHECK(snapshot.temperature_centi_c.sampled_ms == 1704067205000ULL);
   CHECK(snapshot.connectivity.updated_ms == 1704067200000ULL);
   CHECK(snapshot.clock.synchronized == 0U);
+  UiState_Init(&state);
+  UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
+  CHECK(state.control.mqtt_online == 1U);
+  ScreenSnapshot_SetMqttAvailability(&snapshot, 0U, 100U);
+  UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
+  CHECK(state.control.mqtt_online == 0U);
   before = snapshot;
   (void)snprintf(malformed, sizeof(malformed), "%s", kSnapshot);
   CHECK(strstr(malformed, "\"seq\":7") != NULL);
@@ -46,7 +67,10 @@ static int test_snapshot_validation_and_atomicity(void)
   CHECK(ScreenSnapshot_Apply(&context, malformed, strlen(malformed), 200U, &snapshot) == 0U);
   CHECK(memcmp(&before, &snapshot, sizeof(snapshot)) == 0);
   CHECK(ScreenSnapshot_Parse(kSnapshot, SCREEN_SNAPSHOT_LINE_SIZE + 1U, &snapshot) == 0U);
-  CHECK(ScreenSnapshot_Apply(&context, "{ \"schema\": \"ut.screen.snapshot.v1\"", 39U, 300U, &snapshot) == 0U);
+  CHECK(ScreenSnapshot_Apply(&context, truncated, strlen(truncated), 300U, &snapshot) == 0U);
+  CHECK(ScreenSnapshot_Apply(&context, 0, 0U, 300U, &snapshot) == 0U);
+  CHECK(ScreenSnapshot_Apply(0, kSnapshot, strlen(kSnapshot), 300U, &snapshot) == 0U);
+  CHECK(ScreenSnapshot_Parse(0, 0U, &snapshot) == 0U);
   return 0;
 }
 
@@ -55,14 +79,22 @@ static int test_sequence_staleness_wraparound_and_bounds(void)
   ScreenSnapshotContext context;
   UiSnapshot snapshot;
   char bounded[sizeof(kSnapshot)];
+  const char *sequence_field;
   ScreenSnapshot_Init(&context);
   (void)memset(&snapshot, 0, sizeof(snapshot));
   (void)snprintf(bounded, sizeof(bounded), "%s", kSnapshot);
   CHECK(ScreenSnapshot_Apply(&context, bounded, strlen(bounded), UINT32_MAX - 100U, &snapshot) == 1U);
-  CHECK(ScreenSnapshot_IsStale(&context, 4800U) == 0U);
-  CHECK(ScreenSnapshot_IsStale(&context, 4900U) == 1U);
-  ScreenSnapshot_Tick(&context, 4900U, &snapshot);
+  CHECK(ScreenSnapshot_Apply(&context, bounded, strlen(bounded), 100U, &snapshot) == 0U); /* duplicate */
+  sequence_field = strstr(bounded, "\"seq\":7");
+  CHECK(sequence_field != NULL);
+  bounded[(size_t)(sequence_field - bounded) + 6U] = '6';
+  CHECK(ScreenSnapshot_Apply(&context, bounded, strlen(bounded), 200U, &snapshot) == 0U); /* old */
+  CHECK(ScreenSnapshot_IsStale(&context, 4898U) == 0U); /* 4999 ms across wrap */
+  CHECK(ScreenSnapshot_IsStale(&context, 4899U) == 1U); /* 5000 ms across wrap */
+  ScreenSnapshot_Tick(&context, 4899U, &snapshot);
   CHECK(snapshot.temperature_centi_c.quality == UI_QUALITY_STALE);
+  ScreenSnapshot_SetMqttAvailability(&snapshot, 0U, 4899U);
+  CHECK(snapshot.connectivity.mqtt_online == 0U);
   return 0;
 }
 
@@ -71,17 +103,31 @@ static int test_time_and_mqtt_lifecycle(void)
   UiClock clock;
   UiClockSnapshot display;
   UiState state;
+  UiSnapshot snapshot;
+  char layout[320];
   const char line[] = "{ \"schema\" : \"ut.time.sync.v1\", \"source\" : \"ntp\", "
                       "\"state\" : \"synchronized\", \"epochSeconds\" : 1704067200, \"seq\" : 3 }";
   NetworkTime_Init(&clock);
   CHECK(NetworkTime_Update(&clock, line, strlen(line), 100U) == 1U);
   NetworkTime_ToSnapshot(&clock, 61000U, &display);
   CHECK(display.synchronized == 1U && display.hour == 0U && display.minute == 1U);
+  CHECK(NetworkTime_Update(0, line, strlen(line), 100U) == 0U);
+  CHECK(NetworkTime_Update(&clock, 0, 0U, 100U) == 0U);
+  CHECK(NetworkTime_Update(&clock, line, NETWORK_TIME_LINE_SIZE + 1U, 100U) == 0U);
   CHECK(NetworkTime_Update(&clock, "{\"schema\":\"ut.time.sync.v1\",\"source\":\"ntp\",\"state\":\"synchronized\",\"epochSeconds\":1,\"seq\":4}", 100U, 70000U) == 0U);
   UiState_Init(&state);
   UiState_SetControlAvailability(&state, 1U, 0U);
   CHECK(state.control.mqtt_online == 1U);
   UiState_SetControlAvailability(&state, 0U, 0U);
+  CHECK(state.control.mqtt_online == 0U);
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+  CHECK(UiRenderer_DescribeLayout(&state, &snapshot, layout, sizeof(layout)) > 0U);
+  CHECK(strstr(layout, "time=--:--") != NULL);
+  ScreenSnapshot_SetMqttAvailability(&snapshot, 1U, 70100U);
+  UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
+  CHECK(state.control.mqtt_online == 1U);
+  ScreenSnapshot_SetMqttAvailability(&snapshot, 0U, 70200U);
+  UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
   CHECK(state.control.mqtt_online == 0U);
   return 0;
 }
@@ -91,9 +137,10 @@ static int test_commands_and_ack_atomicity(void)
   MenuCommandContext context;
   MenuCommandAck ack;
   MenuCommandAck before;
+  MenuCommandTxQueue queue;
   char line[MENU_COMMAND_LINE_SIZE];
   size_t length;
-  const char valid_ack[] = "{\"schema\":\"ut.command.ack.v1\",\"cmdId\":\"menu-CTRL-02-7-1\",\"status\":\"accepted\",\"reason\":\"buzzer_muted\",\"appliedValue\":0}";
+  const char valid_ack[] = "{\"schema\":\"ut.command.ack.v1\",\"cmdId\":\"menu-CTRL-02-7-3\",\"status\":\"accepted\",\"reason\":\"buzzer_muted\",\"appliedValue\":0}";
   MenuCommand_Init(&context, 7U);
   CHECK(MenuCommand_Begin(&context, UI_ACTION_BUZZER_MUTE, UI_BUZZER_MUTE, 1704067200000ULL,
                           line, sizeof(line), &length) == 1U);
@@ -103,13 +150,31 @@ static int test_commands_and_ack_atomicity(void)
                           line, sizeof(line), &length) == 1U);
   CHECK(strstr(line, "\"action\":\"buzzer_restore\"") != NULL);
   CHECK(strstr(line, "\"value\":0") != NULL);
+  CHECK(strstr(line, "\"ttlMs\":10000") != NULL);
+  CHECK(strstr(line, "menu-CTRL-02-7-2") != NULL);
+  CHECK(strncmp(line, "{\"schema\":\"ut.menu.command.v1\"",
+                strlen("{\"schema\":\"ut.menu.command.v1\"")) == 0);
+  CHECK(length <= MENU_COMMAND_LINE_SIZE);
   (void)memset(&ack, 0xA5, sizeof(ack));
   before = ack;
   CHECK(MenuCommand_ParseAck(valid_ack, strlen(valid_ack) - 1U, &ack) == 0U);
   CHECK(memcmp(&before, &ack, sizeof(ack)) == 0);
+  CHECK(MenuCommand_ParseAck(0, 0U, &ack) == 0U);
+  CHECK(MenuCommand_ParseAck(valid_ack, MENU_COMMAND_ACK_LINE_SIZE + 1U, &ack) == 0U);
   CHECK(MenuCommand_ParseAck(valid_ack, strlen(valid_ack), &ack) == 1U);
   CHECK(MenuCommand_AcceptAck(&context, &ack) == 0U); /* latest active id is restore */
+  CHECK(MenuCommand_Begin(&context, UI_ACTION_BUZZER_MUTE, UI_BUZZER_MUTE, 1704067200000ULL,
+                          line, sizeof(line), &length) == 1U);
+  CHECK(strstr(line, "menu-CTRL-02-7-3") != NULL);
+  CHECK(MenuCommand_ParseAck(valid_ack, strlen(valid_ack), &ack) == 1U);
+  CHECK(MenuCommand_AcceptAck(&context, &ack) == 1U); /* positive match */
+  CHECK(MenuCommand_AcceptAck(&context, &ack) == 0U); /* duplicate */
   CHECK(MenuCommand_NextBootId(0U, 0x12345678U) != MenuCommand_NextBootId(1U, 0x12345678U));
+  MenuCommandTx_Init(&queue);
+  CHECK(MenuCommandTx_Enqueue(&queue, "abc", 3U) == 1U);
+  CHECK(MenuCommandTx_Enqueue(&queue, "def", 3U) == 0U); /* full/active */
+  { uint8_t byte; CHECK(MenuCommandTx_Peek(&queue, &byte) == 1U && byte == 'a'); MenuCommandTx_Commit(&queue); CHECK(MenuCommandTx_Peek(&queue, &byte) == 1U && byte == 'b'); MenuCommandTx_Commit(&queue); MenuCommandTx_Commit(&queue); CHECK(MenuCommandTx_Peek(&queue, &byte) == 0U); }
+  { char max_line[MENU_COMMAND_TX_CAPACITY]; (void)memset(max_line, 'x', sizeof(max_line)); CHECK(MenuCommandTx_Enqueue(&queue, max_line, sizeof(max_line)) == 1U); MenuCommandTx_Fail(&queue); CHECK(queue.failed == 1U); CHECK(MenuCommandTx_Enqueue(&queue, "z", 1U) == 0U); }
   return 0;
 }
 

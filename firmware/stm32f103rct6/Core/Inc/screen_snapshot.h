@@ -18,6 +18,8 @@ typedef struct {
 void ScreenSnapshot_Init(ScreenSnapshotContext *context);
 uint8_t ScreenSnapshot_Apply(ScreenSnapshotContext *context, const char *line,
                              size_t length, uint32_t now_ms, UiSnapshot *snapshot);
+void ScreenSnapshot_SetMqttAvailability(UiSnapshot *snapshot, uint8_t online,
+                                        uint64_t updated_ms);
 uint8_t ScreenSnapshot_IsStale(const ScreenSnapshotContext *context, uint32_t now_ms);
 void ScreenSnapshot_Tick(const ScreenSnapshotContext *context, uint32_t now_ms,
                          UiSnapshot *snapshot);

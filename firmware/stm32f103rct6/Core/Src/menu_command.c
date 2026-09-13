@@ -160,7 +160,7 @@ uint8_t MenuCommand_ParseAck(const char *line, size_t length, MenuCommandAck *ac
   int32_t applied;
   MenuCommandAck temporary;
   if ((line == 0) || (ack == 0) || (length == 0U)) return 0U;
-  if (length > 768U) return 0U;
+  if (length > MENU_COMMAND_ACK_LINE_SIZE) return 0U;
   (void)memset(&temporary, 0, sizeof(temporary));
   cursor.at = line;
   cursor.end = line + length;
@@ -194,4 +194,41 @@ uint8_t MenuCommand_AcceptAck(MenuCommandContext *context, const MenuCommandAck 
       strcmp(context->active_command_id, ack->command_id) != 0) return 0U;
   context->pending = 0U;
   return 1U;
+}
+
+void MenuCommandTx_Init(MenuCommandTxQueue *queue)
+{
+  if (queue != 0) (void)memset(queue, 0, sizeof(*queue));
+}
+
+uint8_t MenuCommandTx_Enqueue(MenuCommandTxQueue *queue, const char *line, size_t length)
+{
+  if ((queue == 0) || (line == 0) || (length == 0U) ||
+      (length > MENU_COMMAND_TX_CAPACITY) || queue->active || queue->failed) return 0U;
+  (void)memcpy(queue->bytes, line, length);
+  queue->length = (uint16_t)length;
+  queue->offset = 0U;
+  queue->active = 1U;
+  return 1U;
+}
+
+uint8_t MenuCommandTx_Peek(const MenuCommandTxQueue *queue, uint8_t *byte)
+{
+  if ((queue == 0) || (byte == 0) || !queue->active || (queue->offset >= queue->length)) return 0U;
+  *byte = queue->bytes[queue->offset];
+  return 1U;
+}
+
+void MenuCommandTx_Commit(MenuCommandTxQueue *queue)
+{
+  if ((queue == 0) || !queue->active) return;
+  ++queue->offset;
+  if (queue->offset >= queue->length) queue->active = 0U;
+}
+
+void MenuCommandTx_Fail(MenuCommandTxQueue *queue)
+{
+  if (queue == 0) return;
+  queue->active = 0U;
+  queue->failed = 1U;
 }

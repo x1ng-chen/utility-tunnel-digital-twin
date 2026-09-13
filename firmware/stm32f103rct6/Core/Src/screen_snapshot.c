@@ -113,16 +113,18 @@ static uint8_t valid_timestamp(uint64_t sampled, uint64_t generated, UiDataQuali
   return sampled >= 1704067200000ULL && sampled <= 4102444799999ULL && sampled <= generated;
 }
 
-static uint8_t safe_token(const char *value, uint8_t allow_empty)
+static uint8_t safe_token(const char *value, size_t capacity, uint8_t allow_empty)
 {
   size_t index;
-  if ((value == 0) || (!allow_empty && value[0] == '\0')) return 0U;
-  for (index = 0U; value[index] != '\0'; ++index) {
+  if ((value == 0) || (capacity == 0U)) return 0U;
+  for (index = 0U; index < capacity; ++index) {
+    if (value[index] == '\0') return allow_empty || (index != 0U);
+    if (index + 1U >= capacity) return 0U;
     const unsigned char ch = (unsigned char)value[index];
-    if (index >= 39U || !((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+    if (!((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
                            (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.')) return 0U;
   }
-  return 1U;
+  return 0U;
 }
 
 static uint8_t reading(Cursor *cursor, UiReading *reading, int32_t minimum,
@@ -171,7 +173,7 @@ static uint8_t fan(Cursor *cursor, UiFanSnapshot *fan_snapshot, uint64_t generat
 static uint8_t parse_model(const char *line, size_t length, uint32_t received_ms,
                            UiSnapshot *snapshot, uint32_t *sequence)
 {
-  Cursor cursor = {line, line + length};
+  Cursor cursor;
   char schema[32], source[16], command_id[40];
   uint64_t generated, sequence_value, alarm, warning, critical;
   uint8_t relay, buzzer, muted;
@@ -180,7 +182,10 @@ static uint8_t parse_model(const char *line, size_t length, uint32_t received_ms
   uint8_t command_accepted, command_complete;
   uint64_t command_completed;
   if ((line == 0) || (snapshot == 0) || (sequence == 0) ||
-      !character(&cursor, '{') || !named_key(&cursor, "schema") ||
+      (length == 0U) || (length > SCREEN_SNAPSHOT_LINE_SIZE)) return 0U;
+  cursor.at = line;
+  cursor.end = line + length;
+  if (!character(&cursor, '{') || !named_key(&cursor, "schema") ||
       !string_value(&cursor, schema, sizeof(schema)) || strcmp(schema, "ut.screen.snapshot.v1") != 0 ||
       !character(&cursor, ',') || !named_key(&cursor, "source") ||
       !string_value(&cursor, source, sizeof(source)) || strcmp(source, "CTRL-01") != 0 ||
@@ -227,10 +232,10 @@ static uint8_t parse_model(const char *line, size_t length, uint32_t received_ms
   if (cursor.at != cursor.end || generated < 1704067200000ULL ||
       generated > 4102444799999ULL || connectivity_updated < 1704067200000ULL ||
       connectivity_updated > generated ||
-      (command_complete ? (!safe_token(command_id, 0U) ||
+      (command_complete ? (!safe_token(command_id, sizeof(command_id), 0U) ||
                            command_completed < 1704067200000ULL ||
                            command_completed > generated) :
-                          (!safe_token(command_id, 1U) || command_accepted || command_completed != 0ULL))) return 0U;
+                          (!safe_token(command_id, sizeof(command_id), 1U) || command_accepted || command_completed != 0ULL))) return 0U;
   (void)source;
   (void)received_ms;
   snapshot->alarm_severity = (UiAlarmSeverity)alarm;
@@ -293,6 +298,14 @@ uint8_t ScreenSnapshot_IsStale(const ScreenSnapshotContext *context, uint32_t no
 {
   return (context != 0) && context->initialized &&
          ((uint32_t)(now_ms - context->received_ms) >= SCREEN_SNAPSHOT_STALE_MS);
+}
+
+void ScreenSnapshot_SetMqttAvailability(UiSnapshot *snapshot, uint8_t online,
+                                        uint64_t updated_ms)
+{
+  if (snapshot == 0) return;
+  snapshot->connectivity.mqtt_online = online ? 1U : 0U;
+  snapshot->connectivity.updated_ms = updated_ms;
 }
 
 void ScreenSnapshot_Tick(const ScreenSnapshotContext *context, uint32_t now_ms,

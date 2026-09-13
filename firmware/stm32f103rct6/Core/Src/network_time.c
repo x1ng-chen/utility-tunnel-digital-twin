@@ -67,10 +67,14 @@ static uint8_t number(TimeCursor *cursor, uint64_t *value)
 static uint8_t parse(const char *line, size_t length, uint64_t *epoch,
                      uint32_t *sequence)
 {
-  TimeCursor cursor = {line, line + length};
+  TimeCursor cursor;
   char schema[24], source[16], state[16];
   uint64_t epoch_value, sequence_value;
   if ((line == 0) || (epoch == 0) || (sequence == 0) ||
+      (length == 0U) || (length > NETWORK_TIME_LINE_SIZE)) return 0U;
+  cursor.at = line;
+  cursor.end = line + length;
+  if (
       !ch(&cursor, '{') || !named(&cursor, "schema") ||
       !string_value(&cursor, schema, sizeof(schema)) || strcmp(schema, "ut.time.sync.v1") != 0 ||
       !ch(&cursor, ',') || !named(&cursor, "source") || !string_value(&cursor, source, sizeof(source)) ||
@@ -98,7 +102,8 @@ uint8_t NetworkTime_Update(UiClock *clock, const char *line, size_t length,
 {
   uint64_t epoch;
   uint32_t sequence;
-  if ((clock == 0) || !parse(line, length, &epoch, &sequence) ||
+  if ((clock == 0) || (line == 0) || (length == 0U) ||
+      (length > NETWORK_TIME_LINE_SIZE) || !parse(line, length, &epoch, &sequence) ||
       (clock->synchronized && ((int32_t)(sequence - clock->sequence) <= 0))) return 0U;
   clock->synchronized = 1U;
   clock->epoch_seconds = epoch;
