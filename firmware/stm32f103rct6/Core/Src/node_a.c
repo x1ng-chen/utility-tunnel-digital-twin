@@ -1,8 +1,12 @@
 #include "main.h"
+#include "network_time.h"
 #include "node_a_clock_contract.h"
 #include "node_a_command.h"
 #include "node_a_ina226.h"
 #include "node_a_sensor_map.h"
+#include "node_a_status_screen.h"
+#include "st7735.h"
+#include "st7735_bus.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -175,6 +179,18 @@ static uint32_t gas_ventilation_clear_started_at;
 static uint8_t ws2812_encoded[WS2812_PIXEL_COUNT * 18U];
 static char node_test_line[NODE_TEST_LINE_SIZE];
 static uint16_t node_test_length;
+/* Secondary screen.  The sensor fields are filled by the telemetry block, the
+ * safety and actuator fields by the display tick. */
+static NodeAStatusScreen status_screen;
+static NodeAStatusSnapshot status_sensors;
+/* ut.time.sync.v1 arrives from ESP-01 on USART2 as a bare JSON line, so it gets
+ * its own bounded slot instead of the command queue. */
+static UiClock esp_clock;
+static char esp_time_line[NETWORK_TIME_LINE_SIZE];
+static volatile uint16_t esp_time_length;
+static volatile uint8_t esp_time_pending;
+static volatile uint8_t esp_time_discarding;
+static volatile uint8_t esp_time_mode;
 static uint8_t test_safety_smoke;
 static uint8_t test_safety_flame;
 static uint8_t test_safety_gas;
@@ -1437,6 +1453,8 @@ static void NodeTest_ReportClock(void)
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
 }
 
+static void NodeTest_ReportDisplay(void);
+
 static void NodeTest_HandleLine(void)
 {
   unsigned int smoke;
@@ -1492,6 +1510,11 @@ static void NodeTest_HandleLine(void)
     NodeTest_ReportState();
     return;
   }
+  if (strcmp(node_test_line, "#NODETEST DISPLAY") == 0)
+  {
+    NodeTest_ReportDisplay();
+    return;
+  }
   if (strcmp(node_test_line, "#NODETEST CLOCK") == 0)
   {
     NodeTest_ReportClock();
@@ -1521,13 +1544,138 @@ static void NodeTest_Poll(void)
   }
 }
 
+/* ============ Secondary status screen (SPI3 + DMA2) =========================
+ * Read-only by construction: the screen renders one snapshot of Node A's own
+ * state and has no path to a command, an actuator or an input device.  The slow
+ * sensor fields are captured by the telemetry block; the safety and actuator
+ * fields change every loop and are copied by the display tick. */
+
+static void EspTime_Poll(void)
+{
+  char line[NETWORK_TIME_LINE_SIZE];
+  uint16_t length;
+
+  if (esp_time_pending == 0U) return;
+  __disable_irq();
+  esp_time_pending = 0U;
+  length = esp_time_length;
+  if (length >= sizeof(line)) length = sizeof(line) - 1U;
+  (void)memcpy(line, esp_time_line, length);
+  line[length] = '\0';
+  __enable_irq();
+  (void)NetworkTime_Update(&esp_clock, line, length, HAL_GetTick());
+}
+
+static void Status_CaptureEnvironment(const Sht30Reading *environment)
+{
+  status_sensors.sht30_online = environment->online;
+  status_sensors.temperature_centi_c = environment->temperature_centi_c;
+  status_sensors.humidity_centi_rh = environment->humidity_centi_rh;
+}
+
+static void Status_CaptureGas(uint16_t oxygen_raw, uint8_t oxygen_online,
+                              uint16_t methane_raw, uint8_t methane_online,
+                              uint16_t co_raw, uint8_t co_online)
+{
+  status_sensors.oxygen_raw = oxygen_raw;
+  status_sensors.oxygen_online = oxygen_online;
+  status_sensors.methane_raw = methane_raw;
+  status_sensors.methane_online = methane_online;
+  status_sensors.co_raw = co_raw;
+  status_sensors.co_online = co_online;
+  status_sensors.oxygen_warning = oxygen_warning;
+  status_sensors.oxygen_alarm = oxygen_alarm;
+  status_sensors.methane_warning = methane_warning;
+  status_sensors.methane_alarm = methane_alarm;
+  status_sensors.co_warning = co_warning;
+  status_sensors.co_alarm = co_alarm;
+}
+
+static void Status_CaptureFanPower(const Ina226Reading *power, uint8_t *online,
+                                   uint32_t *millivolts, int32_t *milliamps)
+{
+  if (power == NULL)
+  {
+    *online = 0U;
+    *millivolts = 0U;
+    *milliamps = 0;
+    return;
+  }
+  *online = power->online;
+  *millivolts = power->bus_microvolts / 1000UL;
+  *milliamps = power->current_microamps / 1000L;
+}
+
+static void Status_Tick(uint32_t now)
+{
+  /* One atomic copy per frame: the renderer never sees a half-updated mix. */
+  NodeAStatusSnapshot snapshot = status_sensors;
+
+  /* The bench probe injects alarm *inputs*; it never fakes an actuator, so the
+   * alarm page may report a simulated source while VENT still shows the real
+   * relay. */
+  snapshot.smoke_alarm = (uint8_t)((smoke_alarm != 0U) || (test_safety_smoke != 0U));
+  snapshot.flame_alarm = (uint8_t)((flame_alarm != 0U) || (test_safety_flame != 0U));
+  snapshot.gas_alarm = (uint8_t)((gas_alarm != 0U) || (test_safety_gas != 0U));
+  snapshot.gas_warning = (uint8_t)((gas_warning != 0U) || (test_safety_gas != 0U));
+  snapshot.level_detected = level_detected;
+  snapshot.fan1_pwm_percent = g_actuator.fan1_pwm_percent;
+  snapshot.fan2_pwm_percent = g_actuator.fan2_pwm_percent;
+  snapshot.relay_on = g_actuator.relay_on;
+  snapshot.buzzer_muted = g_actuator.buzzer_muted;
+  NetworkTime_ToSnapshot(&esp_clock, now, &snapshot.clock);
+
+  NodeAStatus_Update(&status_screen, &snapshot,
+                     (uint8_t)((snapshot.smoke_alarm != 0U) ||
+                               (snapshot.flame_alarm != 0U) ||
+                               (snapshot.gas_alarm != 0U)), now);
+}
+
+static void NodeTest_ReportDisplay(void)
+{
+  char message[256];
+  St7735BusStats stats;
+  int length;
+
+  St7735Bus_GetStats(&stats);
+  length = snprintf(message, sizeof(message),
+    "#DISPLAY page=%s renders=%lu changes=%lu alarm=%u clock_sync=%u clock_seq=%lu "
+    "spi=%lu frames=%lu timeouts=%lu errors=%lu worst_us=%lu\r\n",
+    NodeAStatus_PageTitle(status_screen.model.page),
+    (unsigned long)status_screen.renders,
+    (unsigned long)status_screen.page_changes,
+    (unsigned int)status_screen.model.alarm_active,
+    (unsigned int)esp_clock.synchronized,
+    (unsigned long)esp_clock.sequence,
+    (unsigned long)stats.spi_hz,
+    (unsigned long)stats.dma_frames,
+    (unsigned long)stats.dma_timeouts,
+    (unsigned long)stats.dma_errors,
+    (unsigned long)stats.worst_frame_us);
+  if ((length > 0) && (length < (int)sizeof(message)))
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
+}
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *uart)
 {
   if (uart->Instance != USART2) return;
   ++esp_rx_bytes;
   if (esp_rx_character == '\n')
   {
-    if ((esp_rx_discarding == 0U) && (esp_rx_length > 0U))
+    if (esp_time_mode != 0U)
+    {
+      /* ut.time.sync.v1 keeps its own slot, so a full command queue can never
+       * cost the screen its time base.  A newer line replaces an unread one. */
+      if ((esp_time_discarding == 0U) && (esp_rx_length > 0U))
+      {
+        esp_time_line[esp_rx_length] = '\0';
+        esp_time_length = esp_rx_length;
+        esp_time_pending = 1U;
+      }
+      else
+        ++esp_rx_dropped_lines;
+    }
+    else if ((esp_rx_discarding == 0U) && (esp_rx_length > 0U))
     {
       ++esp_rx_completed_lines;
       /* ESP diagnostic replies such as #PUBLISHED share USART2 with downlink
@@ -1554,13 +1702,33 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *uart)
       ++esp_rx_dropped_lines;
     esp_rx_length = 0U;
     esp_rx_discarding = 0U;
+    esp_time_discarding = 0U;
+    esp_time_mode = 0U;
   }
-  else if ((esp_rx_character != '\r') && (esp_rx_discarding == 0U))
+  else if (esp_rx_character != '\r')
   {
-    if (esp_rx_count >= ESP_RX_QUEUE_CAPACITY) esp_rx_discarding = 1U;
-    else if (esp_rx_length < (ESP_RX_LINE_SIZE - 1U))
-      esp_rx_lines[esp_rx_tail][esp_rx_length++] = (char)esp_rx_character;
-    else { esp_rx_length = 0U; esp_rx_discarding = 1U; }
+    /* The first character of a line decides which slot it belongs to. */
+    if ((esp_rx_length == 0U) && (esp_rx_character == '{')) esp_time_mode = 1U;
+    if (esp_time_mode != 0U)
+    {
+      if (esp_time_discarding == 0U)
+      {
+        if (esp_rx_length < (NETWORK_TIME_LINE_SIZE - 1U))
+          esp_time_line[esp_rx_length++] = (char)esp_rx_character;
+        else
+        {
+          esp_rx_length = 0U;
+          esp_time_discarding = 1U;
+        }
+      }
+    }
+    else if (esp_rx_discarding == 0U)
+    {
+      if (esp_rx_count >= ESP_RX_QUEUE_CAPACITY) esp_rx_discarding = 1U;
+      else if (esp_rx_length < (ESP_RX_LINE_SIZE - 1U))
+        esp_rx_lines[esp_rx_tail][esp_rx_length++] = (char)esp_rx_character;
+      else { esp_rx_length = 0U; esp_rx_discarding = 1U; }
+    }
   }
   (void)HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U);
 }
@@ -1597,6 +1765,12 @@ int main(void)
   if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) Error_Handler();
   MX_USART1_UART_Init(); MX_USART2_UART_Init();
   if (HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U) != HAL_OK) Error_Handler();
+  /* The secondary screen is initialised last: its SPI3/DMA2 setup must not
+   * disturb the sensor buses, the fan PWM or the ESP UART that precede it. */
+  memset(&status_sensors, 0, sizeof(status_sensors));
+  NetworkTime_Init(&esp_clock);
+  NodeAStatus_Init(&status_screen, HAL_GetTick());
+  ST7735_Init();
   (void)HAL_UART_Transmit(&huart1, (uint8_t *)"#NODE node-a boot\r\n", 19U, 1000U);
   for (;;)
   {
@@ -1604,6 +1778,7 @@ int main(void)
     uint8_t alarm_active;
 
     while (esp_rx_count != 0U) Command_Poll();
+    EspTime_Poll();
     NodeTest_Poll();
     /* A command may start a timed actuator. Read the clock afterwards so a
      * just-written start timestamp can never appear to be in the future. */
@@ -1626,6 +1801,9 @@ int main(void)
     if ((gas_ventilation_active == 0U) && (g_actuator.relay_on != 0U) &&
         ((now - relay_started_at) >= relay_duration_ms))
       Relay_Disable();
+    /* Repaint before the slow telemetry block so a fresh alarm reaches the
+     * panel without waiting for the software I2C reads. */
+    Status_Tick(now);
     if ((test_force_telemetry != 0U) ||
         ((now - last_telemetry) >= TELEMETRY_INTERVAL_MS))
     {
@@ -1655,6 +1833,19 @@ int main(void)
         fan_rpm = Fan1Tach_ReadRpm(tach_now);
         fan2_rpm = Fan2Tach_ReadRpm(tach_now);
       }
+      /* Hand the freshly sampled values to the status screen; the display tick
+       * copies them atomically, so it never triggers a second sensor read. */
+      Status_CaptureEnvironment(&readings[0]);
+      Status_CaptureGas(oxygen_raw, oxygen_online, methane_raw, methane_online,
+                        co_raw, co_online);
+      Status_CaptureFanPower(&fan_power, &status_sensors.fan1_power_online,
+                             &status_sensors.fan1_millivolts,
+                             &status_sensors.fan1_milliamps);
+      Status_CaptureFanPower(&fan2_power, &status_sensors.fan2_power_online,
+                             &status_sensors.fan2_millivolts,
+                             &status_sensors.fan2_milliamps);
+      status_sensors.fan1_rpm = fan_rpm;
+      status_sensors.fan2_rpm = fan2_rpm;
       SendTelemetry(readings, smoke_alarm, flame_alarm, level_detected, oxygen_raw,
                     oxygen_microvolts, oxygen_online, methane_raw,
                     methane_microvolts, methane_online, co_raw,

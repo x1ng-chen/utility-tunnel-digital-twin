@@ -63,7 +63,17 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
 )
 
-# Add sources to executable
+# Add sources to executable.  Node A drives its read-only status screen from
+# SPI3/DMA2 and shares only the network time module with Node B; the two bus
+# adapters are never linked into the same image.
+if(FIRMWARE_VARIANT STREQUAL "node_a")
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735_bus_node_a.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/node_a_status_screen.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/network_time.c"
+    )
+endif()
+
 if(FIRMWARE_VARIANT STREQUAL "node_b")
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/joystick.c"
@@ -82,10 +92,13 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_state.c"
 )
 
-# Optimize display rasterization; Node B uses DMA, Node A retains software SPI.
+# Optimize display rasterization and both DMA bus adapters; only the bench
+# image still rasterizes over software SPI.
 set_source_files_properties(
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735_bus_node_a.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735_bus_node_b.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/node_a_status_screen.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_menu.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_renderer.c"
     PROPERTIES COMPILE_OPTIONS "-O3"

@@ -187,11 +187,27 @@
    NODE_A_INA226_SETTLE_BUDGET_MS)
 #define NODE_A_INA226_TIMEOUT_MS                  10000UL
 
+/* --- SPI3 / secondary display ----------------------------------------------
+ * The read-only status screen is the only SPI3 user.  SPI3 hangs off PCLK1 and
+ * keeps its default (no-remap) pins PB3/PB5, so BR = 0b000 divides 36 MHz by
+ * two: the same 18 MHz the primary screen reaches from PCLK2 / 4.  PB3 is
+ * JTDO, released by the SWJ_NOJTAG setting HAL_MspInit() already applies while
+ * keeping SWD on PA13/PA14. */
+#define NODE_A_DISPLAY_BR_FIELD                       0UL
+#define NODE_A_DISPLAY_SPI_DIVIDER \
+  (1UL << (NODE_A_DISPLAY_BR_FIELD + 1UL))
+#define NODE_A_DISPLAY_SPI_HZ \
+  (NODE_A_PCLK1_HZ / NODE_A_DISPLAY_SPI_DIVIDER)
+#define NODE_A_DISPLAY_SPI_MAX_HZ               18000000UL
+
 /* --- Interrupt priorities --------------------------------------------------
  * USART2 (ESP-01 downlink) must be able to preempt the fan tach EXTI handler so
- * a command burst cannot lose a received byte; the HAL tick stays lowest. */
+ * a command burst cannot lose a received byte.  The display DMA yields to both
+ * - a late frame is a cosmetic cost, a lost tachometer edge is not - and the
+ * HAL tick stays lowest. */
 #define NODE_A_ESP_IRQ_PRIORITY                       1U
 #define NODE_A_TACH_IRQ_PRIORITY                      2U
+#define NODE_A_DISPLAY_IRQ_PRIORITY                   3U
 
 _Static_assert(NODE_A_HSE_HZ == 8000000UL,
                "the CTRL-01 board fits an 8 MHz HSE");
@@ -300,9 +316,18 @@ _Static_assert(NODE_A_INA226_TIMEOUT_MS > NODE_A_INA226_WORST_CASE_MS,
 _Static_assert(NODE_A_SOFT_I2C_DELAY_MS > 0UL,
                "the software I2C delay must advance the deadline");
 
+_Static_assert(NODE_A_DISPLAY_SPI_HZ == 18000000UL,
+               "the secondary display must run at 18 MHz");
+_Static_assert(NODE_A_DISPLAY_SPI_HZ <= NODE_A_DISPLAY_SPI_MAX_HZ,
+               "SPI3 must never clock a 36 MHz PCLK1 faster than /2");
+_Static_assert(NODE_A_DISPLAY_BR_FIELD == 0UL,
+               "18 MHz from a 36 MHz PCLK1 needs BR = 0b000");
+
 _Static_assert(NODE_A_ESP_IRQ_PRIORITY < NODE_A_TACH_IRQ_PRIORITY,
                "USART2 must preempt the tach EXTI handler");
-_Static_assert(NODE_A_TACH_IRQ_PRIORITY < TICK_INT_PRIORITY,
-               "the fan tach handler must preempt the HAL tick");
+_Static_assert(NODE_A_TACH_IRQ_PRIORITY < NODE_A_DISPLAY_IRQ_PRIORITY,
+               "the fan tach handler must preempt the display DMA");
+_Static_assert(NODE_A_DISPLAY_IRQ_PRIORITY < TICK_INT_PRIORITY,
+               "the display DMA must preempt the HAL tick");
 
 #endif

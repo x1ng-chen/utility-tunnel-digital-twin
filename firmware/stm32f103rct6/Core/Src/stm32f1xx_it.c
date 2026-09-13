@@ -22,6 +22,8 @@
 #include "stm32f1xx_it.h"
 #ifdef NODE_B_FIRMWARE
 #include "joystick.h"
+#endif
+#if defined(NODE_B_FIRMWARE) || defined(NODE_A_FIRMWARE)
 #include "st7735_bus.h"
 #endif
 /* Private includes ----------------------------------------------------------*/
@@ -228,6 +230,15 @@ void DMA1_Channel1_IRQHandler(void)
   Joystick_DmaIrqHandler();
 }
 void DMA1_Channel3_IRQHandler(void)
+{
+  St7735Bus_DmaIrqHandler();
+}
+#endif
+
+#ifdef NODE_A_FIRMWARE
+/* CTRL-01 drives its secondary screen from SPI3, whose TX request lives on
+ * DMA2 Channel2.  DMA1 stays with the gas ADC and the WS2812 stream. */
+void DMA2_Channel2_IRQHandler(void)
 {
   St7735Bus_DmaIrqHandler();
 }

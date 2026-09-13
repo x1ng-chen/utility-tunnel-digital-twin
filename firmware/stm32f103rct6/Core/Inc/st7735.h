@@ -7,26 +7,48 @@
 
 #include "stm32f1xx_hal.h"
 
-/* ============ 引脚定义（软件 SPI，按开发板 LCD 排针丝印） ============
+/* ============ 引脚定义（按开发板 LCD 排针丝印） ============
  * 排针（左→右）：GND 3V3 SCL SDA RES DC CS BLK
- * Node B 引脚：  GND 3V3 PA5 PA7 PB6 PB7 PB8 PB9
- * Node A 引脚：  GND 3V3 PB4 PB5 PB6 PB7 PB8 PB9
- */
-#define LCD_CTRL_PORT   GPIOB
-#define LCD_PORT        LCD_CTRL_PORT
+ * Node B 引脚：  GND 3V3 PA5 PA7 PB6 PB7 PB8 PB9（SPI1 + DMA1）
+ * Node A 引脚：  GND 3V3 PB3 PB5 PC4 PC5 PC6 PC7（SPI3 + DMA2）
+ * bench  引脚：  GND 3V3 PB4 PB5 PB6 PB7 PB8 PB9（软件 SPI）
+ *
+ * 两块主控板都走硬件 SPI + DMA，只有 bench 固件保留软件 SPI。
+ * Node A 不能用 PB6/PB7（SHT30 软件 I2C）、PA7（风机2转速）或
+ * PB8/PB9（TIM4 风机 PWM），因此控制线整体落在 GPIOC 上。 */
+#if defined(NODE_A_FIRMWARE) || defined(NODE_B_FIRMWARE)
+#define LCD_BUS_DMA    1
+#endif
+
 #ifdef NODE_B_FIRMWARE
+#define LCD_CTRL_PORT   GPIOB
 #define LCD_SPI_PORT    GPIOA
-#define LCD_SCK_PIN     GPIO_PIN_5
-#define LCD_MOSI_PIN    GPIO_PIN_7
+#define LCD_SCK_PIN     GPIO_PIN_5    /* SPI1_SCK */
+#define LCD_MOSI_PIN    GPIO_PIN_7    /* SPI1_MOSI */
+#define LCD_RES_PIN     GPIO_PIN_6    /* RES */
+#define LCD_DC_PIN      GPIO_PIN_7    /* DC  */
+#define LCD_CS_PIN      GPIO_PIN_8    /* CS  */
+#define LCD_BLK_PIN     GPIO_PIN_9    /* BLK 背光 */
+#elif defined(NODE_A_FIRMWARE)
+#define LCD_CTRL_PORT   GPIOC
+#define LCD_SPI_PORT    GPIOB
+#define LCD_SCK_PIN     GPIO_PIN_3    /* SPI3_SCK  */
+#define LCD_MOSI_PIN    GPIO_PIN_5    /* SPI3_MOSI */
+#define LCD_RES_PIN     GPIO_PIN_4    /* RES */
+#define LCD_DC_PIN      GPIO_PIN_5    /* DC  */
+#define LCD_CS_PIN      GPIO_PIN_6    /* CS  */
+#define LCD_BLK_PIN     GPIO_PIN_7    /* BLK 背光 */
 #else
+#define LCD_CTRL_PORT   GPIOB
 #define LCD_SPI_PORT    GPIOB
 #define LCD_SCK_PIN     GPIO_PIN_4    /* SCL */
 #define LCD_MOSI_PIN    GPIO_PIN_5    /* SDA */
-#endif
-#define LCD_DC_PIN      GPIO_PIN_7    /* DC  */
 #define LCD_RES_PIN     GPIO_PIN_6    /* RES */
+#define LCD_DC_PIN      GPIO_PIN_7    /* DC  */
 #define LCD_CS_PIN      GPIO_PIN_8    /* CS  */
 #define LCD_BLK_PIN     GPIO_PIN_9    /* BLK 背光 */
+#endif
+#define LCD_PORT        LCD_CTRL_PORT
 
 /* 屏幕分辨率（1.44 寸 128x128） */
 #define LCD_WIDTH   128

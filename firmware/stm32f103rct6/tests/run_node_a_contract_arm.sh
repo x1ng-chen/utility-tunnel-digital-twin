@@ -20,4 +20,10 @@ INCLUDES="-ICore/Inc -IDrivers/STM32F1xx_HAL_Driver/Inc
 "$CC" $FLAGS $INCLUDES Core/Src/node_a.c
 # shellcheck disable=SC2086
 "$CC" $FLAGS $INCLUDES Core/Src/stm32f1xx_hal_msp.c
+# The secondary display adapter carries its own peripheral, pin and DMA
+# configuration, so it is compiled with the same strict warning set.
+# shellcheck disable=SC2086
+"$CC" $FLAGS $INCLUDES Core/Src/st7735_bus_node_a.c
+# shellcheck disable=SC2086
+"$CC" $FLAGS $INCLUDES Core/Src/node_a_status_screen.c
 echo "Node A ARM clock/pin contract test: PASS"

@@ -1,14 +1,15 @@
 /**
  * @file    st7735.c
- * @brief   ST7735 IPS LCD 驱动实现（软件 SPI）
+ * @brief   ST7735 IPS LCD 驱动实现
  *
- * 软件 SPI：GPIO 翻转模拟 SCK/MOSI 时序，写命令/数据。
+ * 两块主控板都通过 st7735_bus 的异步 DMA 通道发送（Node B 走 SPI1，
+ * Node A 走 SPI3）；只有 bench 固件仍用 GPIO 翻转模拟 SCK/MOSI。
  * 颜色 RGB565（16 位，先高字节后低字节）。
  */
 #include "st7735.h"
 #include "st7735_font.h"
 #include <stddef.h>
-#ifdef NODE_B_FIRMWARE
+#ifdef LCD_BUS_DMA
 #include "st7735_bus.h"
 static uint8_t line_buffers[2][ST7735_BUS_BUFFER_BYTES];
 #endif
@@ -38,7 +39,7 @@ static inline __attribute__((always_inline)) void gpio_reset(uint16_t pin)
 /* ============ GPIO 初始化 ============ */
 static void ST7735_GPIO_Init(void)
 {
-#ifdef NODE_B_FIRMWARE
+#ifdef LCD_BUS_DMA
     St7735Bus_Init();
 #else
     __HAL_RCC_GPIOB_CLK_ENABLE();
@@ -56,7 +57,7 @@ static void ST7735_GPIO_Init(void)
 }
 
 /* ============ 软件 SPI ============ */
-#ifndef NODE_B_FIRMWARE
+#ifndef LCD_BUS_DMA
 static void spi_write_byte(uint8_t b)
 {
     for (int i = 0; i < 8; i++) {
@@ -72,7 +73,7 @@ static void spi_write_byte(uint8_t b)
 /* ============ 写命令 / 写数据 ============ */
 static void ST7735_Cmd(uint8_t cmd)
 {
-#ifdef NODE_B_FIRMWARE
+#ifdef LCD_BUS_DMA
     if (!frame_failed && !St7735Bus_WriteByte(cmd, 0U)) frame_failed = 1U;
 #else
     gpio_reset(LCD_DC_PIN);   /* DC=0 命令 */
@@ -82,7 +83,7 @@ static void ST7735_Cmd(uint8_t cmd)
 
 static void ST7735_Data(uint8_t data)
 {
-#ifdef NODE_B_FIRMWARE
+#ifdef LCD_BUS_DMA
     if (!frame_failed && !St7735Bus_WriteByte(data, 1U)) frame_failed = 1U;
 #else
     gpio_set(LCD_DC_PIN);     /* DC=1 数据 */
@@ -157,7 +158,7 @@ static uint16_t PixelAt(const PixelSource *source, uint32_t col, uint32_t row)
 static void StreamPixels(const PixelSource *source, uint32_t count)
 {
     uint32_t col = 0U, row = 0U;
-#ifdef NODE_B_FIRMWARE
+#ifdef LCD_BUS_DMA
     uint32_t offset = 0U;
     unsigned buffer = 0U;
     if (frame_failed) return;
@@ -192,7 +193,7 @@ static void StreamPixels(const PixelSource *source, uint32_t count)
 static void DrawSource(const ClipRect *rect, PixelSource *source)
 {
     if (frame_failed) return;
-#ifdef NODE_B_FIRMWARE
+#ifdef LCD_BUS_DMA
     const uint32_t started = St7735Bus_Cycles();
 #endif
     source->source_x = rect->source_x;
@@ -201,7 +202,7 @@ static void DrawSource(const ClipRect *rect, PixelSource *source)
     ST7735_SetWindow((uint16_t)rect->x, (uint16_t)rect->y,
                     (uint16_t)(rect->x + rect->w - 1), (uint16_t)(rect->y + rect->h - 1));
     StreamPixels(source, (uint32_t)rect->w * (uint32_t)rect->h);
-#ifdef NODE_B_FIRMWARE
+#ifdef LCD_BUS_DMA
     if (!frame_failed) St7735Bus_RecordFrame(started);
 #endif
 }
@@ -212,11 +213,11 @@ void ST7735_WritePixels(const uint16_t *pixels, uint32_t count)
     if (!pixels || !count || count > (uint32_t)LCD_WIDTH * LCD_HEIGHT) return;
     source.pixels = pixels;
     source.width = source.stride = count;
-#ifdef NODE_B_FIRMWARE
+#ifdef LCD_BUS_DMA
     const uint32_t started = St7735Bus_Cycles();
 #endif
     StreamPixels(&source, count);
-#ifdef NODE_B_FIRMWARE
+#ifdef LCD_BUS_DMA
     if (!frame_failed) St7735Bus_RecordFrame(started);
 #endif
 }
