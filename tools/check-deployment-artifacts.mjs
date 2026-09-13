@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 
-const requirements = ['.dockerignore', 'deploy/containers/Dockerfile.api', 'deploy/containers/Dockerfile.web', 'deploy/containers/nginx.web.conf', 'deploy/containers/docker-compose.production.yml', 'deploy/containers/README.md', 'deploy/postgres/provision.sql', 'deploy/postgres/backup-django.ps1', 'deploy/postgres/restore-verify-django.ps1'];
+const requirements = ['.dockerignore', 'deploy/containers/Dockerfile.api', 'deploy/containers/Dockerfile.web', 'deploy/containers/nginx.web.conf', 'deploy/containers/docker-compose.production.yml', 'deploy/containers/README.md', 'deploy/postgres/provision.sql', 'deploy/postgres/backup-django.ps1', 'deploy/postgres/restore-verify-django.ps1', 'deploy/start-local.ps1', 'deploy/LOCAL-START.md'];
 const missing = requirements.filter((file) => !existsSync(file));
 if (missing.length) {
   console.error(`Deployment artifact check failed: missing ${missing.join(', ')}`);
@@ -14,6 +14,8 @@ const compose = readFileSync('deploy/containers/docker-compose.production.yml', 
 const grants = readFileSync('deploy/postgres/provision.sql', 'utf8');
 const backup = readFileSync('deploy/postgres/backup-django.ps1', 'utf8');
 const restore = readFileSync('deploy/postgres/restore-verify-django.ps1', 'utf8');
+const localLauncher = readFileSync('deploy/start-local.ps1', 'utf8');
+const localLauncherReadme = readFileSync('deploy/LOCAL-START.md', 'utf8');
 const runbook = readFileSync('docs/deployment-runbook.md', 'utf8');
 const containerReadme = readFileSync('deploy/containers/README.md', 'utf8');
 const combined = `${api}\n${web}\n${nginx}\n${compose}\n${grants}\n${backup}\n${restore}`;
@@ -45,6 +47,10 @@ const checks = [
   ['Database backups use a portable custom format and SHA-256 sidecar', /pg_dump --format=custom --no-owner --no-privileges[\s\S]*Get-FileHash -Algorithm SHA256/],
   ['Database restores require explicit destructive-action confirmation', /if \(-not \$ConfirmRestore\)[\s\S]*Restore is destructive/],
   ['Database restores verify checksums and application tables', /Backup SHA-256 checksum[\s\S]*operations_asset[\s\S]*django_migrations/],
+  ['Local launcher starts the API through the ASGI Daphne executable', /\$daphnePath = Join-Path \$backendPath '[^']*daphne\.exe'[\s\S]*Start-Process -FilePath \$daphnePath[\s\S]*'config\.asgi:application'/, localLauncher],
+  ['Local launcher refuses production settings', /if \(\$env:DJANGO_ENV -eq 'production'\) \{ throw 'This launcher is for local development, not production\.'/ , localLauncher],
+  ['Local launcher does not auto-migrate or seed data', /Pending migrations\. Review and apply them manually before starting\./, localLauncher],
+  ['Local launch guide documents the Daphne ASGI command', /daphne -b 127\.0\.0\.1 -p 8000 config\.asgi:application/, localLauncherReadme],
   ['Production runbook pins PostgreSQL 16', /PostgreSQL 16/, runbook],
   ['Production runbook documents that current GIS storage does not require PostGIS', /不依赖 PostGIS/, runbook],
   ['Production runbook forbids production demo seeding', /生产环境严禁执行 `python manage\.py seed_demo`/, runbook],
