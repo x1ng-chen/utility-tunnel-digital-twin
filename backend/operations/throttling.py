@@ -67,3 +67,14 @@ class PasswordChangeRateThrottle(SimpleRateThrottle):
         if not request.user or not request.user.is_authenticated:
             return None
         return self.cache_format % {'scope': self.scope, 'ident': request.user.pk}
+
+
+class ControllerCommandRateThrottle(SimpleRateThrottle):
+    """Bound confirmation and dispatch requests per signed-in operator."""
+
+    scope = 'controller_command'
+
+    def get_cache_key(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return None
+        return self.cache_format % {'scope': self.scope, 'ident': request.user.pk}

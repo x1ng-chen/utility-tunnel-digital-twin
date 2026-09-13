@@ -13,14 +13,14 @@
 .asset-toolbar input:focus, .asset-toolbar select:focus, .asset-form-grid input:focus, .asset-form-grid select:focus, .asset-form-grid textarea:focus { outline: none; border-color: #2679ff; box-shadow: 0 0 0 3px rgba(38,121,255,.12); }
 .asset-count { display: flex; align-items: center; justify-content: space-between; margin: 18px 2px 8px; font-size: 13px; color: #9cabc0; }
 .asset-count b { min-width: 28px; border-radius: 9px; padding: 4px 8px; text-align: center; color: #2467d8; background: #edf4ff; }
-.asset-directory-item { display: grid; grid-template-columns: 10px 1fr auto; gap: 11px; align-items: center; width: 100%; margin: 5px 0; padding: 12px; border: 1px solid transparent; border-radius: 13px; text-align: left; color: #e8eef8; background: transparent; cursor: pointer; }
+.asset-directory-item { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 11px; align-items: center; box-sizing: border-box; width: 100%; min-width: 0; margin: 5px 0; padding: 12px; border: 1px solid transparent; border-radius: 13px; text-align: left; color: #e8eef8; background: transparent; cursor: pointer; }
 .asset-directory-item:hover { background: rgba(255,255,255,.055); }
 .asset-directory-item.active { border-color: rgba(93,148,255,.5); background: linear-gradient(135deg, rgba(48,105,220,.28), rgba(37,72,140,.14)); box-shadow: 0 8px 24px rgba(10,28,61,.2); }
 .asset-directory-item.inactive { opacity: .58; }
 .asset-directory-item div { min-width: 0; }
-.asset-directory-item b, .asset-directory-item small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asset-directory-item b, .asset-directory-item small { display: block; max-width: 100%; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .asset-directory-item small { margin-top: 3px; color: #9cabc0; }
-.asset-directory-item .mapping-state { width: fit-content; margin-top: 7px; border-radius: 20px; padding: 3px 7px; color: #91a5c2; background: rgba(117,139,172,.12); font-size: 10px; }
+.asset-directory-item .mapping-state { box-sizing: border-box; width: fit-content; max-width: 100%; margin-top: 7px; border-radius: 20px; padding: 3px 7px; color: #91a5c2; background: rgba(117,139,172,.12); font-size: 10px; }
 .asset-directory-item .mapping-state.matched { color: #62dfb3; background: rgba(39,190,137,.12); }.asset-directory-item .mapping-state.missing, .asset-directory-item .mapping-state.invalid, .asset-directory-item .mapping-state.not_in_model { color: #ffc068; background: rgba(235,158,42,.13); }
 .asset-directory-item em { font-size: 11px; font-style: normal; color: #91a0b6; }
 .asset-state-dot { width: 8px; height: 8px; border-radius: 50%; background: #8b95a7; box-shadow: 0 0 0 4px rgba(139,149,167,.12); }

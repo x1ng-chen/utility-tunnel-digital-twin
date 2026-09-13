@@ -30,13 +30,13 @@ from rest_framework.views import APIView
 from .authentication import BearerTokenAuthentication, IngestApiKeyAuthentication
 from .command_dispatch import CommandDispatchError, publish_controller_command
 from .connectivity import count_online_assets, mark_assets_connected, reconcile_connectivity
-from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder, WorkOrderEvent
+from .models import Alert, Asset, AuditLog, ControllerCommandConfirmation, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder, WorkOrderEvent
 from .permissions import AuthenticatedRead, TelemetryPermission
 from .realtime import publish_alert, publish_alert_by_id, publish_asset, publish_telemetry, publish_work_order
 from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, HardwareBindingMutationSerializer, HardwareBindingSerializer, RegistrationRequestSerializer, ReportExportSerializer, SpatialFeatureMutationSerializer, SpatialFeatureSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, TwinModelReleaseSerializer, WorkOrderSerializer, hardware_connectivity
 from .services import actor_name, audit
 from .telemetry_rules import evaluate_threshold
-from .throttling import LoginBurstRateThrottle, LoginRateThrottle, PasswordChangeRateThrottle, PasswordSetupRateThrottle, RegistrationRateThrottle
+from .throttling import ControllerCommandRateThrottle, LoginBurstRateThrottle, LoginRateThrottle, PasswordChangeRateThrottle, PasswordSetupRateThrottle, RegistrationRateThrottle
 
 
 def request_id(request) -> str:
@@ -111,6 +111,21 @@ def is_admin(request) -> bool:
 
 
 CONTROLLER_ACTIONS = {'led_red', 'led_green', 'led_blue', 'led_off', 'relay_on', 'relay_off', 'fan_pwm', 'fan2_pwm'}
+
+
+def controller_command_payload(request):
+    """Validate the action shape identically for confirmation and dispatch."""
+    payload = object_payload(request)
+    action = payload.get('action') if payload else None
+    if action not in CONTROLLER_ACTIONS:
+        return None, None, error_response('invalid_request', 'Only approved controller actions are available.', 400)
+    duty_percent = payload.get('dutyPercent') if payload else None
+    if action in {'fan_pwm', 'fan2_pwm'}:
+        if isinstance(duty_percent, bool) or not isinstance(duty_percent, int) or not 0 <= duty_percent <= 100:
+            return None, None, error_response('invalid_request', 'PWM dutyPercent must be an integer from 0 to 100.', 400)
+    elif duty_percent is not None:
+        return None, None, error_response('invalid_request', 'dutyPercent is only allowed for PWM actions.', 400)
+    return action, duty_percent, None
 
 
 def work_order_code() -> str:
@@ -661,10 +676,43 @@ class AdminUserDetailView(APIView):
         return Response(AdminUserSerializer(user).data)
 
 
-class ControllerCommandView(APIView):
-    """Publish the small, reviewed set of safe demonstration actuator actions."""
+class ControllerCommandConfirmationView(APIView):
+    """Issue a short-lived one-shot approval after an operator confirms intent."""
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ControllerCommandRateThrottle]
+
+    def post(self, request, asset_code):
+        if not can_write(request):
+            return error_response('forbidden', 'Operator permission is required to control equipment.', 403)
+        if asset_code != 'CTRL-01' or not Asset.objects.filter(code=asset_code, is_active=True).exists():
+            return error_response('not_found', 'This controller is not configured for platform commands.', 404)
+        action, duty_percent, error = controller_command_payload(request)
+        if error:
+            return error
+
+        now = timezone.now()
+        # The audit trail retains issuance/dispatch evidence; expired token
+        # hashes carry no operational value and must not grow indefinitely.
+        ControllerCommandConfirmation.objects.filter(expires_at__lt=now).delete()
+        token = token_urlsafe(32)
+        confirmation = ControllerCommandConfirmation.objects.create(
+            token_hash=sha256(token.encode('utf-8')).hexdigest(), user=request.user,
+            asset_code=asset_code, action=action, duty_percent=duty_percent,
+            expires_at=now + timedelta(seconds=settings.CONTROLLER_COMMAND_CONFIRMATION_TTL_SECONDS),
+        )
+        audit(request.user, 'controller.command.confirmation_issued', 'asset', asset_code, {
+            'confirmationId': confirmation.pk, 'action': action, 'dutyPercent': duty_percent,
+            'expiresAt': confirmation.expires_at.isoformat(),
+        }, request_id(request))
+        return Response({'confirmationToken': token, 'expiresAt': confirmation.expires_at}, status=201)
+
+
+class ControllerCommandView(APIView):
+    """Publish a reviewed action only after a fresh one-shot approval."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ControllerCommandRateThrottle]
 
     def post(self, request, asset_code):
         if not can_write(request):
@@ -672,15 +720,27 @@ class ControllerCommandView(APIView):
         if asset_code != 'CTRL-01':
             return error_response('not_found', 'This controller is not configured for platform commands.', 404)
         payload = object_payload(request)
-        action = payload.get('action') if payload else None
-        if action not in CONTROLLER_ACTIONS:
-            return error_response('invalid_request', 'Only approved controller actions are available.', 400)
-        duty_percent = payload.get('dutyPercent') if payload else None
-        if action in {'fan_pwm', 'fan2_pwm'}:
-            if isinstance(duty_percent, bool) or not isinstance(duty_percent, int) or not 0 <= duty_percent <= 100:
-                return error_response('invalid_request', 'PWM dutyPercent must be an integer from 0 to 100.', 400)
+        action, duty_percent, error = controller_command_payload(request)
+        if error:
+            return error
         if not Asset.objects.filter(code=asset_code, is_active=True).exists():
             return error_response('not_found', 'The controller asset is not active.', 404)
+
+        confirmation_token = payload.get('confirmationToken') if payload else None
+        if not isinstance(confirmation_token, str) or not 32 <= len(confirmation_token) <= 200:
+            return error_response('confirmation_required', 'A fresh operator confirmation is required before dispatch.', 409)
+        now = timezone.now()
+        with transaction.atomic():
+            confirmation = ControllerCommandConfirmation.objects.select_for_update().filter(
+                token_hash=sha256(confirmation_token.encode('utf-8')).hexdigest(), user=request.user,
+                asset_code=asset_code, action=action, duty_percent=duty_percent,
+            ).first()
+            if not confirmation or confirmation.consumed_at or confirmation.expires_at <= now:
+                return error_response('confirmation_required', 'The command confirmation is invalid, used, or expired. Confirm again.', 409)
+            # Consume before external I/O. A timeout is an uncertain delivery
+            # result, so reusing the approval could duplicate a physical action.
+            confirmation.consumed_at = now
+            confirmation.save(update_fields=['consumed_at'])
 
         command = {
             'schema': 'ut.command.v1',
@@ -694,14 +754,15 @@ class ControllerCommandView(APIView):
             acknowledgement = publish_controller_command(command)
         except CommandDispatchError as exc:
             audit(request.user, 'controller.command.failed', 'asset', asset_code, {
-                'cmdId': command['cmdId'], 'action': action, 'dutyPercent': duty_percent, 'reason': str(exc),
+                'cmdId': command['cmdId'], 'action': action, 'dutyPercent': duty_percent,
+                'confirmationId': confirmation.pk, 'reason': str(exc),
             }, request_id(request))
             return error_response('command_unavailable', 'The local controller command broker is unavailable.', 503)
 
         outcome = acknowledgement.get('status') if acknowledgement else 'ack_timeout'
         audit(request.user, 'controller.command.sent', 'asset', asset_code, {
             'cmdId': command['cmdId'], 'action': action, 'dutyPercent': duty_percent, 'outcome': outcome,
-            'ackReason': acknowledgement.get('reason') if acknowledgement else '',
+            'ackReason': acknowledgement.get('reason') if acknowledgement else '', 'confirmationId': confirmation.pk,
         }, request_id(request))
         return Response({
             'cmdId': command['cmdId'],

@@ -403,6 +403,43 @@ test('操作反馈在页面上方显示并在三秒后自动关闭', async ({ pa
   await expect(notice).toHaveCount(0, { timeout: 3000 });
 });
 
+test('设备控制必须经二次确认并按一次性凭据顺序下发', async ({ page }) => {
+  let confirmationRequests = 0;
+  let commandRequests = 0;
+  await page.route('**/controllers/CTRL-01/commands/confirmations/', async (route) => {
+    confirmationRequests += 1;
+    expect(route.request().postDataJSON()).toEqual({ action: 'relay_on' });
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({
+      confirmationToken: 'e2e-confirmation-token-which-is-long-enough', expiresAt: new Date(Date.now() + 120000).toISOString(),
+    }) });
+  });
+  await page.route('**/controllers/CTRL-01/commands/', async (route) => {
+    commandRequests += 1;
+    expect(route.request().postDataJSON()).toEqual({ action: 'relay_on', confirmationToken: 'e2e-confirmation-token-which-is-long-enough' });
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({
+      cmdId: 'platform-e2e-command', action: 'relay_on', delivery: 'acknowledged', ack: { status: 'accepted', reason: 'relay_active' },
+    }) });
+  });
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码').fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await page.getByRole('button', { name: '启动风扇（10秒）' }).click();
+  const dialog = page.getByRole('dialog', { name: '确认下发设备命令' });
+  await expect(dialog).toContainText('启动风扇（10 秒）');
+  expect(confirmationRequests).toBe(0);
+  expect(commandRequests).toBe(0);
+  await dialog.getByRole('button', { name: '取消' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(confirmationRequests).toBe(0);
+  await page.getByRole('button', { name: '启动风扇（10秒）' }).click();
+  await page.getByRole('dialog', { name: '确认下发设备命令' }).getByRole('button', { name: '确认并下发' }).click();
+  await expect(page.getByText('设备已确认：relay_active')).toBeVisible();
+  expect(confirmationRequests).toBe(1);
+  expect(commandRequests).toBe(1);
+});
+
 test('运维员可确认告警、生成工单并推进处置流程', async ({ page }) => {
   const consoleErrors = trackConsoleErrors(page);
   await page.goto(webUrl);

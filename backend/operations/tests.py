@@ -19,7 +19,7 @@ from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 from config.settings import parse_origins
-from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder
+from .models import Alert, Asset, AuditLog, ControllerCommandConfirmation, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder
 
 
 class OperationsApiTests(TestCase):
@@ -35,6 +35,14 @@ class OperationsApiTests(TestCase):
 
     def auth(self, user):
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {Token.objects.get_or_create(user=user)[0].key}')
+
+    def controller_confirmation(self, action, duty_percent=None):
+        payload = {'action': action}
+        if duty_percent is not None:
+            payload['dutyPercent'] = duty_percent
+        response = self.client.post('/api/controllers/CTRL-01/commands/confirmations/', payload, format='json')
+        self.assertEqual(response.status_code, 201)
+        return response.json()['confirmationToken']
 
     def test_alert_history_filters_by_device_and_time(self):
         other = Asset.objects.create(code='OTHER', name='其他设备', zone='UT-ZA', asset_type='测点')
@@ -136,7 +144,8 @@ class OperationsApiTests(TestCase):
         }
         self.auth(self.operator)
 
-        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_blue'}, format='json')
+        token = self.controller_confirmation('led_blue')
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_blue', 'confirmationToken': token}, format='json')
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()['delivery'], 'acknowledged')
@@ -155,7 +164,8 @@ class OperationsApiTests(TestCase):
         }
         self.auth(self.operator)
 
-        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'relay_on'}, format='json')
+        token = self.controller_confirmation('relay_on')
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'relay_on', 'confirmationToken': token}, format='json')
 
         self.assertEqual(response.status_code, 201)
         command = publish_command.call_args.args[0]
@@ -170,7 +180,8 @@ class OperationsApiTests(TestCase):
         }
         self.auth(self.operator)
 
-        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'fan_pwm', 'dutyPercent': 60}, format='json')
+        token = self.controller_confirmation('fan_pwm', 60)
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'fan_pwm', 'dutyPercent': 60, 'confirmationToken': token}, format='json')
 
         self.assertEqual(response.status_code, 201)
         command = publish_command.call_args.args[0]
@@ -185,7 +196,8 @@ class OperationsApiTests(TestCase):
         }
         self.auth(self.operator)
 
-        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'fan2_pwm', 'dutyPercent': 30}, format='json')
+        token = self.controller_confirmation('fan2_pwm', 30)
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'fan2_pwm', 'dutyPercent': 30, 'confirmationToken': token}, format='json')
 
         self.assertEqual(response.status_code, 201)
         command = publish_command.call_args.args[0]
@@ -207,6 +219,36 @@ class OperationsApiTests(TestCase):
         response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'fan2_pwm'}, format='json')
 
         self.assertEqual(response.status_code, 400)
+
+    def test_controller_command_rejects_missing_replayed_and_mismatched_confirmation(self):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        self.auth(self.operator)
+        missing = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_blue'}, format='json')
+        self.assertEqual(missing.status_code, 409)
+        self.assertEqual(missing.json()['error'], 'confirmation_required')
+
+        token = self.controller_confirmation('led_blue')
+        mismatched = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_green', 'confirmationToken': token}, format='json')
+        self.assertEqual(mismatched.status_code, 409)
+        with patch('operations.views.publish_controller_command', return_value=None):
+            accepted = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_blue', 'confirmationToken': token}, format='json')
+        self.assertEqual(accepted.status_code, 201)
+        replayed = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_blue', 'confirmationToken': token}, format='json')
+        self.assertEqual(replayed.status_code, 409)
+
+    def test_controller_confirmation_is_bound_to_operator_and_expiry(self):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        self.auth(self.operator)
+        other_user_token = self.controller_confirmation('relay_off')
+        self.auth(self.admin)
+        other_user = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'relay_off', 'confirmationToken': other_user_token}, format='json')
+        self.assertEqual(other_user.status_code, 409)
+
+        self.auth(self.operator)
+        expired_token = self.controller_confirmation('relay_off')
+        ControllerCommandConfirmation.objects.filter(user=self.operator, action='relay_off', consumed_at__isnull=True).update(expires_at=timezone.now() - timedelta(seconds=1))
+        expired = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'relay_off', 'confirmationToken': expired_token}, format='json')
+        self.assertEqual(expired.status_code, 409)
 
     def test_viewer_cannot_send_controller_command(self):
         viewer = User.objects.create_user(username='viewer@example.com', email='viewer@example.com', password='demo-password')

@@ -25,6 +25,22 @@ class Profile(models.Model):
         return self.display_name or self.user.email or self.user.username
 
 
+class ControllerCommandConfirmation(models.Model):
+    """A short-lived, single-use approval bound to one controller command."""
+
+    token_hash = models.CharField(max_length=64, unique=True, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='controller_command_confirmations')
+    asset_code = models.CharField(max_length=40)
+    action = models.CharField(max_length=20)
+    duty_percent = models.PositiveSmallIntegerField(null=True, blank=True)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['expires_at'], name='controller_confirm_expires_idx')]
+
+
 class RegistrationRequest(models.Model):
     """A password-free account application. Approval creates a setup invite."""
 
