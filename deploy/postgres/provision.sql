@@ -73,7 +73,7 @@ GRANT UPDATE (status, assignee_id, completed_at, reviewed_by_id, version, update
   ON operations_workorder TO ut_runtime;
 GRANT UPDATE (warning, alarm, version, updated_at) ON operations_threshold TO ut_runtime;
 GRANT INSERT ON operations_auditlog TO ut_runtime;
-GRANT INSERT (report_type, status, file_name, idempotency_key, content,
+GRANT INSERT (report_type, status, file_name, idempotency_key, filters, content,
   content_sha256, row_count, requested_by_id, created_at, completed_at)
   ON operations_reportexport TO ut_runtime;
 GRANT INSERT (account, display_name, requested_role, setup_token_hash,
