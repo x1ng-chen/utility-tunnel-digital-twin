@@ -6,6 +6,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $backendPath = Join-Path $projectRoot 'backend'
 $frontendPath = Join-Path $projectRoot 'frontend'
 $pythonPath = Join-Path $backendPath '.venv\Scripts\python.exe'
+$daphnePath = Join-Path $backendPath '.venv\Scripts\daphne.exe'
 $vitePath = Join-Path $frontendPath 'node_modules\vite\bin\vite.js'
 $logPath = Join-Path $projectRoot '.runtime'
 $apiProcess = $null
@@ -35,6 +36,7 @@ function Test-Frontend {
 
 if ($env:DJANGO_ENV -eq 'production') { throw 'This launcher is for local development, not production.' }
 if (!(Test-Path -LiteralPath $pythonPath)) { throw 'Missing backend/.venv. Follow README environment setup first.' }
+if (!(Test-Path -LiteralPath $daphnePath)) { throw 'Missing backend/.venv daphne executable. Install the locked backend dependencies first.' }
 if (!(Test-Path -LiteralPath $vitePath)) { throw 'Missing frontend dependencies. Run npm ci in frontend first.' }
 $nodePath = (Get-Command node.exe -ErrorAction Stop).Source
 # Check the effective settings too: production may be configured in backend/.env.
@@ -62,8 +64,8 @@ if (!$backendReady) {
 New-Item -ItemType Directory -Path $logPath -Force | Out-Null
 $runStamp = [Guid]::NewGuid().ToString('N')
 if (!$backendReady) {
-    $apiProcess = Start-Process -FilePath $pythonPath -ArgumentList 'manage.py runserver 127.0.0.1:8000 --noreload' -WorkingDirectory $backendPath -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logPath "$runStamp-api.out.log") -RedirectStandardError (Join-Path $logPath "$runStamp-api.err.log")
-    Write-Output "Started API PID $($apiProcess.Id)"
+    $apiProcess = Start-Process -FilePath $daphnePath -ArgumentList @('-b', '127.0.0.1', '-p', '8000', 'config.asgi:application') -WorkingDirectory $backendPath -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logPath "$runStamp-api.out.log") -RedirectStandardError (Join-Path $logPath "$runStamp-api.err.log")
+    Write-Output "Started ASGI API (Daphne) PID $($apiProcess.Id)"
 }
 if (!$frontendReady) {
     $viteArguments = '"' + $vitePath + '" --host 127.0.0.1 --port 5173 --strictPort'
