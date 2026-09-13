@@ -29,6 +29,9 @@ validate(valid)
 
 # The same board would be rejected if the boot tick were never re-derived.
 invalid_cases = [
+    ("rcc_cr", "0x01030003"),   # PLLRDY clear: the PLL never locked
+    ("rcc_cr", "0x03010003"),   # HSERDY clear: the crystal never settled
+    ("rcc_cr", "0x03020003"),   # HSEON clear: the HSE was never enabled
     ("systick_load", "7999"),
     ("pclk1", "72000000"),
     ("rcc_cfgr", "0x001D800A"),

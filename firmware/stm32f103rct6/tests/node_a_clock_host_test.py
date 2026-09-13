@@ -421,7 +421,33 @@ def check_fan_pwm():
 
 
 def check_tach():
-    """Cover the tach RPM math including counter and tick wrap."""
+    """Cover both tach RPM paths, including real uint32 counter crossings."""
+    pulses_per_rev = value("FAN_TACH_PULSES_PER_REVOLUTION")
+    assert pulses_per_rev == 2
+    overflow = 0xFFFFFFFF
+
+    def delta_of(previous, current):
+        """The uint32_t subtraction the ISR counter and the reader perform."""
+        return (current - previous) & overflow
+
+    def rpm(delta, elapsed_ms):
+        """The firmware expression: (uint64_t)delta * 60000 / (2 * elapsed)."""
+        return (delta * 60000) // (pulses_per_rev * elapsed_ms)
+
+    # Boundary table: a real 32-bit counter crossing must be modelled as a wrap,
+    # not as a plain difference, or a broken implementation still looks safe.
+    boundaries = [
+        (100, 115, 1000, 450),                  # no crossing
+        (0xFFFFFFF0, 0x0000000F, 1000, 930),    # crosses 0xFFFFFFFF: 31 pulses
+        (0xFFFFFFF0, 0x0000000F, 2000, 465),    # same delta over 2 s
+        (0xFFFFFFFF, 0x00000000, 1000, 30),     # saturates then rolls to zero
+        (0x7FFFFFFF, 0x80000000, 1000, 30),     # crosses the signed-int boundary
+        (0xFFFFFFFE, 0x00000001, 1000, 90),     # three pulses across the wrap
+        (0xFFFFFF00, 0x00000064, 1000, 10_680),  # 356 pulses across the wrap
+        (42, 42, 1000, 0),                      # a stationary fan
+        # 200 000 RPM in a 2 s window: the fastest plausible four-wire fan.
+        (0, 200_000 * pulses_per_rev * 2 // 60, 2000, 199_995),
+    ]
     for name, counter in (("Fan1Tach_ReadRpm", "fan1_tach_pulses"),
                           ("Fan2Tach_ReadRpm", "fan2_tach_pulses")):
         body = function(NODE_A, name)
@@ -429,27 +455,41 @@ def check_tach():
         assert "__disable_irq();" in body and "__enable_irq();" in body, (
             f"{name} must latch the 32-bit counter atomically")
         last = counter.replace("pulses", "last_pulses")
-        assert f"delta = pulses - {last};" in body
+        assert f"delta = pulses - {last};" in body, (
+            f"{name} must subtract in uint32 so the counter wrap stays correct")
         assert re.search(r"elapsed_ms = now - fan\d_tach_last_sample_at;", body)
         assert "if ((elapsed_ms == 0U) || (g_actuator.relay_on == 0U)) return 0U;" in body
         assert "((uint64_t)delta * 60000ULL)" in body, (
             f"{name} must widen to 64 bits before multiplying")
         assert "((uint64_t)FAN_TACH_PULSES_PER_REVOLUTION * elapsed_ms)" in body
         assert "(uint32_t)(((uint64_t)delta * 60000ULL)" in body
-    pulses_per_rev = value("FAN_TACH_PULSES_PER_REVOLUTION")
-    assert pulses_per_rev == 2
-
-    def rpm(delta, elapsed_ms):
-        return (delta * 60000) // (pulses_per_rev * elapsed_ms)
-
-    assert rpm(0xFFFFFFFF - 0xFFFFFFF0, 1000) == 450, "counter wrap must give 450 RPM"
-    assert rpm(1, 1000) == 30 and rpm(2, 2000) == 30
-    # A 32-bit delta can only overflow the uint64 product for a physically
-    # impossible pulse rate, so check the widest rate a real four-wire fan can
-    # deliver inside the telemetry window instead.
-    plausible = 200_000 * pulses_per_rev * 2 // 60  # pulses in a 2 s window
-    assert rpm(plausible, 2000) == 199_995, rpm(plausible, 2000)  # 800000/60 * 60000 / 4000
-    assert rpm(plausible, 2000) < 2 ** 32, "a plausible fan window must fit uint32"
+        # The counter and both timestamps must be 32-bit so the subtraction is
+        # the unsigned wrap the table above models.
+        for declaration in (f"static volatile uint32_t {counter};",
+                            f"static uint32_t {last};",
+                            f"static uint32_t {counter.replace('pulses', 'last_sample_at')};"):
+            assert declaration in NODE_A, declaration
+        # Both paths must produce the same, correct RPM across the wrap.
+        for previous, current, elapsed_ms, expected in boundaries:
+            delta = delta_of(previous, current)
+            assert 0 <= delta <= overflow, (name, delta)
+            assert rpm(delta, elapsed_ms) == expected, (name, previous, current)
+    # Both paths must stay identical apart from their own counter, so a fix or a
+    # regression applied to only one fan cannot pass unnoticed.
+    fan1 = function(NODE_A, "Fan1Tach_ReadRpm").replace("fan1", "fanN").replace(
+        "Fan1", "FanN")
+    fan2 = function(NODE_A, "Fan2Tach_ReadRpm").replace("fan2", "fanN").replace(
+        "Fan2", "FanN")
+    assert fan1 == fan2, "the two tach paths must stay identical apart from their counter"
+    assert delta_of(0xFFFFFFF0, 0x0000000F) == 31, (
+        "the wrap must be modelled as a masked uint32 subtraction")
+    assert delta_of(0xFFFFFFF0, 0x0000000F) != 0xFFFFFFF0 - 0x0000000F, (
+        "a plain subtraction would underflow instead of wrapping")
+    assert rpm(delta_of(0xFFFFFFF0, 0x0000000F), 1000) == 930
+    # A real fan window stays far below the uint32 cast; a full-counter delta
+    # would imply a 4.29 GHz pulse rate, which no four-wire fan can produce.
+    assert rpm(0xFFFFFFFF, 1000) > 2 ** 32, (
+        "documented: only an impossible rate would truncate the cast")
 
     # The pulse window must be timestamped after the slow software-I2C reads.
     loop = function(NODE_A, "main")
@@ -457,7 +497,7 @@ def check_tach():
         "the tach window must start after the sensor reads it divides by")
     assert "fan_rpm = Fan1Tach_ReadRpm(tach_now);" in loop
     assert "fan2_rpm = Fan2Tach_ReadRpm(tach_now);" in loop
-    return "tach=450RPM@15pulses wrap-safe"
+    return f"tach=both paths, wrap 31->930RPM, {len(boundaries)} boundaries"
 
 
 def check_ws2812():
@@ -562,11 +602,20 @@ def check_i2c_bounds():
     assert "I2c_DeadlineReached(deadline_ms)" in byte_loop.group(1), (
         "the deadline must be re-checked inside the byte loop, not only after it")
     assert sht30.count("I2c_DeadlineReached(deadline_ms)") >= 2
+    # HAL_Delay(N) waits N + uwTickFreq ticks; the HAL adds that tick itself, so
+    # every modelled delay carries it.  Assert the HAL really does add it.
+    overhead = value("NODE_A_HAL_DELAY_OVERHEAD_TICKS")
+    assert overhead == value("HAL_TICK_FREQ_DEFAULT") == 1
+    assert re.search(r"wait \+= \(uint32_t\)\(uwTickFreq\)", HAL_C), (
+        "HAL_Delay no longer adds an overhead tick; the budgets must be retuned")
+    tick_cost = delay_ms + overhead
+
     fixed = (counts["I2c_Start"] + 3 * per_byte + counts["I2c_Stop"]
              + counts["I2c_Start"] + per_byte + 6 * per_byte + counts["I2c_Stop"])
     assert fixed == value("NODE_A_SHT30_FIXED_DELAY_COUNT") == 190, fixed
-    worst_ms = value("NODE_A_SHT30_MEASUREMENT_DELAY_MS") + 2 * fixed * delay_ms
-    assert worst_ms == value("NODE_A_SHT30_WORST_CASE_MS") == 400, worst_ms
+    worst_ms = (value("NODE_A_SHT30_MEASUREMENT_DELAY_MS") + overhead) + \
+        fixed * tick_cost
+    assert worst_ms == value("NODE_A_SHT30_WORST_CASE_MS") == 401, worst_ms
     timeout = value("NODE_A_SHT30_TIMEOUT_MS")
     assert timeout > worst_ms, (timeout, worst_ms)
     assert "HAL_Delay(NODE_A_SHT30_MEASUREMENT_DELAY_MS)" in sht30
@@ -675,18 +724,25 @@ def check_i2c_bounds():
                    + sample_count * samples.count("I2c_ReadRegister16") * per_read)
 
     # Settles are derived from the HAL_Delay call sites: the fixed ones in
-    # Configure plus the per-sample settle that the loop repeats.
-    def delay_total(body):
-        return sum(value(match.group(1).strip())
-                   for match in re.finditer(r"HAL_Delay\(([^)]+)\)", body))
+    # Configure plus the per-sample settle that the loop repeats, each carrying
+    # the HAL's own overhead tick.
+    def delay_calls(body):
+        return [value(match.group(1).strip())
+                for match in re.finditer(r"HAL_Delay\(([^)]+)\)", body)]
 
     sample_settle = value("INA226_SAMPLE_SETTLE_MS")
-    configure_settles = delay_total(configure)
-    assert configure_settles > sample_settle, (
+    configure_calls = delay_calls(configure)
+    configure_nominal = sum(configure_calls)
+    configure_settles = configure_nominal + len(configure_calls) * overhead
+    assert configure_nominal > sample_settle, (
         "Configure must keep its reset and calibration settles")
     assert "if ((sample + 1U) < INA226_SAMPLE_COUNT)" in samples, (
         "the per-sample settle must stay inside the sample loop")
-    pass_settles = configure_settles + (sample_count - 1) * sample_settle
+    sample_calls = delay_calls(samples)
+    assert len(sample_calls) == 1 and sample_calls[0] == sample_settle
+    pass_settle_calls = len(configure_calls) + (sample_count - 1) * len(sample_calls)
+    pass_settles = (configure_settles
+                    + (sample_count - 1) * (sample_settle + overhead))
 
     recover = function(NODE_A, "I2c_Recover")
     assert "pulse < 9U" in recover, "the recovery sequence must stay nine pulses"
@@ -697,21 +753,26 @@ def check_i2c_bounds():
         "the stuck-0x03ff path must recover exactly twice, as budgeted")
 
     assert value("NODE_A_INA226_PASS_DELAY_COUNT") == pass_delays, pass_delays
-    assert value("NODE_A_INA226_SETTLE_DELAY_MS") == configure_settles, \
-        configure_settles
+    assert value("NODE_A_INA226_SETTLE_DELAY_MS") == configure_nominal, \
+        configure_nominal
+    assert value("NODE_A_INA226_SETTLE_CALL_COUNT") == pass_settle_calls, (
+        pass_settle_calls)
     assert value("NODE_A_INA226_I2C_RECOVER_DELAY_COUNT") == recover_delays, \
         recover_delays
     assert value("NODE_A_INA226_FIXED_DELAY_COUNT") == 2 * pass_delays + \
         2 * recover_delays
-    assert value("NODE_A_INA226_SETTLE_BUDGET_MS") == 2 * pass_settles
-    assert value("NODE_A_INA226_WORST_CASE_MS") == \
-        2 * value("NODE_A_INA226_FIXED_DELAY_COUNT") + 2 * pass_settles
+    assert value("NODE_A_INA226_SETTLE_BUDGET_MS") == 2 * pass_settles, \
+        pass_settles
+    worst_ina226 = (value("NODE_A_INA226_FIXED_DELAY_COUNT") * tick_cost
+                    + value("NODE_A_INA226_SETTLE_BUDGET_MS"))
+    assert value("NODE_A_INA226_WORST_CASE_MS") == worst_ina226 == 8328, worst_ina226
     ina226_timeout = value("NODE_A_INA226_TIMEOUT_MS")
     assert ina226_timeout > value("NODE_A_INA226_WORST_CASE_MS"), (
         ina226_timeout, value("NODE_A_INA226_WORST_CASE_MS"))
     return f"sht30_budget={worst_ms}ms/{timeout}ms ina226_budget=" \
            f"{value('NODE_A_INA226_WORST_CASE_MS')}ms/{ina226_timeout}ms " \
-           f"(delays={fixed}/{pass_delays}+recover{recover_delays})"
+           f"(delays={fixed}/{pass_delays}+recover{recover_delays}; " \
+           f"tick={tick_cost}ms)"
 
 
 def check_actuator_timing():

@@ -42,10 +42,12 @@ def validate_clock(fields):
     tim4_arr = number(fields, "tim4_arr")
     spi2_cr1 = number(fields, "spi2_cr1")
 
-    # HSE and PLL must be enabled and locked, with PLLCLK selected.
+    # HSE and PLL must be enabled, settled and locked, with PLLCLK selected.
     rcc_cr = number(fields, "rcc_cr")
     assert rcc_cr & 0x00010000, "HSE is off"
+    assert rcc_cr & 0x00020000, "HSE never became ready (HSERDY)"
     assert rcc_cr & 0x01000000, "PLL is off"
+    assert rcc_cr & 0x02000000, "PLL never locked (PLLRDY)"
     assert (rcc_cfgr & 0x3) == 0x2 and ((rcc_cfgr >> 2) & 0x3) == 0x2, (
         "SYSCLK is not PLLCLK")
     assert ((rcc_cfgr >> 4) & 0xF) == 0, "AHB prescaler is not /1"

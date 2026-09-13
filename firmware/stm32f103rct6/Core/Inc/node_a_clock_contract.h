@@ -148,21 +148,27 @@
  * before returning.
  *
  * The deadline must stay above the slowest healthy transfer or it would cut
- * working bench reads: HAL_Delay(1) can consume up to two ticks, so the
- * watchdogs below are sized from the fixed delay counts of the worst-case
- * recovery paths rather than from the nominal durations. */
+ * working bench reads, so the watchdogs below are strict upper bounds sized from
+ * the fixed delay counts of the worst-case recovery paths rather than from the
+ * nominal durations.  HAL_Delay(N) waits N + uwTickFreq ticks (the HAL adds one
+ * to guarantee a minimum wait), which is why every modelled HAL_Delay carries
+ * NODE_A_HAL_DELAY_OVERHEAD_TICKS on top of its argument. */
 #define NODE_A_SOFT_I2C_DELAY_MS                      1UL
+#define NODE_A_HAL_DELAY_OVERHEAD_TICKS               1UL
 #define NODE_A_SHT30_MEASUREMENT_DELAY_MS            20UL
 #define NODE_A_SHT30_FIXED_DELAY_COUNT              190UL
 #define NODE_A_SHT30_WORST_CASE_MS \
-  (NODE_A_SHT30_MEASUREMENT_DELAY_MS + \
-   (2UL * NODE_A_SHT30_FIXED_DELAY_COUNT * NODE_A_SOFT_I2C_DELAY_MS))
+  ((NODE_A_SHT30_MEASUREMENT_DELAY_MS + NODE_A_HAL_DELAY_OVERHEAD_TICKS) + \
+   (NODE_A_SHT30_FIXED_DELAY_COUNT * \
+    (NODE_A_SOFT_I2C_DELAY_MS + NODE_A_HAL_DELAY_OVERHEAD_TICKS)))
 #define NODE_A_SHT30_TIMEOUT_MS                     500UL
 /* INA226 worst case: the stuck-0x03ff recovery repeats the configure and sample
  * pass, so the budget counts two passes, each with six register reads (97 fixed
  * delays), three register writes (77 each) and twelve sample reads (97 each),
- * plus two I2c_Recover sequences (21 delays each) and the 3/40 ms settles; every
- * HAL_Delay(1) counts as two ticks. */
+ * plus two I2c_Recover sequences (21 delays each) and the settles.  One pass
+ * makes NODE_A_INA226_SETTLE_CALL_COUNT HAL_Delay calls: three in
+ * Ina226_Configure (reset, configuration, calibration) and two in the sample
+ * loop. */
 #define NODE_A_INA226_SAMPLE_COUNT                    3UL
 #define NODE_A_INA226_PASS_DELAY_COUNT             1977UL
 #define NODE_A_INA226_I2C_RECOVER_DELAY_COUNT        21UL
@@ -170,11 +176,15 @@
   ((2UL * NODE_A_INA226_PASS_DELAY_COUNT) + \
    (2UL * NODE_A_INA226_I2C_RECOVER_DELAY_COUNT))
 #define NODE_A_INA226_SETTLE_DELAY_MS                83UL
+#define NODE_A_INA226_SETTLE_CALL_COUNT               5UL
 #define NODE_A_INA226_SETTLE_BUDGET_MS \
   (2UL * (NODE_A_INA226_SETTLE_DELAY_MS + \
-          ((NODE_A_INA226_SAMPLE_COUNT - 1UL) * 40UL)))
+          ((NODE_A_INA226_SAMPLE_COUNT - 1UL) * 40UL) + \
+          (NODE_A_INA226_SETTLE_CALL_COUNT * NODE_A_HAL_DELAY_OVERHEAD_TICKS)))
 #define NODE_A_INA226_WORST_CASE_MS \
-  ((2UL * NODE_A_INA226_FIXED_DELAY_COUNT) + NODE_A_INA226_SETTLE_BUDGET_MS)
+  ((NODE_A_INA226_FIXED_DELAY_COUNT * \
+    (NODE_A_SOFT_I2C_DELAY_MS + NODE_A_HAL_DELAY_OVERHEAD_TICKS)) + \
+   NODE_A_INA226_SETTLE_BUDGET_MS)
 #define NODE_A_INA226_TIMEOUT_MS                  10000UL
 
 /* --- Interrupt priorities --------------------------------------------------
@@ -273,14 +283,18 @@ _Static_assert(NODE_A_WS2812_ONE_HIGH_NS > NODE_A_WS2812_ZERO_HIGH_NS,
 _Static_assert(NODE_A_WS2812_ZERO_LOW_NS > NODE_A_WS2812_ONE_HIGH_NS,
                "a zero must remain longer low than a one is high");
 
-_Static_assert(NODE_A_SHT30_WORST_CASE_MS == 400UL,
-               "the SHT30 fixed-delay budget must stay 400 ms");
+_Static_assert(NODE_A_SHT30_WORST_CASE_MS == 401UL,
+               "the SHT30 fixed-delay budget must stay 401 ms");
 _Static_assert(NODE_A_SHT30_TIMEOUT_MS > NODE_A_SHT30_WORST_CASE_MS,
                "the SHT30 deadline must never cut a healthy read");
 _Static_assert(NODE_A_SHT30_MEASUREMENT_DELAY_MS < NODE_A_SHT30_TIMEOUT_MS,
                "the conversion delay must fit inside the deadline");
 _Static_assert(NODE_A_INA226_SAMPLE_COUNT == 3UL,
                "the median-of-three filter reads exactly three samples");
+_Static_assert(NODE_A_INA226_SETTLE_BUDGET_MS == 336UL,
+               "the INA226 settle budget must stay 336 ms");
+_Static_assert(NODE_A_INA226_WORST_CASE_MS == 8328UL,
+               "the INA226 worst case must stay 8328 ms");
 _Static_assert(NODE_A_INA226_TIMEOUT_MS > NODE_A_INA226_WORST_CASE_MS,
                "the INA226 deadline must never cut a healthy transfer");
 _Static_assert(NODE_A_SOFT_I2C_DELAY_MS > 0UL,
