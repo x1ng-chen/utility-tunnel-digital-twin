@@ -4,6 +4,7 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <WiFiUdp.h>
+#include <sys/time.h>
 #include <time.h>
 
 #include "mqtt_discovery.h"
@@ -62,6 +63,7 @@ bool discoveryListening = false;
 screen_routing::TelemetryAccumulator screenTelemetry{};
 screen_routing::TimeSyncSchedule timeSyncSchedule{};
 screen_routing::NtpAssociationState ntpAssociation{};
+screen_routing::UartTxQueue uartTxQueue{};
 
 #if defined(BUILD_ROLE_CTRL02)
 constexpr screen_routing::Role kBuildRole = screen_routing::Role::Ctrl02;
@@ -138,12 +140,13 @@ void printStatus() {
 }
 
 uint64_t currentEpochMilliseconds() {
-  const time_t now = time(nullptr);
-  if (now < static_cast<time_t>(screen_protocol::kMinEpochSeconds) ||
-      static_cast<uint64_t>(now) > screen_protocol::kMaxEpochSeconds) {
-    return 0ULL;
-  }
-  return static_cast<uint64_t>(now) * 1000ULL;
+  struct timeval now{};
+  if (gettimeofday(&now, nullptr) != 0) return 0ULL;
+  // EpochMillisecondsFromUnixParts returns 0 when the clock is not yet
+  // synchronized (pre-2024 or post-2099), preserving rejection of future or
+  // expired commands until NTP has produced a valid time.
+  return screen_routing::EpochMillisecondsFromUnixParts(
+      static_cast<int64_t>(now.tv_sec), static_cast<int32_t>(now.tv_usec));
 }
 
 #if !defined(BUILD_ROLE_CTRL02)
@@ -155,9 +158,32 @@ bool isCtrl01CommandTopic(const char* topic) {
 }
 #endif
 
+#if !defined(BUILD_ROLE_CTRL02)
 void writeUartLine(const char* payload, size_t length) {
   Serial.write(reinterpret_cast<const uint8_t*>(payload), length);
   Serial.print("\r\n");
+}
+#endif
+
+// Drain pending UART frames in bounded chunks without blocking. Each frame,
+// including its CRLF terminator, is written whole by UartTxPeek/UartTxConsume,
+// so frames never interleave. The chunk count caps per-loop work regardless of
+// how much room Serial.availableForWrite() reports.
+void pumpUartTxQueue() {
+  constexpr size_t kMaxChunksPerPump = 16U;  // 16 * 64 = 1024 bytes max.
+  for (size_t chunks = 0U;
+       chunks < kMaxChunksPerPump &&
+       screen_routing::UartTxQueuedFrameCount(&uartTxQueue) != 0U;
+       ++chunks) {
+    const int available = Serial.availableForWrite();
+    if (available <= 0) return;
+    const uint8_t* bytes = nullptr;
+    const size_t count = screen_routing::UartTxPeek(
+        &uartTxQueue, static_cast<size_t>(available), &bytes);
+    if (count == 0U || bytes == nullptr) return;
+    Serial.write(bytes, count);
+    screen_routing::UartTxConsume(&uartTxQueue, count);
+  }
 }
 
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
@@ -172,7 +198,14 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
       currentEpochMilliseconds(), &screenTelemetry, &routed);
   if (result == screen_routing::RouteResult::Ok &&
       routed.kind == screen_routing::OutputKind::UartLine) {
-    writeUartLine(routed.payload, routed.payload_length);
+    // Enqueue rather than synchronously writing a full snapshot/ack frame from
+    // the MQTT callback; loop() drains it in bounded chunks.
+    const screen_routing::UartTxFrameKind kind =
+        std::strcmp(topic, "ut/v1/CTRL-01/cmd_ack") == 0
+            ? screen_routing::UartTxFrameKind::Acknowledgement
+            : screen_routing::UartTxFrameKind::Snapshot;
+    screen_routing::EnqueueUartTxLine(&uartTxQueue, kind, routed.payload,
+                                      routed.payload_length);
   } else if (result != screen_routing::RouteResult::WrongTopic) {
     Serial.printf("#ERROR screen_route=%u\r\n",
                   static_cast<unsigned int>(result));
@@ -244,7 +277,8 @@ void handleNetworkTime() {
           epoch > 0 ? static_cast<uint64_t>(epoch) : 0ULL, line,
           sizeof(line), &written);
   if (result == screen_routing::TimeEmitResult::Emitted) {
-    writeUartLine(line, written);
+    screen_routing::EnqueueUartTxLine(
+        &uartTxQueue, screen_routing::UartTxFrameKind::TimeSync, line, written);
   }
 }
 
@@ -409,6 +443,7 @@ void setup() {
   screen_routing::InitTelemetryAccumulator(&screenTelemetry);
   screen_routing::InitTimeSyncSchedule(&timeSyncSchedule);
   screen_routing::InitNtpAssociationState(&ntpAssociation);
+  screen_routing::InitUartTxQueue(&uartTxQueue);
   EEPROM.begin(sizeof(StoredBrokerEndpoint));
   StoredBrokerEndpoint stored{};
   EEPROM.get(0, stored);
@@ -430,6 +465,7 @@ void loop() {
     mqtt.loop();
     flushPendingFrame();
   }
+  pumpUartTxQueue();
   readSerial();
   digitalWrite(kLedPin, mqtt.connected() ? LOW : HIGH);
   delay(1);

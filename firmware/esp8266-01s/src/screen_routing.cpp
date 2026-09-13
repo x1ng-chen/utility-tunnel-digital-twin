@@ -49,8 +49,10 @@ constexpr char kCtrl01CommandAck[] = "ut/v1/CTRL-01/cmd_ack";
 #endif
 
 #if SCREEN_ROUTING_CTRL01
+// `cmd/#` already matches `cmd/menu`, so a separate menu subscription would
+// deliver a single menu command twice and emit two UART commands.
 const RouteTopics kCtrl01Topics = {
-    {kCtrl01CommandWildcard, kCtrl01MenuCommand}, 2U, nullptr};
+    {kCtrl01CommandWildcard, nullptr}, 1U, nullptr};
 #endif
 #if SCREEN_ROUTING_CTRL02
 const RouteTopics kCtrl02Topics = {
@@ -526,8 +528,26 @@ RouteResult updateTelemetry(TelemetryAccumulator* accumulator,
       countKey(payload, end, "readings") != 1U) {
     return RouteResult::InvalidPayload;
   }
-  if (accumulator->initialized && sequence < accumulator->last_sequence) {
-    return RouteResult::Stale;
+  if (accumulator->initialized) {
+    if (sequence == accumulator->last_sequence) {
+      return RouteResult::Stale;  // duplicate delivery (e.g. MQTT redelivery).
+    }
+    if (sequence < accumulator->last_sequence) {
+      const uint64_t silence_ms =
+          now_epoch_ms - accumulator->last_received_at_ms;
+      const bool explicit_reset = accumulator->accept_session_reset;
+      const bool long_silence = silence_ms >= kSequenceResyncSilenceMs;
+      const bool low_restart =
+          sequence <= kSequenceRestartMaximum &&
+          accumulator->last_sequence >= kSequenceRestartMinimumPrevious &&
+          silence_ms >= kSequenceRestartSilenceMs;
+      if (!explicit_reset && !long_silence && !low_restart) {
+        return RouteResult::Stale;  // truly out-of-order packet.
+      }
+      // Legitimate Node A session restart: discard the stale snapshot so the
+      // restart packet seeds a fresh accumulator.
+      InitTelemetryAccumulator(accumulator);
+    }
   }
   const char* readings = valueAfterKey(payload, end, "readings");
   if (readings == nullptr || *readings != '[') return RouteResult::InvalidPayload;
@@ -647,6 +667,7 @@ RouteResult updateTelemetry(TelemetryAccumulator* accumulator,
                  ? AlarmSeverity::Warning
                  : AlarmSeverity::None);
   candidate.last_sequence = sequence;
+  candidate.last_received_at_ms = now_epoch_ms;
   candidate.initialized = true;
 
   const Result build = BuildSnapshot(candidate.snapshot, output,
@@ -671,6 +692,158 @@ const RouteTopics& TopicsForRole(Role role) {
 #endif
 }
 
+uint64_t EpochMillisecondsFromUnixParts(int64_t epoch_seconds,
+                                        int32_t microseconds) {
+  if (epoch_seconds < static_cast<int64_t>(kMinEpochSeconds) ||
+      epoch_seconds > static_cast<int64_t>(kMaxEpochSeconds) ||
+      microseconds < 0 || microseconds >= 1000000) {
+    return 0ULL;
+  }
+  const uint64_t seconds_ms = static_cast<uint64_t>(epoch_seconds) * 1000ULL;
+  const uint64_t fraction_ms = static_cast<uint64_t>(microseconds) / 1000U;
+  return seconds_ms + fraction_ms;
+}
+
+void InitUartTxQueue(UartTxQueue* queue) {
+  if (queue == nullptr) return;
+  std::memset(queue, 0, sizeof(*queue));
+}
+
+namespace {
+
+size_t uartQueueIndex(const UartTxQueue& queue, size_t logical_index) {
+  return (static_cast<size_t>(queue.head) + logical_index) %
+         kUartTxQueueCapacity;
+}
+
+void assignUartFrame(UartTxFrame* frame, UartTxFrameKind kind,
+                     const char* payload, size_t length) {
+  std::memcpy(frame->bytes, payload, length);
+  frame->bytes[length] = '\r';
+  frame->bytes[length + 1U] = '\n';
+  frame->length = static_cast<uint16_t>(length + kUartTxTerminatorLength);
+  frame->offset = 0U;
+  frame->kind = kind;
+}
+
+int findReplaceableFrame(const UartTxQueue& queue, UartTxFrameKind kind) {
+  for (size_t remaining = static_cast<size_t>(queue.count); remaining != 0U;
+       --remaining) {
+    const size_t logical_index = remaining - 1U;
+    const UartTxFrame& frame =
+        queue.frames[uartQueueIndex(queue, logical_index)];
+    if (frame.kind == kind && frame.offset == 0U) {
+      return static_cast<int>(logical_index);
+    }
+  }
+  return -1;
+}
+
+int findEvictableFrame(const UartTxQueue& queue) {
+  constexpr UartTxFrameKind priorities[] = {
+      UartTxFrameKind::Snapshot,
+      UartTxFrameKind::Diagnostic,
+      UartTxFrameKind::TimeSync,
+  };
+  for (UartTxFrameKind kind : priorities) {
+    const int index = findReplaceableFrame(queue, kind);
+    if (index >= 0) return index;
+  }
+  return -1;
+}
+
+void removeUartFrame(UartTxQueue* queue, size_t logical_index) {
+  for (size_t index = logical_index;
+       index + 1U < static_cast<size_t>(queue->count); ++index) {
+    queue->frames[uartQueueIndex(*queue, index)] =
+        queue->frames[uartQueueIndex(*queue, index + 1U)];
+  }
+  const size_t tail =
+      uartQueueIndex(*queue, static_cast<size_t>(queue->count) - 1U);
+  std::memset(&queue->frames[tail], 0, sizeof(queue->frames[tail]));
+  --queue->count;
+}
+
+}  // namespace
+
+UartTxEnqueueResult EnqueueUartTxLine(UartTxQueue* queue,
+                                     UartTxFrameKind kind,
+                                     const char* payload, size_t length) {
+  if (queue == nullptr || payload == nullptr) return UartTxEnqueueResult::Invalid;
+  if (length > kUartLineLimit) return UartTxEnqueueResult::TooLarge;
+  if (std::memchr(payload, '\r', length) != nullptr ||
+      std::memchr(payload, '\n', length) != nullptr) {
+    return UartTxEnqueueResult::Invalid;
+  }
+
+  if (kind == UartTxFrameKind::Snapshot ||
+      kind == UartTxFrameKind::TimeSync) {
+    const int replaceable = findReplaceableFrame(*queue, kind);
+    if (replaceable >= 0) {
+      UartTxFrame& frame = queue->frames[uartQueueIndex(
+          *queue, static_cast<size_t>(replaceable))];
+      assignUartFrame(&frame, kind, payload, length);
+      ++queue->coalesced_frames;
+      return UartTxEnqueueResult::Coalesced;
+    }
+  }
+
+  if (static_cast<size_t>(queue->count) == kUartTxQueueCapacity) {
+    if (kind == UartTxFrameKind::Acknowledgement) {
+      const int evictable = findEvictableFrame(*queue);
+      if (evictable >= 0) {
+        removeUartFrame(queue, static_cast<size_t>(evictable));
+        ++queue->dropped_frames;
+      }
+    }
+    if (static_cast<size_t>(queue->count) == kUartTxQueueCapacity) {
+      ++queue->dropped_frames;
+      return UartTxEnqueueResult::Full;
+    }
+  }
+
+  const size_t tail = uartQueueIndex(*queue, queue->count);
+  assignUartFrame(&queue->frames[tail], kind, payload, length);
+  ++queue->count;
+  return UartTxEnqueueResult::Queued;
+}
+
+size_t UartTxQueuedFrameCount(const UartTxQueue* queue) {
+  return queue == nullptr ? 0U : static_cast<size_t>(queue->count);
+}
+
+size_t UartTxPeek(const UartTxQueue* queue, size_t available_bytes,
+                  const uint8_t** bytes) {
+  if (bytes != nullptr) *bytes = nullptr;
+  if (queue == nullptr || bytes == nullptr || queue->count == 0U ||
+      available_bytes == 0U) {
+    return 0U;
+  }
+  const UartTxFrame& frame = queue->frames[queue->head];
+  const size_t remaining =
+      static_cast<size_t>(frame.length) - static_cast<size_t>(frame.offset);
+  size_t count = remaining < available_bytes ? remaining : available_bytes;
+  if (count > kUartTxChunkLimit) count = kUartTxChunkLimit;
+  *bytes = frame.bytes + frame.offset;
+  return count;
+}
+
+void UartTxConsume(UartTxQueue* queue, size_t consumed_bytes) {
+  if (queue == nullptr || queue->count == 0U || consumed_bytes == 0U) return;
+  UartTxFrame& frame = queue->frames[queue->head];
+  const size_t remaining =
+      static_cast<size_t>(frame.length) - static_cast<size_t>(frame.offset);
+  const size_t consumed =
+      consumed_bytes < remaining ? consumed_bytes : remaining;
+  frame.offset = static_cast<uint16_t>(static_cast<size_t>(frame.offset) +
+                                       consumed);
+  if (frame.offset != frame.length) return;
+  std::memset(&frame, 0, sizeof(frame));
+  queue->head = static_cast<uint8_t>(
+      (static_cast<size_t>(queue->head) + 1U) % kUartTxQueueCapacity);
+  --queue->count;
+}
+
 void InitTelemetryAccumulator(TelemetryAccumulator* accumulator) {
   if (accumulator == nullptr) return;
   std::memset(accumulator, 0, sizeof(*accumulator));
@@ -686,6 +859,11 @@ void InitTelemetryAccumulator(TelemetryAccumulator* accumulator) {
   accumulator->snapshot.fans[0].quality = Quality::Unknown;
   accumulator->snapshot.fans[1].quality = Quality::Unknown;
   accumulator->snapshot.actuators.led_brightness_percent = 100U;
+}
+
+void BeginTelemetrySession(TelemetryAccumulator* accumulator) {
+  if (accumulator == nullptr) return;
+  accumulator->accept_session_reset = true;
 }
 
 RouteResult NormalizeMenuCommand(const char* payload, size_t length,

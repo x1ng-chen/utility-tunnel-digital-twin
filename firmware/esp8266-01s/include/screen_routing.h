@@ -10,6 +10,13 @@ namespace screen_routing {
 constexpr size_t kTopicCapacity = 48U;
 constexpr size_t kTransportPayloadLimit = 1024U;
 constexpr uint32_t kTimeSyncPeriodMs = 600000U;
+constexpr uint64_t kSequenceRestartSilenceMs = 5000ULL;
+constexpr uint64_t kSequenceResyncSilenceMs = 30000ULL;
+constexpr uint32_t kSequenceRestartMaximum = 4U;
+constexpr uint32_t kSequenceRestartMinimumPrevious = 16U;
+constexpr size_t kUartTxQueueCapacity = 4U;
+constexpr size_t kUartTxChunkLimit = 64U;
+constexpr size_t kUartTxTerminatorLength = 2U;
 
 enum class Role : uint8_t {
   Ctrl01 = 0,
@@ -50,7 +57,39 @@ struct RouteOutput {
 struct TelemetryAccumulator {
   screen_protocol::ScreenSnapshot snapshot;
   uint32_t last_sequence;
+  uint64_t last_received_at_ms;
   bool initialized;
+  bool accept_session_reset;
+};
+
+enum class UartTxFrameKind : uint8_t {
+  Snapshot = 0,
+  Acknowledgement,
+  TimeSync,
+  Diagnostic,
+};
+
+enum class UartTxEnqueueResult : uint8_t {
+  Queued = 0,
+  Coalesced,
+  Full,
+  TooLarge,
+  Invalid,
+};
+
+struct UartTxFrame {
+  uint8_t bytes[screen_protocol::kUartLineLimit + kUartTxTerminatorLength];
+  uint16_t length;
+  uint16_t offset;
+  UartTxFrameKind kind;
+};
+
+struct UartTxQueue {
+  UartTxFrame frames[kUartTxQueueCapacity];
+  uint8_t head;
+  uint8_t count;
+  uint32_t dropped_frames;
+  uint32_t coalesced_frames;
 };
 
 struct TimeSyncSchedule {
@@ -73,6 +112,24 @@ enum class TimeEmitResult : uint8_t {
 const RouteTopics& TopicsForRole(Role role);
 
 void InitTelemetryAccumulator(TelemetryAccumulator* accumulator);
+
+void BeginTelemetrySession(TelemetryAccumulator* accumulator);
+
+uint64_t EpochMillisecondsFromUnixParts(int64_t epoch_seconds,
+                                        int32_t microseconds);
+
+void InitUartTxQueue(UartTxQueue* queue);
+
+UartTxEnqueueResult EnqueueUartTxLine(UartTxQueue* queue,
+                                     UartTxFrameKind kind,
+                                     const char* payload, size_t length);
+
+size_t UartTxQueuedFrameCount(const UartTxQueue* queue);
+
+size_t UartTxPeek(const UartTxQueue* queue, size_t available_bytes,
+                  const uint8_t** bytes);
+
+void UartTxConsume(UartTxQueue* queue, size_t consumed_bytes);
 
 RouteResult NormalizeMenuCommand(const char* payload, size_t length,
                                  uint64_t now_epoch_ms, char* output,
