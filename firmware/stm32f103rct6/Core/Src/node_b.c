@@ -4,6 +4,9 @@
 #include "st7735_bus.h"
 #include "ui_renderer.h"
 #include "ui_state.h"
+#include "screen_snapshot.h"
+#include "network_time.h"
+#include "menu_command.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -11,7 +14,7 @@
 #define NODE_ID "node-b"
 #define ESP_HEARTBEAT_INTERVAL_MS 2000U
 #define LED_INTERVAL_MS 500U
-#define ESP_RX_LINE_SIZE 256U
+#define ESP_RX_LINE_SIZE SCREEN_SNAPSHOT_LINE_SIZE
 #define UI_TEST_LINE_SIZE 48U
 #define DISPLAY_TEST_DIRTY_COUNT 1000U
 #define DISPLAY_TEST_COLOR_COUNT 3U
@@ -32,6 +35,9 @@ static volatile uint16_t esp_rx_length;
 static volatile uint8_t esp_rx_line_ready;
 static UiState ui_state;
 static UiSnapshot ui_snapshot;
+static ScreenSnapshotContext snapshot_context;
+static UiClock ui_clock;
+static MenuCommandContext command_context;
 static char ui_test_line[UI_TEST_LINE_SIZE];
 static uint8_t ui_test_length;
 static uint16_t display_test_completed;
@@ -45,6 +51,7 @@ static void MX_USART2_UART_Init(void);
 static void SendHeartbeat(void);
 static void PollEsp(uint32_t *received_count, PeerReading *peer);
 static void PollUiTest(void);
+static void HandleUiEffect(UiEffect effect, uint32_t now_ms);
 
 static uint8_t DecodePeerReading(const char *line, PeerReading *peer)
 {
@@ -84,6 +91,7 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
 {
   char line[ESP_RX_LINE_SIZE];
   uint16_t length;
+  uint32_t now_ms;
 
   if (esp_rx_line_ready == 0U) return;
   __disable_irq();
@@ -97,22 +105,53 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
 
   if (length > 0U)
   {
+    now_ms = HAL_GetTick();
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)"#ESP ", 5U, 1000U);
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)line, length, 1000U);
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)"\r\n", 2U, 1000U);
-    if ((strncmp(line, "MQTT|", 5U) == 0) && DecodePeerReading(line, peer))
+    if (strstr(line, "\"schema\":\"ut.screen.snapshot.v1\"") != NULL)
+    {
+      if (ScreenSnapshot_Apply(&snapshot_context, line, length, now_ms, &ui_snapshot))
+      {
+        ++*received_count;
+        UiState_SetControlAvailability(&ui_state, ui_snapshot.connectivity.mqtt_online,
+                                       ui_state.control.safety_locked);
+      }
+    }
+    else if (strstr(line, "\"schema\":\"ut.time.sync.v1\"") != NULL)
+    {
+      (void)NetworkTime_Update(&ui_clock, line, length, now_ms);
+    }
+    else if (strstr(line, "\"schema\":\"ut.command.ack.v1\"") != NULL)
+    {
+      MenuCommandAck acknowledgement;
+      if (MenuCommand_ParseAck(line, length, &acknowledgement) &&
+          MenuCommand_AcceptAck(&command_context, &acknowledgement))
+      {
+        (void)UiState_HandleAcknowledgement(&ui_state, acknowledgement.command_id,
+                                            acknowledgement.accepted);
+      }
+    }
+    else if ((strncmp(line, "MQTT|", 5U) == 0) && DecodePeerReading(line, peer))
     {
       ++*received_count;
       ui_snapshot.temperature_centi_c.value = peer->temperature_centi_c;
-      ui_snapshot.temperature_centi_c.sampled_ms = HAL_GetTick();
+      ui_snapshot.temperature_centi_c.sampled_ms = now_ms;
       ui_snapshot.temperature_centi_c.quality = UI_QUALITY_VALID;
       ui_snapshot.humidity_centi_rh.value = peer->humidity_centi_rh;
-      ui_snapshot.humidity_centi_rh.sampled_ms = HAL_GetTick();
+      ui_snapshot.humidity_centi_rh.sampled_ms = now_ms;
       ui_snapshot.humidity_centi_rh.quality = UI_QUALITY_VALID;
       ui_snapshot.connectivity.node_a_online = peer->online;
       ui_snapshot.connectivity.mqtt_online = 1U;
-      ui_snapshot.connectivity.updated_ms = HAL_GetTick();
+      ui_snapshot.connectivity.updated_ms = now_ms;
       UiState_SetControlAvailability(&ui_state, 1U, ui_state.control.safety_locked);
+    }
+    else if ((strcmp(line, "MQTT|UP") == 0) || (strcmp(line, "MQTT|DOWN") == 0))
+    {
+      const uint8_t online = (strcmp(line, "MQTT|UP") == 0) ? 1U : 0U;
+      ui_snapshot.connectivity.mqtt_online = online;
+      ui_snapshot.connectivity.updated_ms = now_ms;
+      UiState_SetControlAvailability(&ui_state, online, ui_state.control.safety_locked);
     }
   }
 }
@@ -218,6 +257,9 @@ static void UiTest_HandleLine(void)
   } else if (strcmp(ui_test_line, "#UITEST RESET") == 0) {
     UiState_Init(&ui_state);
     (void)memset(&ui_snapshot, 0, sizeof(ui_snapshot));
+    ScreenSnapshot_Init(&snapshot_context);
+    NetworkTime_Init(&ui_clock);
+    MenuCommand_Init(&command_context, HAL_GetTick());
     UiRenderer_Init();
   } else if (sscanf(ui_test_line, "#UITEST GOTO %15s", page_name) == 1) {
     if (!UiRenderer_PageFromName(page_name, &target_page)) return;
@@ -258,7 +300,10 @@ static void UiTest_HandleLine(void)
     return;
   }
 
-  if (event != UI_EVT_NONE) (void)UiState_Handle(&ui_state, event, HAL_GetTick());
+  if (event != UI_EVT_NONE) {
+    const UiEffect effect = UiState_Handle(&ui_state, event, HAL_GetTick());
+    HandleUiEffect(effect, HAL_GetTick());
+  }
   UiTest_Report();
 }
 
@@ -275,6 +320,24 @@ static void PollUiTest(void)
       if (ui_test_length < (UI_TEST_LINE_SIZE - 1U)) ui_test_line[ui_test_length++] = (char)character;
       else ui_test_length = 0U;
     }
+  }
+}
+
+static void HandleUiEffect(UiEffect effect, uint32_t now_ms)
+{
+  char line[MENU_COMMAND_LINE_SIZE];
+  size_t length = 0U;
+  uint64_t epoch_ms;
+  if (effect.kind != UI_EFFECT_SEND_COMMAND) return;
+  epoch_ms = NetworkTime_EpochMilliseconds(&ui_clock, now_ms);
+  if ((epoch_ms == 0ULL) || !MenuCommand_Begin(&command_context, (UiAction)effect.action,
+                                                effect.value, epoch_ms, line, sizeof(line), &length)) return;
+  if (HAL_UART_Transmit(&huart2, (uint8_t *)line, (uint16_t)length, 1000U) == HAL_OK) {
+    if (!UiState_CommandDispatched(&ui_state, command_context.active_command_id)) {
+      command_context.pending = 0U;
+    }
+  } else {
+    command_context.pending = 0U;
   }
 }
 
@@ -307,6 +370,9 @@ int main(void)
   MX_USART2_UART_Init();
   UiState_Init(&ui_state);
   (void)memset(&ui_snapshot, 0, sizeof(ui_snapshot));
+  ScreenSnapshot_Init(&snapshot_context);
+  NetworkTime_Init(&ui_clock);
+  MenuCommand_Init(&command_context, HAL_GetTick());
   Joystick_Init();
   if (HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U) != HAL_OK) Error_Handler();
   ST7735_Init();
@@ -319,9 +385,16 @@ int main(void)
     const uint32_t now = HAL_GetTick();
     UiInputEvent event;
     event = Joystick_Poll(now);
-    if (event != UI_EVT_NONE) (void)UiState_Handle(&ui_state, event, now);
+    if (event != UI_EVT_NONE) {
+      const UiEffect effect = UiState_Handle(&ui_state, event, now);
+      HandleUiEffect(effect, now);
+    }
     PollUiTest();
     PollEsp(&received_count, &peer);
+    ScreenSnapshot_Tick(&snapshot_context, now, &ui_snapshot);
+    NetworkTime_ToSnapshot(&ui_clock, now, &ui_snapshot.clock);
+    UiState_SetControlAvailability(&ui_state, ui_snapshot.connectivity.mqtt_online,
+                                   ui_state.control.safety_locked);
     UiState_Tick(&ui_state, now);
     /* One diagnostic transfer per loop keeps input and ESP polling scheduled. */
     if (display_test_active) {

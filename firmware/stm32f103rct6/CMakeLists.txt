@@ -68,6 +68,9 @@ if(FIRMWARE_VARIANT STREQUAL "node_b")
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/joystick.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735_bus_node_b.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/screen_snapshot.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/network_time.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/menu_command.c"
     )
 endif()
 

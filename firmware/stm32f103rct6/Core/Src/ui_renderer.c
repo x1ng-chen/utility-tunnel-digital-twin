@@ -202,6 +202,19 @@ static uint8_t clock_is_valid(const UiSnapshot *snapshot)
          (snapshot->clock.hour < 24U) && (snapshot->clock.minute < 60U);
 }
 
+static uint8_t stale_reading_count(const UiSnapshot *snapshot)
+{
+  const UiReading *readings = &snapshot->temperature_centi_c;
+  uint8_t count = 0U;
+  size_t index;
+  for (index = 0U; index < 8U; ++index) {
+    if (readings[index].quality == UI_QUALITY_STALE) ++count;
+  }
+  if (snapshot->fans[0].quality == UI_QUALITY_STALE) ++count;
+  if (snapshot->fans[1].quality == UI_QUALITY_STALE) ++count;
+  return count;
+}
+
 static void format_clock(const UiSnapshot *snapshot, char output[6])
 {
   output[0] = '-'; output[1] = '-'; output[2] = ':';
@@ -221,7 +234,7 @@ size_t UiRenderer_DescribeLayout(const UiState *state, const UiSnapshot *snapsho
   if ((state == NULL) || (snapshot == NULL) || (output == NULL) || (output_size == 0U)) return 0U;
   format_clock(snapshot, time_field);
   length = snprintf(output, output_size,
-                    "#UI page=%s row=%u dialog=%s command=%s title=%s rows=%u selected=%s time=%s mqtt=%s option=%s value=%u editing=%u warning=%u critical=%u",
+                    "#UI page=%s row=%u dialog=%s command=%s title=%s rows=%u selected=%s time=%s mqtt=%s option=%s value=%u editing=%u warning=%u critical=%u stale=%u",
                     ((uint8_t)state->page < (uint8_t)(sizeof(page_names) / sizeof(page_names[0])))
                       ? page_names[state->page] : "unknown",
                     (unsigned int)state->selected_row, dialog_name(state->dialog),
@@ -233,7 +246,8 @@ size_t UiRenderer_DescribeLayout(const UiState *state, const UiSnapshot *snapsho
                     selected_option_name(state), (unsigned int)selected_option_value(state),
                     (unsigned int)state->option_editing,
                     (unsigned int)popcount8(warning_only_sources(snapshot)),
-                    (unsigned int)popcount8(critical_sources(snapshot)));
+                    (unsigned int)popcount8(critical_sources(snapshot)),
+                    (unsigned int)stale_reading_count(snapshot));
   if (length < 0) {
     output[0] = '\0';
     return 0U;

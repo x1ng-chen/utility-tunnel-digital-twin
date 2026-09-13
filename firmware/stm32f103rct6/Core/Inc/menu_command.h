@@ -1,0 +1,34 @@
+#ifndef MENU_COMMAND_H
+#define MENU_COMMAND_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#include "ui_state.h"
+
+#define MENU_COMMAND_ID_SIZE 40U
+#define MENU_COMMAND_LINE_SIZE 256U
+#define MENU_COMMAND_TTL_MS 10000U
+#define MENU_COMMAND_TIMEOUT_MS 5000U
+
+typedef struct {
+  char active_command_id[MENU_COMMAND_ID_SIZE];
+  uint32_t boot_id;
+  uint32_t sequence;
+  uint8_t pending;
+} MenuCommandContext;
+
+typedef struct {
+  char command_id[MENU_COMMAND_ID_SIZE];
+  uint8_t accepted;
+  int32_t applied_value;
+} MenuCommandAck;
+
+void MenuCommand_Init(MenuCommandContext *context, uint32_t boot_id);
+uint8_t MenuCommand_Begin(MenuCommandContext *context, UiAction action, uint8_t value,
+                          uint64_t created_at_ms, char *line, size_t line_capacity,
+                          size_t *written);
+uint8_t MenuCommand_ParseAck(const char *line, size_t length, MenuCommandAck *ack);
+uint8_t MenuCommand_AcceptAck(MenuCommandContext *context, const MenuCommandAck *ack);
+
+#endif /* MENU_COMMAND_H */
