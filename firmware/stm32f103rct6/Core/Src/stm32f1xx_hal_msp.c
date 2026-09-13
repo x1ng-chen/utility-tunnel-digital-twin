@@ -101,12 +101,13 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
 
     __HAL_RCC_GPIOC_CLK_ENABLE();
     /**ADC1 GPIO Configuration
-    PC1     ------> ADC1_IN11 (Node A AO-02 oxygen trial)
+    PC1     ------> ADC1_IN11 (Node A MQ CO analog output)
     PC2     ------> ADC1_IN12 (Node A MQ methane analog output)
+    PC3     ------> ADC1_IN13 (Node A AO-02 oxygen trial)
     PC0     ------> ADC1_IN10 (legacy bench image)
     */
 #ifdef NODE_A_FIRMWARE
-    GPIO_InitStruct.Pin = GPIO_PIN_1 | GPIO_PIN_2;
+    GPIO_InitStruct.Pin = GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3;
 #elif defined(NODE_B_FIRMWARE)
     GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1;
 #else
@@ -157,7 +158,7 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* hadc)
 
     /**ADC1 GPIO Configuration */
 #ifdef NODE_A_FIRMWARE
-    HAL_GPIO_DeInit(GPIOC, GPIO_PIN_1 | GPIO_PIN_2);
+    HAL_GPIO_DeInit(GPIOC, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
 #elif defined(NODE_B_FIRMWARE)
     HAL_GPIO_DeInit(GPIOC, GPIO_PIN_0 | GPIO_PIN_1);
     HAL_NVIC_DisableIRQ(DMA1_Channel1_IRQn);

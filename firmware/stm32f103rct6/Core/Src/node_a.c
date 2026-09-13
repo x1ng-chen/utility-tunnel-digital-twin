@@ -1,4 +1,7 @@
 #include "main.h"
+#include "node_a_command.h"
+#include "node_a_ina226.h"
+#include "node_a_sensor_map.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -6,6 +9,8 @@
 #define NODE_ID                         "node-a"
 #define TELEMETRY_INTERVAL_MS           2000U
 #define LED_INTERVAL_MS                  500U
+#define LED_ANIM_INTERVAL_MS              50U
+#define BUZZER_TEST_DURATION_MS         1000U
 #define SHT30_COMMAND_HIGH_REPEATABLE    0x2400U
 #define SHT30_ADDRESS_44                 0x44U
 #define SHT30_ADDRESS_45                 0x45U
@@ -21,20 +26,20 @@
 #define INA226_MANUFACTURER_ID         0x5449U
 #define INA226_DIE_ID_MASK             0xFFF0U
 #define INA226_DIE_ID                  0x2260U
-#define INA226_SHUNT_MILLIOHMS            100L
-#define INA226_CURRENT_LSB_MICROAMPS        10L
 #define INA226_CALIBRATION_VALUE          5120U
-#define INA226_POWER_LSB_MICROWATTS        250L
 #define INA226_CONFIG_AVG16_CONTINUOUS   0x4527U
+#define INA226_CONFIG_RESET              0x8000U
 #define INA226_SAMPLE_COUNT                   3U
 #define INA226_SAMPLE_SETTLE_MS              40U
 #define INA226_MAX_BUS_MICROVOLTS       18000000UL
+#define INA226_FAULT_NONE                       0U
+#define INA226_FAULT_COMMUNICATION              1U
+#define INA226_FAULT_IDENTITY                   2U
+#define INA226_FAULT_CONFIGURATION              3U
+#define INA226_FAULT_STUCK_03FF                 4U
 #define ESP_RX_LINE_SIZE                  384U
 #define ESP_RX_QUEUE_CAPACITY             4U
-#define COMMAND_ID_MAX                    40U
-#define COMMAND_ACTION_MAX                24U
-#define COMMAND_DEDUP_CAPACITY            8U
-#define COMMAND_TTL_MAX_MS                30000U
+#define NODE_TEST_LINE_SIZE               384U
 #define BUZZER_Pin                         GPIO_PIN_0
 #define BUZZER_GPIO_Port                   GPIOB
 #define RELAY_Pin                          GPIO_PIN_1
@@ -66,7 +71,6 @@
 #define LEVEL_SAMPLE_INTERVAL_MS            50U
 #define LEVEL_STABLE_SAMPLE_COUNT            4U
 #define GAS_ADC_SAMPLE_COUNT                 64U
-#define ADC_REFERENCE_UV                3300000UL
 
 typedef struct
 {
@@ -74,6 +78,11 @@ typedef struct
   uint16_t scl_pin;
   uint16_t sda_pin;
 } SoftI2cBus;
+
+typedef struct
+{
+  uint8_t configured;
+} Ina226State;
 
 typedef struct
 {
@@ -86,6 +95,10 @@ typedef struct
 {
   uint8_t online;
   uint8_t plausible;
+  uint8_t fault;
+  uint16_t manufacturer_id;
+  uint16_t die_id;
+  uint16_t config_raw;
   uint16_t bus_raw;
   int16_t shunt_raw;
   int16_t current_raw;
@@ -96,8 +109,18 @@ typedef struct
   int32_t power_microwatts;
 } Ina226Reading;
 
+typedef struct
+{
+  uint16_t samples[3];
+  uint16_t filtered;
+  uint8_t count;
+  uint8_t next;
+} GasAdcFilter;
+
 static const SoftI2cBus i2c1_bus = {GPIOB, GPIO_PIN_6, GPIO_PIN_7};
 static const SoftI2cBus i2c2_bus = {GPIOB, GPIO_PIN_10, GPIO_PIN_11};
+static Ina226State ina226_fan1_state;
+static Ina226State ina226_fan2_state;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart1;
 ADC_HandleTypeDef hadc1;
@@ -113,22 +136,19 @@ static volatile uint8_t esp_rx_count;
 static volatile uint32_t esp_rx_bytes;
 static volatile uint32_t esp_rx_completed_lines;
 static volatile uint32_t esp_rx_dropped_lines;
-static char recent_command_ids[COMMAND_DEDUP_CAPACITY][COMMAND_ID_MAX + 1U];
-static uint8_t recent_command_next;
-static uint8_t buzzer_active;
-static uint32_t buzzer_started_at;
-static uint32_t buzzer_duration_ms;
-static uint8_t relay_active;
+static NodeACommandDedup command_dedup;
+static NodeAActuatorState g_actuator = { 100U, 100U, 0U, 0U, 0U,
+                                         NODE_A_LED_OFF, 100U };
 static uint32_t relay_started_at;
 static uint32_t relay_duration_ms;
+static uint32_t buzzer_started_at;
+static uint32_t buzzer_duration_ms;
 static volatile uint32_t fan1_tach_pulses;
 static uint32_t fan1_tach_last_pulses;
 static uint32_t fan1_tach_last_sample_at;
-static uint8_t fan1_pwm_percent = 100U;
 static volatile uint32_t fan2_tach_pulses;
 static uint32_t fan2_tach_last_pulses;
 static uint32_t fan2_tach_last_sample_at;
-static uint8_t fan2_pwm_percent = 100U;
 static uint8_t smoke_alarm;
 static uint8_t smoke_active_samples;
 static uint32_t smoke_last_sample_at;
@@ -140,7 +160,25 @@ static uint8_t level_detected;
 static uint8_t level_candidate;
 static uint8_t level_candidate_samples;
 static uint32_t level_last_sample_at;
+static uint8_t co_warning;
+static uint8_t co_alarm;
+static uint8_t methane_warning;
+static uint8_t methane_alarm;
+static uint8_t oxygen_warning;
+static uint8_t oxygen_alarm;
+static uint8_t gas_warning;
+static uint8_t gas_alarm;
+static uint8_t gas_ventilation_active;
+static uint8_t gas_ventilation_cooling;
+static uint32_t gas_ventilation_clear_started_at;
 static uint8_t ws2812_encoded[WS2812_PIXEL_COUNT * 15U];
+static char node_test_line[NODE_TEST_LINE_SIZE];
+static uint16_t node_test_length;
+static uint8_t test_safety_smoke;
+static uint8_t test_safety_flame;
+static uint8_t test_safety_gas;
+static uint8_t test_safety_vent;
+static volatile uint8_t test_force_telemetry;
 
 void SystemClock_Config(void);
 void Error_Handler(void);
@@ -149,17 +187,33 @@ static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_ADC1_Init(void);
 static uint8_t GasAdc_ReadRaw(uint32_t channel, uint16_t *raw);
+static uint16_t GasAdcFilter_Update(GasAdcFilter *filter, uint16_t sample);
+static void GasAlarm_Update(uint16_t oxygen_raw, uint8_t oxygen_online,
+                            uint16_t methane_raw, uint8_t methane_online,
+                            uint16_t co_raw, uint8_t co_online);
+static void GasVentilation_Update(uint32_t now);
 static uint8_t Sht30_Read(const SoftI2cBus *bus, uint8_t address, Sht30Reading *reading);
-static uint8_t Ina226_Read(const SoftI2cBus *bus, Ina226Reading *reading);
+static uint8_t Ina226_Read(const SoftI2cBus *bus, Ina226State *state,
+                           Ina226Reading *reading);
 static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected,
                           uint8_t flame_detected,
                           uint8_t level_is_detected, uint16_t oxygen_raw,
                           uint32_t oxygen_microvolts, uint8_t oxygen_online,
                           uint16_t methane_raw, uint32_t methane_microvolts,
-                          uint8_t methane_online, const Ina226Reading *fan1_power,
+                          uint8_t methane_online, uint16_t co_raw,
+                          uint32_t co_microvolts, uint8_t co_online,
+                          const Ina226Reading *fan1_power,
                           uint32_t fan1_rpm, const Ina226Reading *fan2_power,
                           uint32_t fan2_rpm);
 static void Command_Poll(void);
+static void Command_ProcessPayload(const char *payload, uint32_t received_at);
+static void Command_SendAck(const char *command_id, const char *status,
+                            const char *reason, uint32_t applied_value);
+static void NodeTest_Poll(void);
+static void Safety_Snapshot(NodeASafetyState *safety);
+static void CommitActuators(const NodeACommand *command, uint32_t now,
+                            const NodeAActuatorState *before);
+static void Led_Render(uint32_t now);
 static void Buzzer_Silence(void);
 static void Buzzer_Start(uint32_t duration_ms);
 static void Relay_Disable(void);
@@ -169,7 +223,6 @@ static void Flame_Poll(uint32_t now);
 static void Level_Poll(uint32_t now);
 static void MX_WS2812_SPI_Init(void);
 static void Ws2812_Show(uint8_t red, uint8_t green, uint8_t blue);
-static void Ws2812_Off(void);
 static uint32_t Fan1Tach_ReadRpm(uint32_t now);
 static uint32_t Fan2Tach_ReadRpm(uint32_t now);
 static void MX_FAN1_PWM_Init(void);
@@ -194,7 +247,7 @@ static uint32_t Fan1Tach_ReadRpm(uint32_t now)
   delta = pulses - fan1_tach_last_pulses;
   fan1_tach_last_pulses = pulses;
   fan1_tach_last_sample_at = now;
-  if ((elapsed_ms == 0U) || (relay_active == 0U)) return 0U;
+  if ((elapsed_ms == 0U) || (g_actuator.relay_on == 0U)) return 0U;
   return (uint32_t)(((uint64_t)delta * 60000ULL) /
                     ((uint64_t)FAN_TACH_PULSES_PER_REVOLUTION * elapsed_ms));
 }
@@ -211,7 +264,7 @@ static uint32_t Fan2Tach_ReadRpm(uint32_t now)
   delta = pulses - fan2_tach_last_pulses;
   fan2_tach_last_pulses = pulses;
   fan2_tach_last_sample_at = now;
-  if ((elapsed_ms == 0U) || (relay_active == 0U)) return 0U;
+  if ((elapsed_ms == 0U) || (g_actuator.relay_on == 0U)) return 0U;
   return (uint32_t)(((uint64_t)delta * 60000ULL) /
                     ((uint64_t)FAN_TACH_PULSES_PER_REVOLUTION * elapsed_ms));
 }
@@ -224,7 +277,7 @@ static void Fan1Pwm_SetPercent(uint8_t percent)
 {
   uint32_t transistor_on_counts;
   if (percent > 100U) percent = 100U;
-  fan1_pwm_percent = percent;
+  g_actuator.fan1_pwm_percent = percent;
   transistor_on_counts = ((uint32_t)(100U - percent) *
                           (FAN_PWM_TIMER_PERIOD + 1U) + 50U) / 100U;
   TIM4->CCR3 = transistor_on_counts;
@@ -234,7 +287,7 @@ static void Fan2Pwm_SetPercent(uint8_t percent)
 {
   uint32_t transistor_on_counts;
   if (percent > 100U) percent = 100U;
-  fan2_pwm_percent = percent;
+  g_actuator.fan2_pwm_percent = percent;
   transistor_on_counts = ((uint32_t)(100U - percent) *
                           (FAN_PWM_TIMER_PERIOD + 1U) + 50U) / 100U;
   TIM4->CCR4 = transistor_on_counts;
@@ -281,6 +334,17 @@ static void I2c_Stop(const SoftI2cBus *bus)
 {
   I2c_Sda(bus, GPIO_PIN_RESET); I2c_Delay(); I2c_Scl(bus, GPIO_PIN_SET);
   I2c_Delay(); I2c_Sda(bus, GPIO_PIN_SET); I2c_Delay();
+}
+static void I2c_Recover(const SoftI2cBus *bus)
+{
+  uint8_t pulse;
+  I2c_Sda(bus, GPIO_PIN_SET);
+  for (pulse = 0U; pulse < 9U; ++pulse)
+  {
+    I2c_Scl(bus, GPIO_PIN_RESET); I2c_Delay();
+    I2c_Scl(bus, GPIO_PIN_SET); I2c_Delay();
+  }
+  I2c_Stop(bus);
 }
 static uint8_t I2c_WriteByte(const SoftI2cBus *bus, uint8_t value)
 {
@@ -409,51 +473,93 @@ static uint8_t Sht30_Read(const SoftI2cBus *bus, uint8_t address, Sht30Reading *
   reading->online = 1U;
   return 1U;
 }
-static uint8_t Ina226_Read(const SoftI2cBus *bus, Ina226Reading *reading)
+static uint8_t Ina226_Configure(const SoftI2cBus *bus, Ina226State *state,
+                                Ina226Reading *reading, uint8_t reset_first)
 {
-  static uint8_t configured;
-  uint16_t manufacturer_id;
-  uint16_t die_id;
   uint16_t config;
   uint16_t calibration;
+  if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_MANUFACTURER_ID,
+                          &reading->manufacturer_id) ||
+      !I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_DIE_ID,
+                          &reading->die_id))
+  {
+    reading->fault = INA226_FAULT_COMMUNICATION;
+    return 0U;
+  }
+  if ((reading->manufacturer_id != INA226_MANUFACTURER_ID) ||
+      ((reading->die_id & INA226_DIE_ID_MASK) != INA226_DIE_ID))
+  {
+    reading->fault = INA226_FAULT_IDENTITY;
+    return 0U;
+  }
+  reading->online = 1U;
+  if (reset_first != 0U)
+  {
+    if (!I2c_WriteRegister16(bus, INA226_ADDRESS, INA226_REG_CONFIG,
+                            INA226_CONFIG_RESET))
+    {
+      reading->fault = INA226_FAULT_COMMUNICATION;
+      return 0U;
+    }
+    HAL_Delay(3U);
+    state->configured = 0U;
+  }
+  if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CONFIG, &config))
+  {
+    reading->fault = INA226_FAULT_COMMUNICATION;
+    return 0U;
+  }
+  if ((state->configured == 0U) || (config != INA226_CONFIG_AVG16_CONTINUOUS))
+  {
+    if (!I2c_WriteRegister16(bus, INA226_ADDRESS, INA226_REG_CONFIG,
+                            INA226_CONFIG_AVG16_CONTINUOUS))
+    {
+      reading->fault = INA226_FAULT_CONFIGURATION;
+      return 0U;
+    }
+    HAL_Delay(INA226_SAMPLE_SETTLE_MS);
+  }
+  if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CONFIG,
+                          &reading->config_raw) ||
+      (reading->config_raw != INA226_CONFIG_AVG16_CONTINUOUS))
+  {
+    reading->fault = INA226_FAULT_CONFIGURATION;
+    state->configured = 0U;
+    return 0U;
+  }
+  if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CALIBRATION,
+                          &calibration))
+  {
+    reading->fault = INA226_FAULT_COMMUNICATION;
+    return 0U;
+  }
+  reading->calibration_raw = calibration;
+  if (calibration != INA226_CALIBRATION_VALUE)
+  {
+    /* CURRENT and POWER depend on calibration, but BUS and SHUNT do not.
+     * Try to restore the calibrated datapath for diagnostics; a module that
+     * refuses this write is still usable through the physical R100 shunt. */
+    if (I2c_WriteRegister16(bus, INA226_ADDRESS, INA226_REG_CALIBRATION,
+                           INA226_CALIBRATION_VALUE))
+    {
+      HAL_Delay(INA226_SAMPLE_SETTLE_MS);
+      if (I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CALIBRATION,
+                            &calibration))
+        reading->calibration_raw = calibration;
+    }
+  }
+  state->configured = 1U;
+  return 1U;
+}
+
+static uint8_t Ina226_ReadSamples(const SoftI2cBus *bus,
+                                  Ina226Reading *reading)
+{
   uint16_t bus_samples[INA226_SAMPLE_COUNT];
   int16_t shunt_samples[INA226_SAMPLE_COUNT];
   int16_t current_samples[INA226_SAMPLE_COUNT];
   uint16_t power_samples[INA226_SAMPLE_COUNT];
-  uint16_t bus_raw;
-  int16_t shunt_raw;
   uint8_t sample;
-  if (reading == NULL) return 0U;
-  memset(reading, 0, sizeof(*reading));
-  if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_MANUFACTURER_ID, &manufacturer_id) ||
-      !I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_DIE_ID, &die_id) ||
-      (manufacturer_id != INA226_MANUFACTURER_ID) ||
-      ((die_id & INA226_DIE_ID_MASK) != INA226_DIE_ID))
-    return 0U;
-
-  /* Do not rely on clone/reset defaults. AVG=16 and continuous shunt+bus
-   * conversion reject relay-contact spikes while retaining a quick update. */
-  if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CONFIG, &config))
-    return 0U;
-  if ((configured == 0U) || (config != INA226_CONFIG_AVG16_CONTINUOUS))
-  {
-    if (!I2c_WriteRegister16(bus, INA226_ADDRESS, INA226_REG_CONFIG,
-                            INA226_CONFIG_AVG16_CONTINUOUS))
-      return 0U;
-    configured = 1U;
-    HAL_Delay(INA226_SAMPLE_SETTLE_MS);
-  }
-  if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CALIBRATION,
-                          &calibration))
-    return 0U;
-  if (calibration != INA226_CALIBRATION_VALUE)
-  {
-    if (!I2c_WriteRegister16(bus, INA226_ADDRESS, INA226_REG_CALIBRATION,
-                            INA226_CALIBRATION_VALUE))
-      return 0U;
-    calibration = INA226_CALIBRATION_VALUE;
-    HAL_Delay(INA226_SAMPLE_SETTLE_MS);
-  }
   for (sample = 0U; sample < INA226_SAMPLE_COUNT; ++sample)
   {
     uint16_t shunt_word;
@@ -466,62 +572,98 @@ static uint8_t Ina226_Read(const SoftI2cBus *bus, Ina226Reading *reading)
                            &current_word) ||
         !I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_POWER,
                            &power_samples[sample]))
+    {
+      reading->fault = INA226_FAULT_COMMUNICATION;
       return 0U;
+    }
     shunt_samples[sample] = (int16_t)shunt_word;
     current_samples[sample] = (int16_t)current_word;
     if ((sample + 1U) < INA226_SAMPLE_COUNT)
       HAL_Delay(INA226_SAMPLE_SETTLE_MS);
   }
-  bus_raw = Median3U16(bus_samples[0], bus_samples[1], bus_samples[2]);
-  shunt_raw = Median3S16(shunt_samples[0], shunt_samples[1], shunt_samples[2]);
-  reading->bus_raw = bus_raw;
-  reading->shunt_raw = shunt_raw;
+  reading->bus_raw = Median3U16(bus_samples[0], bus_samples[1], bus_samples[2]);
+  reading->shunt_raw = Median3S16(shunt_samples[0], shunt_samples[1],
+                                  shunt_samples[2]);
   reading->current_raw = Median3S16(current_samples[0], current_samples[1],
                                     current_samples[2]);
   reading->power_raw = Median3U16(power_samples[0], power_samples[1],
                                   power_samples[2]);
-  reading->calibration_raw = calibration;
-  reading->bus_microvolts = (uint32_t)bus_raw * 1250UL;
-  /* Use the INA226 calibrated CURRENT/POWER datapath.  On the installed
-   * boards the direct SHUNT register can remain at 0x03ff even though the
-   * calibrated registers track the real load.  The fan branch is physically
-   * opened by the relay, so report zero rather than stale converter data while
-   * the relay is off. */
-  if (relay_active != 0U)
-  {
-    reading->current_microamps =
-        (int32_t)reading->current_raw * INA226_CURRENT_LSB_MICROAMPS;
-    reading->power_microwatts =
-        (int32_t)reading->power_raw * INA226_POWER_LSB_MICROWATTS;
-  }
-  else
-  {
-    reading->current_microamps = 0L;
-    reading->power_microwatts = 0L;
-  }
-  reading->online = 1U;
-  reading->plausible = (reading->bus_microvolts <= INA226_MAX_BUS_MICROVOLTS) ? 1U : 0U;
   return 1U;
 }
+
+static uint8_t Ina226_Read(const SoftI2cBus *bus, Ina226State *state,
+                           Ina226Reading *reading)
+{
+  if ((bus == NULL) || (state == NULL) || (reading == NULL)) return 0U;
+  memset(reading, 0, sizeof(*reading));
+  reading->fault = INA226_FAULT_COMMUNICATION;
+  if (state->configured == 0U) I2c_Recover(bus);
+  if (!Ina226_Configure(bus, state, reading, 0U) ||
+      !Ina226_ReadSamples(bus, reading))
+  {
+    state->configured = 0U;
+    return 0U;
+  }
+
+  if (NODE_A_INA226_SAMPLE_STUCK_03FF(reading->bus_raw, reading->shunt_raw,
+                                      reading->current_raw, reading->power_raw))
+  {
+    /* Recover once from the exact converter-lock signature seen in the field.
+     * If reset does not clear it, retain the raw diagnostics but never publish
+     * those words as trustworthy voltage/current/power values. */
+    state->configured = 0U;
+    I2c_Recover(bus);
+    if (!Ina226_Configure(bus, state, reading, 1U) ||
+        !Ina226_ReadSamples(bus, reading))
+      return 0U;
+    if (NODE_A_INA226_SAMPLE_STUCK_03FF(reading->bus_raw, reading->shunt_raw,
+                                        reading->current_raw, reading->power_raw))
+    {
+      reading->fault = INA226_FAULT_STUCK_03FF;
+      reading->plausible = 0U;
+      return 0U;
+    }
+  }
+
+  reading->bus_microvolts = NODE_A_INA226_BUS_RAW_TO_UV(reading->bus_raw);
+  if (g_actuator.relay_on != 0U)
+  {
+    reading->current_microamps =
+        NODE_A_INA226_SHUNT_RAW_TO_UA(reading->shunt_raw);
+    reading->power_microwatts =
+        NODE_A_INA226_POWER_UW(reading->bus_microvolts,
+                               reading->current_microamps);
+  }
+  reading->fault = INA226_FAULT_NONE;
+  reading->plausible =
+      (reading->bus_microvolts <= INA226_MAX_BUS_MICROVOLTS) ? 1U : 0U;
+  return reading->plausible;
+}
+
 static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected,
                           uint8_t flame_detected, uint8_t level_is_detected,
                           uint16_t oxygen_raw,
                           uint32_t oxygen_microvolts, uint8_t oxygen_online,
                           uint16_t methane_raw, uint32_t methane_microvolts,
-                          uint8_t methane_online, const Ina226Reading *fan1_power,
+                          uint8_t methane_online, uint16_t co_raw,
+                          uint32_t co_microvolts, uint8_t co_online,
+                          const Ina226Reading *fan1_power,
                           uint32_t fan1_rpm, const Ina226Reading *fan2_power,
                           uint32_t fan2_rpm)
 {
   char message[896];
-  char methane_message[384];
-  char fan_message[768];
-  char fan2_message[640];
+  char methane_message[640];
+  char gas_status_message[768];
+  char fan_message[1280];
+  char fan2_message[1088];
+  char actuator_message[512];
   static uint32_t sequence = 0U;
   int32_t temperature_abs;
   const char *temperature_sign;
   const char *quality;
   const char *oxygen_quality;
   const char *methane_quality;
+  const char *co_quality;
   const char *fan_quality;
   const char *current_sign;
   const char *power_sign;
@@ -545,6 +687,7 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
    * readings explicitly suspect until a precision ADC/front end is fitted. */
   oxygen_quality = oxygen_online ? "suspect" : "missing";
   methane_quality = methane_online ? "suspect" : "missing";
+  co_quality = co_online ? "suspect" : "missing";
   fan_quality = ((fan1_power != NULL) && fan1_power->online) ?
                 (fan1_power->plausible ? "good" : "suspect") : "missing";
   current_abs = ((fan1_power != NULL) ? fan1_power->current_microamps : 0L);
@@ -581,15 +724,38 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
     "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
     "{\"assetCode\":\"GAS-01\",\"metric\":\"flame.rawLevel\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
     "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"}]}\r\n",
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"}]}\r\n",
     (unsigned long)sequence, (unsigned int)flame_raw_level,
     (unsigned int)methane_raw, methane_quality,
     (unsigned long)(methane_microvolts / 1000UL),
-    (unsigned long)(methane_microvolts % 1000UL), methane_quality);
+    (unsigned long)(methane_microvolts % 1000UL), methane_quality,
+    (unsigned int)co_raw, co_quality,
+    (unsigned long)(co_microvolts / 1000UL),
+    (unsigned long)(co_microvolts % 1000UL), co_quality);
   if (length > 0 && length < (int)sizeof(methane_message))
   {
     (void)HAL_UART_Transmit(&huart2, (uint8_t *)methane_message, (uint16_t)length, 1000U);
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)methane_message, (uint16_t)length, 1000U);
+  }
+  while (esp_rx_count != 0U) Command_Poll();
+  length = snprintf(gas_status_message, sizeof(gas_status_message),
+    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"}]}\r\n",
+    (unsigned long)sequence,
+    (unsigned int)oxygen_warning, (unsigned int)oxygen_alarm,
+    (unsigned int)methane_warning, (unsigned int)methane_alarm,
+    (unsigned int)co_warning, (unsigned int)co_alarm);
+  if (length > 0 && length < (int)sizeof(gas_status_message))
+  {
+    (void)HAL_UART_Transmit(&huart2, (uint8_t *)gas_status_message, (uint16_t)length, 1000U);
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)gas_status_message, (uint16_t)length, 1000U);
   }
   while (esp_rx_count != 0U) Command_Poll();
   length = snprintf(fan_message, sizeof(fan_message),
@@ -597,16 +763,24 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
     "{\"assetCode\":\"FAN-01\",\"metric\":\"supply.voltage\",\"value\":%lu.%03lu,\"unit\":\"V\",\"quality\":\"%s\"},"
     "{\"assetCode\":\"FAN-01\",\"metric\":\"motor.current\",\"value\":%s%ld.%03ld,\"unit\":\"mA\",\"quality\":\"%s\"},"
     "{\"assetCode\":\"FAN-01\",\"metric\":\"power\",\"value\":%s%ld.%03ld,\"unit\":\"W\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"FAN-01\",\"metric\":\"rotational.speed\",\"value\":%lu,\"unit\":\"rpm\",\"quality\":\"good\"}],"
+    "{\"assetCode\":\"FAN-01\",\"metric\":\"rotational.speed\",\"value\":%lu,\"unit\":\"rpm\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"FAN-01\",\"metric\":\"target.dutyPercent\",\"value\":%u,\"unit\":\"percent\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"FAN-01\",\"metric\":\"relay\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"FAN-01\",\"metric\":\"control.autoVentilation\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"FAN-01\",\"metric\":\"control.cooldown\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"}],"
     "\"diag\":{\"uart2RxBytes\":%lu,\"uart2Lines\":%lu,\"uart2Drops\":%lu,"
     "\"inaBusRaw\":%u,\"inaShuntRaw\":%d,\"inaCurrentRaw\":%d,"
-    "\"inaPowerRaw\":%u,\"inaCalibration\":%u,\"relayActive\":%u,\"pwmPercent\":%u}}\r\n",
+    "\"inaPowerRaw\":%u,\"inaCalibration\":%u,\"inaManufacturer\":%u,"
+    "\"inaDieId\":%u,\"inaConfig\":%u,\"inaFault\":%u,"
+    "\"relayActive\":%u,\"pwmPercent\":%u}}\r\n",
     (unsigned long)sequence,
     (unsigned long)((fan1_power != NULL) ? fan1_power->bus_microvolts / 1000000UL : 0UL),
     (unsigned long)((fan1_power != NULL) ? (fan1_power->bus_microvolts % 1000000UL) / 1000UL : 0UL), fan_quality,
     current_sign, (long)(current_abs / 1000L), (long)(current_abs % 1000L), fan_quality,
     power_sign, (long)(power_abs / 1000000L), (long)((power_abs % 1000000L) / 1000L), fan_quality,
-    (unsigned long)fan1_rpm,
+    (unsigned long)fan1_rpm, (unsigned int)g_actuator.fan1_pwm_percent,
+    (unsigned int)g_actuator.relay_on, (unsigned int)gas_ventilation_active,
+    (unsigned int)gas_ventilation_cooling,
     (unsigned long)esp_rx_bytes, (unsigned long)esp_rx_completed_lines,
     (unsigned long)esp_rx_dropped_lines,
     (unsigned int)((fan1_power != NULL) ? fan1_power->bus_raw : 0U),
@@ -614,7 +788,11 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
     (int)((fan1_power != NULL) ? fan1_power->current_raw : 0),
     (unsigned int)((fan1_power != NULL) ? fan1_power->power_raw : 0U),
     (unsigned int)((fan1_power != NULL) ? fan1_power->calibration_raw : 0U),
-    (unsigned int)relay_active, (unsigned int)fan1_pwm_percent);
+    (unsigned int)((fan1_power != NULL) ? fan1_power->manufacturer_id : 0U),
+    (unsigned int)((fan1_power != NULL) ? fan1_power->die_id : 0U),
+    (unsigned int)((fan1_power != NULL) ? fan1_power->config_raw : 0U),
+    (unsigned int)((fan1_power != NULL) ? fan1_power->fault : INA226_FAULT_COMMUNICATION),
+    (unsigned int)g_actuator.relay_on, (unsigned int)g_actuator.fan1_pwm_percent);
   if (length > 0 && length < (int)sizeof(fan_message))
   {
     (void)HAL_UART_Transmit(&huart2, (uint8_t *)fan_message, (uint16_t)length, 1000U);
@@ -635,119 +813,53 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
     "{\"assetCode\":\"FAN-02\",\"metric\":\"supply.voltage\",\"value\":%lu.%03lu,\"unit\":\"V\",\"quality\":\"%s\"},"
     "{\"assetCode\":\"FAN-02\",\"metric\":\"motor.current\",\"value\":%s%ld.%03ld,\"unit\":\"mA\",\"quality\":\"%s\"},"
     "{\"assetCode\":\"FAN-02\",\"metric\":\"power\",\"value\":%s%ld.%03ld,\"unit\":\"W\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"FAN-02\",\"metric\":\"rotational.speed\",\"value\":%lu,\"unit\":\"rpm\",\"quality\":\"good\"}],"
+    "{\"assetCode\":\"FAN-02\",\"metric\":\"rotational.speed\",\"value\":%lu,\"unit\":\"rpm\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"FAN-02\",\"metric\":\"target.dutyPercent\",\"value\":%u,\"unit\":\"percent\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"FAN-02\",\"metric\":\"relay\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"FAN-02\",\"metric\":\"control.autoVentilation\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"FAN-02\",\"metric\":\"control.cooldown\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"}],"
     "\"diag\":{\"inaBusRaw\":%u,\"inaCurrentRaw\":%d,\"inaPowerRaw\":%u,"
-    "\"inaCalibration\":%u,\"relayActive\":%u,\"pwmPercent\":%u}}\r\n",
+    "\"inaCalibration\":%u,\"inaManufacturer\":%u,\"inaDieId\":%u,"
+    "\"inaConfig\":%u,\"inaFault\":%u,\"relayActive\":%u,"
+    "\"pwmPercent\":%u}}\r\n",
     (unsigned long)sequence,
     (unsigned long)((fan2_power != NULL) ? fan2_power->bus_microvolts / 1000000UL : 0UL),
     (unsigned long)((fan2_power != NULL) ? (fan2_power->bus_microvolts % 1000000UL) / 1000UL : 0UL), fan_quality,
     current_sign, (long)(current_abs / 1000L), (long)(current_abs % 1000L), fan_quality,
     power_sign, (long)(power_abs / 1000000L), (long)((power_abs % 1000000L) / 1000L), fan_quality,
-    (unsigned long)fan2_rpm,
+    (unsigned long)fan2_rpm, (unsigned int)g_actuator.fan2_pwm_percent,
+    (unsigned int)g_actuator.relay_on, (unsigned int)gas_ventilation_active,
+    (unsigned int)gas_ventilation_cooling,
     (unsigned int)((fan2_power != NULL) ? fan2_power->bus_raw : 0U),
     (int)((fan2_power != NULL) ? fan2_power->current_raw : 0),
     (unsigned int)((fan2_power != NULL) ? fan2_power->power_raw : 0U),
     (unsigned int)((fan2_power != NULL) ? fan2_power->calibration_raw : 0U),
-    (unsigned int)relay_active, (unsigned int)fan2_pwm_percent);
+    (unsigned int)((fan2_power != NULL) ? fan2_power->manufacturer_id : 0U),
+    (unsigned int)((fan2_power != NULL) ? fan2_power->die_id : 0U),
+    (unsigned int)((fan2_power != NULL) ? fan2_power->config_raw : 0U),
+    (unsigned int)((fan2_power != NULL) ? fan2_power->fault : INA226_FAULT_COMMUNICATION),
+    (unsigned int)g_actuator.relay_on, (unsigned int)g_actuator.fan2_pwm_percent);
   if (length > 0 && length < (int)sizeof(fan2_message))
   {
     (void)HAL_UART_Transmit(&huart2, (uint8_t *)fan2_message, (uint16_t)length, 1000U);
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)fan2_message, (uint16_t)length, 1000U);
   }
   while (esp_rx_count != 0U) Command_Poll();
-}
-
-static uint8_t Json_ReadString(const char *json, const char *key,
-                               char *destination, size_t destination_size)
-{
-  char needle[32];
-  const char *cursor;
-  size_t length = 0U;
-
-  if ((snprintf(needle, sizeof(needle), "\"%s\"", key) <= 0) ||
-      (destination_size == 0U)) return 0U;
-  cursor = strstr(json, needle);
-  if (cursor == NULL) return 0U;
-  cursor += strlen(needle);
-  while ((*cursor == ' ') || (*cursor == '\t')) ++cursor;
-  if (*cursor++ != ':') return 0U;
-  while ((*cursor == ' ') || (*cursor == '\t')) ++cursor;
-  if (*cursor++ != '"') return 0U;
-  while ((*cursor != '\0') && (*cursor != '"'))
+  length = snprintf(actuator_message, sizeof(actuator_message),
+    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
+    "{\"assetCode\":\"CTRL-01\",\"metric\":\"led.mode\",\"value\":%u,\"unit\":\"enum\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"CTRL-01\",\"metric\":\"led.brightnessPercent\",\"value\":%u,\"unit\":\"percent\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"CTRL-01\",\"metric\":\"buzzer.active\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
+    "{\"assetCode\":\"CTRL-01\",\"metric\":\"buzzer.muted\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"}]}\r\n",
+    (unsigned long)sequence,
+    (unsigned int)g_actuator.led_mode, (unsigned int)g_actuator.led_brightness_percent,
+    (unsigned int)g_actuator.buzzer_on, (unsigned int)g_actuator.buzzer_muted);
+  if (length > 0 && length < (int)sizeof(actuator_message))
   {
-    if ((*cursor == '\\') || ((unsigned char)*cursor < 0x20U) ||
-        (length >= (destination_size - 1U))) return 0U;
-    destination[length++] = *cursor++;
+    (void)HAL_UART_Transmit(&huart2, (uint8_t *)actuator_message, (uint16_t)length, 1000U);
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)actuator_message, (uint16_t)length, 1000U);
   }
-  if ((*cursor != '"') || (length == 0U)) return 0U;
-  destination[length] = '\0';
-  return 1U;
-}
-
-static uint8_t Json_ReadUnsigned(const char *json, const char *key, uint32_t *value)
-{
-  char needle[32];
-  const char *cursor;
-  uint32_t parsed = 0U;
-  uint8_t digits = 0U;
-
-  if (snprintf(needle, sizeof(needle), "\"%s\"", key) <= 0) return 0U;
-  cursor = strstr(json, needle);
-  if (cursor == NULL) return 0U;
-  cursor += strlen(needle);
-  while ((*cursor == ' ') || (*cursor == '\t')) ++cursor;
-  if (*cursor++ != ':') return 0U;
-  while ((*cursor == ' ') || (*cursor == '\t')) ++cursor;
-  while ((*cursor >= '0') && (*cursor <= '9'))
-  {
-    if ((parsed > 429496729U) || ((parsed == 429496729U) && (*cursor > '5'))) return 0U;
-    parsed = (parsed * 10U) + (uint32_t)(*cursor++ - '0');
-    ++digits;
-  }
-  if (digits == 0U) return 0U;
-  *value = parsed;
-  return 1U;
-}
-
-static uint8_t CommandId_IsSafe(const char *command_id)
-{
-  size_t index;
-  const size_t length = strlen(command_id);
-  if ((length == 0U) || (length > COMMAND_ID_MAX)) return 0U;
-  for (index = 0U; index < length; ++index)
-  {
-    const char value = command_id[index];
-    if (!(((value >= 'a') && (value <= 'z')) || ((value >= 'A') && (value <= 'Z')) ||
-          ((value >= '0') && (value <= '9')) || (value == '-') || (value == '_'))) return 0U;
-  }
-  return 1U;
-}
-
-static uint8_t CommandId_IsDuplicate(const char *command_id)
-{
-  uint8_t index;
-  for (index = 0U; index < COMMAND_DEDUP_CAPACITY; ++index)
-    if (strcmp(recent_command_ids[index], command_id) == 0) return 1U;
-  return 0U;
-}
-
-static void CommandId_Remember(const char *command_id)
-{
-  (void)snprintf(recent_command_ids[recent_command_next], COMMAND_ID_MAX + 1U, "%s", command_id);
-  recent_command_next = (uint8_t)((recent_command_next + 1U) % COMMAND_DEDUP_CAPACITY);
-}
-
-static void Command_SendAck(const char *command_id, const char *status, const char *reason)
-{
-  char json[220];
-  const int length = snprintf(json, sizeof(json),
-    "{\"schema\":\"ut.command.ack.v1\",\"cmdId\":\"%s\",\"status\":\"%s\",\"reason\":\"%s\"}\r\n",
-    command_id, status, reason);
-  if ((length > 0) && (length < (int)sizeof(json)))
-  {
-    (void)HAL_UART_Transmit(&huart2, (uint8_t *)json, (uint16_t)length, 1000U);
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)json, (uint16_t)length, 1000U);
-  }
+  while (esp_rx_count != 0U) Command_Poll();
 }
 
 /* MH-FMG is a high-level-triggered active buzzer.  PB0 is deliberately
@@ -755,7 +867,7 @@ static void Command_SendAck(const char *command_id, const char *status, const ch
 static void Buzzer_Silence(void)
 {
   HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_RESET);
-  buzzer_active = 0U;
+  g_actuator.buzzer_on = 0U;
 }
 
 static void Buzzer_Start(uint32_t duration_ms)
@@ -763,7 +875,7 @@ static void Buzzer_Start(uint32_t duration_ms)
   HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_SET);
   buzzer_started_at = HAL_GetTick();
   buzzer_duration_ms = duration_ms;
-  buzzer_active = 1U;
+  g_actuator.buzzer_on = 1U;
 }
 
 /* The installed relay module is set to high-level trigger.  PA1 is held low
@@ -771,7 +883,7 @@ static void Buzzer_Start(uint32_t duration_ms)
 static void Relay_Disable(void)
 {
   HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_RESET);
-  relay_active = 0U;
+  g_actuator.relay_on = 0U;
 }
 
 static void Relay_Enable(uint32_t duration_ms)
@@ -779,7 +891,7 @@ static void Relay_Enable(uint32_t duration_ms)
   HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_SET);
   relay_started_at = HAL_GetTick();
   relay_duration_ms = duration_ms;
-  relay_active = 1U;
+  g_actuator.relay_on = 1U;
 }
 
 /* The MQ board comparator is powered from 5 V and its DO output is divided
@@ -805,17 +917,18 @@ static void Smoke_Poll(uint32_t now)
   smoke_alarm = next_alarm;
   if (smoke_alarm != 0U)
   {
-    /* Local safety indication remains independent of the network path. */
-    buzzer_active = 0U;
-    HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_SET);
-    Ws2812_Show(WS2812_TEST_BRIGHTNESS, 0U, 0U);
+    /* A new alarm invalidates any user mute and stops a timed buzzer so the
+     * local safety indication remains independent of the network path. */
+    NodeACommand_AlarmActivated(&g_actuator);
+    Buzzer_Start(0xFFFFFFFFUL);
+    Led_Render(now);
   }
   else
   {
-    if (flame_alarm == 0U)
+    if ((flame_alarm == 0U) && (gas_alarm == 0U))
     {
       Buzzer_Silence();
-      Ws2812_Off();
+      Led_Render(now);
     }
   }
 }
@@ -838,9 +951,9 @@ static void Flame_Poll(uint32_t now)
     if (flame_alarm == 0U)
     {
       flame_alarm = 1U;
-      buzzer_active = 0U;
-      HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_SET);
-      Ws2812_Show(WS2812_TEST_BRIGHTNESS, 0U, 0U);
+      NodeACommand_AlarmActivated(&g_actuator);
+      Buzzer_Start(0xFFFFFFFFUL);
+      Led_Render(now);
     }
     return;
   }
@@ -848,10 +961,10 @@ static void Flame_Poll(uint32_t now)
       ((now - flame_last_detected_at) >= FLAME_ALARM_HOLD_MS))
   {
     flame_alarm = 0U;
-    if (smoke_alarm == 0U)
+    if ((smoke_alarm == 0U) && (gas_alarm == 0U))
     {
       Buzzer_Silence();
-      Ws2812_Off();
+      Led_Render(now);
     }
   }
 }
@@ -959,7 +1072,64 @@ static void Ws2812_Show(uint8_t red, uint8_t green, uint8_t blue)
   HAL_Delay(1U); /* Low reset interval exceeds the WS2812B latch requirement. */
 }
 
-static void Ws2812_Off(void) { Ws2812_Show(0U, 0U, 0U); }
+static uint8_t Led_BreathLevel(uint32_t now)
+{
+  const uint32_t phase = now % 3000U;
+  if (phase < 1500U) return (uint8_t)((phase * 255U) / 1500U);
+  return (uint8_t)(((3000U - phase) * 255U) / 1500U);
+}
+
+static void Led_ColorForMode(uint8_t mode, uint8_t brightness_percent,
+                             uint32_t now, uint8_t *red, uint8_t *green,
+                             uint8_t *blue)
+{
+  const uint8_t scale =
+      (uint8_t)(((uint32_t)brightness_percent * 255U) / 100U);
+  uint8_t level = scale;
+
+  if (mode == NODE_A_LED_BREATHE)
+    level = (uint8_t)(((uint32_t)Led_BreathLevel(now) * scale) / 255U);
+  else if (mode == NODE_A_LED_FLASH)
+    level = ((now / 500U) & 1U) ? scale : 0U;
+
+  *red = 0U;
+  *green = 0U;
+  *blue = 0U;
+  switch (mode)
+  {
+    case NODE_A_LED_WHITE:   *red = *green = *blue = level; break;
+    case NODE_A_LED_GREEN:   *green = level; break;
+    case NODE_A_LED_YELLOW:  *red = level; *green = level / 2U; break;
+    case NODE_A_LED_RED:     *red = level; break;
+    case NODE_A_LED_BLUE:    *blue = level; break;
+    case NODE_A_LED_BREATHE: *red = *green = *blue = level; break; /* white breath */
+    case NODE_A_LED_FLASH:   *red = *green = *blue = level; break; /* white flash */
+    default: break; /* off */
+  }
+}
+
+/* Safety always owns the LED: an alarm forces red, a gas warning forces
+ * yellow, and only a fully clear state renders the user-commanded mode. */
+static void Led_Render(uint32_t now)
+{
+  uint8_t red;
+  uint8_t green;
+  uint8_t blue;
+
+  if ((smoke_alarm != 0U) || (flame_alarm != 0U) || (gas_alarm != 0U))
+  {
+    Ws2812_Show(WS2812_TEST_BRIGHTNESS, 0U, 0U);
+    return;
+  }
+  if (gas_warning != 0U)
+  {
+    Ws2812_Show(WS2812_TEST_BRIGHTNESS, WS2812_TEST_BRIGHTNESS / 2U, 0U);
+    return;
+  }
+  Led_ColorForMode(g_actuator.led_mode, g_actuator.led_brightness_percent, now,
+                   &red, &green, &blue);
+  Ws2812_Show(red, green, blue);
+}
 
 static uint8_t Command_IsForThisController(const char *topic)
 {
@@ -969,13 +1139,131 @@ static uint8_t Command_IsForThisController(const char *topic)
          ((topic[length] == '\0') || (topic[length] == '/'));
 }
 
+static void Safety_Snapshot(NodeASafetyState *safety)
+{
+  safety->smoke_alarm = (smoke_alarm != 0U) || (test_safety_smoke != 0U);
+  safety->flame_alarm = (flame_alarm != 0U) || (test_safety_flame != 0U);
+  safety->gas_alarm = (gas_alarm != 0U) || (test_safety_gas != 0U);
+  safety->gas_warning = gas_warning;
+  safety->gas_ventilation_active =
+      (gas_ventilation_active != 0U) || (test_safety_vent != 0U);
+}
+
+static void Command_SendAck(const char *command_id, const char *status,
+                            const char *reason, uint32_t applied_value)
+{
+  char json[192];
+  size_t length = NodeACommand_FormatAck(json, sizeof(json), command_id,
+                                         status, reason, applied_value);
+  if ((length > 0U) && ((length + 2U) <= sizeof(json)))
+  {
+    json[length++] = '\r';
+    json[length++] = '\n';
+    (void)HAL_UART_Transmit(&huart2, (uint8_t *)json, (uint16_t)length, 1000U);
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)json, (uint16_t)length, 1000U);
+  }
+}
+
+static void CommitActuators(const NodeACommand *command, uint32_t now,
+                            const NodeAActuatorState *before)
+{
+  const uint32_t elapsed_ms = now - command->received_at_ms;
+
+  /* PWM is idempotent, so re-applying the committed duty is always safe. */
+  Fan1Pwm_SetPercent(g_actuator.fan1_pwm_percent);
+  Fan2Pwm_SetPercent(g_actuator.fan2_pwm_percent);
+
+  /* Timed actuators are only re-armed when the command changed their state, so
+   * a read-only `status` command can never reset an active relay/buzzer timer. */
+  if (g_actuator.relay_on != before->relay_on)
+  {
+    if (g_actuator.relay_on != 0U)
+    {
+      const uint32_t duration =
+          (command->action == NODE_A_ACTION_FANS_BOTH_START)
+              ? 0xFFFFFFFFUL : (command->ttl_ms - elapsed_ms);
+      Relay_Enable(duration);
+    }
+    else
+      Relay_Disable();
+  }
+  if (g_actuator.buzzer_on != before->buzzer_on)
+  {
+    if (g_actuator.buzzer_on != 0U)
+    {
+      const uint32_t duration =
+          (command->action == NODE_A_ACTION_BUZZER_TEST)
+              ? BUZZER_TEST_DURATION_MS : (command->ttl_ms - elapsed_ms);
+      Buzzer_Start(duration);
+    }
+    else
+      Buzzer_Silence();
+  }
+  if ((g_actuator.led_mode != before->led_mode) ||
+      (g_actuator.led_brightness_percent != before->led_brightness_percent))
+    Led_Render(now);
+}
+
+/* Every Web, IoTDA and menu-originated `ut.command.v1` command passes through
+ * this single dispatcher path: parse, dedup, TTL/safety/value decision, then
+ * commit and acknowledge only after the in-memory state is accepted. */
+static void Command_ProcessPayload(const char *payload, uint32_t received_at)
+{
+  NodeACommand command;
+  NodeASafetyState safety;
+  NodeAActuatorState before;
+  NodeAActuatorState next;
+  NodeACommandResult result;
+  uint32_t now;
+
+  if (!NodeACommand_ParseHeader(payload, &command))
+  {
+    Command_SendAck("unknown", "rejected", "invalid_command", 0U);
+    return;
+  }
+  if (NodeACommand_IsDuplicate(&command_dedup, command.command_id))
+  {
+    Command_SendAck(command.command_id, "duplicate", "cmdId_seen", 0U);
+    return;
+  }
+  if (!NodeACommand_ParseBody(payload, &command))
+  {
+    NodeACommand_Remember(&command_dedup, command.command_id);
+    Command_SendAck(command.command_id, "rejected", "invalid_or_missing_ttl", 0U);
+    return;
+  }
+
+  command.received_at_ms = received_at;
+  now = HAL_GetTick();
+  Safety_Snapshot(&safety);
+  before = g_actuator;
+  next = before;
+  result = NodeACommand_Apply(&command, now, &safety, &next);
+
+  if (result.status == NODE_A_STATUS_EXPIRED)
+  {
+    NodeACommand_Remember(&command_dedup, command.command_id);
+    Command_SendAck(command.command_id, "expired", "ttl_elapsed", 0U);
+    return;
+  }
+  if (result.status == NODE_A_STATUS_REJECTED)
+  {
+    NodeACommand_Remember(&command_dedup, command.command_id);
+    Command_SendAck(command.command_id, "rejected", result.reason, 0U);
+    return;
+  }
+
+  NodeACommand_Remember(&command_dedup, command.command_id);
+  g_actuator = next;
+  CommitActuators(&command, now, &before);
+  Command_SendAck(command.command_id, "accepted", result.reason,
+                  result.applied_value);
+}
+
 static void Command_HandleLine(char *line, uint32_t received_at)
 {
   char *topic;
   char *payload;
-  char command_id[COMMAND_ID_MAX + 1U];
-  char action[COMMAND_ACTION_MAX + 1U];
-  uint32_t ttl_ms;
 
   if (strncmp(line, "MQTT|", 5U) != 0) return;
   topic = line + 5U;
@@ -983,112 +1271,7 @@ static void Command_HandleLine(char *line, uint32_t received_at)
   if (payload == NULL) return;
   *payload++ = '\0';
   if (!Command_IsForThisController(topic)) return;
-  if (!Json_ReadString(payload, "schema", action, sizeof(action)) ||
-      (strcmp(action, "ut.command.v1") != 0) ||
-      !Json_ReadString(payload, "cmdId", command_id, sizeof(command_id)) ||
-      !CommandId_IsSafe(command_id))
-  {
-    Command_SendAck("unknown", "rejected", "invalid_command");
-    return;
-  }
-  if (CommandId_IsDuplicate(command_id))
-  {
-    Command_SendAck(command_id, "duplicate", "cmdId_seen");
-    return;
-  }
-  if (!Json_ReadString(payload, "action", action, sizeof(action)) ||
-      !Json_ReadUnsigned(payload, "ttlMs", &ttl_ms) || (ttl_ms == 0U) ||
-      (ttl_ms > COMMAND_TTL_MAX_MS))
-  {
-    CommandId_Remember(command_id);
-    Command_SendAck(command_id, "rejected", "invalid_or_missing_ttl");
-    return;
-  }
-  if ((HAL_GetTick() - received_at) >= ttl_ms)
-  {
-    CommandId_Remember(command_id);
-    Command_SendAck(command_id, "expired", "ttl_elapsed");
-    return;
-  }
-
-  CommandId_Remember(command_id);
-  if (strcmp(action, "status") == 0)
-    Command_SendAck(command_id, "accepted", "controller_online");
-  else if (strcmp(action, "safe_state") == 0)
-  {
-    Buzzer_Silence();
-    Relay_Disable();
-    Ws2812_Off();
-    Command_SendAck(command_id, "accepted", "safe_state_applied");
-  }
-  else if (strcmp(action, "buzzer_off") == 0)
-  {
-    Buzzer_Silence();
-    Command_SendAck(command_id, "accepted", "buzzer_silent");
-  }
-  else if (strcmp(action, "buzzer_on") == 0)
-  {
-    const uint32_t elapsed_ms = HAL_GetTick() - received_at;
-    Buzzer_Start(ttl_ms - elapsed_ms);
-    Command_SendAck(command_id, "accepted", "buzzer_active");
-  }
-  else if (strcmp(action, "relay_off") == 0)
-  {
-    Relay_Disable();
-    Command_SendAck(command_id, "accepted", "relay_off");
-  }
-  else if (strcmp(action, "relay_on") == 0)
-  {
-    const uint32_t elapsed_ms = HAL_GetTick() - received_at;
-    Relay_Enable(ttl_ms - elapsed_ms);
-    Command_SendAck(command_id, "accepted", "relay_active");
-  }
-  else if (strcmp(action, "fan_pwm") == 0)
-  {
-    uint32_t duty_percent;
-    if (!Json_ReadUnsigned(payload, "dutyPercent", &duty_percent) ||
-        (duty_percent > 100U))
-      Command_SendAck(command_id, "rejected", "invalid_duty_percent");
-    else
-    {
-      Fan1Pwm_SetPercent((uint8_t)duty_percent);
-      Command_SendAck(command_id, "accepted", "fan_pwm_set");
-    }
-  }
-  else if (strcmp(action, "fan2_pwm") == 0)
-  {
-    uint32_t duty_percent;
-    if (!Json_ReadUnsigned(payload, "dutyPercent", &duty_percent) ||
-        (duty_percent > 100U))
-      Command_SendAck(command_id, "rejected", "invalid_duty_percent");
-    else
-    {
-      Fan2Pwm_SetPercent((uint8_t)duty_percent);
-      Command_SendAck(command_id, "accepted", "fan2_pwm_set");
-    }
-  }
-  else if (strcmp(action, "led_off") == 0)
-  {
-    Ws2812_Off();
-    Command_SendAck(command_id, "accepted", "led_off");
-  }
-  else if (strcmp(action, "led_red") == 0)
-  {
-    Ws2812_Show(WS2812_TEST_BRIGHTNESS, 0U, 0U);
-    Command_SendAck(command_id, "accepted", "led_red");
-  }
-  else if (strcmp(action, "led_green") == 0)
-  {
-    Ws2812_Show(0U, WS2812_TEST_BRIGHTNESS, 0U);
-    Command_SendAck(command_id, "accepted", "led_green");
-  }
-  else if (strcmp(action, "led_blue") == 0)
-  {
-    Ws2812_Show(0U, 0U, WS2812_TEST_BRIGHTNESS);
-    Command_SendAck(command_id, "accepted", "led_blue");
-  }
-  else
-    Command_SendAck(command_id, "rejected", "actuator_unmapped");
+  Command_ProcessPayload(payload, received_at);
 }
 
 static void Command_Poll(void)
@@ -1108,6 +1291,103 @@ static void Command_Poll(void)
   --esp_rx_count;
   __enable_irq();
   Command_HandleLine(line, received_at);
+}
+
+static void NodeTest_ReportState(void)
+{
+  char message[160];
+  const int length = snprintf(message, sizeof(message),
+    "#STATE fan1=%u fan2=%u relay=%u buzzer=%u muted=%u led_mode=%u led_bright=%u smoke=%u flame=%u gas=%u vent=%u\r\n",
+    (unsigned int)g_actuator.fan1_pwm_percent,
+    (unsigned int)g_actuator.fan2_pwm_percent,
+    (unsigned int)g_actuator.relay_on, (unsigned int)g_actuator.buzzer_on,
+    (unsigned int)g_actuator.buzzer_muted, (unsigned int)g_actuator.led_mode,
+    (unsigned int)g_actuator.led_brightness_percent,
+    (unsigned int)((smoke_alarm != 0U) || (test_safety_smoke != 0U)),
+    (unsigned int)((flame_alarm != 0U) || (test_safety_flame != 0U)),
+    (unsigned int)((gas_alarm != 0U) || (test_safety_gas != 0U)),
+    (unsigned int)((gas_ventilation_active != 0U) || (test_safety_vent != 0U)));
+  if ((length > 0) && (length < (int)sizeof(message)))
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
+}
+
+static void NodeTest_HandleLine(void)
+{
+  unsigned int smoke;
+  unsigned int flame;
+  unsigned int gas;
+  unsigned int vent;
+
+  if (strcmp(node_test_line, "#NODETEST RESET") == 0)
+  {
+    NodeACommand_DedupInit(&command_dedup);
+    g_actuator.fan1_pwm_percent = 100U;
+    g_actuator.fan2_pwm_percent = 100U;
+    g_actuator.relay_on = 0U;
+    g_actuator.buzzer_on = 0U;
+    g_actuator.buzzer_muted = 0U;
+    g_actuator.led_mode = NODE_A_LED_OFF;
+    g_actuator.led_brightness_percent = 100U;
+    test_safety_smoke = 0U;
+    test_safety_flame = 0U;
+    test_safety_gas = 0U;
+    test_safety_vent = 0U;
+    Fan1Pwm_SetPercent(g_actuator.fan1_pwm_percent);
+    Fan2Pwm_SetPercent(g_actuator.fan2_pwm_percent);
+    Buzzer_Silence();
+    Relay_Disable();
+    Led_Render(HAL_GetTick());
+    NodeTest_ReportState();
+    return;
+  }
+  if (sscanf(node_test_line, "#NODETEST SAFETY %u %u %u %u",
+             &smoke, &flame, &gas, &vent) == 4)
+  {
+    if ((smoke > 1U) || (flame > 1U) || (gas > 1U) || (vent > 1U)) return;
+    test_safety_smoke = (uint8_t)smoke;
+    test_safety_flame = (uint8_t)flame;
+    test_safety_gas = (uint8_t)gas;
+    test_safety_vent = (uint8_t)vent;
+    NodeTest_ReportState();
+    return;
+  }
+  if (strncmp(node_test_line, "#NODETEST CMD ", 14U) == 0)
+  {
+    Command_ProcessPayload(node_test_line + 14U, HAL_GetTick());
+    return;
+  }
+  if (strcmp(node_test_line, "#NODETEST TELEMETRY") == 0)
+  {
+    test_force_telemetry = 1U;
+    return;
+  }
+  if (strcmp(node_test_line, "#NODETEST STATE") == 0)
+  {
+    NodeTest_ReportState();
+    return;
+  }
+}
+
+static void NodeTest_Poll(void)
+{
+  uint8_t character;
+
+  while (HAL_UART_Receive(&huart1, &character, 1U, 0U) == HAL_OK)
+  {
+    if (character == '\n')
+    {
+      node_test_line[node_test_length] = '\0';
+      NodeTest_HandleLine();
+      node_test_length = 0U;
+    }
+    else if (character != '\r')
+    {
+      if (node_test_length < (NODE_TEST_LINE_SIZE - 1U))
+        node_test_line[node_test_length++] = (char)character;
+      else
+        node_test_length = 0U;
+    }
+  }
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *uart)
@@ -1153,6 +1433,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *uart)
   }
   (void)HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U);
 }
+
 int main(void)
 {
   Sht30Reading readings[3] = {0};
@@ -1162,16 +1443,25 @@ int main(void)
   uint16_t methane_raw = 0U;
   uint32_t methane_microvolts = 0UL;
   uint8_t methane_online = 0U;
+  uint16_t co_raw = 0U;
+  uint32_t co_microvolts = 0UL;
+  uint8_t co_online = 0U;
+  GasAdcFilter oxygen_filter = {0};
+  GasAdcFilter methane_filter = {0};
+  GasAdcFilter co_filter = {0};
   Ina226Reading fan_power = {0};
   Ina226Reading fan2_power = {0};
   uint32_t fan_rpm = 0U;
   uint32_t fan2_rpm = 0U;
   uint32_t last_telemetry = HAL_MAX_DELAY;
   uint32_t last_led = HAL_MAX_DELAY;
+  uint32_t last_led_anim = HAL_MAX_DELAY;
+
   HAL_Init(); SystemClock_Config(); MX_GPIO_Init(); MX_FAN1_PWM_Init(); MX_WS2812_SPI_Init();
   fan1_tach_last_sample_at = HAL_GetTick();
   fan2_tach_last_sample_at = fan1_tach_last_sample_at;
-  Ws2812_Off();
+  NodeACommand_DedupInit(&command_dedup);
+  Led_Render(HAL_GetTick());
   MX_ADC1_Init();
   if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) Error_Handler();
   MX_USART1_UART_Init(); MX_USART2_UART_Init();
@@ -1179,31 +1469,53 @@ int main(void)
   (void)HAL_UART_Transmit(&huart1, (uint8_t *)"#NODE node-a boot\r\n", 19U, 1000U);
   for (;;)
   {
+    uint32_t now;
+    uint8_t alarm_active;
+
     while (esp_rx_count != 0U) Command_Poll();
+    NodeTest_Poll();
     /* A command may start a timed actuator. Read the clock afterwards so a
      * just-written start timestamp can never appear to be in the future. */
-    uint32_t now = HAL_GetTick();
+    now = HAL_GetTick();
     Smoke_Poll(now);
     Flame_Poll(now);
     Level_Poll(now);
-    if ((smoke_alarm == 0U) && (flame_alarm == 0U) &&
-        (buzzer_active != 0U) && ((now - buzzer_started_at) >= buzzer_duration_ms))
+    GasVentilation_Update(now);
+    alarm_active = ((smoke_alarm != 0U) || (flame_alarm != 0U) || (gas_alarm != 0U)) ? 1U : 0U;
+    if ((alarm_active == 0U) && (g_actuator.buzzer_on != 0U) &&
+        ((now - buzzer_started_at) >= buzzer_duration_ms))
       Buzzer_Silence();
-    if ((smoke_alarm != 0U) || (flame_alarm != 0U))
-      HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_SET);
-    if ((relay_active != 0U) && ((now - relay_started_at) >= relay_duration_ms))
+    if (alarm_active != 0U)
+    {
+      if (g_actuator.buzzer_muted != 0U)
+        HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_RESET);
+      else
+        HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_SET);
+    }
+    if ((gas_ventilation_active == 0U) && (g_actuator.relay_on != 0U) &&
+        ((now - relay_started_at) >= relay_duration_ms))
       Relay_Disable();
-    if ((now - last_telemetry) >= TELEMETRY_INTERVAL_MS)
+    if ((test_force_telemetry != 0U) ||
+        ((now - last_telemetry) >= TELEMETRY_INTERVAL_MS))
     {
       (void)Sht30_Read(&i2c1_bus, SHT30_ADDRESS_44, &readings[0]);
       (void)Sht30_Read(&i2c1_bus, SHT30_ADDRESS_45, &readings[1]);
       (void)Sht30_Read(&i2c2_bus, SHT30_ADDRESS_44, &readings[2]);
-      oxygen_online = GasAdc_ReadRaw(ADC_CHANNEL_11, &oxygen_raw);
-      oxygen_microvolts = ((uint32_t)oxygen_raw * ADC_REFERENCE_UV + 2047UL) / 4095UL;
-      methane_online = GasAdc_ReadRaw(ADC_CHANNEL_12, &methane_raw);
-      methane_microvolts = ((uint32_t)methane_raw * ADC_REFERENCE_UV + 2047UL) / 4095UL;
-      (void)Ina226_Read(&i2c1_bus, &fan_power);
-      (void)Ina226_Read(&i2c2_bus, &fan2_power);
+      oxygen_online = GasAdc_ReadRaw(NODE_A_OXYGEN_ADC_CHANNEL, &oxygen_raw);
+      if (oxygen_online != 0U) oxygen_raw = GasAdcFilter_Update(&oxygen_filter, oxygen_raw);
+      oxygen_microvolts = NODE_A_ADC_RAW_TO_UV(oxygen_raw);
+      methane_online = GasAdc_ReadRaw(NODE_A_METHANE_ADC_CHANNEL, &methane_raw);
+      if (methane_online != 0U) methane_raw = GasAdcFilter_Update(&methane_filter, methane_raw);
+      methane_microvolts = NODE_A_ADC_RAW_TO_UV(methane_raw);
+      co_online = GasAdc_ReadRaw(NODE_A_CO_ADC_CHANNEL, &co_raw);
+      if (co_online != 0U) co_raw = GasAdcFilter_Update(&co_filter, co_raw);
+      co_microvolts = NODE_A_ADC_RAW_TO_UV(co_raw);
+      if ((oxygen_filter.count >= 3U) && (methane_filter.count >= 3U) &&
+          (co_filter.count >= 3U))
+        GasAlarm_Update(oxygen_raw, oxygen_online, methane_raw, methane_online,
+                        co_raw, co_online);
+      (void)Ina226_Read(&i2c1_bus, &ina226_fan1_state, &fan_power);
+      (void)Ina226_Read(&i2c2_bus, &ina226_fan2_state, &fan2_power);
       /* Sensor acquisition is deliberately slow on the software I2C buses.
        * Timestamp the pulse window after those reads so pulses accumulated
        * during acquisition are divided by the matching real elapsed time. */
@@ -1214,16 +1526,24 @@ int main(void)
       }
       SendTelemetry(readings, smoke_alarm, flame_alarm, level_detected, oxygen_raw,
                     oxygen_microvolts, oxygen_online, methane_raw,
-                    methane_microvolts, methane_online, &fan_power, fan_rpm,
+                    methane_microvolts, methane_online, co_raw,
+                    co_microvolts, co_online, &fan_power, fan_rpm,
                     &fan2_power, fan2_rpm);
       last_telemetry = now;
+      test_force_telemetry = 0U;
     }
     if ((now - last_led) >= LED_INTERVAL_MS)
     {
       HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin); last_led = now;
     }
+    if ((now - last_led_anim) >= LED_ANIM_INTERVAL_MS)
+    {
+      last_led_anim = now;
+      Led_Render(now);
+    }
   }
 }
+
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef oscillator = {0};
@@ -1240,6 +1560,113 @@ void SystemClock_Config(void)
   clock.APB2CLKDivider = RCC_HCLK_DIV1;
   if (HAL_RCC_ClockConfig(&clock, FLASH_LATENCY_0) != HAL_OK) Error_Handler();
 }
+
+static uint16_t GasAdcFilter_Update(GasAdcFilter *filter, uint16_t sample)
+{
+  uint16_t median;
+  if (filter == NULL) return sample;
+  if (filter->count < 3U)
+  {
+    filter->samples[filter->count++] = sample;
+    filter->filtered = (filter->count == 1U) ? sample :
+                       NODE_A_EMA_QUARTER(filter->filtered, sample);
+    if (filter->count == 3U) filter->next = 0U;
+    return filter->filtered;
+  }
+  filter->samples[filter->next] = sample;
+  filter->next = (uint8_t)((filter->next + 1U) % 3U);
+  median = NODE_A_MEDIAN3(filter->samples[0], filter->samples[1], filter->samples[2]);
+  filter->filtered = NODE_A_EMA_QUARTER(filter->filtered, median);
+  return filter->filtered;
+}
+
+static void GasAlarm_Update(uint16_t oxygen_raw, uint8_t oxygen_online,
+                            uint16_t methane_raw, uint8_t methane_online,
+                            uint16_t co_raw, uint8_t co_online)
+{
+  const uint8_t previous_warning = gas_warning;
+  const uint8_t previous_alarm = gas_alarm;
+
+  oxygen_warning = (oxygen_online != 0U) ?
+      NODE_A_LOW_ALARM_STATE(oxygen_warning, oxygen_raw,
+                             NODE_A_OXYGEN_WARNING_ON_RAW,
+                             NODE_A_OXYGEN_WARNING_OFF_RAW) : 0U;
+  oxygen_alarm = (oxygen_online != 0U) ?
+      NODE_A_LOW_ALARM_STATE(oxygen_alarm, oxygen_raw,
+                             NODE_A_OXYGEN_ALARM_ON_RAW,
+                             NODE_A_OXYGEN_ALARM_OFF_RAW) : 0U;
+  methane_warning = (methane_online != 0U) ?
+      NODE_A_HIGH_ALARM_STATE(methane_warning, methane_raw,
+                              NODE_A_METHANE_WARNING_ON_RAW,
+                              NODE_A_METHANE_WARNING_OFF_RAW) : 0U;
+  methane_alarm = (methane_online != 0U) ?
+      NODE_A_HIGH_ALARM_STATE(methane_alarm, methane_raw,
+                              NODE_A_METHANE_ALARM_ON_RAW,
+                              NODE_A_METHANE_ALARM_OFF_RAW) : 0U;
+  co_warning = (co_online != 0U) ?
+      NODE_A_HIGH_ALARM_STATE(co_warning, co_raw,
+                              NODE_A_CO_WARNING_ON_RAW,
+                              NODE_A_CO_WARNING_OFF_RAW) : 0U;
+  co_alarm = (co_online != 0U) ?
+      NODE_A_HIGH_ALARM_STATE(co_alarm, co_raw,
+                              NODE_A_CO_ALARM_ON_RAW,
+                              NODE_A_CO_ALARM_OFF_RAW) : 0U;
+  gas_warning = NODE_A_OPERATIONAL_GAS_ALARM(
+      oxygen_warning, methane_warning, co_warning);
+  gas_alarm = NODE_A_OPERATIONAL_GAS_ALARM(
+      oxygen_alarm, methane_alarm, co_alarm);
+
+  if ((gas_warning == previous_warning) && (gas_alarm == previous_alarm)) return;
+  if ((gas_alarm != 0U) && (previous_alarm == 0U))
+    NodeACommand_AlarmActivated(&g_actuator);
+  if ((smoke_alarm != 0U) || (flame_alarm != 0U) || (gas_alarm != 0U))
+  {
+    Buzzer_Start(0xFFFFFFFFUL);
+    Led_Render(HAL_GetTick());
+  }
+  else if (gas_warning != 0U)
+  {
+    Buzzer_Silence();
+    Led_Render(HAL_GetTick());
+  }
+  else
+  {
+    Buzzer_Silence();
+    Led_Render(HAL_GetTick());
+  }
+}
+
+static void GasVentilation_Update(uint32_t now)
+{
+  if (gas_alarm != 0U)
+  {
+    gas_ventilation_active = 1U;
+    gas_ventilation_cooling = 0U;
+  }
+  else if ((gas_ventilation_active != 0U) && (gas_ventilation_cooling == 0U))
+  {
+    gas_ventilation_cooling = 1U;
+    gas_ventilation_clear_started_at = now;
+  }
+  else if ((gas_ventilation_active != 0U) &&
+           (NODE_A_GAS_VENTILATION_SHOULD_RUN(
+               gas_alarm, gas_ventilation_cooling,
+               now - gas_ventilation_clear_started_at) == 0U))
+  {
+    gas_ventilation_active = 0U;
+    gas_ventilation_cooling = 0U;
+    Relay_Disable();
+    return;
+  }
+
+  if (gas_ventilation_active != 0U)
+  {
+    if (g_actuator.fan1_pwm_percent != 100U) Fan1Pwm_SetPercent(100U);
+    if (g_actuator.fan2_pwm_percent != 100U) Fan2Pwm_SetPercent(100U);
+    if (g_actuator.relay_on == 0U) Relay_Enable(0xFFFFFFFFUL);
+  }
+}
+
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef gpio = {0};
@@ -1273,6 +1700,7 @@ static void MX_GPIO_Init(void)
   gpio.Mode = GPIO_MODE_OUTPUT_OD; gpio.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &gpio);
 }
+
 static void MX_ADC1_Init(void)
 {
   ADC_ChannelConfTypeDef channel = {0};
@@ -1284,11 +1712,12 @@ static void MX_ADC1_Init(void)
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.NbrOfConversion = 1;
   if (HAL_ADC_Init(&hadc1) != HAL_OK) Error_Handler();
-  channel.Channel = ADC_CHANNEL_11;
+  channel.Channel = NODE_A_CO_ADC_CHANNEL;
   channel.Rank = ADC_REGULAR_RANK_1;
   channel.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
   if (HAL_ADC_ConfigChannel(&hadc1, &channel) != HAL_OK) Error_Handler();
 }
+
 static uint8_t GasAdc_ReadRaw(uint32_t adc_channel, uint16_t *raw)
 {
   ADC_ChannelConfTypeDef channel = {0};
@@ -1318,6 +1747,7 @@ static uint8_t GasAdc_ReadRaw(uint32_t adc_channel, uint16_t *raw)
   *raw = (uint16_t)((sum + (valid / 2U)) / valid);
   return 1U;
 }
+
 static void MX_USART2_UART_Init(void)
 {
   huart2.Instance = USART2;
@@ -1330,6 +1760,7 @@ static void MX_USART2_UART_Init(void)
   huart2.Init.OverSampling = UART_OVERSAMPLING_16;
   if (HAL_UART_Init(&huart2) != HAL_OK) Error_Handler();
 }
+
 static void MX_USART1_UART_Init(void)
 {
   huart1.Instance = USART1;
@@ -1342,6 +1773,7 @@ static void MX_USART1_UART_Init(void)
   huart1.Init.OverSampling = UART_OVERSAMPLING_16;
   if (HAL_UART_Init(&huart1) != HAL_OK) Error_Handler();
 }
+
 void Error_Handler(void)
 {
   __disable_irq();
