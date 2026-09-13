@@ -93,8 +93,20 @@ static int test_sequence_staleness_wraparound_and_bounds(void)
   CHECK(ScreenSnapshot_IsStale(&context, 4899U) == 1U); /* 5000 ms across wrap */
   ScreenSnapshot_Tick(&context, 4899U, &snapshot);
   CHECK(snapshot.temperature_centi_c.quality == UI_QUALITY_STALE);
-  ScreenSnapshot_SetMqttAvailability(&snapshot, 0U, 4899U);
-  CHECK(snapshot.connectivity.mqtt_online == 0U);
+  CHECK(snapshot.connectivity.mqtt_online == 0U); /* Tick itself must lock MQTT */
+  CHECK(snapshot.connectivity.updated_ms == 4899U);
+  {
+    UiState state;
+    UiState_Init(&state);
+    UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
+    CHECK(state.control.mqtt_online == 0U);
+    ScreenSnapshot_SetMqttAvailability(&snapshot, 1U, 4900U);
+    UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
+    CHECK(state.control.mqtt_online == 1U); /* MQTT UP recovery */
+    ScreenSnapshot_SetMqttAvailability(&snapshot, 0U, 4901U);
+    UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
+    CHECK(state.control.mqtt_online == 0U); /* MQTT DOWN */
+  }
   return 0;
 }
 
@@ -174,7 +186,7 @@ static int test_commands_and_ack_atomicity(void)
   CHECK(MenuCommandTx_Enqueue(&queue, "abc", 3U) == 1U);
   CHECK(MenuCommandTx_Enqueue(&queue, "def", 3U) == 0U); /* full/active */
   { uint8_t byte; CHECK(MenuCommandTx_Peek(&queue, &byte) == 1U && byte == 'a'); MenuCommandTx_Commit(&queue); CHECK(MenuCommandTx_Peek(&queue, &byte) == 1U && byte == 'b'); MenuCommandTx_Commit(&queue); MenuCommandTx_Commit(&queue); CHECK(MenuCommandTx_Peek(&queue, &byte) == 0U); }
-  { char max_line[MENU_COMMAND_TX_CAPACITY]; (void)memset(max_line, 'x', sizeof(max_line)); CHECK(MenuCommandTx_Enqueue(&queue, max_line, sizeof(max_line)) == 1U); MenuCommandTx_Fail(&queue); CHECK(queue.failed == 1U); CHECK(MenuCommandTx_Enqueue(&queue, "z", 1U) == 0U); }
+  { char max_line[MENU_COMMAND_TX_CAPACITY]; uint8_t byte; (void)memset(max_line, 'x', sizeof(max_line)); CHECK(MenuCommandTx_Enqueue(&queue, max_line, sizeof(max_line)) == 1U); MenuCommandTx_Fail(&queue); CHECK(queue.failed == 1U); CHECK(queue.active == 0U); CHECK(MenuCommandTx_Enqueue(&queue, "z", 1U) == 1U); CHECK(queue.failed == 0U); CHECK(MenuCommandTx_Peek(&queue, &byte) == 1U && byte == 'z'); MenuCommandTx_Commit(&queue); CHECK(queue.active == 0U); }
   return 0;
 }
 

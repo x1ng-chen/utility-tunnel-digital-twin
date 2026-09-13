@@ -204,11 +204,12 @@ void MenuCommandTx_Init(MenuCommandTxQueue *queue)
 uint8_t MenuCommandTx_Enqueue(MenuCommandTxQueue *queue, const char *line, size_t length)
 {
   if ((queue == 0) || (line == 0) || (length == 0U) ||
-      (length > MENU_COMMAND_TX_CAPACITY) || queue->active || queue->failed) return 0U;
+      (length > MENU_COMMAND_TX_CAPACITY) || queue->active) return 0U;
   (void)memcpy(queue->bytes, line, length);
   queue->length = (uint16_t)length;
   queue->offset = 0U;
   queue->active = 1U;
+  queue->failed = 0U;
   return 1U;
 }
 
@@ -229,6 +230,8 @@ void MenuCommandTx_Commit(MenuCommandTxQueue *queue)
 void MenuCommandTx_Fail(MenuCommandTxQueue *queue)
 {
   if (queue == 0) return;
+  /* HAL_ERROR drops only the current frame; Enqueue clears this diagnostic
+   * bit and starts a fresh bounded frame on the next command. */
   queue->active = 0U;
   queue->failed = 1U;
 }

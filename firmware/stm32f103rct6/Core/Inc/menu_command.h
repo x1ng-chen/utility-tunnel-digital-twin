@@ -43,6 +43,8 @@ uint8_t MenuCommand_Begin(MenuCommandContext *context, UiAction action, uint8_t 
 uint8_t MenuCommand_ParseAck(const char *line, size_t length, MenuCommandAck *ack);
 uint8_t MenuCommand_AcceptAck(MenuCommandContext *context, const MenuCommandAck *ack);
 void MenuCommandTx_Init(MenuCommandTxQueue *queue);
+/* A failed frame is dropped atomically; the next enqueue reinitializes the
+ * queue, so one transient UART failure cannot disable later commands. */
 uint8_t MenuCommandTx_Enqueue(MenuCommandTxQueue *queue, const char *line, size_t length);
 uint8_t MenuCommandTx_Peek(const MenuCommandTxQueue *queue, uint8_t *byte);
 void MenuCommandTx_Commit(MenuCommandTxQueue *queue);
