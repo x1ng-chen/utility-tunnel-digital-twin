@@ -10,6 +10,10 @@ constexpr size_t kCommandIdCapacity = 40U;  // 39 characters plus NUL.
 constexpr size_t kDeviceIdCapacity = 8U;
 constexpr size_t kAckReasonCapacity = 48U;
 constexpr uint64_t kMinEpochSeconds = 1704067200ULL;  // 2024-01-01T00:00:00Z.
+// End of 2099 UTC. Keeping both representations bounded makes subtraction and
+// seconds-to-milliseconds conversion safe in the STM32/ESP uint64_t consumers.
+constexpr uint64_t kMaxEpochSeconds = 4102444799ULL;
+constexpr uint64_t kMaxEpochMilliseconds = 4102444799999ULL;
 constexpr uint32_t kSnapshotMaxAgeMs = 5000U;
 constexpr uint32_t kCommandMaxTtlMs = 30000U;
 

@@ -16,15 +16,15 @@ constexpr uint32_t kAlarmSourceMask = 0xffU;
 class Writer {
  public:
   Writer(char* output, size_t capacity)
-      : output_(output), capacity_(capacity), position_(0U), ok_(true) {}
+      : output_(output), capacity_(capacity), position_(0U), storage_ok_(true) {}
 
   void character(char value) {
-    if (!ok_) return;
-    if (position_ >= capacity_) {
-      ok_ = false;
-      return;
+    if (position_ < capacity_) {
+      output_[position_] = value;
+    } else {
+      storage_ok_ = false;
     }
-    output_[position_++] = value;
+    ++position_;
   }
 
   void literal(const char* value) {
@@ -81,17 +81,19 @@ class Writer {
   void boolean(bool value) { literal(value ? "true" : "false"); }
 
   bool finish(size_t* written) {
-    if (!ok_ || position_ >= capacity_) return false;
+    if (!storage_ok_ || position_ >= capacity_) return false;
     output_[position_] = '\0';
     *written = position_;
     return true;
   }
 
+  size_t requiredSize() const { return position_; }
+
  private:
   char* output_;
   size_t capacity_;
   size_t position_;
-  bool ok_;
+  bool storage_ok_;
 };
 
 class Reader {
@@ -125,7 +127,8 @@ class Reader {
     return punctuation(':');
   }
 
-  bool readString(char* output, size_t capacity) {
+  bool readString(char* output, size_t capacity,
+                  Result invalid_result = Result::InvalidString) {
     skipWhitespace();
     if (position_ >= length_ || input_[position_] != '"') {
       fail(Result::WrongType);
@@ -137,14 +140,14 @@ class Reader {
       unsigned char byte = static_cast<unsigned char>(input_[position_++]);
       if (byte == '"') {
         if (written >= capacity) {
-          fail(Result::InvalidString);
+          fail(invalid_result);
           return false;
         }
         output[written] = '\0';
         return true;
       }
       if (byte < 0x20U) {
-        fail(Result::InvalidString);
+        fail(invalid_result);
         return false;
       }
       if (byte == '\\') {
@@ -177,7 +180,7 @@ class Reader {
               code = static_cast<uint16_t>((code << 4U) | static_cast<uint16_t>(value));
             }
             if (code > 0x7fU || code < 0x20U) {
-              fail(Result::InvalidString);
+              fail(invalid_result);
               return false;
             }
             byte = static_cast<unsigned char>(code);
@@ -188,11 +191,11 @@ class Reader {
             return false;
         }
       } else if (byte >= 0x80U) {
-        fail(Result::InvalidString);
+        fail(invalid_result);
         return false;
       }
       if (written + 1U >= capacity) {
-        fail(Result::InvalidString);
+        fail(invalid_result);
         return false;
       }
       output[written++] = static_cast<char>(byte);
@@ -386,42 +389,59 @@ bool validQuality(Quality value) {
 
 bool validTimestamp(uint64_t value, uint64_t generated_at_ms, Quality quality) {
   if (quality == Quality::Unknown && value == 0ULL) return true;
-  return value >= kMinEpochMs && value <= generated_at_ms;
+  return value >= kMinEpochMs && value <= kMaxEpochMilliseconds &&
+         value <= generated_at_ms;
 }
 
-bool validReading(const Reading& reading, int32_t minimum, int32_t maximum,
-                  uint64_t generated_at_ms) {
-  return validQuality(reading.quality) && reading.value >= minimum &&
-         reading.value <= maximum &&
-         validTimestamp(reading.sampled_at_ms, generated_at_ms, reading.quality);
+Result validateReading(const Reading& reading, int32_t minimum, int32_t maximum,
+                       uint64_t generated_at_ms) {
+  if (!validQuality(reading.quality)) return Result::InvalidEnum;
+  if (reading.value < minimum || reading.value > maximum ||
+      !validTimestamp(reading.sampled_at_ms, generated_at_ms, reading.quality)) {
+    return Result::OutOfRange;
+  }
+  return Result::Ok;
 }
 
 Result validateSnapshot(const ScreenSnapshot& value) {
   if (!hasTerminator(value.source) || std::strcmp(value.source, "CTRL-01") != 0) {
     return Result::InvalidTarget;
   }
-  if (value.generated_at_ms < kMinEpochMs) return Result::OutOfRange;
-  if (!validReading(value.temperature, -5000, 10000, value.generated_at_ms) ||
-      !validReading(value.humidity, 0, 10000, value.generated_at_ms) ||
-      !validReading(value.oxygen, 0, 100000, value.generated_at_ms) ||
-      !validReading(value.methane, 0, 100000, value.generated_at_ms) ||
-      !validReading(value.carbon_monoxide, 0, 100000, value.generated_at_ms) ||
-      !validReading(value.smoke, 0, 4095, value.generated_at_ms) ||
-      !validReading(value.water, 0, 4095, value.generated_at_ms) ||
-      !validReading(value.flame, 0, 1, value.generated_at_ms)) {
+  if (value.generated_at_ms < kMinEpochMs ||
+      value.generated_at_ms > kMaxEpochMilliseconds) {
     return Result::OutOfRange;
   }
+  Result result = validateReading(value.temperature, -5000, 10000,
+                                  value.generated_at_ms);
+  if (result != Result::Ok) return result;
+  result = validateReading(value.humidity, 0, 10000, value.generated_at_ms);
+  if (result != Result::Ok) return result;
+  result = validateReading(value.oxygen, 0, 100000, value.generated_at_ms);
+  if (result != Result::Ok) return result;
+  result = validateReading(value.methane, 0, 100000, value.generated_at_ms);
+  if (result != Result::Ok) return result;
+  result = validateReading(value.carbon_monoxide, 0, 100000,
+                           value.generated_at_ms);
+  if (result != Result::Ok) return result;
+  result = validateReading(value.smoke, 0, 4095, value.generated_at_ms);
+  if (result != Result::Ok) return result;
+  result = validateReading(value.water, 0, 4095, value.generated_at_ms);
+  if (result != Result::Ok) return result;
+  result = validateReading(value.flame, 0, 1, value.generated_at_ms);
+  if (result != Result::Ok) return result;
   if (static_cast<uint8_t>(value.alarm_severity) >
-          static_cast<uint8_t>(AlarmSeverity::Critical) ||
-      (value.warning_sources & ~kAlarmSourceMask) != 0U ||
+      static_cast<uint8_t>(AlarmSeverity::Critical)) {
+    return Result::InvalidEnum;
+  }
+  if ((value.warning_sources & ~kAlarmSourceMask) != 0U ||
       (value.critical_sources & ~kAlarmSourceMask) != 0U) {
     return Result::OutOfRange;
   }
   for (size_t index = 0U; index < 2U; ++index) {
     const FanSnapshot& fan = value.fans[index];
+    if (!validQuality(fan.quality)) return Result::InvalidEnum;
     if (!validFanDuty(fan.target_duty_percent) || fan.actual_rpm > 100000U ||
         fan.voltage_mv > 36000U || fan.current_ma > 10000U ||
-        !validQuality(fan.quality) ||
         !validTimestamp(fan.sampled_at_ms, value.generated_at_ms, fan.quality)) {
       return Result::OutOfRange;
     }
@@ -443,9 +463,13 @@ Result validateSnapshot(const ScreenSnapshot& value) {
         value.last_command.completed_at_ms > value.generated_at_ms) {
       return Result::OutOfRange;
     }
-  } else if (value.last_command.accepted || value.last_command.completed_at_ms != 0ULL ||
-             !isSafeToken(value.last_command.command_id, kCommandIdCapacity - 1U, true)) {
-    return Result::OutOfRange;
+  } else {
+    if (!isSafeToken(value.last_command.command_id, kCommandIdCapacity - 1U, true)) {
+      return Result::InvalidIdentifier;
+    }
+    if (value.last_command.accepted || value.last_command.completed_at_ms != 0ULL) {
+      return Result::OutOfRange;
+    }
   }
   return Result::Ok;
 }
@@ -481,7 +505,8 @@ Result validateCommand(const MenuCommand& value) {
       if (value.value != 0U) return Result::OutOfRange;
       break;
   }
-  if (value.created_at_ms < kMinEpochMs || value.ttl_ms == 0U ||
+  if (value.created_at_ms < kMinEpochMs ||
+      value.created_at_ms > kMaxEpochMilliseconds || value.ttl_ms == 0U ||
       value.ttl_ms > kCommandMaxTtlMs) {
     return Result::OutOfRange;
   }
@@ -501,7 +526,8 @@ Result validateAck(const CommandAck& value) {
     return Result::InvalidString;
   }
   if (value.applied_value < 0 || value.applied_value > 100 ||
-      value.completed_at_ms < kMinEpochMs) {
+      value.completed_at_ms < kMinEpochMs ||
+      value.completed_at_ms > kMaxEpochMilliseconds) {
     return Result::OutOfRange;
   }
   return Result::Ok;
@@ -512,7 +538,10 @@ Result validateTime(const TimeSync& value) {
       static_cast<uint8_t>(value.state) > static_cast<uint8_t>(TimeState::Holdover)) {
     return Result::InvalidEnum;
   }
-  if (value.epoch_seconds < kMinEpochSeconds) return Result::OutOfRange;
+  if (value.epoch_seconds < kMinEpochSeconds ||
+      value.epoch_seconds > kMaxEpochSeconds) {
+    return Result::OutOfRange;
+  }
   return Result::Ok;
 }
 
@@ -594,6 +623,11 @@ Result prepareOutput(char* output, size_t output_capacity, size_t* written) {
 }
 
 Result finishOutput(Writer* writer, char* output, size_t* written) {
+  if (writer->requiredSize() > kUartLineLimit) {
+    output[0] = '\0';
+    *written = 0U;
+    return Result::TooLarge;
+  }
   if (writer->finish(written)) return Result::Ok;
   output[0] = '\0';
   *written = 0U;
@@ -802,13 +836,13 @@ Result ParseSnapshot(const char* json, size_t length, uint64_t now_epoch_ms,
       !reader.endArray() || !reader.comma() || !reader.key("lastCommand") ||
       !reader.beginArray() ||
       !reader.readString(value.last_command.command_id,
-                         sizeof(value.last_command.command_id)) ||
+                         sizeof(value.last_command.command_id),
+                         Result::InvalidIdentifier) ||
       !reader.comma() || !reader.readBool(&value.last_command.accepted) ||
       !reader.comma() || !reader.readBool(&value.last_command.complete) ||
       !reader.comma() ||
       !reader.readUnsigned64(&value.last_command.completed_at_ms) ||
       !reader.endArray() || !reader.endObject()) {
-    if (reader.result() == Result::InvalidString) return Result::InvalidIdentifier;
     return readerFailure(reader);
   }
   result = reader.finish();
@@ -859,7 +893,8 @@ Result ParseMenuCommand(const char* json, size_t length, uint64_t now_epoch_ms,
   MenuCommand value{};
   char action[24];
   if (!reader.comma() || !reader.key("cmdId") ||
-      !reader.readString(value.command_id, sizeof(value.command_id)) ||
+      !reader.readString(value.command_id, sizeof(value.command_id),
+                         Result::InvalidIdentifier) ||
       !reader.comma() || !reader.key("target") ||
       !reader.readString(value.target, sizeof(value.target)) || !reader.comma() ||
       !reader.key("action") || !reader.readString(action, sizeof(action)) ||
@@ -869,7 +904,6 @@ Result ParseMenuCommand(const char* json, size_t length, uint64_t now_epoch_ms,
       !reader.readUnsigned64(&value.created_at_ms) || !reader.comma() ||
       !reader.key("ttlMs") || !reader.readUnsigned32(&value.ttl_ms) ||
       !reader.endObject()) {
-    if (reader.result() == Result::InvalidString) return Result::InvalidIdentifier;
     return readerFailure(reader);
   }
   result = reader.finish();
@@ -918,7 +952,8 @@ Result ParseCommandAck(const char* json, size_t length,
   CommandAck value{};
   char status[16];
   if (!reader.comma() || !reader.key("cmdId") ||
-      !reader.readString(value.command_id, sizeof(value.command_id)) ||
+      !reader.readString(value.command_id, sizeof(value.command_id),
+                         Result::InvalidIdentifier) ||
       !reader.comma() || !reader.key("status") ||
       !reader.readString(status, sizeof(status)) || !reader.comma() ||
       !reader.key("reason") ||
@@ -927,7 +962,6 @@ Result ParseCommandAck(const char* json, size_t length,
       !reader.readSigned32(&value.applied_value) || !reader.comma() ||
       !reader.key("completedAtMs") ||
       !reader.readUnsigned64(&value.completed_at_ms) || !reader.endObject()) {
-    if (reader.result() == Result::InvalidString) return Result::InvalidIdentifier;
     return readerFailure(reader);
   }
   result = reader.finish();
