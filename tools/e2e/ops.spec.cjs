@@ -793,7 +793,13 @@ test('多页事件加载、报警次数口径与页码刷新恢复', async ({ pa
   await expect(eventsRegion.getByRole('button', { name: '加载更多事件' })).toHaveCount(0);
   await expect(page.locator('.insight-metrics article').filter({ hasText: '报警次数' })).toContainText('80');
   await expect(page.locator('.insight-metrics article').filter({ hasText: '采集时段' })).toBeVisible();
+  await eventsRegion.getByRole('button', { name: '查看当前筛选范围内的全部告警（80）' }).click();
+  await expect(page).toHaveURL(new RegExp(`/alerts\\?.*assetCode=${assetCode}`));
+  const completeAlertTable = page.getByRole('region', { name: '告警记录' });
+  await expect(completeAlertTable).toContainText('ALM-AUTO-');
+  await expect(completeAlertTable.locator('.table-row')).toHaveCount(80);
   const paging = page.getByRole('navigation', { name: '历史采集记录分页' });
+  await page.goto(`${webUrl}/telemetry?assetCode=${assetCode}&metricKey=humidity`);
   await paging.getByRole('button', { name: '下一页' }).click();
   await expect(page).toHaveURL(/page=2/);
   await expect(paging).toContainText('第 2 / 2 页');

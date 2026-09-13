@@ -31,6 +31,7 @@ let eventPage = 0;
 let eventParams: Record<string, string> | null = null;
 const alertTotal = ref<number | null>(null);
 let alertCountSequence = 0;
+const canOpenAllAlerts = computed(() => alertTotal.value !== null && alertTotal.value > historyEvents.value.length);
 const metricOptions = computed(() => {
   const options = new Map(store.thresholds.map((item) => [item.key, item.label]));
   for (const item of [...store.telemetry, ...store.telemetryInsights]) {
@@ -128,6 +129,15 @@ function alertCountParams(): Record<string, string> {
   if (query.recordedFrom) params.openedFrom = query.recordedFrom;
   if (query.recordedTo) params.openedTo = query.recordedTo;
   return params;
+}
+
+function openAllAlerts() {
+  const query = appliedQuery.value;
+  const target: Record<string, string> = { source: 'telemetry' };
+  if (query.assetCode) target.assetCode = query.assetCode;
+  if (query.recordedFrom) target.openedFrom = query.recordedFrom;
+  if (query.recordedTo) target.openedTo = query.recordedTo;
+  void router.push({ path: '/alerts', query: target });
 }
 
 async function loadAlertCount() {
@@ -271,6 +281,7 @@ watch(() => store.source, (next, previous) => {
           <p v-else-if="!historyEvents.length">已加载范围内没有匹配事件。</p>
           <p v-if="eventsTotal">本页趋势时段及设备共 {{ eventsTotal }} 条告警，已加载 {{ historyEvents.length }} 条。</p>
           <button v-if="eventsError || historyEvents.length < eventsTotal" type="button" :disabled="eventsLoading" @click="loadMoreEvents">{{ eventsLoading ? '加载中…' : eventsError ? '重试加载事件' : '加载更多事件' }}</button>
+          <button v-if="canOpenAllAlerts" type="button" @click="openAllAlerts">查看当前筛选范围内的全部告警（{{ alertTotal }}）</button>
           <article v-for="event in historyEvents" :key="event.id">
             <time>{{ new Date(event.openedAt).toLocaleString('zh-CN') }}</time>
             <strong>{{ event.code }} · {{ event.title }}</strong>

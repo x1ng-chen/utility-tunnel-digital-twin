@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
 import ReportExportButton from '../components/ReportExportButton.vue';
+import { api } from '../services/api';
 import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
 import type { Alert } from '../types';
@@ -14,13 +15,66 @@ const router = useRouter();
 const filter = ref('all');
 const actionError = ref('');
 const busyId = ref<number | null>(null);
-const visible = computed(() => store.alerts.filter((item) => filter.value === 'all' || item.status === filter.value));
+const contextualAlerts = ref<Alert[]>([]);
+const contextualTotal = ref(0);
+const contextualLoading = ref(false);
+const contextualError = ref('');
+let contextualSequence = 0;
+const alertPage = computed(() => {
+  const page = Number(route.query.page);
+  return Number.isInteger(page) && page > 0 ? page : 1;
+});
+const contextualQuery = computed(() => {
+  const query: Record<string, string> = {};
+  for (const key of ['assetCode', 'assetCodes', 'openedFrom', 'openedTo']) {
+    const value = route.query[key];
+    if (typeof value === 'string' && value) query[key] = value;
+  }
+  return query;
+});
+const hasContextualQuery = computed(() => Object.keys(contextualQuery.value).length > 0);
+const visible = computed(() => (hasContextualQuery.value ? contextualAlerts.value : store.alerts)
+  .filter((item) => filter.value === 'all' || item.status === filter.value));
+const contextualPageCount = computed(() => Math.max(1, Math.ceil(contextualTotal.value / 100)));
 const focusedCode = computed(() => typeof route.query.focus === 'string' ? route.query.focus : '');
 const canWrite = computed(() => !store.offline && (auth.user?.role === 'administrator' || auth.user?.role === 'operator'));
 function linkedOrder(alert: Alert) { return store.workOrders.find((item) => item.sourceAlertId === alert.id); }
 
+async function loadContextualAlerts() {
+  if (!hasContextualQuery.value || store.source !== 'api') return;
+  const sequence = ++contextualSequence;
+  contextualLoading.value = true;
+  contextualError.value = '';
+  try {
+    const params: Record<string, string | number> = { ...contextualQuery.value, page: alertPage.value, pageSize: 100 };
+    if (filter.value !== 'all') params.status = filter.value;
+    const response = await api.alerts(params);
+    if (sequence !== contextualSequence) return;
+    contextualAlerts.value = response.data.items as Alert[];
+    contextualTotal.value = response.data.total;
+  } catch {
+    if (sequence === contextualSequence) contextualError.value = '告警记录加载失败，请检查连接后重试。';
+  } finally {
+    if (sequence === contextualSequence) contextualLoading.value = false;
+  }
+}
+
+watch([hasContextualQuery, contextualQuery, alertPage, filter, () => store.source], () => {
+  if (hasContextualQuery.value) void loadContextualAlerts();
+  else { contextualAlerts.value = []; contextualTotal.value = 0; contextualError.value = ''; }
+}, { immediate: true });
+
+function goToAlertPage(page: number) {
+  const next = Math.min(contextualPageCount.value, Math.max(1, page));
+  const query = { ...route.query } as Record<string, string>;
+  if (next === 1) delete query.page;
+  else query.page = String(next);
+  void router.replace({ query });
+}
+
 async function acknowledge(alert: Alert) {
   await runAction(alert.id, () => store.acknowledge(alert));
+  if (hasContextualQuery.value) await loadContextualAlerts();
 }
 
 async function createWorkOrder(alert: Alert) {
@@ -87,7 +141,9 @@ function getUserFacingError(cause: unknown) {
       <div class="filter-tabs"><button v-for="item in [['all','全部'],['open','待确认'],['acknowledged','已确认']]" :key="item[0]" :class="{ active: filter === item[0] }" @click="filter = item[0]">{{ item[1] }}</button></div>
     </section>
     <p v-if="actionError" class="inline-message error-message" role="alert">{{ actionError }}</p>
-    <section class="table-panel alerts-table" aria-label="告警记录">
+    <p v-if="hasContextualQuery" class="inline-message" role="status">正在查看数据洞察筛选范围内的完整告警记录，共 {{ contextualTotal }} 条。</p>
+    <p v-if="contextualError" class="inline-message error-message" role="alert">{{ contextualError }}</p>
+    <section class="table-panel alerts-table" aria-label="告警记录" :aria-busy="contextualLoading">
       <div class="table-head"><span>告警编码</span><span>资产 / 事件</span><span>级别</span><span>状态</span><span>操作</span></div>
       <div v-for="alert in visible" :key="alert.id" :class="['table-row', { focused: alert.code === focusedCode }]">
         <div><b>{{ alert.code }}</b><small>{{ new Date(alert.openedAt).toLocaleString('zh-CN') }}</small></div>
@@ -105,7 +161,12 @@ function getUserFacingError(cause: unknown) {
           <small v-else class="permission-hint">{{ store.offline ? '离线只读' : '只读角色' }}</small>
         </div>
       </div>
-      <div v-if="!visible.length" class="empty-state">当前筛选条件下没有告警。</div>
+      <div v-if="!visible.length && !contextualLoading" class="empty-state">当前筛选条件下没有告警。</div>
+      <nav v-if="hasContextualQuery && contextualPageCount > 1" class="history-pagination" aria-label="告警记录分页">
+        <button type="button" :disabled="alertPage <= 1 || contextualLoading" @click="goToAlertPage(alertPage - 1)">上一页</button>
+        <span>第 {{ alertPage }} / {{ contextualPageCount }} 页</span>
+        <button type="button" :disabled="alertPage >= contextualPageCount || contextualLoading" @click="goToAlertPage(alertPage + 1)">下一页</button>
+      </nav>
     </section>
   </AppShell>
 </template>

@@ -1,4 +1,5 @@
 const { defineConfig } = require('@playwright/test');
+const executablePath = process.env.E2E_CHROMIUM_PATH;
 
 module.exports = defineConfig({
   testDir: __dirname,
@@ -17,6 +18,7 @@ module.exports = defineConfig({
     reducedMotion: 'reduce',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    ...(executablePath ? { launchOptions: { executablePath } } : {}),
   },
   outputDir: 'test-results',
 });

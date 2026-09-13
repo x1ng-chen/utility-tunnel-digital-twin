@@ -27,6 +27,8 @@ node "$env:NODE_PATH/@playwright/test/cli.js" test --config tools/e2e/playwright
 
 Windows 下包含 `|` 的 `--grep` 参数应直接传给 Node CLI，避免 `.cmd` 再次解析它为管道。
 
+若本机无法下载 Playwright 托管浏览器，可仅为该隔离测试会话设置 `E2E_CHROMIUM_PATH` 指向已审查的 Chrome/Chromium 可执行文件；该变量不会写入项目配置，也不会改变 CI 的托管浏览器。不要将此回退用于生产浏览器兼容性结论。
+
 停止独立 API 时会关闭数据库连接并清理临时目录。异常强制结束进程可能留下临时目录；只清理启动日志中明确列出的 `ut-e2e-isolated-*` 目录，不删除演示数据。
 
 ## 检查范围
