@@ -20,6 +20,11 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 /* USER CODE BEGIN Includes */
+#ifdef NODE_A_FIRMWARE
+#include "node_a_clock_contract.h"
+_Static_assert(NODE_A_ADC_CLOCK_HZ <= 12000000UL,
+               "Node A ADC GPIO map must use a safe ADC clock contract");
+#endif
 
 /* USER CODE END Includes */
 

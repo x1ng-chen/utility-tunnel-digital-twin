@@ -1,4 +1,5 @@
 #include "main.h"
+#include "node_a_clock_contract.h"
 #include "node_a_command.h"
 #include "node_a_ina226.h"
 #include "node_a_sensor_map.h"
@@ -61,7 +62,7 @@
 #define FAN2_TACH_GPIO_Port                GPIOA
 #define FAN2_PWM_Pin                       GPIO_PIN_9
 #define FAN2_PWM_GPIO_Port                 GPIOB
-#define FAN_PWM_TIMER_PERIOD                    319U
+#define FAN_PWM_TIMER_PERIOD        NODE_A_FAN_TIMER_PERIOD
 #define WS2812_PIXEL_COUNT                 9U
 #define WS2812_TEST_BRIGHTNESS             32U
 #define SMOKE_SAMPLE_INTERVAL_MS            50U
@@ -171,7 +172,7 @@ static uint8_t gas_alarm;
 static uint8_t gas_ventilation_active;
 static uint8_t gas_ventilation_cooling;
 static uint32_t gas_ventilation_clear_started_at;
-static uint8_t ws2812_encoded[WS2812_PIXEL_COUNT * 15U];
+static uint8_t ws2812_encoded[WS2812_PIXEL_COUNT * 18U];
 static char node_test_line[NODE_TEST_LINE_SIZE];
 static uint16_t node_test_length;
 static uint8_t test_safety_smoke;
@@ -210,6 +211,7 @@ static void Command_ProcessPayload(const char *payload, uint32_t received_at);
 static void Command_SendAck(const char *command_id, const char *status,
                             const char *reason, uint32_t applied_value);
 static void NodeTest_Poll(void);
+static void NodeTest_ReportClock(void);
 static void Safety_Snapshot(NodeASafetyState *safety);
 static void CommitActuators(const NodeACommand *command, uint32_t now,
                             const NodeAActuatorState *before);
@@ -303,8 +305,8 @@ static void MX_FAN1_PWM_Init(void)
   HAL_GPIO_Init(FAN1_PWM_GPIO_Port, &gpio);
 
   TIM4->CR1 = 0U;
-  TIM4->PSC = 0U;
-  TIM4->ARR = FAN_PWM_TIMER_PERIOD; /* 8 MHz / 320 = 25 kHz. */
+  TIM4->PSC = NODE_A_FAN_TIMER_PRESCALER;
+  TIM4->ARR = FAN_PWM_TIMER_PERIOD; /* 72 MHz timer clock / 2880 = 25 kHz. */
   TIM4->CCMR2 = TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3PE |
                 TIM_CCMR2_OC4M_1 | TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4PE;
   TIM4->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;
@@ -316,7 +318,7 @@ static void MX_FAN1_PWM_Init(void)
 
 /* The existing Cube package omitted HAL I2C. These deliberately slow,
  * open-drain routines are sufficient for initial SHT30 bring-up at 500 Hz. */
-static void I2c_Delay(void) { HAL_Delay(1U); }
+static void I2c_Delay(void) { HAL_Delay(NODE_A_SOFT_I2C_DELAY_MS); }
 static void I2c_Sda(const SoftI2cBus *bus, GPIO_PinState state)
 {
   HAL_GPIO_WritePin(bus->port, bus->sda_pin, state);
@@ -457,7 +459,7 @@ static uint8_t Sht30_Read(const SoftI2cBus *bus, uint8_t address, Sht30Reading *
   {
     I2c_Stop(bus); return 0U;
   }
-  I2c_Stop(bus); HAL_Delay(20U); I2c_Start(bus);
+  I2c_Stop(bus); HAL_Delay(NODE_A_SHT30_MEASUREMENT_DELAY_MS); I2c_Start(bus);
   if (!I2c_WriteByte(bus, (uint8_t)((address << 1U) | 1U)))
   {
     I2c_Stop(bus); return 0U;
@@ -1005,17 +1007,18 @@ static void Level_Poll(uint32_t now)
     level_detected = level_candidate;
 }
 
-/* SPI2 on PB15 runs at 4 MHz from the 8 MHz APB1 clock.  Each WS2812 bit is
- * encoded as five SPI bits: 0=10000 and 1=11100, giving a 1.25 us cell. */
+/* SPI2 on PB15 runs at 4.5 MHz (36 MHz APB1 / 8). Each WS2812 bit is encoded
+ * as six SPI bits: 0=100000 and 1=111100, giving a 1.333 us cell. */
 static uint8_t *Ws2812_EncodeByte(uint8_t value, uint8_t *output,
                                   uint8_t *pending, uint8_t *pending_bits)
 {
   uint8_t source_bit;
   for (source_bit = 0x80U; source_bit != 0U; source_bit >>= 1U)
   {
-    uint8_t encoded = ((value & source_bit) != 0U) ? 0x1CU : 0x10U;
+    uint8_t encoded = ((value & source_bit) != 0U) ?
+                      NODE_A_WS2812_ONE_PATTERN : NODE_A_WS2812_ZERO_PATTERN;
     uint8_t encoded_bit;
-    for (encoded_bit = 0x10U; encoded_bit != 0U; encoded_bit >>= 1U)
+    for (encoded_bit = 0x20U; encoded_bit != 0U; encoded_bit >>= 1U)
     {
       *pending = (uint8_t)((*pending << 1U) | (((encoded & encoded_bit) != 0U) ? 1U : 0U));
       if (++(*pending_bits) == 8U)
@@ -1038,7 +1041,8 @@ static void MX_WS2812_SPI_Init(void)
   gpio.Mode = GPIO_MODE_AF_PP;
   gpio.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(WS2812_GPIO_Port, &gpio);
-  SPI2->CR1 = SPI_CR1_MSTR | SPI_CR1_SSM | SPI_CR1_SSI;
+  SPI2->CR1 = SPI_CR1_MSTR | SPI_CR1_SSM | SPI_CR1_SSI |
+              SPI_CR1_BR_1; /* PCLK1 / 8 = 4.5 MHz. */
   SPI2->CR2 = 0U;
   SPI2->CR1 |= SPI_CR1_SPE;
 }
@@ -1318,6 +1322,26 @@ static void NodeTest_ReportState(void)
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
 }
 
+static void NodeTest_ReportClock(void)
+{
+  char message[240];
+  const int length = snprintf(message, sizeof(message),
+    "#CLOCK sysclk=%lu hclk=%lu pclk1=%lu pclk2=%lu adc=%lu fan_pwm=%lu uart1=%lu uart2=%lu sht30_ms=%lu ws_spi=%lu ws_cell_ns=%lu\r\n",
+    (unsigned long)HAL_RCC_GetSysClockFreq(),
+    (unsigned long)HAL_RCC_GetHCLKFreq(),
+    (unsigned long)HAL_RCC_GetPCLK1Freq(),
+    (unsigned long)HAL_RCC_GetPCLK2Freq(),
+    (unsigned long)NODE_A_ADC_CLOCK_HZ,
+    (unsigned long)NODE_A_FAN_PWM_HZ,
+    (unsigned long)NODE_A_UART_BAUD,
+    (unsigned long)NODE_A_UART_BAUD,
+    (unsigned long)NODE_A_SHT30_MEASUREMENT_DELAY_MS,
+    (unsigned long)NODE_A_WS2812_SPI_HZ,
+    (unsigned long)NODE_A_WS2812_CELL_NS);
+  if ((length > 0) && (length < (int)sizeof(message)))
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
+}
+
 static void NodeTest_HandleLine(void)
 {
   unsigned int smoke;
@@ -1371,6 +1395,11 @@ static void NodeTest_HandleLine(void)
   if (strcmp(node_test_line, "#NODETEST STATE") == 0)
   {
     NodeTest_ReportState();
+    return;
+  }
+  if (strcmp(node_test_line, "#NODETEST CLOCK") == 0)
+  {
+    NodeTest_ReportClock();
     return;
   }
 }
@@ -1555,17 +1584,24 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef oscillator = {0};
   RCC_ClkInitTypeDef clock = {0};
-  oscillator.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  oscillator.HSIState = RCC_HSI_ON;
-  oscillator.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  oscillator.PLL.PLLState = RCC_PLL_NONE;
+  RCC_PeriphCLKInitTypeDef peripheral_clock = {0};
+
+  oscillator.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  oscillator.HSEState = RCC_HSE_ON;
+  oscillator.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+  oscillator.PLL.PLLState = RCC_PLL_ON;
+  oscillator.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  oscillator.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&oscillator) != HAL_OK) Error_Handler();
   clock.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-  clock.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  clock.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   clock.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  clock.APB1CLKDivider = RCC_HCLK_DIV1;
+  clock.APB1CLKDivider = RCC_HCLK_DIV2;
   clock.APB2CLKDivider = RCC_HCLK_DIV1;
-  if (HAL_RCC_ClockConfig(&clock, FLASH_LATENCY_0) != HAL_OK) Error_Handler();
+  if (HAL_RCC_ClockConfig(&clock, FLASH_LATENCY_2) != HAL_OK) Error_Handler();
+  peripheral_clock.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+  peripheral_clock.AdcClockSelection = RCC_ADCPCLK2_DIV6;
+  if (HAL_RCCEx_PeriphCLKConfig(&peripheral_clock) != HAL_OK) Error_Handler();
 }
 
 static uint16_t GasAdcFilter_Update(GasAdcFilter *filter, uint16_t sample)
@@ -1758,7 +1794,7 @@ static uint8_t GasAdc_ReadRaw(uint32_t adc_channel, uint16_t *raw)
 static void MX_USART2_UART_Init(void)
 {
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 9600;
+  huart2.Init.BaudRate = NODE_A_UART_BAUD;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -1771,7 +1807,7 @@ static void MX_USART2_UART_Init(void)
 static void MX_USART1_UART_Init(void)
 {
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 9600;
+  huart1.Init.BaudRate = NODE_A_UART_BAUD;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
