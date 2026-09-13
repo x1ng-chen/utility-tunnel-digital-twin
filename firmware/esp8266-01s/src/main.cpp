@@ -1,10 +1,13 @@
 #include <Arduino.h>
+#include <cstring>
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>
-#include <WiFiUdp.h>
 #include <PubSubClient.h>
+#include <WiFiUdp.h>
+#include <time.h>
 
 #include "mqtt_discovery.h"
+#include "screen_routing.h"
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -24,7 +27,10 @@ namespace {
 constexpr uint32_t kSerialBaud = 9600;
 constexpr uint32_t kReconnectIntervalMs = 5000;
 constexpr uint32_t kWiFiConnectTimeoutMs = 30000;
-constexpr size_t kMaxSerialFrame = 768;
+// Preserve the bench-tested long telemetry path. Screen protocol frames remain
+// independently capped at screen_protocol::kUartLineLimit (768 bytes).
+constexpr size_t kMaxSerialFrame = 1024;
+constexpr uint16_t kMqttBufferSize = 1280;
 constexpr uint8_t kPendingFrameCapacity = 8;
 constexpr uint8_t kLedPin = 2;
 constexpr uint16_t kDiscoveryPort = 4210;
@@ -33,13 +39,16 @@ constexpr size_t kMaxDiscoveryPacket = 96;
 WiFiClient networkClient;
 WiFiUDP discoveryUdp;
 PubSubClient mqtt(networkClient);
-String serialFrame;
-String telemetryTopic;
-String commandTopic;
+char serialFrame[kMaxSerialFrame + 1U] = {};
+size_t serialFrameLength = 0U;
 String statusTopic;
+#if !defined(BUILD_ROLE_CTRL02)
+String telemetryTopic;
 String commandAckTopic;
+#endif
 char pendingFrames[kPendingFrameCapacity][kMaxSerialFrame + 1] = {};
-bool pendingFrameIsCommandAck[kPendingFrameCapacity] = {};
+enum class PendingKind : uint8_t { Telemetry = 0, CommandAck, MenuCommand };
+PendingKind pendingFrameKinds[kPendingFrameCapacity] = {};
 uint8_t pendingHead = 0;
 uint8_t pendingCount = 0;
 uint32_t lastWiFiAttempt = 0;
@@ -50,6 +59,15 @@ BrokerEndpoint savedBrokerEndpoint{};
 bool brokerAvailable = false;
 bool savedBrokerAvailable = false;
 bool discoveryListening = false;
+screen_routing::TelemetryAccumulator screenTelemetry{};
+screen_routing::TimeSyncSchedule timeSyncSchedule{};
+screen_routing::NtpAssociationState ntpAssociation{};
+
+#if defined(BUILD_ROLE_CTRL02)
+constexpr screen_routing::Role kBuildRole = screen_routing::Role::Ctrl02;
+#else
+constexpr screen_routing::Role kBuildRole = screen_routing::Role::Ctrl01;
+#endif
 
 IPAddress brokerIp() {
   return IPAddress(brokerEndpoint.address[0], brokerEndpoint.address[1],
@@ -119,13 +137,71 @@ void printStatus() {
                 mqtt.connected() ? "up" : "down", broker.c_str(), pendingCount, ESP.getFreeHeap());
 }
 
+uint64_t currentEpochMilliseconds() {
+  const time_t now = time(nullptr);
+  if (now < static_cast<time_t>(screen_protocol::kMinEpochSeconds) ||
+      static_cast<uint64_t>(now) > screen_protocol::kMaxEpochSeconds) {
+    return 0ULL;
+  }
+  return static_cast<uint64_t>(now) * 1000ULL;
+}
+
+#if !defined(BUILD_ROLE_CTRL02)
+bool isCtrl01CommandTopic(const char* topic) {
+  constexpr char prefix[] = "ut/v1/CTRL-01/cmd";
+  constexpr size_t prefixLength = sizeof(prefix) - 1U;
+  return std::strncmp(topic, prefix, prefixLength) == 0 &&
+         (topic[prefixLength] == '\0' || topic[prefixLength] == '/');
+}
+#endif
+
+void writeUartLine(const char* payload, size_t length) {
+  Serial.write(reinterpret_cast<const uint8_t*>(payload), length);
+  Serial.print("\r\n");
+}
+
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
-  // The STM32 receives cloud/local commands as one framed UART line.
+  if (length > kMaxSerialFrame) {
+    Serial.println("#ERROR mqtt_payload_too_large");
+    return;
+  }
+#if defined(BUILD_ROLE_CTRL02)
+  screen_routing::RouteOutput routed{};
+  const screen_routing::RouteResult result = screen_routing::RouteMqttMessage(
+      kBuildRole, topic, reinterpret_cast<const char*>(payload), length,
+      currentEpochMilliseconds(), &screenTelemetry, &routed);
+  if (result == screen_routing::RouteResult::Ok &&
+      routed.kind == screen_routing::OutputKind::UartLine) {
+    writeUartLine(routed.payload, routed.payload_length);
+  } else if (result != screen_routing::RouteResult::WrongTopic) {
+    Serial.printf("#ERROR screen_route=%u\r\n",
+                  static_cast<unsigned int>(result));
+  }
+#else
+  if (std::strcmp(topic, "ut/v1/CTRL-01/cmd/menu") == 0) {
+    screen_routing::RouteOutput routed{};
+    const screen_routing::RouteResult result = screen_routing::RouteMqttMessage(
+        kBuildRole, topic, reinterpret_cast<const char*>(payload), length,
+        currentEpochMilliseconds(), &screenTelemetry, &routed);
+    if (result != screen_routing::RouteResult::Ok ||
+        routed.kind != screen_routing::OutputKind::UartCommand) {
+      Serial.printf("#ERROR menu_command_rejected=%u\r\n",
+                    static_cast<unsigned int>(result));
+      return;
+    }
+    Serial.print("MQTT|");
+    Serial.print(topic);
+    Serial.print('|');
+    writeUartLine(routed.payload, routed.payload_length);
+    return;
+  }
+  if (!isCtrl01CommandTopic(topic)) return;
+  // Preserve the existing Web/IoTDA command bridge byte-for-byte.
   Serial.print("MQTT|");
   Serial.print(topic);
   Serial.print('|');
-  Serial.write(payload, length);
-  Serial.print("\r\n");
+  writeUartLine(reinterpret_cast<const char*>(payload), length);
+#endif
 }
 
 void connectWiFi() {
@@ -151,6 +227,27 @@ void connectWiFi() {
   Serial.println("#WIFI connecting");
 }
 
+void handleNetworkTime() {
+  const bool connected = WiFi.status() == WL_CONNECTED;
+  if (screen_routing::ShouldConfigureNtp(&ntpAssociation, connected)) {
+    // configTime() starts the SNTP client and returns immediately.
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    Serial.println("#NTP configured");
+  }
+  if (!connected) return;
+  const time_t epoch = time(nullptr);
+  char line[screen_protocol::kUartLineLimit + 1U]{};
+  size_t written = 0U;
+  const screen_routing::TimeEmitResult result =
+      screen_routing::BuildDueTimeSync(
+          &timeSyncSchedule, millis(),
+          epoch > 0 ? static_cast<uint64_t>(epoch) : 0ULL, line,
+          sizeof(line), &written);
+  if (result == screen_routing::TimeEmitResult::Emitted) {
+    writeUartLine(line, written);
+  }
+}
+
 void connectMqtt() {
   if (WiFi.status() != WL_CONNECTED || !brokerAvailable || mqtt.connected() ||
       millis() - lastMqttAttempt < kReconnectIntervalMs) return;
@@ -163,40 +260,71 @@ void connectMqtt() {
     Serial.printf("#MQTT connect_failed state=%d\r\n", mqtt.state());
     return;
   }
-  mqtt.subscribe(commandTopic.c_str(), 1);
+  const screen_routing::RouteTopics& topics =
+      screen_routing::TopicsForRole(kBuildRole);
+  for (size_t index = 0U; index < topics.subscription_count; ++index) {
+    if (!mqtt.subscribe(topics.subscriptions[index], 1)) {
+      Serial.println("#MQTT subscribe_failed");
+      mqtt.disconnect();
+      return;
+    }
+  }
   mqtt.publish(statusTopic.c_str(), "online", true);
   persistBrokerAfterSuccessfulConnection();
   Serial.println("#MQTT connected");
 }
 
-void enqueueFrame(const String& line, bool isCommandAck) {
+const char* topicForPending(PendingKind kind) {
+#if defined(BUILD_ROLE_CTRL02)
+  (void)kind;
+  return screen_routing::TopicsForRole(kBuildRole).serial_publish_topic;
+#else
+  if (kind == PendingKind::CommandAck) return commandAckTopic.c_str();
+  return telemetryTopic.c_str();
+#endif
+}
+
+void enqueueFrame(const char* line, size_t length, PendingKind kind) {
+  if (line == nullptr || length > kMaxSerialFrame) return;
   if (pendingCount == kPendingFrameCapacity) {
     pendingHead = (pendingHead + 1U) % kPendingFrameCapacity;
     pendingCount--;
-    Serial.println("#ERROR telemetry_buffer_overflow_oldest_removed");
+    Serial.println("#ERROR mqtt_buffer_overflow_oldest_removed");
   }
   const uint8_t index = (pendingHead + pendingCount) % kPendingFrameCapacity;
-  line.toCharArray(pendingFrames[index], kMaxSerialFrame + 1);
-  pendingFrameIsCommandAck[index] = isCommandAck;
+  std::memcpy(pendingFrames[index], line, length);
+  pendingFrames[index][length] = '\0';
+  pendingFrameKinds[index] = kind;
   pendingCount++;
   Serial.printf("#QUEUED count=%u\r\n", pendingCount);
 }
 
 void flushPendingFrame() {
   if (!mqtt.connected() || pendingCount == 0) return;
-  const char* topic = pendingFrameIsCommandAck[pendingHead] ? commandAckTopic.c_str() : telemetryTopic.c_str();
+  const PendingKind kind = pendingFrameKinds[pendingHead];
+  const char* topic = topicForPending(kind);
   if (!mqtt.publish(topic, pendingFrames[pendingHead], false)) return;
   pendingFrames[pendingHead][0] = '\0';
-  pendingFrameIsCommandAck[pendingHead] = false;
+  pendingFrameKinds[pendingHead] = PendingKind::Telemetry;
   pendingHead = (pendingHead + 1U) % kPendingFrameCapacity;
   pendingCount--;
   Serial.printf("#PUBLISHED queued=%u\r\n", pendingCount);
 }
 
-void handleSerialLine(String line) {
-  line.trim();
-  if (line.isEmpty()) return;
-  if (line == "STATUS" || line == "AT") {
+void handleSerialLine(const char* line, size_t length) {
+  while (length != 0U &&
+         (*line == ' ' || *line == '\t' || *line == '\r' || *line == '\n')) {
+    ++line;
+    --length;
+  }
+  while (length != 0U &&
+         (line[length - 1U] == ' ' || line[length - 1U] == '\t' ||
+          line[length - 1U] == '\r' || line[length - 1U] == '\n')) {
+    --length;
+  }
+  if (length == 0U) return;
+  if ((length == 6U && std::memcmp(line, "STATUS", 6U) == 0) ||
+      (length == 2U && std::memcmp(line, "AT", 2U) == 0)) {
     printStatus();
     return;
   }
@@ -204,31 +332,61 @@ void handleSerialLine(String line) {
     Serial.println("#ERROR expected JSON, STATUS, or AT");
     return;
   }
-  const bool isCommandAck = line.indexOf("\"schema\":\"ut.command.ack.v1\"") >= 0;
-  const char* topic = isCommandAck ? commandAckTopic.c_str() : telemetryTopic.c_str();
-  if (!mqtt.connected()) {
-    enqueueFrame(line, isCommandAck);
+#if defined(BUILD_ROLE_CTRL02)
+  screen_routing::RouteOutput routed{};
+  const screen_routing::RouteResult result = screen_routing::RouteSerialLine(
+      kBuildRole, line, length, currentEpochMilliseconds(), &routed);
+  if (result != screen_routing::RouteResult::Ok ||
+      routed.kind != screen_routing::OutputKind::MqttPublish) {
+    Serial.printf("#ERROR menu_serial_rejected=%u\r\n",
+                  static_cast<unsigned int>(result));
     return;
   }
-  if (mqtt.publish(topic, line.c_str(), false)) {
+  if (!mqtt.connected()) {
+    enqueueFrame(routed.payload, routed.payload_length,
+                 PendingKind::MenuCommand);
+    return;
+  }
+  if (mqtt.publish(routed.topic, routed.payload, false)) {
+    Serial.println("#MENU_PUBLISHED");
+  } else {
+    enqueueFrame(routed.payload, routed.payload_length,
+                 PendingKind::MenuCommand);
+  }
+#else
+  const bool isCommandAck =
+      std::strstr(line, "\"schema\":\"ut.command.ack.v1\"") != nullptr;
+  const PendingKind kind = isCommandAck ? PendingKind::CommandAck
+                                        : PendingKind::Telemetry;
+  const char* topic = topicForPending(kind);
+  if (!mqtt.connected()) {
+    enqueueFrame(line, length, kind);
+    return;
+  }
+  if (mqtt.publish(topic, reinterpret_cast<const uint8_t*>(line), length,
+                   false)) {
     Serial.println(isCommandAck ? "#ACK_PUBLISHED" : "#PUBLISHED");
   } else {
-    enqueueFrame(line, isCommandAck);
+    enqueueFrame(line, length, kind);
   }
+#endif
 }
 
 void readSerial() {
   while (Serial.available()) {
     const char c = static_cast<char>(Serial.read());
     if (c == '\n') {
-      handleSerialLine(serialFrame);
-      serialFrame = "";
+      serialFrame[serialFrameLength] = '\0';
+      handleSerialLine(serialFrame, serialFrameLength);
+      serialFrameLength = 0U;
+      serialFrame[0] = '\0';
     } else if (c != '\r') {
-      if (serialFrame.length() >= kMaxSerialFrame) {
-        serialFrame = "";
+      if (serialFrameLength >= kMaxSerialFrame) {
+        serialFrameLength = 0U;
+        serialFrame[0] = '\0';
         Serial.println("#ERROR serial_frame_too_large");
       } else {
-        serialFrame += c;
+        serialFrame[serialFrameLength++] = c;
       }
     }
   }
@@ -240,14 +398,17 @@ void setup() {
   digitalWrite(kLedPin, HIGH);
   Serial.begin(kSerialBaud);
   Serial.setTimeout(50);
-  serialFrame.reserve(kMaxSerialFrame);
+#if !defined(BUILD_ROLE_CTRL02)
   telemetryTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/telemetry";
-  commandTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/cmd/#";
   commandAckTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/cmd_ack";
+#endif
   statusTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/status";
   mqtt.setCallback(onMqttMessage);
-  mqtt.setBufferSize(1024);
+  mqtt.setBufferSize(kMqttBufferSize);
   mqtt.setKeepAlive(30);
+  screen_routing::InitTelemetryAccumulator(&screenTelemetry);
+  screen_routing::InitTimeSyncSchedule(&timeSyncSchedule);
+  screen_routing::InitNtpAssociationState(&ntpAssociation);
   EEPROM.begin(sizeof(StoredBrokerEndpoint));
   StoredBrokerEndpoint stored{};
   EEPROM.get(0, stored);
@@ -256,13 +417,14 @@ void setup() {
     selectBroker(savedBrokerEndpoint);
     Serial.println("#DISCOVERY restored_saved_broker");
   }
-  Serial.printf("#BOOT esp8266-01s mqtt-uart-bridge v2 device=%s\r\n", BUILD_DEVICE_ID);
+  Serial.printf("#BOOT esp8266-01s mqtt-uart-bridge v3 device=%s\r\n", BUILD_DEVICE_ID);
   connectWiFi();
 }
 
 void loop() {
   connectWiFi();
   handleDiscovery();
+  handleNetworkTime();
   connectMqtt();
   if (mqtt.connected()) {
     mqtt.loop();
