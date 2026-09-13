@@ -615,10 +615,10 @@ bool parseTimeState(const char* text, TimeState* state) {
 }
 
 Result prepareOutput(char* output, size_t output_capacity, size_t* written) {
+  if (written != nullptr) *written = 0U;
+  if (output != nullptr && output_capacity > 0U) output[0] = '\0';
   if (output == nullptr || written == nullptr) return Result::NullArgument;
-  *written = 0U;
   if (output_capacity == 0U) return Result::OutputTooSmall;
-  output[0] = '\0';
   return Result::Ok;
 }
 

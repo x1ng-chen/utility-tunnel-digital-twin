@@ -139,6 +139,47 @@ TimeSync validTimeSync() {
   return value;
 }
 
+template <typename Value>
+void checkBuilderInvalidOutputContract(
+    Result (*builder)(const Value&, char*, size_t, size_t*),
+    const Value& value) {
+  char output[8] = {'x', 'x', 'x', 'x', 'x', 'x', 'x', '\0'};
+  size_t written = 99U;
+
+  CHECK_EQ(Result::NullArgument, builder(value, nullptr, sizeof(output), &written));
+  CHECK_EQ(0U, written);
+
+  output[0] = 'x';
+  CHECK_EQ(Result::NullArgument, builder(value, output, sizeof(output), nullptr));
+  CHECK_EQ('\0', output[0]);
+
+  CHECK_EQ(Result::NullArgument, builder(value, nullptr, 0U, nullptr));
+
+  written = 99U;
+  CHECK_EQ(Result::NullArgument, builder(value, nullptr, 0U, &written));
+  CHECK_EQ(0U, written);
+
+  output[0] = 'x';
+  written = 99U;
+  CHECK_EQ(Result::OutputTooSmall, builder(value, output, 0U, &written));
+  CHECK_EQ(0U, written);
+  CHECK_EQ('x', output[0]);
+
+  output[0] = 'x';
+  CHECK_EQ(Result::NullArgument, builder(value, output, 0U, nullptr));
+  CHECK_EQ('x', output[0]);
+}
+
+template <typename Value>
+void fillSentinel(Value* value) {
+  std::memset(value, 0xa5, sizeof(*value));
+}
+
+template <typename Value>
+void checkUnchanged(const Value& expected, const Value& actual) {
+  CHECK_TRUE(std::memcmp(&expected, &actual, sizeof(Value)) == 0);
+}
+
 void test_snapshot_round_trip_is_complete_and_canonical() {
   const ScreenSnapshot input = validSnapshot();
   ScreenSnapshot output{};
@@ -822,6 +863,8 @@ void test_uart_line_limit_and_output_buffer_are_exact() {
   largest.connectivity.mqtt_online = false;
   std::strcpy(largest.last_command.command_id,
               "123456789012345678901234567890123456789");
+  largest.last_command.accepted = false;
+  largest.last_command.complete = true;
   char largest_json[2048]{};
   size_t largest_length = 0U;
   CHECK_EQ(Result::Ok,
@@ -865,6 +908,122 @@ void test_every_builder_failure_clears_output_and_written() {
   CHECK_EQ(Result::OutOfRange,
            BuildTimeSync(time_sync, output, sizeof(output), &written));
   CHECK_EQ(0U, written); CHECK_EQ('\0', output[0]);
+}
+
+void test_every_builder_handles_partial_null_and_zero_capacity_outputs() {
+  checkBuilderInvalidOutputContract(&BuildSnapshot, validSnapshot());
+  checkBuilderInvalidOutputContract(&BuildMenuCommand, validCommand());
+  checkBuilderInvalidOutputContract(&BuildCommandAck, validAck());
+  checkBuilderInvalidOutputContract(&BuildTimeSync, validTimeSync());
+}
+
+void test_parser_failures_leave_caller_objects_unchanged() {
+  char encoded[kUartLineLimit + 1U]{};
+  size_t length = 0U;
+
+  CHECK_EQ(Result::Ok,
+           BuildSnapshot(validSnapshot(), encoded, sizeof(encoded), &length));
+  const std::string snapshot_json(encoded, length);
+  const std::string snapshot_schema = replaceOnce(
+      snapshot_json, "ut.screen.snapshot.v1", "ut.screen.snapshot.v2");
+  const std::string snapshot_type = replaceOnce(
+      snapshot_json, "\"seq\":77", "\"seq\":\"77\"");
+  const std::string snapshot_range = replaceOnce(
+      snapshot_json, "\"humidity\":[5210", "\"humidity\":[10001");
+  const std::string snapshot_malformed =
+      snapshot_json.substr(0U, snapshot_json.size() - 1U);
+  const auto check_snapshot = [&](const std::string& json, uint64_t now,
+                                  Result expected_result) {
+    ScreenSnapshot output{};
+    fillSentinel(&output);
+    ScreenSnapshot before{};
+    std::memcpy(&before, &output, sizeof(before));
+    CHECK_EQ(expected_result,
+             ParseSnapshot(json.c_str(), json.size(), now, &output));
+    checkUnchanged(before, output);
+  };
+  check_snapshot(snapshot_malformed, kFreshNowMs, Result::MalformedJson);
+  check_snapshot(snapshot_schema, kFreshNowMs, Result::UnknownSchema);
+  check_snapshot(snapshot_type, kFreshNowMs, Result::WrongType);
+  check_snapshot(snapshot_range, kFreshNowMs, Result::OutOfRange);
+  check_snapshot(snapshot_json, kFreshNowMs + kSnapshotMaxAgeMs, Result::Stale);
+
+  CHECK_EQ(Result::Ok,
+           BuildMenuCommand(validCommand(), encoded, sizeof(encoded), &length));
+  const std::string command_json(encoded, length);
+  const std::string command_schema = replaceOnce(
+      command_json, "ut.menu.command.v1", "ut.menu.command.v2");
+  const std::string command_type = replaceOnce(
+      command_json, "\"value\":60", "\"value\":\"60\"");
+  const std::string command_range = replaceOnce(
+      command_json, "\"value\":60", "\"value\":45");
+  const std::string command_malformed =
+      command_json.substr(0U, command_json.size() - 1U);
+  const auto check_command = [&](const std::string& json, uint64_t now,
+                                 Result expected_result) {
+    MenuCommand output{};
+    fillSentinel(&output);
+    MenuCommand before{};
+    std::memcpy(&before, &output, sizeof(before));
+    CHECK_EQ(expected_result,
+             ParseMenuCommand(json.c_str(), json.size(), now, &output));
+    checkUnchanged(before, output);
+  };
+  check_command(command_malformed, kFreshNowMs, Result::MalformedJson);
+  check_command(command_schema, kFreshNowMs, Result::UnknownSchema);
+  check_command(command_type, kFreshNowMs, Result::WrongType);
+  check_command(command_range, kFreshNowMs, Result::OutOfRange);
+  check_command(command_json, kFreshNowMs + 9000ULL, Result::Expired);
+
+  CHECK_EQ(Result::Ok,
+           BuildCommandAck(validAck(), encoded, sizeof(encoded), &length));
+  const std::string ack_json(encoded, length);
+  const std::string ack_schema = replaceOnce(
+      ack_json, "ut.command.ack.v1", "ut.command.ack.v2");
+  const std::string ack_type = replaceOnce(
+      ack_json, "\"appliedValue\":60", "\"appliedValue\":\"60\"");
+  const std::string ack_range = replaceOnce(
+      ack_json, "\"appliedValue\":60", "\"appliedValue\":101");
+  const std::string ack_malformed = ack_json.substr(0U, ack_json.size() - 1U);
+  const auto check_ack = [&](const std::string& json, Result expected_result) {
+    CommandAck output{};
+    fillSentinel(&output);
+    CommandAck before{};
+    std::memcpy(&before, &output, sizeof(before));
+    CHECK_EQ(expected_result,
+             ParseCommandAck(json.c_str(), json.size(), &output));
+    checkUnchanged(before, output);
+  };
+  check_ack(ack_malformed, Result::MalformedJson);
+  check_ack(ack_schema, Result::UnknownSchema);
+  check_ack(ack_type, Result::WrongType);
+  check_ack(ack_range, Result::OutOfRange);
+
+  CHECK_EQ(Result::Ok,
+           BuildTimeSync(validTimeSync(), encoded, sizeof(encoded), &length));
+  const std::string time_json(encoded, length);
+  const std::string time_schema = replaceOnce(
+      time_json, "ut.time.sync.v1", "ut.time.sync.v2");
+  const std::string time_type = replaceOnce(
+      time_json, "\"epochSeconds\":1704067200",
+      "\"epochSeconds\":\"1704067200\"");
+  const std::string time_range = replaceOnce(
+      time_json, "\"epochSeconds\":1704067200",
+      "\"epochSeconds\":1704067199");
+  const std::string time_malformed = time_json.substr(0U, time_json.size() - 1U);
+  const auto check_time = [&](const std::string& json, Result expected_result) {
+    TimeSync output{};
+    fillSentinel(&output);
+    TimeSync before{};
+    std::memcpy(&before, &output, sizeof(before));
+    CHECK_EQ(expected_result,
+             ParseTimeSync(json.c_str(), json.size(), &output));
+    checkUnchanged(before, output);
+  };
+  check_time(time_malformed, Result::MalformedJson);
+  check_time(time_schema, Result::UnknownSchema);
+  check_time(time_type, Result::WrongType);
+  check_time(time_range, Result::OutOfRange);
 }
 
 uint32_t nextFuzzValue(uint32_t* state) {
@@ -961,6 +1120,8 @@ int main() {
   test_time_sync_round_trip_and_epoch_boundary();
   test_uart_line_limit_and_output_buffer_are_exact();
   test_every_builder_failure_clears_output_and_written();
+  test_every_builder_handles_partial_null_and_zero_capacity_outputs();
+  test_parser_failures_leave_caller_objects_unchanged();
   fuzzParsersDeterministically();
   if (failures == 0) std::puts("screen_protocol tests passed");
   return failures == 0 ? 0 : 1;
