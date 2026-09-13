@@ -24,6 +24,8 @@ typedef struct {
   int32_t applied_value;
 } MenuCommandAck;
 
+/* The node stores the 16-bit counter in the STM32 backup domain (VBAT). */
+uint32_t MenuCommand_NextBootId(uint16_t persisted_counter, uint32_t uid_mix);
 void MenuCommand_Init(MenuCommandContext *context, uint32_t boot_id);
 uint8_t MenuCommand_Begin(MenuCommandContext *context, UiAction action, uint8_t value,
                           uint64_t created_at_ms, char *line, size_t line_capacity,

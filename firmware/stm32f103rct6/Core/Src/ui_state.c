@@ -320,6 +320,13 @@ uint8_t UiState_CommandDispatched(UiState *state, const char *command_id)
   return 0U;
 }
 
+uint8_t UiState_CommandSendFailed(UiState *state)
+{
+  if ((state == 0) || (state->command_phase != UI_CMD_SENDING)) return 0U;
+  state->command_phase = UI_CMD_REJECTED;
+  return 1U;
+}
+
 uint8_t UiState_HandleAcknowledgement(UiState *state, const char *command_id, uint8_t accepted)
 {
   if ((state == 0) || (command_id == 0) || (state->command_phase != UI_CMD_SENDING) ||

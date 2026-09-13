@@ -43,7 +43,7 @@ typedef enum {
 
 typedef struct {
   int32_t value;
-  uint32_t sampled_ms;
+  uint64_t sampled_ms;
   UiDataQuality quality;
 } UiReading;
 
@@ -53,7 +53,7 @@ typedef struct {
   uint32_t actual_rpm;
   uint16_t voltage_mv;
   uint16_t current_ma;
-  uint32_t sampled_ms;
+  uint64_t sampled_ms;
   UiDataQuality quality;
 } UiFanSnapshot;
 
@@ -70,14 +70,14 @@ typedef struct {
   uint8_t gateway_online;
   uint8_t iotda_online;
   uint8_t mqtt_online;
-  uint32_t updated_ms;
+  uint64_t updated_ms;
 } UiConnectivitySnapshot;
 
 typedef struct {
   char command_id[40];
   uint8_t accepted;
   uint8_t complete;
-  uint32_t completed_ms;
+  uint64_t completed_ms;
 } UiCommandResult;
 
 typedef struct {

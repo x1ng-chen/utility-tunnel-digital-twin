@@ -42,6 +42,10 @@ static char ui_test_line[UI_TEST_LINE_SIZE];
 static uint8_t ui_test_length;
 static uint16_t display_test_completed;
 static uint8_t display_test_active;
+static char command_tx_line[MENU_COMMAND_LINE_SIZE];
+static uint16_t command_tx_length;
+static uint16_t command_tx_offset;
+static uint8_t command_tx_active;
 
 void SystemClock_Config(void);
 void Error_Handler(void);
@@ -52,6 +56,26 @@ static void SendHeartbeat(void);
 static void PollEsp(uint32_t *received_count, PeerReading *peer);
 static void PollUiTest(void);
 static void HandleUiEffect(UiEffect effect, uint32_t now_ms);
+static void PollCommandTx(void);
+
+static uint32_t NextBootId(void)
+{
+  uint16_t persisted;
+  uint32_t uid_mix;
+  /* BKP->DR1 survives reset while VBAT powers the backup domain. The UID
+   * prevents collisions between boards; the persisted counter separates
+   * successive boots of one board. Hardware VBAT persistence is a deferred
+   * bench check, not assumed by host tests. */
+  __HAL_RCC_PWR_CLK_ENABLE();
+  __HAL_RCC_BKP_CLK_ENABLE();
+  HAL_PWR_EnableBkUpAccess();
+  persisted = BKP->DR1;
+  ++persisted;
+  if (persisted == 0U) persisted = 1U;
+  BKP->DR1 = persisted;
+  uid_mix = HAL_GetUIDw0() ^ HAL_GetUIDw1() ^ HAL_GetUIDw2();
+  return MenuCommand_NextBootId((uint16_t)(persisted - 1U), uid_mix);
+}
 
 static uint8_t DecodePeerReading(const char *line, PeerReading *peer)
 {
@@ -109,49 +133,47 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)"#ESP ", 5U, 1000U);
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)line, length, 1000U);
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)"\r\n", 2U, 1000U);
-    if (strstr(line, "\"schema\":\"ut.screen.snapshot.v1\"") != NULL)
+    if (ScreenSnapshot_Apply(&snapshot_context, line, length, now_ms, &ui_snapshot))
     {
-      if (ScreenSnapshot_Apply(&snapshot_context, line, length, now_ms, &ui_snapshot))
-      {
-        ++*received_count;
-        UiState_SetControlAvailability(&ui_state, ui_snapshot.connectivity.mqtt_online,
-                                       ui_state.control.safety_locked);
-      }
+      ++*received_count;
+      UiState_SetControlAvailability(&ui_state, ui_snapshot.connectivity.mqtt_online,
+                                     ui_state.control.safety_locked);
     }
-    else if (strstr(line, "\"schema\":\"ut.time.sync.v1\"") != NULL)
+    else if (NetworkTime_Update(&ui_clock, line, length, now_ms))
     {
-      (void)NetworkTime_Update(&ui_clock, line, length, now_ms);
+      /* The parser accepts compact and whitespace-bearing JSON. */
     }
-    else if (strstr(line, "\"schema\":\"ut.command.ack.v1\"") != NULL)
+    else
     {
       MenuCommandAck acknowledgement;
       if (MenuCommand_ParseAck(line, length, &acknowledgement) &&
           MenuCommand_AcceptAck(&command_context, &acknowledgement))
       {
+        command_tx_active = 0U;
         (void)UiState_HandleAcknowledgement(&ui_state, acknowledgement.command_id,
                                             acknowledgement.accepted);
       }
-    }
-    else if ((strncmp(line, "MQTT|", 5U) == 0) && DecodePeerReading(line, peer))
-    {
-      ++*received_count;
-      ui_snapshot.temperature_centi_c.value = peer->temperature_centi_c;
-      ui_snapshot.temperature_centi_c.sampled_ms = now_ms;
-      ui_snapshot.temperature_centi_c.quality = UI_QUALITY_VALID;
-      ui_snapshot.humidity_centi_rh.value = peer->humidity_centi_rh;
-      ui_snapshot.humidity_centi_rh.sampled_ms = now_ms;
-      ui_snapshot.humidity_centi_rh.quality = UI_QUALITY_VALID;
-      ui_snapshot.connectivity.node_a_online = peer->online;
-      ui_snapshot.connectivity.mqtt_online = 1U;
-      ui_snapshot.connectivity.updated_ms = now_ms;
-      UiState_SetControlAvailability(&ui_state, 1U, ui_state.control.safety_locked);
-    }
-    else if ((strcmp(line, "MQTT|UP") == 0) || (strcmp(line, "MQTT|DOWN") == 0))
-    {
-      const uint8_t online = (strcmp(line, "MQTT|UP") == 0) ? 1U : 0U;
-      ui_snapshot.connectivity.mqtt_online = online;
-      ui_snapshot.connectivity.updated_ms = now_ms;
-      UiState_SetControlAvailability(&ui_state, online, ui_state.control.safety_locked);
+      if ((strncmp(line, "MQTT|", 5U) == 0) && DecodePeerReading(line, peer))
+      {
+        ++*received_count;
+        ui_snapshot.temperature_centi_c.value = peer->temperature_centi_c;
+        ui_snapshot.temperature_centi_c.sampled_ms = now_ms;
+        ui_snapshot.temperature_centi_c.quality = UI_QUALITY_VALID;
+        ui_snapshot.humidity_centi_rh.value = peer->humidity_centi_rh;
+        ui_snapshot.humidity_centi_rh.sampled_ms = now_ms;
+        ui_snapshot.humidity_centi_rh.quality = UI_QUALITY_VALID;
+        ui_snapshot.connectivity.node_a_online = peer->online;
+        ui_snapshot.connectivity.mqtt_online = 1U;
+        ui_snapshot.connectivity.updated_ms = now_ms;
+        UiState_SetControlAvailability(&ui_state, 1U, ui_state.control.safety_locked);
+      }
+      else if ((strcmp(line, "MQTT|UP") == 0) || (strcmp(line, "MQTT|DOWN") == 0))
+      {
+        const uint8_t online = (strcmp(line, "MQTT|UP") == 0) ? 1U : 0U;
+        ui_snapshot.connectivity.mqtt_online = online;
+        ui_snapshot.connectivity.updated_ms = now_ms;
+        UiState_SetControlAvailability(&ui_state, online, ui_state.control.safety_locked);
+      }
     }
   }
 }
@@ -325,19 +347,40 @@ static void PollUiTest(void)
 
 static void HandleUiEffect(UiEffect effect, uint32_t now_ms)
 {
-  char line[MENU_COMMAND_LINE_SIZE];
   size_t length = 0U;
   uint64_t epoch_ms;
   if (effect.kind != UI_EFFECT_SEND_COMMAND) return;
   epoch_ms = NetworkTime_EpochMilliseconds(&ui_clock, now_ms);
   if ((epoch_ms == 0ULL) || !MenuCommand_Begin(&command_context, (UiAction)effect.action,
-                                                effect.value, epoch_ms, line, sizeof(line), &length)) return;
-  if (HAL_UART_Transmit(&huart2, (uint8_t *)line, (uint16_t)length, 1000U) == HAL_OK) {
-    if (!UiState_CommandDispatched(&ui_state, command_context.active_command_id)) {
-      command_context.pending = 0U;
-    }
-  } else {
+                                                effect.value, epoch_ms, command_tx_line,
+                                                sizeof(command_tx_line), &length)) {
+    (void)UiState_CommandSendFailed(&ui_state);
+    return;
+  }
+  command_tx_length = (uint16_t)length;
+  command_tx_offset = 0U;
+  command_tx_active = 1U;
+  if (!UiState_CommandDispatched(&ui_state, command_context.active_command_id)) {
     command_context.pending = 0U;
+    command_tx_active = 0U;
+    (void)UiState_CommandSendFailed(&ui_state);
+  }
+}
+
+static void PollCommandTx(void)
+{
+  HAL_StatusTypeDef status;
+  if (!command_tx_active) return;
+  status = HAL_UART_Transmit(&huart2, (uint8_t *)&command_tx_line[command_tx_offset], 1U, 0U);
+  if (status == HAL_OK) {
+    ++command_tx_offset;
+    if (command_tx_offset >= command_tx_length) {
+      command_tx_active = 0U;
+    }
+  } else if (status == HAL_ERROR) {
+    command_tx_active = 0U;
+    command_context.pending = 0U;
+    (void)UiState_CommandSendFailed(&ui_state);
   }
 }
 
@@ -372,7 +415,7 @@ int main(void)
   (void)memset(&ui_snapshot, 0, sizeof(ui_snapshot));
   ScreenSnapshot_Init(&snapshot_context);
   NetworkTime_Init(&ui_clock);
-  MenuCommand_Init(&command_context, HAL_GetTick());
+  MenuCommand_Init(&command_context, NextBootId());
   Joystick_Init();
   if (HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U) != HAL_OK) Error_Handler();
   ST7735_Init();
@@ -391,6 +434,7 @@ int main(void)
     }
     PollUiTest();
     PollEsp(&received_count, &peer);
+    PollCommandTx();
     ScreenSnapshot_Tick(&snapshot_context, now, &ui_snapshot);
     NetworkTime_ToSnapshot(&ui_clock, now, &ui_snapshot.clock);
     UiState_SetControlAvailability(&ui_state, ui_snapshot.connectivity.mqtt_online,

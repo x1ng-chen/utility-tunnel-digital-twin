@@ -102,6 +102,7 @@ static uint8_t action_value_valid(UiAction action, uint8_t value)
   if (action == UI_ACTION_LED_BRIGHTNESS) {
     return (value == 25U) || (value == 50U) || (value == 75U) || (value == 100U);
   }
+  if ((action == UI_ACTION_BUZZER_MUTE) || (action == UI_ACTION_BUZZER_RESTORE)) return value <= 2U;
   return value == 0U;
 }
 
@@ -112,15 +113,24 @@ void MenuCommand_Init(MenuCommandContext *context, uint32_t boot_id)
   context->boot_id = boot_id;
 }
 
+uint32_t MenuCommand_NextBootId(uint16_t persisted_counter, uint32_t uid_mix)
+{
+  uint16_t next = (uint16_t)(persisted_counter + 1U);
+  if (next == 0U) next = 1U;
+  return uid_mix ^ (uint32_t)next;
+}
+
 uint8_t MenuCommand_Begin(MenuCommandContext *context, UiAction action, uint8_t value,
                           uint64_t created_at_ms, char *line, size_t line_capacity,
                           size_t *written)
 {
   int length;
   uint32_t next;
+  uint8_t wire_value;
   if ((context == 0) || (line == 0) || (written == 0) ||
       ((uint8_t)action == (uint8_t)UI_ACTION_NONE) || created_at_ms == 0ULL) return 0U;
   if (!action_value_valid(action, value)) return 0U;
+  wire_value = ((action == UI_ACTION_BUZZER_MUTE) || (action == UI_ACTION_BUZZER_RESTORE)) ? 0U : value;
   next = context->sequence + 1U;
   if (next == 0U) next = 1U;
   context->sequence = next;
@@ -129,7 +139,7 @@ uint8_t MenuCommand_Begin(MenuCommandContext *context, UiAction action, uint8_t 
                     "\"target\":\"CTRL-01\",\"action\":\"%s\",\"value\":%u,"
                     "\"createdAtMs\":%llu,\"ttlMs\":%u}\r\n",
                     (unsigned long)context->boot_id, (unsigned long)next,
-                    action_name(action), (unsigned int)value,
+                    action_name(action), (unsigned int)wire_value,
                     (unsigned long long)created_at_ms, MENU_COMMAND_TTL_MS);
   if ((length <= 0) || ((size_t)length >= line_capacity) || ((size_t)length > MENU_COMMAND_LINE_SIZE)) {
     context->sequence = next - 1U;
@@ -148,13 +158,15 @@ uint8_t MenuCommand_ParseAck(const char *line, size_t length, MenuCommandAck *ac
   CommandCursor cursor;
   char schema[32], status[16], reason[48];
   int32_t applied;
+  MenuCommandAck temporary;
   if ((line == 0) || (ack == 0) || (length == 0U)) return 0U;
   if (length > 768U) return 0U;
+  (void)memset(&temporary, 0, sizeof(temporary));
   cursor.at = line;
   cursor.end = line + length;
   if (!ch(&cursor, '{') || !named(&cursor, "schema") || !string_value(&cursor, schema, sizeof(schema)) ||
       strcmp(schema, "ut.command.ack.v1") != 0 || !ch(&cursor, ',') || !named(&cursor, "cmdId") ||
-      !string_value(&cursor, ack->command_id, sizeof(ack->command_id)) || ack->command_id[0] == '\0' ||
+      !string_value(&cursor, temporary.command_id, sizeof(temporary.command_id)) || temporary.command_id[0] == '\0' ||
       !ch(&cursor, ',') || !named(&cursor, "status") || !string_value(&cursor, status, sizeof(status)) ||
       !ch(&cursor, ',') || !named(&cursor, "reason") || !string_value(&cursor, reason, sizeof(reason)) ||
       !ch(&cursor, ',') || !named(&cursor, "appliedValue") || !number(&cursor, &applied)) return 0U;
@@ -170,8 +182,9 @@ uint8_t MenuCommand_ParseAck(const char *line, size_t length, MenuCommandAck *ac
       (strcmp(status, "accepted") != 0 && strcmp(status, "rejected") != 0 &&
        strcmp(status, "duplicate") != 0 && strcmp(status, "expired") != 0)) return 0U;
   (void)reason;
-  ack->accepted = (strcmp(status, "accepted") == 0) ? 1U : 0U;
-  ack->applied_value = applied;
+  temporary.accepted = (strcmp(status, "accepted") == 0) ? 1U : 0U;
+  temporary.applied_value = applied;
+  *ack = temporary;
   return 1U;
 }
 

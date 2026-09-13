@@ -102,6 +102,7 @@ UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms);
 void UiState_Tick(UiState *state, uint32_t now_ms);
 void UiState_SetControlAvailability(UiState *state, uint8_t mqtt_online, uint8_t safety_locked);
 uint8_t UiState_CommandDispatched(UiState *state, const char *command_id);
+uint8_t UiState_CommandSendFailed(UiState *state);
 uint8_t UiState_HandleAcknowledgement(UiState *state, const char *command_id, uint8_t accepted);
 
 #endif /* UI_STATE_H */
