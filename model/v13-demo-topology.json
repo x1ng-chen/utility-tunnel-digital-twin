@@ -1,0 +1,389 @@
+{
+  "status": "DESIGN_CANDIDATE_NOT_COMMISSIONED",
+  "points": [
+    {
+      "id": "LEVEL-L01",
+      "zone": "Z1",
+      "kind": "FSIR02",
+      "x_m": 0.36,
+      "y_m": -0.404,
+      "z_m": 0.23299999999999998,
+      "threshold_axis_above_local_invert_mm": 8,
+      "meaning": "入口到水",
+      "data_source": "REAL_WHEN_CONNECTED",
+      "state": "NOT_CONNECTED",
+      "route": "CTRL-01:PC0"
+    },
+    {
+      "id": "LEVEL-L02",
+      "zone": "Z2",
+      "kind": "FSIR02",
+      "x_m": 0.18,
+      "y_m": -0.404,
+      "z_m": 0.2195,
+      "threshold_axis_above_local_invert_mm": 8,
+      "meaning": "上游有水",
+      "data_source": "REAL_WHEN_CONNECTED",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:L02"
+    },
+    {
+      "id": "LEVEL-L03",
+      "zone": "Z3",
+      "kind": "FSIR02",
+      "x_m": 0,
+      "y_m": -0.404,
+      "z_m": 0.222,
+      "threshold_axis_above_local_invert_mm": 24,
+      "meaning": "中部高位",
+      "data_source": "REAL_WHEN_CONNECTED",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:L03"
+    },
+    {
+      "id": "LEVEL-L04",
+      "zone": "Z4",
+      "kind": "FSIR02",
+      "x_m": -0.18,
+      "y_m": -0.404,
+      "z_m": 0.20850000000000002,
+      "threshold_axis_above_local_invert_mm": 24,
+      "meaning": "下游高位",
+      "data_source": "REAL_WHEN_CONNECTED",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:L04"
+    },
+    {
+      "id": "LEVEL-L05",
+      "zone": "Z5",
+      "kind": "FSIR02",
+      "x_m": -0.36,
+      "y_m": -0.404,
+      "z_m": 0.179,
+      "threshold_axis_above_local_invert_mm": 8,
+      "meaning": "回水到达",
+      "data_source": "REAL_WHEN_CONNECTED",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:L05"
+    },
+    {
+      "id": "MQ4-01",
+      "zone": "Z1",
+      "kind": "MQ4",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "CTRL-01:PC2/ADC1_IN12",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ4-02",
+      "zone": "Z2",
+      "kind": "MQ4",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:MQ4-02",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ4-03",
+      "zone": "Z3",
+      "kind": "MQ4",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:MQ4-03",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ4-04",
+      "zone": "Z4",
+      "kind": "MQ4",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:MQ4-04",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ4-05",
+      "zone": "Z5",
+      "kind": "MQ4",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:MQ4-05",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ7-01",
+      "zone": "Z1",
+      "kind": "MQ7",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:MQ7-01",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ7-02",
+      "zone": "Z2",
+      "kind": "MQ7",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:MQ7-02",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ7-03",
+      "zone": "Z3",
+      "kind": "MQ7",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:MQ7-03",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ7-04",
+      "zone": "Z4",
+      "kind": "MQ7",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:MQ7-04",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ7-05",
+      "zone": "Z5",
+      "kind": "MQ7",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:MQ7-05",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "ME2O2-01",
+      "zone": "Z1",
+      "kind": "ME2O2",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "CTRL-01:PC1/ADC1_IN11",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "ME2O2-02",
+      "zone": "Z2",
+      "kind": "ME2O2",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:ME2O2-02",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "ME2O2-03",
+      "zone": "Z3",
+      "kind": "ME2O2",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:ME2O2-03",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "ME2O2-04",
+      "zone": "Z4",
+      "kind": "ME2O2",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:ME2O2-04",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "ME2O2-05",
+      "zone": "Z5",
+      "kind": "ME2O2",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:ME2O2-05",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ2-01",
+      "zone": "Z1",
+      "kind": "MQ2",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "CTRL-01:PB12",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ2-02",
+      "zone": "Z2",
+      "kind": "MQ2",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:MQ2-02",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ2-03",
+      "zone": "Z3",
+      "kind": "MQ2",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:MQ2-03",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ2-04",
+      "zone": "Z4",
+      "kind": "MQ2",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:MQ2-04",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "MQ2-05",
+      "zone": "Z5",
+      "kind": "MQ2",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:MQ2-05",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "FLAME-01",
+      "zone": "Z1",
+      "kind": "FLAME",
+      "measurement": "corridor_optical",
+      "state": "NOT_CONNECTED",
+      "route": "CTRL-01:PB14",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "FLAME-02",
+      "zone": "Z2",
+      "kind": "FLAME",
+      "measurement": "corridor_optical",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:FLAME-02",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "FLAME-03",
+      "zone": "Z3",
+      "kind": "FLAME",
+      "measurement": "corridor_optical",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:FLAME-03",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "FLAME-04",
+      "zone": "Z4",
+      "kind": "FLAME",
+      "measurement": "corridor_optical",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:FLAME-04",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "FLAME-05",
+      "zone": "Z5",
+      "kind": "FLAME",
+      "measurement": "corridor_optical",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:FLAME-05",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "SHT30-01",
+      "zone": "Z1",
+      "kind": "SHT30",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "CTRL-01:I2C1/0x44",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "SHT30-02",
+      "zone": "Z2",
+      "kind": "SHT30",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:SHT30-02",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "SHT30-03",
+      "zone": "Z3",
+      "kind": "SHT30",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:SHT30-03",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "SHT30-04",
+      "zone": "Z4",
+      "kind": "SHT30",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:SHT30-04",
+      "data_source": "REAL_WHEN_CONNECTED"
+    },
+    {
+      "id": "SHT30-05",
+      "zone": "Z5",
+      "kind": "SHT30",
+      "measurement": "corridor_environment",
+      "state": "NOT_CONNECTED",
+      "route": "PENDING:SHT30-05",
+      "data_source": "REAL_WHEN_CONNECTED"
+    }
+  ],
+  "fsir02_count": 5,
+  "water_edges": [
+    [
+      "储水箱",
+      "水泵"
+    ],
+    [
+      "水泵",
+      "敞口供水盒"
+    ],
+    [
+      "敞口供水盒",
+      "重力测量管"
+    ],
+    [
+      "重力测量管",
+      "储水箱"
+    ]
+  ],
+  "feed_air_gap_m": 0.03,
+  "gas_edges": [
+    [
+      "环境空气",
+      "开放进气"
+    ],
+    [
+      "开放进气",
+      "气泵"
+    ],
+    [
+      "气泵",
+      "弧形气管"
+    ],
+    [
+      "弧形气管",
+      "常开排气"
+    ],
+    [
+      "弧形气管",
+      "手动泄漏阀"
+    ]
+  ],
+  "not_verified": [
+    "pressure_protection",
+    "seals",
+    "hydraulics",
+    "electrical",
+    "firmware_full_channels"
+  ]
+}

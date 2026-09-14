@@ -2,8 +2,13 @@
 import bpy,sys,json,math
 from pathlib import Path
 from mathutils import Vector,Matrix
-R=Path(sys.argv[sys.argv.index('--')+1]);O=R/'_qa_rebuild_20260910/distributed';O.mkdir(parents=True,exist_ok=True)
+R=Path(sys.argv[sys.argv.index('--')+1]);O=R/'_qa_rebuild_20260911/demo-functional-v4';O.mkdir(parents=True,exist_ok=True)
+sys.path.insert(0,str(R/'tools'))
+from pump_reference_geometry import build_water,build_air,hollow_route,gas_y
+from enclosure_geometry import build_enclosure,set_inspection_view
+from demo_reconstruction import rebuild_demo
 C=json.loads((R/'model/rebuild-contract-2026-09-10.json').read_text(encoding='utf-8'))
+C['unresolved']=['水泵80×40×50mm是否包含接头待复核；气泵其余尺寸为估计','螺纹、管径、密封、流向和气水管路完整贯通待核验','接口电路与围护尚未定版；不可直接加工或通电通水']
 bpy.ops.wm.read_factory_settings(use_empty=True)
 S=bpy.context.scene;S.unit_settings.system='METRIC';S.unit_settings.scale_length=1;S.world=bpy.data.worlds.new('展示环境')
 registry=[]
@@ -46,7 +51,7 @@ def annulus(n,rx,ry,ix,iy,z,h,m):
   j=(i+1)%N
   fs.extend([(i,j,N+j,N+i),(2*N+i,3*N+i,3*N+j,2*N+j),(i,2*N+i,2*N+j,j),(N+i,N+j,3*N+j,3*N+i)])
  me=bpy.data.meshes.new(n);me.from_pydata(vs,[],fs);me.update();o=bpy.data.objects.new(n,me);bpy.context.collection.objects.link(o);o.data.materials.append(M[m]);return o
-annulus('环形承重底座',.84,.55,.43,.18,0,.03,'浅灰')
+annulus('环形承重底座',.90,.60,.422,.172,0,.03,'浅灰')
 for a in range(0,360,45):
  t=math.radians(a);x,y=.79*math.cos(t),.50*math.sin(t)
  box(f'立柱脚-{a}',(x,y,.035),(.04,.04,.01),'铝合金');box(f'立柱-{a}',(x,y,.215),(.016,.016,.36),'铝合金')
@@ -75,6 +80,7 @@ for k in range(30):
  if kind in ['MQ4','MQ7','MQ2']:
   o=box(n+'-加热驱动',(x,y-.008,.085),(.038,.006,.022),'蓝板');asset('MQ_DRIVER',n+'-DRV',o)
   box(n+'-驱动背座',(x,y,.085),(.042,.010,.026),'浅灰')
+ bpy.context.view_layer.update()
  rotation=Matrix.Translation(p)@Matrix.Rotation(math.atan2(-x,y),4,'Z')@Matrix.Translation(-p)
  for obj in set(bpy.data.objects)-before:obj.matrix_world=rotation@obj.matrix_world
 # Single continuous planned LED strip along rear roof, one stock item.
@@ -135,13 +141,25 @@ def tube(n,a,b,outer=.012,inner=.009):
   for r in [outer,inner]:vs.extend([tuple(a+q@Vector((r*math.cos(i*2*math.pi/N),r*math.sin(i*2*math.pi/N),z))) for i in range(N)])
  for i in range(N):
   j=(i+1)%N;fs.extend([(i,j,2*N+j,2*N+i),(N+i,3*N+i,3*N+j,N+j),(i,N+i,N+j,j),(2*N+i,2*N+j,3*N+j,3*N+i)])
- me=bpy.data.meshes.new(n);me.from_pydata(vs,[],fs);me.update();o=bpy.data.objects.new(n,me);bpy.context.collection.objects.link(o);o.data.materials.append(M['水管']);return o
-pipeL=tube('WATER-INTAKE',(-.46,-.36,.115),(.03,-.36,.115));pipeR=tube('WATER-OUTLET',(.11,-.36,.115),(.46,-.36,.115));tube('WATER-RETURN',(-.46,-.42,.115),(.46,-.42,.115))
-tube('WATER-END-L',(-.46,-.36,.115),(-.46,-.42,.115));tube('WATER-END-R',(.46,-.36,.115),(.46,-.42,.115))
-for x in [-.44,-.23,0,.23,.44]:box('管托'+str(x),(x,-.39,.072),(.018,.09,.074),'铝合金')
+ me=bpy.data.meshes.new(n);me.from_pydata(vs,[],fs);me.update();o=bpy.data.objects.new(n,me);bpy.context.collection.objects.link(o);o.data.materials.append(M['水管'])
+ for f in me.polygons:f.use_smooth=f.index%4<2
+ return o
+pipeL=tube('WATER-INTAKE',(-.43,-.36,.115),(.02,-.36,.115))
+pipeR=tube('WATER-OUTLET',(.19,-.36,.115),(.43,-.36,.115))
+pts=[(.43,-.36,.115)]
+pts += [(.43+.03*math.sin(i*math.pi/32),-.39+.03*math.cos(i*math.pi/32),.115) for i in range(1,33)]
+pts += [(-.43,-.42,.115)]
+pts += [(-.43-.03*math.sin(i*math.pi/32),-.39-.03*math.cos(i*math.pi/32),.115) for i in range(1,33)]
+pipeReturn=hollow_route('WATER-RETURN',pts,.012,.009)
+for x in [-.40,-.23,0,.23,.40]:
+ support=box('管托'+str(x),(x,-.39,.072),(.018,.09,.074),'铝合金',0)
+ for yy in [-.36,-.42]:
+  cutter=cyl('鞍座切削',(x-.02,yy,.115),(x+.02,yy,.115),.0121)
+  bpy.context.view_layer.objects.active=support;md=support.modifiers.new('鞍座','BOOLEAN');md.operation='DIFFERENCE';md.object=cutter;bpy.ops.object.modifier_apply(modifier=md.name);bpy.data.objects.remove(cutter,do_unlink=True)
 for i,(x,title) in enumerate(zip([-.40,-.23,-.07,.23,.40],['排水段','吸水段','泵入口','阀后段','回水段']),1):
- n=f'LEVEL-L{i:02}';pipe=pipeL if x<0 else pipeR
- cutter=cyl('cut',(x,-.36,.11),(x,-.36,.145),.005,'深灰')
+ n=f'LEVEL-L{i:02}';pipe=pipeReturn if i==5 else (pipeL if x<0 else pipeR);yy=-.42 if i==5 else -.36
+ beforeLevel=set(bpy.data.objects)
+ cutter=cyl('cut',(x,yy,.11),(x,yy,.145),.005,'深灰')
  bpy.context.view_layer.objects.active=pipe;md=pipe.modifiers.new('测点孔','BOOLEAN');md.operation='DIFFERENCE';md.object=cutter;bpy.ops.object.modifier_apply(modifier=md.name);bpy.data.objects.remove(cutter,do_unlink=True)
  tube(n+'-测点座',(x,-.36,.12),(x,-.36,.142),.009,.005)
  o=cyl(n+'-探头',(x,-.36,.118),(x,-.36,.156),.0045,'白');asset('FSIR02',n,o)
@@ -152,21 +170,34 @@ for i,(x,title) in enumerate(zip([-.40,-.23,-.07,.23,.40],['排水段','吸水�
  line(n+'-探头线',[(x,-.36,.156),(x,-.36,.182),(x,-.249,.217)],.0013,'黑')
  plate(n,title,(x,-.237,.205),.067,.014,.008)
  plate(n+'号',f'L{i:02}',(x,-.36,.159),.021,.012,.006,False)
+ if i==5:
+  for obj in set(bpy.data.objects)-beforeLevel:
+   if any(s in obj.name for s in ['测点座','探头','光学端','号']):obj.location.y-=.06
+  wire=bpy.data.objects[n+'-探头线'];wire.location.y=0
+  wire.data.splines[0].points[0].co.y=yy;wire.data.splines[0].points[1].co.y=yy
 # Pump is an unpowered design component; no invented live 24V wiring.
-o=cyl('PUMP24',( .03,-.36,.115),(.11,-.36,.115),.028,'深灰');asset('PUMP24','P-01',o)
-box('PUMP-脚',(.07,-.36,.064),(.08,.065,.06),'铝合金')
-plate('PUMP','24V泵 待核验',(.07,-.389,.12),.075,.016,.006)
-cyl('截止阀',(.145,-.36,.115),(.185,-.36,.115),.017,'金');box('阀柄',(.165,-.36,.143),(.042,.008,.008),'红')
+build_water(box,cyl,tube,line,plate,asset)
+valve=tube('截止阀',(.142,-.36,.115),(.19,-.36,.115),.017,.006);valve.data.materials.clear();valve.data.materials.append(M['金'])
+cyl('阀杆',(.165,-.36,.131),(.165,-.36,.141),.003,'金');box('阀柄',(.165,-.36,.143),(.042,.008,.008),'红')
+adaptor=tube('接口占位-水泵入口',(.02,-.36,.115),(.03,-.36,.115),.014,.006)
+adaptor['spec_status']='待实测螺纹及密封';adaptor.data.materials.clear();adaptor.data.materials.append(M['金'])
+tube('接口占位-入口内螺纹套',(.03,-.36,.115),(.04,-.36,.115),.014,.0102)
 # Two wet alarms and independent float, attached to tray.
 for i,x in enumerate([-.46,.46],1):
  o=box(f'LEAK-{i}',(x,-.32,.046),(.021,.025,.012),'蓝板');asset('LEAK',f'LEAK-{i}',o)
 o=cyl('FLOAT-01',(.45,-.43,.045),(.45,-.43,.077),.015,'白');asset('FLOAT','FLOAT-01',o)
 box('浮球固定桥',(.45,-.439,.075),(.014,.032,.004),'铝合金')
 # Closed demonstration gas conduit, separate from wet circuit.
-o=tube('PIPE-G01',(-.57,.20,.105),(.57,.20,.105),.018,.014);o.data.materials.clear();o.data.materials.append(M['气管'])
-for x in [-.55,.55]:
- box('气管支座'+str(x),(x,.20,.058),(.035,.055,.056),'铝合金')
- cyl('气管封帽'+str(x),(x+(-.022 if x<0 else .018),.20,.105),(x+(-.018 if x<0 else .022),.20,.105),.02,'金')
+gaspoints=[(-.57+1.14*i/128,gas_y(-.57+1.14*i/128),.105) for i in range(129)]
+o=hollow_route('PIPE-G01',gaspoints,.018,.014);o.data.materials.clear();o.data.materials.append(M['气管'])
+o['design']='环廊弧形气管；外径36mm/内径28mm为布局占位，非加工规格'
+for x in [-.54,-.27,0,.27,.54]:
+ yy=gas_y(x)
+ support=box('气管支座'+str(x),(x,yy,.0585),(.035,.055,.057),'铝合金',0)
+ box('气管支座底脚'+str(x),(x,yy,.034),(.055,.065,.008),'铝合金')
+for index in [0,-1]:
+ p=Vector(gaspoints[index]);other=Vector(gaspoints[1 if index==0 else -2]);t=(p-other).normalized()
+ cyl('气管封帽'+str(index),p,p+t*.004,.019,'金')
 # Planned heater on its own insulated, floor-mounted base.
 box('加热隔热座',(-.32,.18,.042),(.06,.03,.024),'白');o=box('HEATER',(-.32,.18,.056),(.05,.025,.004),'深灰');asset('HEATER','HEATER',o)
 # Actual door and magnet, not another generic sensor stack.
@@ -174,18 +205,33 @@ door=box('检修门',(-.79,-.07,.175),(.008,.14,.23),'浅灰');box('门脚',(-.7
 o=box('门磁',(-.783,-.025,.25),(.014,.025,.018),'白');asset('DOOR_CONTACT','DOOR-01',o)
 box('门磁对磁',(-.783,.002,.25),(.014,.018,.018),'白');cyl('门铰',(-.79,-.135,.06),(-.79,-.135,.29),.006,'铝合金')
 # Planned air pump from project gas-circuit record. Not identified with DCP-3620.
-o=box('AIR-PUMP',(.33,.235,.064),(.072,.040,.040),'深灰',.006);asset('AIR_PUMP','AIR-PUMP-01',o)
-box('AIR-PUMP-BASE',(.33,.235,.037),(.086,.058,.014),'铝合金')
-cyl('气泵膜片',(.365,.235,.064),(.381,.235,.064),.021,'浅灰')
-for xx in [.31,.35]:
- cyl('气嘴'+str(xx),(xx,.235,.08),(xx,.235,.097),.004,'金')
-line('气泵进气管',[(.31,.235,.097),(.31,.235,.125),(.22,.235,.125),(.22,.235,.08)],.003,'水管')
-line('气泵回气管',[(.35,.235,.097),(.35,.235,.137),(.44,.235,.137),(.44,.235,.08)],.003,'水管')
-for xx,tt in [(.22,'进气过滤'),(.44,'回气出口')]:
- box(tt+'座',(xx,.235,.048),(.032,.034,.036),'浅灰');cyl(tt,(xx,.235,.062),(xx,.235,.09),.009,'深灰');plate(tt,tt,(xx,.217,.051),.052,.013,.006)
-plate('气泵','气泵 待核验',(.33,.214,.064),.073,.012,.007)
+build_air(box,cyl,tube,line,plate,asset)
+rebuild_demo(box,cyl,tube,line,plate,asset,registry,O)
 # Traceable plan plate, supported on front floor lip rather than floating legend.
 plate('总说明','计划装配 / 未投运',(0,-.50,.043),.27,.03,.015,False)
+build_enclosure(M['浅灰'])
+# Passive roof openings; no claim that these form tested fan ducts.
+for i,xx in enumerate([-.56,.56]):
+ cut=cyl('通风口切削',(xx,.12,.399),(xx,.12,.425),.059)
+ for roof in list(bpy.data.objects):
+  if roof.name.startswith('围护-屋面-'):
+   bpy.context.view_layer.objects.active=roof;md=roof.modifiers.new('屋面通风口','BOOLEAN');md.operation='DIFFERENCE';md.object=cut;bpy.ops.object.modifier_apply(modifier=md.name)
+ bpy.data.objects.remove(cut,do_unlink=True)
+ ring=tube(f'屋面通风附件-口圈-{i}',(xx,.12,.410),(xx,.12,.416),.064,.059)
+ for dy in [-.04,-.02,0,.02,.04]:
+  w=2*math.sqrt(.059**2-dy**2)
+  box(f'屋面通风附件-格栅-{i}-{dy}',(xx,.12+dy,.414),(w,.002,.002),'铝合金',.0003)
+# Opening for the existing access-door assembly; clear aperture is a design proposal.
+cut=box('围护门洞切削',(-.88,-.07,.175),(.10,.15,.232),'深灰',0)
+for wall in list(bpy.data.objects):
+ if wall.name.startswith('围护-外墙-'):
+  bpy.context.view_layer.objects.active=wall;md=wall.modifiers.new('检修开口','BOOLEAN');md.operation='DIFFERENCE';md.object=cut;bpy.ops.object.modifier_apply(modifier=md.name)
+bpy.data.objects.remove(cut,do_unlink=True)
+for n in ['检修门','门脚','门磁','门磁对磁','门铰']:
+ bpy.data.objects[n].location.x-=.094
+# Frame depth bridges the curved skin to the flat door.
+for yy in [-.146,.006]:box('门框立边'+str(yy),(-.882,yy,.175),(.035,.008,.244),'铝合金')
+for zz in [.055,.295]:box('门框横边'+str(zz),(-.882,-.07,zz),(.035,.16,.008),'铝合金')
 # Convert all visible geometry for portable GLB; preserve Chinese mesh labels.
 bpy.ops.object.select_all(action='DESELECT')
 for o in bpy.data.objects:
@@ -197,13 +243,18 @@ S.render.engine='BLENDER_WORKBENCH';S.display.shading.light='STUDIO';S.display.s
 S.render.resolution_x=1600;S.render.resolution_y=1100;S.render.resolution_percentage=100
 bpy.ops.object.camera_add();cam=bpy.context.object;cam.name='审查相机';cam.data.type='ORTHO';S.camera=cam
 views={'hero':((1.4,-2,1.5),(0,0,.14),2.1),'front':((0,-3,.3),(0,0,.2),1.9),'back':((0,3,.3),(0,0,.2),1.9),'left':((-3,0,.3),(0,0,.2),1.4),'right':((3,0,.3),(0,0,.2),1.4),'top':((0,0,3),(0,0,0),1.9),'station':((0,-1,.65),(0,.385,.19),.35),'water':((0,-1,.75),(0,-.33,.12),1.15),'controls':((-.68,-1,.6),(-.68,-.1,.2),.4)}
+views.update({'water-pump':((.20,-.60,.36),(.075,-.36,.115),.20),'air-pump':((.47,-.10,.50),(.33,.19,.10),.30),'gas':((.85,-.7,1.1),(0,.26,.105),1.32)})
+views.update({'probe':((-.10,-.62,.35),(0,-.404,.222),.18),'feed-gap':((.62,-.65,.48),(.45,-.38,.265),.22),'leak-valve':((-.24,.06,.38),(-.10,.31,.14),.25)})
 for tag,(p,target,scale) in views.items():
+ set_inspection_view(True)
  cam.location=p;cam.rotation_euler=(Vector(target)-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.ortho_scale=scale;S.render.filepath=str(O/f'{tag}.png');bpy.ops.render.render(write_still=True)
 p,target,scale=views['hero'];cam.location=p;cam.rotation_euler=(Vector(target)-cam.location).to_track_quat('-Z','Y').to_euler();cam.data.ortho_scale=scale
+set_inspection_view(False);S.render.filepath=str(O/'enclosure-full.png');bpy.ops.render.render(write_still=True)
 bpy.ops.object.select_all(action='DESELECT')
 for o in bpy.data.objects:
  if o.type=='MESH':o.select_set(True)
 bpy.ops.export_scene.gltf(filepath=str(O/'planned-rebuild.glb'),export_format='GLB',use_selection=True,export_apply=True,export_animations=False)
+set_inspection_view(True)
 bpy.ops.wm.save_as_mainfile(filepath=str(O/'planned-rebuild.blend'),compress=True)
 (O/'inventory.json').write_text(json.dumps({'counts':counts,'assets':registry,'unresolved':C['unresolved'],'views':views,'status':'AWAITING_VISUAL_REVIEW'},ensure_ascii=False,indent=2),encoding='utf-8')
 print('CLEAN_REBUILD_DONE',flush=True)
