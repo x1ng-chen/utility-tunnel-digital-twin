@@ -70,6 +70,7 @@ if(FIRMWARE_VARIANT STREQUAL "node_a")
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735_bus_node_a.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/node_a_status_screen.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/node_a_telemetry.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/network_time.c"
     )
 endif()
@@ -86,6 +87,7 @@ endif()
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/node_a_command.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/uart_tx_queue.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_menu.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_renderer.c"

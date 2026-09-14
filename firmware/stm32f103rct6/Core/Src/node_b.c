@@ -7,12 +7,18 @@
 #include "screen_snapshot.h"
 #include "network_time.h"
 #include "menu_command.h"
+#include "uart_tx_queue.h"
 
 #include <stdio.h>
 #include <string.h>
 
 #define NODE_ID "node-b"
 #define ESP_HEARTBEAT_INTERVAL_MS 2000U
+/* Bytes moved per UART per UI-loop iteration.  The loop must keep parsing the
+ * ESP snapshot and polling the joystick at the 60 FPS cadence, so the transmit
+ * work of one iteration is bounded in bytes (and therefore in milliseconds)
+ * rather than by how long the link takes to accept a frame. */
+#define NODE_B_UART_TX_DRAIN_BYTES 48U
 #define LED_INTERVAL_MS 500U
 #define ESP_RX_LINE_SIZE SCREEN_SNAPSHOT_LINE_SIZE
 #define UI_TEST_LINE_SIZE 48U
@@ -43,6 +49,11 @@ static uint8_t ui_test_length;
 static uint16_t display_test_completed;
 static uint8_t display_test_active;
 static MenuCommandTxQueue command_tx;
+/* Both UARTs keep their own queue so a stalled debug console can never hold
+ * back the ESP link, and neither can hold back the UI loop.  The menu command
+ * path keeps its own byte-at-a-time queue in menu_command.c. */
+static UartTxQueue esp_tx_queue;
+static UartTxQueue debug_tx_queue;
 
 void SystemClock_Config(void);
 void Error_Handler(void);
@@ -54,6 +65,22 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer);
 static void PollUiTest(void);
 static void HandleUiEffect(UiEffect effect, uint32_t now_ms);
 static void PollCommandTx(void);
+
+/* Queues one already-formatted line for both UARTs.  Nothing on the diagnostic
+ * or heartbeat path writes a UART directly any more: the UI loop drains both
+ * queues under a fixed byte budget and parses the ESP snapshot either way. */
+static void Tx_EnqueueLine(const char *line, uint16_t length)
+{
+  if ((line == 0) || (length == 0U)) return;
+  (void)UartTx_Enqueue(&esp_tx_queue, line, length);
+  (void)UartTx_Enqueue(&debug_tx_queue, line, length);
+}
+
+static void Tx_DrainBoth(uint32_t now_ms)
+{
+  (void)UartTx_Drain(&esp_tx_queue, &huart2, NODE_B_UART_TX_DRAIN_BYTES, now_ms);
+  (void)UartTx_Drain(&debug_tx_queue, &huart1, NODE_B_UART_TX_DRAIN_BYTES, now_ms);
+}
 
 static uint32_t NextBootId(void)
 {
@@ -103,8 +130,7 @@ static void SendHeartbeat(void)
 
   if ((length > 0) && (length < (int)sizeof(message)))
   {
-    (void)HAL_UART_Transmit(&huart2, (uint8_t *)message, (uint16_t)length, 1000U);
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
+    Tx_EnqueueLine(message, (uint16_t)length);
   }
 }
 
@@ -127,13 +153,17 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
   if (length > 0U)
   {
     now_ms = HAL_GetTick();
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)"#ESP ", 5U, 1000U);
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)line, length, 1000U);
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)"\r\n", 2U, 1000U);
+    /* The echo is a diagnostic, not an input to the UI: it is queued behind a
+     * bounded budget so a slow console can never delay the parse and render
+     * below, and it is dropped rather than delayed if the queue is full.  It is
+     * queued in its three parts so no second copy of the line is needed. */
+    (void)UartTx_Enqueue(&debug_tx_queue, "#ESP ", 5U);
+    (void)UartTx_Enqueue(&debug_tx_queue, line, length);
+    (void)UartTx_Enqueue(&debug_tx_queue, "\r\n", 2U);
     if (ScreenSnapshot_Apply(&snapshot_context, line, length, now_ms, &ui_snapshot))
     {
       ++*received_count;
-      UiState_SetControlAvailability(&ui_state, ui_snapshot.connectivity.mqtt_online,
+      UiState_SetControlAvailability(&ui_state, (uint8_t)(ui_snapshot.connectivity.mqtt == UI_LINK_ONLINE),
                                      ui_state.control.safety_locked);
     }
     else if (NetworkTime_Update(&ui_clock, line, length, now_ms))
@@ -159,7 +189,7 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
         ui_snapshot.humidity_centi_rh.value = peer->humidity_centi_rh;
         ui_snapshot.humidity_centi_rh.sampled_ms = now_ms;
         ui_snapshot.humidity_centi_rh.quality = UI_QUALITY_VALID;
-        ui_snapshot.connectivity.node_a_online = peer->online;
+        ui_snapshot.connectivity.node_a = peer->online ? (uint8_t)UI_LINK_ONLINE : (uint8_t)UI_LINK_OFFLINE;
         ScreenSnapshot_SetMqttAvailability(&ui_snapshot, 1U, now_ms);
         UiState_SetControlAvailability(&ui_state, 1U, ui_state.control.safety_locked);
       }
@@ -187,7 +217,7 @@ static void JoystickTest_Report(UiInputEvent event)
   const int length = snprintf(message, sizeof(message), "#JOY %s\r\n", Joystick_EventName(event));
 
   if ((length > 0) && (length < (int)sizeof(message))) {
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
+    Tx_EnqueueLine(message, (uint16_t)length);
   }
 }
 
@@ -199,7 +229,7 @@ static void UiTest_Report(void)
   if ((length > 0U) && (length < (sizeof(message) - 2U))) {
     message[length++] = '\r';
     message[length++] = '\n';
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
+    Tx_EnqueueLine(message, (uint16_t)length);
   }
 }
 
@@ -214,7 +244,7 @@ static void DisplayTest_Report(void)
     (unsigned long)stats.dma_frames, (unsigned long)stats.dma_timeouts,
     (unsigned long)stats.worst_frame_us, (unsigned long)stats.dma_errors);
   if (length > 0 && length < (int)sizeof(message))
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
+    Tx_EnqueueLine(message, (uint16_t)length);
 }
 
 static void DisplayTest_BeginRun(void)
@@ -298,7 +328,7 @@ static void UiTest_HandleLine(void)
       (void)UiState_HandleAcknowledgement(&ui_state, command_id, 0U);
     }
   } else if (sscanf(ui_test_line, "#UITEST MQTT %u", &enabled) == 1) {
-    ui_snapshot.connectivity.mqtt_online = enabled ? 1U : 0U;
+    ui_snapshot.connectivity.mqtt = enabled ? (uint8_t)UI_LINK_ONLINE : (uint8_t)UI_LINK_OFFLINE;
     UiState_SetControlAvailability(&ui_state, enabled ? 1U : 0U, ui_state.control.safety_locked);
   } else if (sscanf(ui_test_line, "#UITEST SAFETY %u", &enabled) == 1) {
     UiState_SetControlAvailability(&ui_state, ui_state.control.mqtt_online, enabled ? 1U : 0U);
@@ -414,12 +444,14 @@ int main(void)
   NetworkTime_Init(&ui_clock);
   MenuCommand_Init(&command_context, NextBootId());
   MenuCommandTx_Init(&command_tx);
+  UartTx_Init(&esp_tx_queue);
+  UartTx_Init(&debug_tx_queue);
   Joystick_Init();
   if (HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U) != HAL_OK) Error_Handler();
   ST7735_Init();
   UiRenderer_Init();
   (void)UiRenderer_RenderFrame(&ui_state, &ui_snapshot, HAL_GetTick());
-  (void)HAL_UART_Transmit(&huart1, (uint8_t *)"#NODE node-b boot\r\n", 19U, 1000U);
+  Tx_EnqueueLine("#NODE node-b boot\r\n", 19U);
 
   for (;;)
   {
@@ -433,9 +465,13 @@ int main(void)
     PollUiTest();
     PollEsp(&received_count, &peer);
     PollCommandTx();
+    /* Hand the queued diagnostic and heartbeat lines to the links under a byte
+     * budget, so a busy or unplugged console cannot delay the input poll, the
+     * snapshot parse or the render above. */
+    Tx_DrainBoth(now);
     ScreenSnapshot_Tick(&snapshot_context, now, &ui_snapshot);
     NetworkTime_ToSnapshot(&ui_clock, now, &ui_snapshot.clock);
-    UiState_SetControlAvailability(&ui_state, ui_snapshot.connectivity.mqtt_online,
+    UiState_SetControlAvailability(&ui_state, (uint8_t)(ui_snapshot.connectivity.mqtt == UI_LINK_ONLINE),
                                    ui_state.control.safety_locked);
     UiState_Tick(&ui_state, now);
     /* One diagnostic transfer per loop keeps input and ESP polling scheduled. */

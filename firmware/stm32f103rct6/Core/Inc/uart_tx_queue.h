@@ -1,0 +1,66 @@
+#ifndef UART_TX_QUEUE_H
+#define UART_TX_QUEUE_H
+
+#include "stm32f1xx_hal.h"
+
+#include <stdint.h>
+
+/* Byte-oriented, non-blocking transmit queue shared by both controller images.
+ *
+ * The boards used to serialise every diagnostic line with a blocking
+ * HAL_UART_Transmit(..., 1000U).  A full telemetry cycle or a burst of debug
+ * echo is far longer than any single loop iteration should take, so those
+ * calls stalled the foreground loop - and with it sampling, command handling
+ * and joystick polling - for seconds at a time.
+ *
+ * The queue never blocks: it accepts a whole frame or refuses it, and the
+ * caller drains it from the main loop with HAL_UART_Transmit(..., 0U) one byte
+ * at a time inside a fixed per-iteration byte budget.
+ *
+ * A link that stops accepting bytes must not keep charging the drain budget
+ * every iteration, so a queue whose head cannot move for a while is treated as
+ * stalled and skipped entirely until the backoff expires.  Node B needs this:
+ * a debug console with no reader attached would otherwise consume the whole
+ * budget that the ESP link and the 60 FPS UI loop share. */
+#define UART_TX_FRAME_LIMIT 767U
+/* Holds a whole telemetry cycle for one UART, so a cycle is refused only when
+ * the previous one is genuinely still on the wire. */
+#define UART_TX_CAPACITY 3072U
+/* Consecutive fully-blocked drain calls after which a queue is considered
+ * stalled.  At the Node A loop rate this is a small fraction of a second. */
+#define UART_TX_STALL_ATTEMPTS 4U
+/* How long a stalled queue is skipped before the link is retried. */
+#define UART_TX_STALL_BACKOFF_MS 1000U
+
+typedef struct {
+  uint8_t bytes[UART_TX_CAPACITY];
+  uint16_t capacity;
+  uint16_t head;
+  uint16_t tail;
+  uint16_t used;
+  uint8_t frames;
+  uint8_t blocked_attempts;
+  uint32_t stall_until_ms;
+  uint32_t enqueued_frames;
+  uint32_t dropped_frames;
+  uint32_t dropped_bytes;
+  uint16_t peak_used;
+  uint16_t peak_frames;
+} UartTxQueue;
+
+void UartTx_Init(UartTxQueue *queue);
+
+/* Copies `length` bytes when the whole frame fits, otherwise drops the frame.
+ * Returns 1 when queued.  A frame longer than UART_TX_FRAME_LIMIT is always
+ * refused: the peer splits lines at that bound. */
+uint8_t UartTx_Enqueue(UartTxQueue *queue, const char *line, uint16_t length);
+
+/* Pushes at most `budget` bytes to `uart` with a zero HAL timeout, so the call
+ * returns immediately whatever the link is doing.  `now_ms` stamps the stall
+ * backoff.  Returns the bytes written; a stalled queue writes none. */
+uint16_t UartTx_Drain(UartTxQueue *queue, UART_HandleTypeDef *uart,
+                      uint16_t budget, uint32_t now_ms);
+
+uint8_t UartTx_Pending(const UartTxQueue *queue);
+
+#endif
