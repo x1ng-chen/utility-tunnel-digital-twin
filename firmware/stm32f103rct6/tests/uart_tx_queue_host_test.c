@@ -38,12 +38,13 @@ static char link_bytes[8192];
 static size_t link_length;
 static uint8_t link_failing;
 static unsigned long link_calls;
+static uint32_t link_timeout;
 
 HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *uart, uint8_t *data,
                                     uint16_t size, uint32_t timeout)
 {
   (void)uart;
-  (void)timeout;
+  link_timeout = timeout;
   ++link_calls;
   if (link_failing) return HAL_TIMEOUT;
   if (size != 1U) return HAL_ERROR;
@@ -58,6 +59,7 @@ static void link_reset(void)
   link_length = 0U;
   link_failing = 0U;
   link_calls = 0UL;
+  link_timeout = 0U;
 }
 
 static UART_HandleTypeDef kUart = {0};
@@ -114,6 +116,7 @@ static void test_a_drain_call_never_exceeds_its_budget(void)
 
   moved = UartTx_Drain(&queue, &kUart, 48U, 0U);
   CHECK(moved == 48U);
+  CHECK(link_timeout == 2U);
   CHECK(link_length == 48U);
   CHECK(queue.used == 154U);
 

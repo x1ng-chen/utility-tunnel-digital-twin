@@ -28,6 +28,7 @@ namespace {
 constexpr uint32_t kSerialBaud = 9600;
 constexpr uint32_t kReconnectIntervalMs = 5000;
 constexpr uint32_t kWiFiConnectTimeoutMs = 30000;
+constexpr uint32_t kNtpRetryIntervalMs = 30000;
 // Preserve the bench-tested long telemetry path. Screen protocol frames remain
 // independently capped at screen_protocol::kUartLineLimit (768 bytes).
 constexpr size_t kMaxSerialFrame = 1024;
@@ -64,6 +65,8 @@ screen_routing::TelemetryAccumulator screenTelemetry{};
 screen_routing::TimeSyncSchedule timeSyncSchedule{};
 screen_routing::NtpAssociationState ntpAssociation{};
 screen_routing::UartTxQueue uartTxQueue{};
+uint32_t lastNtpConfigureMs = 0U;
+bool ntpConfigureAttempted = false;
 
 #if defined(BUILD_ROLE_CTRL02)
 constexpr screen_routing::Role kBuildRole = screen_routing::Role::Ctrl02;
@@ -262,9 +265,22 @@ void connectWiFi() {
 
 void handleNetworkTime() {
   const bool connected = WiFi.status() == WL_CONNECTED;
-  if (screen_routing::ShouldConfigureNtp(&ntpAssociation, connected)) {
+  const uint32_t nowMs = millis();
+  const uint64_t epochMs = currentEpochMilliseconds();
+  const bool associated =
+      screen_routing::ShouldConfigureNtp(&ntpAssociation, connected);
+  const bool retryDue = connected && epochMs == 0ULL &&
+      (!ntpConfigureAttempted ||
+       static_cast<uint32_t>(nowMs - lastNtpConfigureMs) >=
+           kNtpRetryIntervalMs);
+  if (associated || retryDue) {
     // configTime() starts the SNTP client and returns immediately.
-    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    // Multiple geographically diverse names make hotspot/DNS restrictions
+    // much less likely to leave both displays at the unsynchronised marker.
+    configTime(0, 0, "ntp.aliyun.com", "time1.cloud.tencent.com",
+               "pool.ntp.org");
+    lastNtpConfigureMs = nowMs;
+    ntpConfigureAttempted = true;
     Serial.println("#NTP configured");
   }
   if (!connected) return;
@@ -273,7 +289,7 @@ void handleNetworkTime() {
   size_t written = 0U;
   const screen_routing::TimeEmitResult result =
       screen_routing::BuildDueTimeSync(
-          &timeSyncSchedule, millis(),
+          &timeSyncSchedule, nowMs,
           epoch > 0 ? static_cast<uint64_t>(epoch) : 0ULL, line,
           sizeof(line), &written);
   if (result == screen_routing::TimeEmitResult::Emitted) {

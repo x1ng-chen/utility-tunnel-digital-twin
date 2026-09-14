@@ -14,8 +14,9 @@
  * and joystick polling - for seconds at a time.
  *
  * The queue never blocks: it accepts a whole frame or refuses it, and the
- * caller drains it from the main loop with HAL_UART_Transmit(..., 0U) one byte
- * at a time inside a fixed per-iteration byte budget.
+ * caller drains it from the main loop one byte at a time inside a fixed
+ * per-iteration byte budget.  The short non-zero HAL timeout is required on
+ * STM32F1 because a zero timeout can report failure after writing the byte.
  *
  * A link that stops accepting bytes must not keep charging the drain budget
  * every iteration, so a queue whose head cannot move for a while is treated as
@@ -74,9 +75,9 @@ uint8_t UartTx_Enqueue(UartTxQueue *queue, const char *line, uint16_t length);
 uint8_t UartTx_EnqueuePriority(UartTxQueue *queue, const char *line,
                                uint16_t length);
 
-/* Pushes at most `budget` bytes to `uart` with a zero HAL timeout, so the call
- * returns immediately whatever the link is doing.  `now_ms` stamps the stall
- * backoff.  Returns the bytes written; a stalled queue writes none. */
+/* Pushes at most `budget` bytes to `uart` with a two-tick per-byte timeout.
+ * `now_ms` stamps the stall backoff.  Returns the bytes written; a stalled
+ * queue writes none. */
 uint16_t UartTx_Drain(UartTxQueue *queue, UART_HandleTypeDef *uart,
                       uint16_t budget, uint32_t now_ms);
 

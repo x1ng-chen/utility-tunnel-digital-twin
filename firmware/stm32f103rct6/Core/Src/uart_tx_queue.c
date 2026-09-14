@@ -72,9 +72,13 @@ uint16_t UartTx_Drain(UartTxQueue *queue, UART_HandleTypeDef *uart,
   }
   while ((queue->used != 0U) && (written < budget)) {
     const uint8_t byte = queue->bytes[queue->head];
-    /* A zero timeout is what keeps the loop bounded: the HAL returns
-     * HAL_TIMEOUT rather than waiting for room in the transmit register. */
-    if (HAL_UART_Transmit(uart, (uint8_t *)&byte, 1U, 0U) != HAL_OK) break;
+    /* Do not use a zero timeout here.  STM32F1 HAL writes the byte to DR and
+     * then waits for TC; with timeout == 0 it reports HAL_TIMEOUT after the
+     * byte has already left DR.  Treating that result as "not sent" kept the
+     * queue head fixed and retransmitted its first byte forever.  Two ticks
+     * comfortably cover one 9600-8N1 character while still bounding a
+     * genuinely stalled link. */
+    if (HAL_UART_Transmit(uart, (uint8_t *)&byte, 1U, 2U) != HAL_OK) break;
     queue->head = (uint16_t)((queue->head + 1U) % queue->capacity);
     --queue->used;
     ++written;

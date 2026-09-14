@@ -86,8 +86,8 @@ static NodeAStatusSnapshot idle_snapshot(void)
   NodeAStatusSnapshot snapshot;
   memset(&snapshot, 0, sizeof(snapshot));
   snapshot.sht30_online = 1U;
-  snapshot.temperature_centi_c = 234;
-  snapshot.humidity_centi_rh = 456;
+  snapshot.temperature_centi_c = 2345;
+  snapshot.humidity_centi_rh = 4560;
   snapshot.oxygen_online = 1U;
   snapshot.methane_online = 1U;
   snapshot.co_online = 1U;
@@ -271,8 +271,8 @@ static int check_render_pages(void)
   NodeAStatus_Update(&screen, &snapshot, 0U, 0U);
   CHECK(normal_fill_count == 1U && alarm_fill_count == 0U);
   CHECK(saw_text("ENV"));
-  CHECK(saw_text("TEMP") && saw_text("23.4"));
-  CHECK(saw_text("HUMI") && saw_text("45.6"));
+  CHECK(saw_text("TEMP") && saw_text("23.45"));
+  CHECK(saw_text("HUMI") && saw_text("45.60"));
   CHECK(saw_text("DRY"));
   CHECK(saw_text("--:--"));
 

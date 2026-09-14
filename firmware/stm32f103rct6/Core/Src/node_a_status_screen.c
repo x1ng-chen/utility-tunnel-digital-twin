@@ -147,13 +147,14 @@ size_t NodeAStatus_DescribeAlarms(const NodeAStatusSnapshot *snapshot,
 
 /* ---------- drawing ---------- */
 
-static void FormatDecimal(char *output, size_t size, int32_t tenths, const char *suffix)
+static void FormatCenti(char *output, size_t size, int32_t centi, const char *suffix)
 {
-  int64_t value = tenths;
+  int64_t value = centi;
   const char *sign = "";
   if (value < 0) { sign = "-"; value = -value; }
-  (void)snprintf(output, size, "%s%u.%u%s", sign, (unsigned int)(value / 10),
-                 (unsigned int)(value % 10), suffix);
+  (void)snprintf(output, size, "%s%u.%02u%s", sign,
+                 (unsigned int)(value / 100),
+                 (unsigned int)(value % 100), suffix);
 }
 
 static uint16_t AlarmColor(uint8_t alarm, uint8_t warning)
@@ -194,9 +195,9 @@ static void DrawEnvironment(const NodeAStatusSnapshot *snapshot)
   {
     /* Node A has no temperature alarm threshold, so the reading is reported
      * as data and never coloured as a warning the firmware did not raise. */
-    FormatDecimal(text, sizeof(text), snapshot->temperature_centi_c, " C");
+    FormatCenti(text, sizeof(text), snapshot->temperature_centi_c, " C");
     DrawRow(0U, "TEMP", text, NODE_A_STATUS_FG);
-    FormatDecimal(text, sizeof(text), (int32_t)snapshot->humidity_centi_rh, " %");
+    FormatCenti(text, sizeof(text), (int32_t)snapshot->humidity_centi_rh, " %");
     DrawRow(1U, "HUMI", text, NODE_A_STATUS_FG);
   }
 

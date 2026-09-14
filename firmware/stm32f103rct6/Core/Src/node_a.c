@@ -1335,10 +1335,10 @@ static void Command_HandleLine(char *line, uint32_t received_at)
   Command_ProcessPayload(payload, received_at);
 }
 
-/* Moves a bounded number of bytes to each UART.  Every byte uses a zero HAL
- * timeout, so this can never wait for the link; the budget caps the whole
- * iteration at NODE_A_UART_TX_DRAIN_WORST_CASE_MS of transmit time, and a link
- * that has stopped draining is skipped rather than retried every iteration. */
+/* Moves a bounded number of bytes to each UART.  Every byte uses the shared
+ * queue's short HAL timeout, so the byte budget still caps one iteration and
+ * a link that has stopped draining is skipped rather than retried every
+ * iteration. */
 static void UartTx_DrainBoth(uint32_t now_ms)
 {
   (void)UartTx_Drain(&esp_tx_queue, &huart2, NODE_A_UART_TX_DRAIN_BYTES, now_ms);
