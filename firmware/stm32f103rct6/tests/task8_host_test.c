@@ -37,7 +37,9 @@ static const char kSnapshot[] =
   "\"fans\":[[60,1,2400,11900,320,1704067205000,1],"
   "[30,0,1600,11800,280,1704067205000,1]],"
   "\"actuators\":[true,3,75,true,false],"
-  "\"connectivity\":[true,true,false,true,1704067200000],"
+  /* node_a, mqtt, gateway, iotda as UiLinkStatus ordinals.  The gateway is
+   * UNKNOWN (0), not a false OFFLINE: nothing on this wire observes it. */
+  "\"connectivity\":[1,1,0,0,1704067200000],"
   "\"lastCommand\":[\"menu-CTRL-02-1-2\",true,true,1704067204000]}";
 
 static int test_snapshot_validation_and_atomicity(void)
@@ -55,10 +57,10 @@ static int test_snapshot_validation_and_atomicity(void)
   CHECK(snapshot.connectivity.updated_ms == 1704067200000ULL);
   CHECK(snapshot.clock.synchronized == 0U);
   UiState_Init(&state);
-  UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
+  UiState_SetControlAvailability(&state, (uint8_t)(snapshot.connectivity.mqtt == UI_LINK_ONLINE), 0U);
   CHECK(state.control.mqtt_online == 1U);
   ScreenSnapshot_SetMqttAvailability(&snapshot, 0U, 100U);
-  UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
+  UiState_SetControlAvailability(&state, (uint8_t)(snapshot.connectivity.mqtt == UI_LINK_ONLINE), 0U);
   CHECK(state.control.mqtt_online == 0U);
   before = snapshot;
   (void)snprintf(malformed, sizeof(malformed), "%s", kSnapshot);
@@ -93,18 +95,18 @@ static int test_sequence_staleness_wraparound_and_bounds(void)
   CHECK(ScreenSnapshot_IsStale(&context, 4899U) == 1U); /* 5000 ms across wrap */
   ScreenSnapshot_Tick(&context, 4899U, &snapshot);
   CHECK(snapshot.temperature_centi_c.quality == UI_QUALITY_STALE);
-  CHECK(snapshot.connectivity.mqtt_online == 0U); /* Tick itself must lock MQTT */
+  CHECK(snapshot.connectivity.mqtt == (uint8_t)UI_LINK_UNKNOWN); /* Tick degrades an unobserved link to unknown */
   CHECK(snapshot.connectivity.updated_ms == 4899U);
   {
     UiState state;
     UiState_Init(&state);
-    UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
+    UiState_SetControlAvailability(&state, (uint8_t)(snapshot.connectivity.mqtt == UI_LINK_ONLINE), 0U);
     CHECK(state.control.mqtt_online == 0U);
     ScreenSnapshot_SetMqttAvailability(&snapshot, 1U, 4900U);
-    UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
+    UiState_SetControlAvailability(&state, (uint8_t)(snapshot.connectivity.mqtt == UI_LINK_ONLINE), 0U);
     CHECK(state.control.mqtt_online == 1U); /* MQTT UP recovery */
     ScreenSnapshot_SetMqttAvailability(&snapshot, 0U, 4901U);
-    UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
+    UiState_SetControlAvailability(&state, (uint8_t)(snapshot.connectivity.mqtt == UI_LINK_ONLINE), 0U);
     CHECK(state.control.mqtt_online == 0U); /* MQTT DOWN */
   }
   return 0;
@@ -136,10 +138,10 @@ static int test_time_and_mqtt_lifecycle(void)
   CHECK(UiRenderer_DescribeLayout(&state, &snapshot, layout, sizeof(layout)) > 0U);
   CHECK(strstr(layout, "time=--:--") != NULL);
   ScreenSnapshot_SetMqttAvailability(&snapshot, 1U, 70100U);
-  UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
+  UiState_SetControlAvailability(&state, (uint8_t)(snapshot.connectivity.mqtt == UI_LINK_ONLINE), 0U);
   CHECK(state.control.mqtt_online == 1U);
   ScreenSnapshot_SetMqttAvailability(&snapshot, 0U, 70200U);
-  UiState_SetControlAvailability(&state, snapshot.connectivity.mqtt_online, 0U);
+  UiState_SetControlAvailability(&state, (uint8_t)(snapshot.connectivity.mqtt == UI_LINK_ONLINE), 0U);
   CHECK(state.control.mqtt_online == 0U);
   return 0;
 }

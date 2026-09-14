@@ -33,9 +33,9 @@ void UI_MenuSetTelemetry(const UiTelemetry *telemetry)
   menu_snapshot.water_level_raw.quality = UI_QUALITY_VALID;
   menu_snapshot.alarm_severity = telemetry->vibrationAlarm ? UI_ALARM_CRITICAL : UI_ALARM_NONE;
   menu_snapshot.alarm_sources = telemetry->vibrationAlarm ? 1U : 0U;
-  menu_snapshot.connectivity.mqtt_online = telemetry->telemetryTxEnabled ? 1U : 0U;
+  menu_snapshot.connectivity.mqtt = telemetry->telemetryTxEnabled ? (uint8_t)UI_LINK_ONLINE : (uint8_t)UI_LINK_OFFLINE;
   menu_snapshot.connectivity.updated_ms = menu_now_ms;
-  UiState_SetControlAvailability(&menu_state, menu_snapshot.connectivity.mqtt_online, 0U);
+  UiState_SetControlAvailability(&menu_state, (uint8_t)(menu_snapshot.connectivity.mqtt == UI_LINK_ONLINE), 0U);
 }
 
 void UI_MenuHandleInput(UiInput input)

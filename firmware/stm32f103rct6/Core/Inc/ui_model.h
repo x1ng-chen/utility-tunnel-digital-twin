@@ -65,11 +65,21 @@ typedef struct {
   uint8_t buzzer_muted;
 } UiActuatorSnapshot;
 
+/* Mirrors screen_protocol::LinkStatus on the ESP side.  Unknown is a real
+ * state: nothing in the current interface supplies an observed status for the
+ * IoTDA gateway or the cloud session, so the network page must not render
+ * those rows as OFFLINE. */
+typedef enum {
+  UI_LINK_UNKNOWN = 0,
+  UI_LINK_ONLINE,
+  UI_LINK_OFFLINE,
+} UiLinkStatus;
+
 typedef struct {
-  uint8_t node_a_online;
-  uint8_t gateway_online;
-  uint8_t iotda_online;
-  uint8_t mqtt_online;
+  uint8_t node_a;
+  uint8_t mqtt;
+  uint8_t gateway;
+  uint8_t iotda;
   uint64_t updated_ms;
 } UiConnectivitySnapshot;
 

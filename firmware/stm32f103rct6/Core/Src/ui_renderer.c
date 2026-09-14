@@ -242,7 +242,7 @@ size_t UiRenderer_DescribeLayout(const UiState *state, const UiSnapshot *snapsho
                     ((uint8_t)state->page < (uint8_t)(sizeof(page_titles) / sizeof(page_titles[0])))
                       ? page_titles[state->page] : "unknown",
                     (unsigned int)page_row_count(state->page), selected_name(state->page, state->selected_row),
-                    time_field, snapshot->connectivity.mqtt_online ? "online" : "offline",
+                    time_field, (snapshot->connectivity.mqtt == UI_LINK_ONLINE) ? "online" : ((snapshot->connectivity.mqtt == UI_LINK_OFFLINE) ? "offline" : "unknown"),
                     selected_option_name(state), (unsigned int)selected_option_value(state),
                     (unsigned int)state->option_editing,
                     (unsigned int)popcount8(warning_only_sources(snapshot)),
@@ -428,8 +428,8 @@ static void draw_header(const UiSnapshot *snapshot)
   char time_field[6];
   ST7735_FillRect(0, 0, LCD_WIDTH, UI_HEADER_HEIGHT, UI_COLOR_HEADER);
   ST7735_DrawString(2, 2, "CTRL-02", LCD_WHITE, UI_COLOR_HEADER);
-  ST7735_DrawString(61, 2, snapshot->connectivity.mqtt_online ? "M+" : "M-",
-                    snapshot->connectivity.mqtt_online ? LCD_GREEN : UI_COLOR_DANGER,
+  ST7735_DrawString(61, 2, (snapshot->connectivity.mqtt == UI_LINK_ONLINE) ? "M+" : "M-",
+                    (snapshot->connectivity.mqtt == UI_LINK_ONLINE) ? LCD_GREEN : UI_COLOR_DANGER,
                     UI_COLOR_HEADER);
   format_clock(snapshot, time_field);
   ST7735_DrawString(88, 2, time_field, LCD_WHITE, UI_COLOR_HEADER);
@@ -802,24 +802,32 @@ static void draw_light_sound(int16_t offset, const UiState *state, const UiSnaps
   }
 }
 
-static uint8_t network_row_online(const UiSnapshot *snapshot, uint8_t row)
+static uint8_t network_row_status(const UiSnapshot *snapshot, uint8_t row)
 {
-  if (row == 0U) return snapshot->connectivity.node_a_online;
-  if (row == 1U) return snapshot->connectivity.gateway_online;
-  if (row == 2U) return snapshot->connectivity.iotda_online;
-  return snapshot->connectivity.mqtt_online;
+  if (row == 0U) return (uint8_t)snapshot->connectivity.node_a;
+  if (row == 1U) return (uint8_t)snapshot->connectivity.gateway;
+  if (row == 2U) return (uint8_t)snapshot->connectivity.iotda;
+  return (uint8_t)snapshot->connectivity.mqtt;
 }
 
 static void draw_network_row(int16_t offset, uint8_t row, const UiSnapshot *snapshot)
 {
   static const char *const labels[] = {"NODE-A", "GATEWAY", "IOTDA", "MQTT"};
+  static const char *const status_text[] = {"UNKNOWN", "ONLINE", "OFFLINE"};
   char text[24];
   const int16_t y = (int16_t)(UI_ROWS_TOP + row * UI_ROW_HEIGHT);
-  (void)snprintf(text, sizeof(text), "%s %s", labels[row],
-                 network_row_online(snapshot, row) ? "ONLINE" : "OFFLINE");
+  const uint8_t status = network_row_status(snapshot, row);
+  const char *label = (status <= (uint8_t)UI_LINK_OFFLINE)
+                          ? status_text[status]
+                          : status_text[0];
+  /* Only an observed link is worth a green row.  An unobserved one has to read
+   * as unknown: the IoTDA gateway and cloud session have no status source on
+   * this screen, and claiming OFFLINE would be a known falsehood. */
+  (void)snprintf(text, sizeof(text), "%s %s", labels[row], label);
   ST7735_FillRect(offset + 8, y, 116, UI_ROW_HEIGHT - 2, UI_COLOR_PANEL);
   ST7735_DrawString(offset + 12, y + 5, text,
-                    network_row_online(snapshot, row) ? LCD_GREEN : UI_COLOR_MUTED,
+                    (status == (uint8_t)UI_LINK_ONLINE) ? LCD_GREEN
+                                                        : UI_COLOR_MUTED,
                     UI_COLOR_PANEL);
 }
 
@@ -963,8 +971,8 @@ static void redraw_header_delta(const UiSnapshot *snapshot, uint8_t redraw_time,
   if (redraw_mqtt) {
     invalidate((UiDirtyRect){56, 0, 30, UI_HEADER_HEIGHT});
     ST7735_FillRect(56, 0, 30, UI_HEADER_HEIGHT, UI_COLOR_HEADER);
-    ST7735_DrawString(61, 2, snapshot->connectivity.mqtt_online ? "M+" : "M-",
-                      snapshot->connectivity.mqtt_online ? LCD_GREEN : UI_COLOR_DANGER,
+    ST7735_DrawString(61, 2, (snapshot->connectivity.mqtt == UI_LINK_ONLINE) ? "M+" : "M-",
+                      (snapshot->connectivity.mqtt == UI_LINK_ONLINE) ? LCD_GREEN : UI_COLOR_DANGER,
                       UI_COLOR_HEADER);
   }
   if (redraw_time) {
@@ -1085,7 +1093,7 @@ static uint8_t redraw_snapshot_delta(const UiState *state, const UiSnapshot *sna
     }
   } else if (state->page == UI_NETWORK) {
     for (row = 0U; row < 4U; ++row) {
-      if (network_row_online(snapshot, row) != network_row_online(&renderer.snapshot, row)) {
+      if (network_row_status(snapshot, row) != network_row_status(&renderer.snapshot, row)) {
         invalidate((UiDirtyRect){2, (int16_t)(UI_ROWS_TOP + row * UI_ROW_HEIGHT),
                                  122, UI_ROW_HEIGHT - 2});
         draw_network_row(0, row, snapshot);
@@ -1277,7 +1285,7 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
   }
 
   header_time = time_changed(snapshot, &renderer.snapshot);
-  header_mqtt = snapshot->connectivity.mqtt_online != renderer.snapshot.connectivity.mqtt_online;
+  header_mqtt = snapshot->connectivity.mqtt != renderer.snapshot.connectivity.mqtt;
   overlay_delta = (state->dialog != renderer.state.dialog) ||
                   (state->command_phase != renderer.state.command_phase) ||
                   (state->pending_action != renderer.state.pending_action) ||

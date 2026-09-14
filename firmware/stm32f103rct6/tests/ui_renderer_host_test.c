@@ -225,6 +225,10 @@ static int check_layout_contract(void)
 
   UiState_Init(&state);
   (void)memset(&snapshot, 0, sizeof(snapshot));
+  /* An observed-down link renders as offline.  Zero-initialising is not the
+   * same state any more: unmeasured is UI_LINK_UNKNOWN and must not be shown
+   * as a confident OFFLINE. */
+  snapshot.connectivity.mqtt = (uint8_t)UI_LINK_OFFLINE;
   for (index = 0U; index < (sizeof(expected) / sizeof(expected[0])); ++index) {
     state.page = expected[index].page;
     state.selected_row = 0U;
@@ -246,7 +250,7 @@ static int check_layout_contract(void)
   snapshot.clock.synchronized = 1U;
   snapshot.clock.hour = 9U;
   snapshot.clock.minute = 7U;
-  snapshot.connectivity.mqtt_online = 1U;
+  snapshot.connectivity.mqtt = (uint8_t)UI_LINK_ONLINE;
   state.page = UI_FANS;
   state.selected_row = 1U;
   state.dialog = UI_DIALOG_CONFIRM;
@@ -255,6 +259,12 @@ static int check_layout_contract(void)
   CHECK(strstr(line, "time=09:07") != NULL);
   CHECK(strstr(line, "mqtt=online") != NULL);
   CHECK(strstr(line, "dialog=confirm") != NULL);
+
+  /* A link that was never observed reads as unknown, not as offline. */
+  snapshot.connectivity.mqtt = (uint8_t)UI_LINK_UNKNOWN;
+  CHECK(UiRenderer_DescribeLayout(&state, &snapshot, line, sizeof(line)) > 0U);
+  CHECK(strstr(line, "mqtt=unknown") != NULL);
+  snapshot.connectivity.mqtt = (uint8_t)UI_LINK_ONLINE;
 
   state.page = UI_FANS;
   state.selected_row = 0U;
@@ -373,7 +383,7 @@ static int check_field_level_dirty_rectangles(void)
   state.animation_start_ms = 10U;
   state.animation_end_ms = 190U;
   CHECK(UiRenderer_RenderFrame(&state, &snapshot, 190U) == 1U);
-  snapshot.connectivity.gateway_online = 1U;
+  snapshot.connectivity.gateway = (uint8_t)UI_LINK_ONLINE;
   reset_display_recording();
   CHECK(UiRenderer_RenderFrame(&state, &snapshot, 191U) == 1U);
   UiRenderer_GetStats(&stats);
@@ -381,7 +391,7 @@ static int check_field_level_dirty_rectangles(void)
   CHECK(has_rect(8, 54, 116, 18));
   CHECK(string_was_drawn("GATEWAY ONLINE"));
 
-  snapshot.connectivity.mqtt_online = 1U;
+  snapshot.connectivity.mqtt = (uint8_t)UI_LINK_ONLINE;
   reset_display_recording();
   CHECK(UiRenderer_RenderFrame(&state, &snapshot, 192U) == 1U);
   CHECK(has_rect(8, 94, 116, 18));
@@ -705,7 +715,7 @@ static int check_page_animation_and_header_delta(void)
   CHECK(stats.last_dirty_rectangles == 1U);
   CHECK(stats.full_screen_redraws == 1U);
 
-  snapshot.connectivity.mqtt_online = 1U;
+  snapshot.connectivity.mqtt = (uint8_t)UI_LINK_ONLINE;
   CHECK(UiRenderer_RenderFrame(&state, &snapshot, 3U) == 1U);
   UiRenderer_GetStats(&stats);
   CHECK(stats.last_dirty_rectangles == 1U);

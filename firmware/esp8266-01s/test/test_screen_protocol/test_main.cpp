@@ -84,8 +84,9 @@ ScreenSnapshot validSnapshot() {
   value.fans[1] = FanSnapshot{30U, true, 1600U, 11850U, 280U,
                               kFreshNowMs - 500ULL, Quality::Valid};
   value.actuators = ActuatorSnapshot{true, 4U, 75U, true, false};
-  value.connectivity = ConnectivitySnapshot{true, true, true, true,
-                                             kFreshNowMs - 200ULL};
+  value.connectivity = ConnectivitySnapshot{
+      LinkStatus::Online, LinkStatus::Online, LinkStatus::Unknown,
+      LinkStatus::Unknown, kFreshNowMs - 200ULL};
   std::strcpy(value.last_command.command_id, "menu-CTRL-02-7-42");
   value.last_command.accepted = true;
   value.last_command.complete = true;
@@ -201,7 +202,11 @@ void test_snapshot_round_trip_is_complete_and_canonical() {
   CHECK_EQ(60U, output.fans[0].target_duty_percent);
   CHECK_EQ(280U, output.fans[1].current_ma);
   CHECK_EQ(4U, output.actuators.led_mode);
-  CHECK_TRUE(output.connectivity.mqtt_online);
+  CHECK_TRUE(output.connectivity.mqtt == LinkStatus::Online);
+  /* An unobserved link survives the round trip as unknown, so the display
+   * cannot turn "never measured" into "measured offline". */
+  CHECK_TRUE(output.connectivity.gateway == LinkStatus::Unknown);
+  CHECK_TRUE(output.connectivity.iotda == LinkStatus::Unknown);
   CHECK_TRUE(output.last_command.accepted);
   CHECK_TRUE(std::strcmp(output.last_command.command_id, input.last_command.command_id) == 0);
   CHECK_EQ(Result::Ok, BuildSnapshot(output, rebuilt, sizeof(rebuilt), &rebuilt_length));
@@ -857,10 +862,10 @@ void test_uart_line_limit_and_output_buffer_are_exact() {
   largest.actuators.led_brightness_percent = 100U;
   largest.actuators.buzzer_on = false;
   largest.actuators.buzzer_muted = false;
-  largest.connectivity.node_a_online = false;
-  largest.connectivity.gateway_online = false;
-  largest.connectivity.iotda_online = false;
-  largest.connectivity.mqtt_online = false;
+  largest.connectivity.node_a = LinkStatus::Offline;
+  largest.connectivity.gateway = LinkStatus::Unknown;
+  largest.connectivity.iotda = LinkStatus::Unknown;
+  largest.connectivity.mqtt = LinkStatus::Offline;
   std::strcpy(largest.last_command.command_id,
               "123456789012345678901234567890123456789");
   largest.last_command.accepted = false;

@@ -50,6 +50,16 @@ enum class AlarmSeverity : uint8_t {
   Critical = 2,
 };
 
+/* A link the screen reports on.  Unknown is a first-class state, not "false":
+ * this firmware has no observed status for the IoTDA gateway or the cloud
+ * session, so it must say so rather than claim they are offline.  Offline is
+ * reserved for a status that was actually observed to be down. */
+enum class LinkStatus : uint8_t {
+  Unknown = 0,
+  Online = 1,
+  Offline = 2,
+};
+
 enum class CommandAction : uint8_t {
   Fan1Duty = 0,
   FansBothStart,
@@ -104,10 +114,15 @@ struct ActuatorSnapshot {
 };
 
 struct ConnectivitySnapshot {
-  bool node_a_online;
-  bool gateway_online;
-  bool iotda_online;
-  bool mqtt_online;
+  /* Observed on the telemetry wire: a frame that reached CTRL-02 was produced
+   * by Node A and carried by the broker, so both are structurally online. */
+  LinkStatus node_a;
+  LinkStatus mqtt;
+  /* Not observable from any topic CTRL-02 subscribes to today.  They stay
+   * Unknown until a status source feeds them, and the screen renders them as
+   * unknown rather than inventing an OFFLINE. */
+  LinkStatus gateway;
+  LinkStatus iotda;
   uint64_t updated_at_ms;
 };
 

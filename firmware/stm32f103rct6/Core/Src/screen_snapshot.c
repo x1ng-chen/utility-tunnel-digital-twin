@@ -107,6 +107,17 @@ static uint8_t boolean_value(Cursor *cursor, uint8_t *value)
   return 0U;
 }
 
+/* Link status travels as the UiLinkStatus ordinal, not as a boolean: an
+ * unobserved gateway or cloud session has to stay distinguishable from one
+ * that was observed to be down. */
+static uint8_t link_status_value(Cursor *cursor, uint8_t *value)
+{
+  uint64_t status;
+  if (!unsigned_value(cursor, &status) || status > (uint64_t)UI_LINK_OFFLINE) return 0U;
+  *value = (uint8_t)status;
+  return 1U;
+}
+
 static uint8_t valid_timestamp(uint64_t sampled, uint64_t generated, UiDataQuality quality)
 {
   if ((quality == UI_QUALITY_UNKNOWN) && (sampled == 0ULL)) return 1U;
@@ -217,10 +228,10 @@ static uint8_t parse_model(const char *line, size_t length, uint32_t received_ms
       !character(&cursor, ',') || !boolean_value(&cursor, &buzzer) ||
       !character(&cursor, ',') || !boolean_value(&cursor, &muted) ||
       !character(&cursor, ']') || !character(&cursor, ',') || !named_key(&cursor, "connectivity") ||
-      !character(&cursor, '[') || !boolean_value(&cursor, &node_a) ||
-      !character(&cursor, ',') || !boolean_value(&cursor, &gateway) ||
-      !character(&cursor, ',') || !boolean_value(&cursor, &iotda) ||
-      !character(&cursor, ',') || !boolean_value(&cursor, &mqtt) ||
+      !character(&cursor, '[') || !link_status_value(&cursor, &node_a) ||
+      !character(&cursor, ',') || !link_status_value(&cursor, &mqtt) ||
+      !character(&cursor, ',') || !link_status_value(&cursor, &gateway) ||
+      !character(&cursor, ',') || !link_status_value(&cursor, &iotda) ||
       !character(&cursor, ',') || !unsigned_value(&cursor, &connectivity_updated) ||
       !character(&cursor, ']') || !character(&cursor, ',') || !named_key(&cursor, "lastCommand") ||
       !character(&cursor, '[') || !string_value(&cursor, command_id, sizeof(command_id)) ||
@@ -247,10 +258,10 @@ static uint8_t parse_model(const char *line, size_t length, uint32_t received_ms
   snapshot->actuators.led_brightness_percent = (uint8_t)brightness;
   snapshot->actuators.buzzer_on = (uint8_t)buzzer;
   snapshot->actuators.buzzer_muted = (uint8_t)muted;
-  snapshot->connectivity.node_a_online = (uint8_t)node_a;
-  snapshot->connectivity.gateway_online = (uint8_t)gateway;
-  snapshot->connectivity.iotda_online = (uint8_t)iotda;
-  snapshot->connectivity.mqtt_online = (uint8_t)mqtt;
+  snapshot->connectivity.node_a = (uint8_t)node_a;
+  snapshot->connectivity.mqtt = (uint8_t)mqtt;
+  snapshot->connectivity.gateway = (uint8_t)gateway;
+  snapshot->connectivity.iotda = (uint8_t)iotda;
   snapshot->connectivity.updated_ms = connectivity_updated;
   (void)memcpy(snapshot->last_command.command_id, command_id, sizeof(snapshot->last_command.command_id));
   snapshot->last_command.accepted = (uint8_t)command_accepted;
@@ -304,7 +315,10 @@ void ScreenSnapshot_SetMqttAvailability(UiSnapshot *snapshot, uint8_t online,
                                         uint64_t updated_ms)
 {
   if (snapshot == 0) return;
-  snapshot->connectivity.mqtt_online = online ? 1U : 0U;
+  /* This is a real observation from the ESP link, so it is Online or Offline,
+   * never Unknown: it may clear a previous Unknown. */
+  snapshot->connectivity.mqtt = online ? (uint8_t)UI_LINK_ONLINE
+                                       : (uint8_t)UI_LINK_OFFLINE;
   snapshot->connectivity.updated_ms = updated_ms;
 }
 
@@ -321,6 +335,9 @@ void ScreenSnapshot_Tick(const ScreenSnapshotContext *context, uint32_t now_ms,
   for (index = 0U; index < 2U; ++index) {
     if (snapshot->fans[index].quality == UI_QUALITY_VALID) snapshot->fans[index].quality = UI_QUALITY_STALE;
   }
-  snapshot->connectivity.mqtt_online = 0U;
+  /* A stale snapshot still proves the link carried it at the time, but the
+   * link is no longer known to be up: report unknown rather than a confident
+   * OFFLINE, so the page does not claim more than was measured. */
+  snapshot->connectivity.mqtt = (uint8_t)UI_LINK_UNKNOWN;
   snapshot->connectivity.updated_ms = now_ms;
 }
