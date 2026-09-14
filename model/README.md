@@ -1,6 +1,10 @@
 # 综合管廊实体样品模型
 
-## 最新审查归档：V12（2026-09-10，重建进行中）
+## 当前设计最终版：V13（2026-09-14）
+
+用户已确认当前 V13 为项目数字孪生模型的设计最终版。归档文件为 `utility-tunnel-annular-v13-candidate.blend` / `.glb`，文件名保留上传时的不可变标识；模型状态以本索引和项目实施日志为准。V13 设计定版不表示实体加工、通水通气通电、网页运行时替换或项目最终验收通过；当前 BLEND 与 GLB 的同源重导出仍需完成。
+
+## 前一审查归档：V12（2026-09-10，重建进行中）
 
 `utility-tunnel-annular-v12-candidate.blend` / `.glb` 为按计划数量从零重建的分散布设候选。两台泵尚未按当天新提供的实物照片修正，全场标注、围护、管路与装配验证未通过，不替换网页V07。详见 [V12审查报告](quality-report-v12-candidate.md) 和 [泵实物确认](pump-reference-2026-09-10.md)。
 
@@ -48,6 +52,7 @@ V08 的 LFS 对象已于 2026-09-07 补传并通过独立缓存下载核验；9 
 | V07 | 2026-09-02 五个分散管路液位测点网页运行时版 | `utility-tunnel-annular-v07-final.glb` |
 | V08 | 2026-09-03 控制区 BT-01 可选视觉模块候选版 | `utility-tunnel-annular-v08-final.glb` |
 | V09 | 2026-09-07 受控导出、测点连接和铭牌修复候选 | `utility-tunnel-annular-v09-candidate.glb` |
+| V13 | 2026-09-14 用户确认的设计最终版 | `utility-tunnel-annular-v13-candidate.glb` |
 
 ## V09 可重复验证
 
