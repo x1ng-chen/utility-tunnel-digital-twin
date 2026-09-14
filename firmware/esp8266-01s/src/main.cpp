@@ -64,6 +64,7 @@ bool discoveryListening = false;
 screen_routing::TelemetryAccumulator screenTelemetry{};
 screen_routing::TimeSyncSchedule timeSyncSchedule{};
 screen_routing::NtpAssociationState ntpAssociation{};
+screen_routing::MqttLinkStatusState mqttLinkStatus{};
 screen_routing::UartTxQueue uartTxQueue{};
 uint32_t lastNtpConfigureMs = 0U;
 bool ntpConfigureAttempted = false;
@@ -298,6 +299,18 @@ void handleNetworkTime() {
   }
 }
 
+void handleMqttLinkStatus() {
+  char line[16]{};
+  size_t written = 0U;
+  if (screen_routing::BuildMqttLinkStatus(
+          &mqttLinkStatus, mqtt.connected(), line, sizeof(line), &written) ==
+      screen_routing::MqttLinkStatusResult::Emitted) {
+    screen_routing::EnqueueUartTxLine(
+        &uartTxQueue, screen_routing::UartTxFrameKind::Diagnostic, line,
+        written);
+  }
+}
+
 void connectMqtt() {
   if (WiFi.status() != WL_CONNECTED || !brokerAvailable || mqtt.connected() ||
       millis() - lastMqttAttempt < kReconnectIntervalMs) return;
@@ -459,6 +472,7 @@ void setup() {
   screen_routing::InitTelemetryAccumulator(&screenTelemetry);
   screen_routing::InitTimeSyncSchedule(&timeSyncSchedule);
   screen_routing::InitNtpAssociationState(&ntpAssociation);
+  screen_routing::InitMqttLinkStatusState(&mqttLinkStatus);
   screen_routing::InitUartTxQueue(&uartTxQueue);
   EEPROM.begin(sizeof(StoredBrokerEndpoint));
   StoredBrokerEndpoint stored{};
@@ -477,6 +491,7 @@ void loop() {
   handleDiscovery();
   handleNetworkTime();
   connectMqtt();
+  handleMqttLinkStatus();
   if (mqtt.connected()) {
     mqtt.loop();
     flushPendingFrame();

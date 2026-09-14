@@ -663,6 +663,24 @@ void test_ntp_configuration_is_once_per_wifi_association() {
   CHECK_TRUE(!ShouldConfigureNtp(&association, true));
 }
 
+void test_mqtt_link_status_emits_initial_and_changed_state() {
+  MqttLinkStatusState state{};
+  char output[16]{};
+  size_t written = 0U;
+  InitMqttLinkStatusState(&state);
+
+  CHECK_EQ(MqttLinkStatusResult::Emitted,
+           BuildMqttLinkStatus(&state, false, output, sizeof(output), &written));
+  CHECK_TRUE(std::strcmp(output, "MQTT|DOWN") == 0);
+  CHECK_EQ(9U, written);
+  CHECK_EQ(MqttLinkStatusResult::Unchanged,
+           BuildMqttLinkStatus(&state, false, output, sizeof(output), &written));
+  CHECK_EQ(MqttLinkStatusResult::Emitted,
+           BuildMqttLinkStatus(&state, true, output, sizeof(output), &written));
+  CHECK_TRUE(std::strcmp(output, "MQTT|UP") == 0);
+  CHECK_EQ(7U, written);
+}
+
 void test_time_sync_is_immediate_periodic_valid_and_wrap_safe() {
   TimeSyncSchedule schedule{};
   InitTimeSyncSchedule(&schedule);
@@ -1073,6 +1091,7 @@ int main() {
   test_sequence_gate_recovers_low_restart_sequence_after_stale_window();
   test_sequence_gate_recovers_any_rollback_after_long_silence();
   test_ntp_configuration_is_once_per_wifi_association();
+  test_mqtt_link_status_emits_initial_and_changed_state();
   test_time_sync_is_immediate_periodic_valid_and_wrap_safe();
   test_ctrl02_consumes_the_node_a_producer_vectors();
   test_ctrl02_accepts_a_legacy_non_ladder_fan_duty();

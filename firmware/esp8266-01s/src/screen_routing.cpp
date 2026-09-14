@@ -1195,6 +1195,34 @@ bool ShouldConfigureNtp(NtpAssociationState* state, bool wifi_connected) {
   return true;
 }
 
+void InitMqttLinkStatusState(MqttLinkStatusState* state) {
+  if (state == nullptr) return;
+  state->initialized = false;
+  state->connected = false;
+}
+
+MqttLinkStatusResult BuildMqttLinkStatus(MqttLinkStatusState* state,
+                                         bool connected, char* output,
+                                         size_t output_capacity,
+                                         size_t* written) {
+  if (written != nullptr) *written = 0U;
+  if (output != nullptr && output_capacity != 0U) output[0] = '\0';
+  if (state == nullptr || output == nullptr || written == nullptr) {
+    return MqttLinkStatusResult::OutputTooSmall;
+  }
+  if (state->initialized && state->connected == connected) {
+    return MqttLinkStatusResult::Unchanged;
+  }
+  const char* status = connected ? "MQTT|UP" : "MQTT|DOWN";
+  const size_t length = std::strlen(status);
+  if (output_capacity <= length) return MqttLinkStatusResult::OutputTooSmall;
+  std::memcpy(output, status, length + 1U);
+  *written = length;
+  state->initialized = true;
+  state->connected = connected;
+  return MqttLinkStatusResult::Emitted;
+}
+
 TimeEmitResult BuildDueTimeSync(TimeSyncSchedule* schedule, uint32_t now_ms,
                                 uint64_t epoch_seconds, char* output,
                                 size_t output_capacity, size_t* written) {

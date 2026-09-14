@@ -102,6 +102,17 @@ struct NtpAssociationState {
   bool configured_for_current_association;
 };
 
+struct MqttLinkStatusState {
+  bool initialized;
+  bool connected;
+};
+
+enum class MqttLinkStatusResult : uint8_t {
+  Emitted = 0,
+  Unchanged,
+  OutputTooSmall,
+};
+
 enum class TimeEmitResult : uint8_t {
   Emitted = 0,
   NotDue,
@@ -149,6 +160,13 @@ void InitTimeSyncSchedule(TimeSyncSchedule* schedule);
 void InitNtpAssociationState(NtpAssociationState* state);
 
 bool ShouldConfigureNtp(NtpAssociationState* state, bool wifi_connected);
+
+void InitMqttLinkStatusState(MqttLinkStatusState* state);
+
+MqttLinkStatusResult BuildMqttLinkStatus(MqttLinkStatusState* state,
+                                         bool connected, char* output,
+                                         size_t output_capacity,
+                                         size_t* written);
 
 TimeEmitResult BuildDueTimeSync(TimeSyncSchedule* schedule, uint32_t now_ms,
                                 uint64_t epoch_seconds, char* output,
