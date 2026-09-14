@@ -66,6 +66,17 @@
   ((((NODE_A_UART_DIV_100(pclk)) / 100UL) << 4U) | \
    (((((NODE_A_UART_DIV_100(pclk)) % 100UL) * 16UL) + 50UL) / 100UL))
 
+/* Bytes moved per UART per main-loop iteration.  One byte occupies 10 bit
+ * times at 9600 8N1, so 48 bytes cap the transmit work of any single iteration
+ * at 50 ms: the queue can always reach the wire, but smoke/flame/level sampling
+ * and command polling still run at least twenty times a second.  The budget is
+ * deliberately measured in transmitted bytes rather than in frames so a stalled
+ * link cannot stretch one iteration; uart_tx_queue.c additionally stops
+ * charging this budget to a link that has stopped accepting bytes. */
+#define NODE_A_UART_TX_DRAIN_BYTES                    48U
+#define NODE_A_UART_TX_DRAIN_WORST_CASE_MS \
+  ((NODE_A_UART_TX_DRAIN_BYTES * 10UL * 1000UL) / NODE_A_UART_BAUD)
+
 /* --- ADC -------------------------------------------------------------------
  * RCC_CFGR.ADCPRE encodes the ADC prescaler as (divider / 2) - 1, so the
  * divider is recovered from the selected RCC_ADCPCLK2_DIV6 macro. */
@@ -248,6 +259,11 @@ _Static_assert((NODE_A_PCLK2_HZ % NODE_A_UART_BRR(NODE_A_PCLK2_HZ)) == 0UL,
                "USART1 must keep zero baud error");
 _Static_assert((NODE_A_PCLK1_HZ % NODE_A_UART_BRR(NODE_A_PCLK1_HZ)) == 0UL,
                "USART2 must keep zero baud error");
+_Static_assert(NODE_A_UART_TX_DRAIN_WORST_CASE_MS == 50UL,
+               "one drain iteration must never hold the loop for more than 50 ms");
+_Static_assert(NODE_A_UART_TX_DRAIN_WORST_CASE_MS <
+               NODE_A_GAS_ADC_POLL_TIMEOUT_MS * 10UL,
+               "the drain budget must stay well inside the sampling cadence");
 
 _Static_assert(NODE_A_ADC_CLOCK_DIVIDER == 6UL,
                "ADC prescaler must stay PCLK2 / 6");

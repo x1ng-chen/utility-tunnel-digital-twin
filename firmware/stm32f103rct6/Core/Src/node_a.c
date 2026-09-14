@@ -5,6 +5,8 @@
 #include "node_a_ina226.h"
 #include "node_a_sensor_map.h"
 #include "node_a_status_screen.h"
+#include "node_a_telemetry.h"
+#include "uart_tx_queue.h"
 #include "st7735.h"
 #include "st7735_bus.h"
 
@@ -91,31 +93,6 @@ typedef struct
 
 typedef struct
 {
-  uint8_t online;
-  int16_t temperature_centi_c;
-  uint16_t humidity_centi_rh;
-} Sht30Reading;
-
-typedef struct
-{
-  uint8_t online;
-  uint8_t plausible;
-  uint8_t fault;
-  uint16_t manufacturer_id;
-  uint16_t die_id;
-  uint16_t config_raw;
-  uint16_t bus_raw;
-  int16_t shunt_raw;
-  int16_t current_raw;
-  uint16_t power_raw;
-  uint16_t calibration_raw;
-  uint32_t bus_microvolts;
-  int32_t current_microamps;
-  int32_t power_microwatts;
-} Ina226Reading;
-
-typedef struct
-{
   uint16_t samples[3];
   uint16_t filtered;
   uint8_t count;
@@ -144,6 +121,10 @@ static volatile uint32_t esp_rx_dropped_lines;
 static NodeACommandDedup command_dedup;
 static NodeAActuatorState g_actuator = { 100U, 100U, 0U, 0U, 0U,
                                          NODE_A_LED_OFF, 100U };
+/* Both UARTs keep their own queue so a stalled debug console can never hold
+ * back the ESP link, and neither can hold back the safety loop. */
+static UartTxQueue esp_tx_queue;
+static UartTxQueue debug_tx_queue;
 static uint32_t relay_started_at;
 static uint32_t relay_duration_ms;
 static uint32_t buzzer_started_at;
@@ -222,6 +203,16 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
                           const Ina226Reading *fan1_power,
                           uint32_t fan1_rpm, const Ina226Reading *fan2_power,
                           uint32_t fan2_rpm);
+/* Queues one already-formatted frame for both UARTs.  Nothing on the
+ * telemetry or command-answer path writes a UART directly any more: the main
+ * loop drains both queues under a fixed byte budget. */
+static void Tx_EnqueueLine(const char *line, uint16_t length)
+{
+  if ((line == 0) || (length == 0U)) return;
+  (void)UartTx_Enqueue(&esp_tx_queue, line, length);
+  (void)UartTx_Enqueue(&debug_tx_queue, line, length);
+}
+
 static void Command_Poll(void);
 static void Command_ProcessPayload(const char *payload, uint32_t received_at);
 static void Command_SendAck(const char *command_id, const char *status,
@@ -711,228 +702,54 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
                           uint32_t fan1_rpm, const Ina226Reading *fan2_power,
                           uint32_t fan2_rpm)
 {
-  char message[896];
-  char methane_message[640];
-  char gas_status_message[768];
-  char fan_message[1280];
-  char fan2_message[1088];
-  char actuator_message[512];
   static uint32_t sequence = 0U;
-  int32_t temperature_abs;
-  const char *temperature_sign;
-  const char *quality;
-  const char *oxygen_quality;
-  const char *methane_quality;
-  const char *co_quality;
-  const char *smoke_quality;
-  const char *flame_quality;
-  const char *level_quality;
-  const char *fan_quality;
-  const char *current_sign;
-  const char *power_sign;
-  int32_t current_abs;
-  int32_t power_abs;
-  int length;
+  NodeATelemetrySnapshot snapshot;
+  char frames[NODE_A_TELEMETRY_FRAME_COUNT][NODE_A_TELEMETRY_FRAME_SIZE];
+  uint16_t lengths[NODE_A_TELEMETRY_FRAME_COUNT] = {0U};
+  uint8_t index;
 
   /* Slot 1 is the physically installed environmental sensor.  Report only
    * that truthful source in the platform contract; Slots 2/3 are reserved
    * buses and must not create fabricated zero-value readings. */
-  sequence++;
-  temperature_abs = readings[0].temperature_centi_c;
-  temperature_sign = "";
-  if (temperature_abs < 0)
-  {
-    temperature_sign = "-";
-    temperature_abs = -temperature_abs;
-  }
-  quality = readings[0].online ? "good" : "missing";
-  /* The unamplified AO-02 signal uses only a few ADC codes. Keep the trial
-   * readings explicitly suspect until a precision ADC/front end is fitted. */
-  oxygen_quality = oxygen_online ? "suspect" : "missing";
-  /* Methane is the only analog gas channel with a completed alarm-response
-   * bench check; oxygen and CO remain telemetry-only until calibrated. */
-  methane_quality = methane_online ? "good" : "missing";
-  co_quality = co_online ? "suspect" : "missing";
-  smoke_quality = (smoke_last_sample_at != 0U) ? "good" : "missing";
-  flame_quality = (flame_last_sample_at != 0U) ? "good" : "missing";
-  level_quality = (level_candidate_samples >= LEVEL_STABLE_SAMPLE_COUNT) ?
-                  "good" : "suspect";
-  fan_quality = ((fan1_power != NULL) && fan1_power->online) ?
-                (fan1_power->plausible ? "good" : "suspect") : "missing";
-  current_abs = ((fan1_power != NULL) ? fan1_power->current_microamps : 0L);
-  power_abs = ((fan1_power != NULL) ? fan1_power->power_microwatts : 0L);
-  current_sign = (current_abs < 0L) ? "-" : "";
-  power_sign = (power_abs < 0L) ? "-" : "";
-  if (current_abs < 0L) current_abs = -current_abs;
-  if (power_abs < 0L) power_abs = -power_abs;
-  length = snprintf(message, sizeof(message),
-    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
-    "{\"assetCode\":\"ENV-01\",\"metric\":\"temperature\",\"value\":%s%ld.%02ld,\"unit\":\"degC\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"ENV-01\",\"metric\":\"humidity\",\"value\":%lu.%02lu,\"unit\":\"%%RH\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"smoke.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"flame.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"LEVEL-L01\",\"metric\":\"level.detected\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"}]}\r\n",
-    (unsigned long)sequence,
-    temperature_sign, (long)(temperature_abs / 100), (long)(temperature_abs % 100), quality,
-    (unsigned long)(readings[0].humidity_centi_rh / 100U),
-    (unsigned long)(readings[0].humidity_centi_rh % 100U), quality,
-    (unsigned int)smoke_detected, smoke_quality,
-    (unsigned int)flame_detected, flame_quality,
-    (unsigned int)level_is_detected, level_quality,
-    (unsigned int)oxygen_raw, oxygen_quality,
-    (unsigned long)(oxygen_microvolts / 1000UL),
-    (unsigned long)(oxygen_microvolts % 1000UL), oxygen_quality);
-  if (length > 0 && length < (int)sizeof(message))
-  {
-    (void)HAL_UART_Transmit(&huart2, (uint8_t *)message, (uint16_t)length, 1000U);
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
-  }
-  while (esp_rx_count != 0U) Command_Poll();
-  length = snprintf(methane_message, sizeof(methane_message),
-    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"flame.rawLevel\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"}]}\r\n",
-    (unsigned long)sequence, (unsigned int)flame_raw_level, flame_quality,
-    (unsigned int)methane_raw, methane_quality,
-    (unsigned long)(methane_microvolts / 1000UL),
-    (unsigned long)(methane_microvolts % 1000UL), methane_quality,
-    (unsigned int)co_raw, co_quality,
-    (unsigned long)(co_microvolts / 1000UL),
-    (unsigned long)(co_microvolts % 1000UL), co_quality);
-  if (length > 0 && length < (int)sizeof(methane_message))
-  {
-    (void)HAL_UART_Transmit(&huart2, (uint8_t *)methane_message, (uint16_t)length, 1000U);
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)methane_message, (uint16_t)length, 1000U);
-  }
-  while (esp_rx_count != 0U) Command_Poll();
-  length = snprintf(gas_status_message, sizeof(gas_status_message),
-    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"}]}\r\n",
-    (unsigned long)sequence,
-    (unsigned int)oxygen_warning, oxygen_quality,
-    (unsigned int)oxygen_alarm, oxygen_quality,
-    (unsigned int)methane_warning, methane_quality,
-    (unsigned int)methane_alarm, methane_quality,
-    (unsigned int)co_warning, co_quality,
-    (unsigned int)co_alarm, co_quality);
-  if (length > 0 && length < (int)sizeof(gas_status_message))
-  {
-    (void)HAL_UART_Transmit(&huart2, (uint8_t *)gas_status_message, (uint16_t)length, 1000U);
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)gas_status_message, (uint16_t)length, 1000U);
-  }
-  while (esp_rx_count != 0U) Command_Poll();
-  length = snprintf(fan_message, sizeof(fan_message),
-    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
-    "{\"assetCode\":\"FAN-01\",\"metric\":\"supply.voltage\",\"value\":%lu.%03lu,\"unit\":\"V\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"FAN-01\",\"metric\":\"motor.current\",\"value\":%s%ld.%03ld,\"unit\":\"mA\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"FAN-01\",\"metric\":\"power\",\"value\":%s%ld.%03ld,\"unit\":\"W\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"FAN-01\",\"metric\":\"rotational.speed\",\"value\":%lu,\"unit\":\"rpm\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"FAN-01\",\"metric\":\"target.dutyPercent\",\"value\":%u,\"unit\":\"percent\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"FAN-01\",\"metric\":\"relay\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"FAN-01\",\"metric\":\"control.autoVentilation\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"FAN-01\",\"metric\":\"control.cooldown\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"}],"
-    "\"diag\":{\"uart2RxBytes\":%lu,\"uart2Lines\":%lu,\"uart2Drops\":%lu,"
-    "\"inaBusRaw\":%u,\"inaShuntRaw\":%d,\"inaCurrentRaw\":%d,"
-    "\"inaPowerRaw\":%u,\"inaCalibration\":%u,\"inaManufacturer\":%u,"
-    "\"inaDieId\":%u,\"inaConfig\":%u,\"inaFault\":%u,"
-    "\"relayActive\":%u,\"pwmPercent\":%u}}\r\n",
-    (unsigned long)sequence,
-    (unsigned long)((fan1_power != NULL) ? fan1_power->bus_microvolts / 1000000UL : 0UL),
-    (unsigned long)((fan1_power != NULL) ? (fan1_power->bus_microvolts % 1000000UL) / 1000UL : 0UL), fan_quality,
-    current_sign, (long)(current_abs / 1000L), (long)(current_abs % 1000L), fan_quality,
-    power_sign, (long)(power_abs / 1000000L), (long)((power_abs % 1000000L) / 1000L), fan_quality,
-    (unsigned long)fan1_rpm, (unsigned int)g_actuator.fan1_pwm_percent,
-    (unsigned int)g_actuator.relay_on, (unsigned int)gas_ventilation_active,
-    (unsigned int)gas_ventilation_cooling,
-    (unsigned long)esp_rx_bytes, (unsigned long)esp_rx_completed_lines,
-    (unsigned long)esp_rx_dropped_lines,
-    (unsigned int)((fan1_power != NULL) ? fan1_power->bus_raw : 0U),
-    (int)((fan1_power != NULL) ? fan1_power->shunt_raw : 0),
-    (int)((fan1_power != NULL) ? fan1_power->current_raw : 0),
-    (unsigned int)((fan1_power != NULL) ? fan1_power->power_raw : 0U),
-    (unsigned int)((fan1_power != NULL) ? fan1_power->calibration_raw : 0U),
-    (unsigned int)((fan1_power != NULL) ? fan1_power->manufacturer_id : 0U),
-    (unsigned int)((fan1_power != NULL) ? fan1_power->die_id : 0U),
-    (unsigned int)((fan1_power != NULL) ? fan1_power->config_raw : 0U),
-    (unsigned int)((fan1_power != NULL) ? fan1_power->fault : INA226_FAULT_COMMUNICATION),
-    (unsigned int)g_actuator.relay_on, (unsigned int)g_actuator.fan1_pwm_percent);
-  if (length > 0 && length < (int)sizeof(fan_message))
-  {
-    (void)HAL_UART_Transmit(&huart2, (uint8_t *)fan_message, (uint16_t)length, 1000U);
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)fan_message, (uint16_t)length, 1000U);
-  }
-  while (esp_rx_count != 0U) Command_Poll();
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+  snapshot.environment = readings[0];
+  snapshot.smoke_alarm = smoke_detected;
+  snapshot.flame_alarm = flame_detected;
+  snapshot.level_detected = level_is_detected;
+  snapshot.smoke_sampled = (smoke_last_sample_at != 0U) ? 1U : 0U;
+  snapshot.flame_sampled = (flame_last_sample_at != 0U) ? 1U : 0U;
+  snapshot.level_stable =
+      (level_candidate_samples >= LEVEL_STABLE_SAMPLE_COUNT) ? 1U : 0U;
+  snapshot.oxygen_raw = oxygen_raw;
+  snapshot.oxygen_microvolts = oxygen_microvolts;
+  snapshot.oxygen_online = oxygen_online;
+  snapshot.methane_raw = methane_raw;
+  snapshot.methane_microvolts = methane_microvolts;
+  snapshot.methane_online = methane_online;
+  snapshot.co_raw = co_raw;
+  snapshot.co_microvolts = co_microvolts;
+  snapshot.co_online = co_online;
+  snapshot.gas_warning = gas_warning;
+  snapshot.gas_alarm = gas_alarm;
+  snapshot.oxygen_warning = oxygen_warning;
+  snapshot.oxygen_alarm = oxygen_alarm;
+  snapshot.co_warning = co_warning;
+  snapshot.co_alarm = co_alarm;
+  if (fan1_power != NULL) snapshot.fan1_power = *fan1_power;
+  if (fan2_power != NULL) snapshot.fan2_power = *fan2_power;
+  snapshot.fan1_rpm = fan1_rpm;
+  snapshot.fan2_rpm = fan2_rpm;
+  snapshot.actuators = g_actuator;
+  snapshot.auto_ventilation_active = gas_ventilation_active;
+  snapshot.cooldown_active = gas_ventilation_cooling;
 
-  fan_quality = ((fan2_power != NULL) && fan2_power->online) ?
-                (fan2_power->plausible ? "good" : "suspect") : "missing";
-  current_abs = ((fan2_power != NULL) ? fan2_power->current_microamps : 0L);
-  power_abs = ((fan2_power != NULL) ? fan2_power->power_microwatts : 0L);
-  current_sign = (current_abs < 0L) ? "-" : "";
-  power_sign = (power_abs < 0L) ? "-" : "";
-  if (current_abs < 0L) current_abs = -current_abs;
-  if (power_abs < 0L) power_abs = -power_abs;
-  length = snprintf(fan2_message, sizeof(fan2_message),
-    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
-    "{\"assetCode\":\"FAN-02\",\"metric\":\"supply.voltage\",\"value\":%lu.%03lu,\"unit\":\"V\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"FAN-02\",\"metric\":\"motor.current\",\"value\":%s%ld.%03ld,\"unit\":\"mA\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"FAN-02\",\"metric\":\"power\",\"value\":%s%ld.%03ld,\"unit\":\"W\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"FAN-02\",\"metric\":\"rotational.speed\",\"value\":%lu,\"unit\":\"rpm\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"FAN-02\",\"metric\":\"target.dutyPercent\",\"value\":%u,\"unit\":\"percent\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"FAN-02\",\"metric\":\"relay\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"FAN-02\",\"metric\":\"control.autoVentilation\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"FAN-02\",\"metric\":\"control.cooldown\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"}],"
-    "\"diag\":{\"inaBusRaw\":%u,\"inaCurrentRaw\":%d,\"inaPowerRaw\":%u,"
-    "\"inaCalibration\":%u,\"inaManufacturer\":%u,\"inaDieId\":%u,"
-    "\"inaConfig\":%u,\"inaFault\":%u,\"relayActive\":%u,"
-    "\"pwmPercent\":%u}}\r\n",
-    (unsigned long)sequence,
-    (unsigned long)((fan2_power != NULL) ? fan2_power->bus_microvolts / 1000000UL : 0UL),
-    (unsigned long)((fan2_power != NULL) ? (fan2_power->bus_microvolts % 1000000UL) / 1000UL : 0UL), fan_quality,
-    current_sign, (long)(current_abs / 1000L), (long)(current_abs % 1000L), fan_quality,
-    power_sign, (long)(power_abs / 1000000L), (long)((power_abs % 1000000L) / 1000L), fan_quality,
-    (unsigned long)fan2_rpm, (unsigned int)g_actuator.fan2_pwm_percent,
-    (unsigned int)g_actuator.relay_on, (unsigned int)gas_ventilation_active,
-    (unsigned int)gas_ventilation_cooling,
-    (unsigned int)((fan2_power != NULL) ? fan2_power->bus_raw : 0U),
-    (int)((fan2_power != NULL) ? fan2_power->current_raw : 0),
-    (unsigned int)((fan2_power != NULL) ? fan2_power->power_raw : 0U),
-    (unsigned int)((fan2_power != NULL) ? fan2_power->calibration_raw : 0U),
-    (unsigned int)((fan2_power != NULL) ? fan2_power->manufacturer_id : 0U),
-    (unsigned int)((fan2_power != NULL) ? fan2_power->die_id : 0U),
-    (unsigned int)((fan2_power != NULL) ? fan2_power->config_raw : 0U),
-    (unsigned int)((fan2_power != NULL) ? fan2_power->fault : INA226_FAULT_COMMUNICATION),
-    (unsigned int)g_actuator.relay_on, (unsigned int)g_actuator.fan2_pwm_percent);
-  if (length > 0 && length < (int)sizeof(fan2_message))
-  {
-    (void)HAL_UART_Transmit(&huart2, (uint8_t *)fan2_message, (uint16_t)length, 1000U);
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)fan2_message, (uint16_t)length, 1000U);
+  NodeATelemetry_FormatAll(&sequence, &snapshot, frames, lengths);
+  for (index = 0U; index < NODE_A_TELEMETRY_FRAME_COUNT; ++index) {
+    if (lengths[index] != 0U) Tx_EnqueueLine(frames[index], lengths[index]);
+    /* A command can arrive while the cycle is being handed to the queues, so
+     * keep answering between frames instead of waiting for the next pass. */
+    while (esp_rx_count != 0U) Command_Poll();
   }
-  while (esp_rx_count != 0U) Command_Poll();
-  length = snprintf(actuator_message, sizeof(actuator_message),
-    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
-    "{\"assetCode\":\"CTRL-01\",\"metric\":\"led.mode\",\"value\":%u,\"unit\":\"enum\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"CTRL-01\",\"metric\":\"led.brightnessPercent\",\"value\":%u,\"unit\":\"percent\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"CTRL-01\",\"metric\":\"buzzer.active\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"},"
-    "{\"assetCode\":\"CTRL-01\",\"metric\":\"buzzer.muted\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"good\"}]}\r\n",
-    (unsigned long)sequence,
-    (unsigned int)g_actuator.led_mode, (unsigned int)g_actuator.led_brightness_percent,
-    (unsigned int)g_actuator.buzzer_on, (unsigned int)g_actuator.buzzer_muted);
-  if (length > 0 && length < (int)sizeof(actuator_message))
-  {
-    (void)HAL_UART_Transmit(&huart2, (uint8_t *)actuator_message, (uint16_t)length, 1000U);
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)actuator_message, (uint16_t)length, 1000U);
-  }
-  while (esp_rx_count != 0U) Command_Poll();
 }
 
 /* MH-FMG is a high-level-triggered active buzzer.  PB0 is deliberately
@@ -1234,8 +1051,7 @@ static void Command_SendAck(const char *command_id, const char *status,
   {
     json[length++] = '\r';
     json[length++] = '\n';
-    (void)HAL_UART_Transmit(&huart2, (uint8_t *)json, (uint16_t)length, 1000U);
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)json, (uint16_t)length, 1000U);
+    Tx_EnqueueLine(json, (uint16_t)length);
   }
 }
 
@@ -1343,6 +1159,16 @@ static void Command_HandleLine(char *line, uint32_t received_at)
   Command_ProcessPayload(payload, received_at);
 }
 
+/* Moves a bounded number of bytes to each UART.  Every byte uses a zero HAL
+ * timeout, so this can never wait for the link; the budget caps the whole
+ * iteration at NODE_A_UART_TX_DRAIN_WORST_CASE_MS of transmit time, and a link
+ * that has stopped draining is skipped rather than retried every iteration. */
+static void UartTx_DrainBoth(uint32_t now_ms)
+{
+  (void)UartTx_Drain(&esp_tx_queue, &huart2, NODE_A_UART_TX_DRAIN_BYTES, now_ms);
+  (void)UartTx_Drain(&debug_tx_queue, &huart1, NODE_A_UART_TX_DRAIN_BYTES, now_ms);
+}
+
 static void Command_Poll(void)
 {
   char line[ESP_RX_LINE_SIZE];
@@ -1377,7 +1203,7 @@ static void NodeTest_ReportState(void)
     (unsigned int)((gas_alarm != 0U) || (test_safety_gas != 0U)),
     (unsigned int)((gas_ventilation_active != 0U) || (test_safety_vent != 0U)));
   if ((length > 0) && (length < (int)sizeof(message)))
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
+    Tx_EnqueueLine(message, (uint16_t)length);
 }
 
 /* The APB1 timer clock keeps the x2 boost whenever APB1 is prescaled, so the
@@ -1450,7 +1276,7 @@ static void NodeTest_ReportClock(void)
     (unsigned long)SPI2->CR1,
     (unsigned long)SysTick->LOAD);
   if ((length > 0) && (length < (int)sizeof(message)))
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
+    Tx_EnqueueLine(message, (uint16_t)length);
 }
 
 static void NodeTest_ReportDisplay(void);
@@ -1657,7 +1483,7 @@ static void NodeTest_ReportDisplay(void)
     (unsigned long)stats.dma_errors,
     (unsigned long)stats.worst_frame_us);
   if ((length > 0) && (length < (int)sizeof(message)))
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)length, 1000U);
+    Tx_EnqueueLine(message, (uint16_t)length);
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *uart)
@@ -1767,6 +1593,8 @@ int main(void)
   Led_Render(HAL_GetTick());
   MX_ADC1_Init();
   if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) Error_Handler();
+  UartTx_Init(&esp_tx_queue);
+  UartTx_Init(&debug_tx_queue);
   MX_USART1_UART_Init(); MX_USART2_UART_Init();
   if (HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U) != HAL_OK) Error_Handler();
   /* The secondary screen is initialised last: its SPI3/DMA2 setup must not
@@ -1775,13 +1603,17 @@ int main(void)
   NetworkTime_Init(&esp_clock);
   NodeAStatus_Init(&status_screen, HAL_GetTick());
   ST7735_Init();
-  (void)HAL_UART_Transmit(&huart1, (uint8_t *)"#NODE node-a boot\r\n", 19U, 1000U);
+  Tx_EnqueueLine("#NODE node-a boot\r\n", 19U);
   for (;;)
   {
     uint32_t now;
     uint8_t alarm_active;
     uint8_t telemetry_due;
 
+    /* Drain first: frames queued by the previous iteration leave without
+     * delaying this iteration's sampling, and a pending command is parsed
+     * before anything else. */
+    UartTx_DrainBoth(HAL_GetTick());
     while (esp_rx_count != 0U) Command_Poll();
     EspTime_Poll();
     NodeTest_Poll();
@@ -1827,8 +1659,15 @@ int main(void)
       co_online = GasAdc_ReadRaw(NODE_A_CO_ADC_CHANNEL, &co_raw);
       if (co_online != 0U) co_raw = GasAdcFilter_Update(&co_filter, co_raw);
       co_microvolts = NODE_A_ADC_RAW_TO_UV(co_raw);
-      if ((oxygen_filter.count >= 3U) && (methane_filter.count >= 3U) &&
-          (co_filter.count >= 3U))
+      /* Only the operational methane channel gates the safety evaluation.
+       * Oxygen and CO are telemetry-only: NODE_A_OPERATIONAL_GAS_ALARM
+       * discards their states, and their filters never prime while their ADC
+       * reads stay offline.  Requiring them here would let an uncalibrated
+       * rail suppress the methane alarm and its ventilation indefinitely.
+       * GasAlarm_Update already zeroes a channel's state while that channel
+       * reports offline, so the un-primed rails still report truthful
+       * telemetry. */
+      if (methane_filter.count >= 3U)
         GasAlarm_Update(oxygen_raw, oxygen_online, methane_raw, methane_online,
                         co_raw, co_online);
       /* Re-evaluate the gas safety state on this iteration's sample, not the

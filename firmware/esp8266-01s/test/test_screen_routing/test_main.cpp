@@ -5,6 +5,14 @@
 #include "screen_protocol.h"
 #include "screen_routing.h"
 
+/* The exact bytes the Node A producer formatter emits for one cycle, committed
+ * by firmware/stm32f103rct6/tests/update_node_a_telemetry_vectors.sh and
+ * re-derived from the board's formatter by node_a_telemetry_host_test.c.  The
+ * consumer tests below parse these instead of hand-written payloads, so a
+ * producer schema change cannot pass here without the producer test failing
+ * first. */
+#include "../../stm32f103rct6/tests/vectors/node_a_telemetry_vectors.h"
+
 namespace {
 using namespace screen_protocol;
 using namespace screen_routing;
@@ -368,8 +376,12 @@ void test_ctrl02_aggregates_telemetry_into_complete_bounded_snapshot() {
   CHECK_EQ(4, snapshot.carbon_monoxide.value);
   CHECK_EQ(1, snapshot.smoke.value);
   CHECK_EQ(1, snapshot.water.value);
-  CHECK_TRUE(snapshot.connectivity.node_a_online);
-  CHECK_TRUE(snapshot.connectivity.mqtt_online);
+  CHECK_TRUE(snapshot.connectivity.node_a == LinkStatus::Online);
+  CHECK_TRUE(snapshot.connectivity.mqtt == LinkStatus::Online);
+  /* Nothing on the telemetry topic observes the gateway or the cloud session,
+   * so CTRL-02 must publish them as unknown rather than as a false OFFLINE. */
+  CHECK_TRUE(snapshot.connectivity.gateway == LinkStatus::Unknown);
+  CHECK_TRUE(snapshot.connectivity.iotda == LinkStatus::Unknown);
   CHECK_EQ(AlarmSeverity::Critical, snapshot.alarm_severity);
 
   CHECK_EQ(RouteResult::Ok,
@@ -693,6 +705,192 @@ void test_time_sync_is_immediate_periodic_valid_and_wrap_safe() {
                             sizeof(output), &written));
 }
 
+/* Re-emits a committed producer frame with a different sequence.  Only the
+ * `seq` digits change, so the reading vocabulary stays exactly what the board
+ * transmits; this only lets one committed cycle be replayed after a synthetic
+ * frame without colliding with the consumer's sequence gate. */
+bool reshape_frame(const char* frame, uint32_t sequence, char* output,
+                   size_t output_capacity) {
+  constexpr char kPrefix[] = "\"seq\":";
+  const char* start = std::strstr(frame, kPrefix);
+  if (start == nullptr) return false;
+  const char* digits = start + sizeof(kPrefix) - 1U;
+  const char* end = digits;
+  while (*end >= '0' && *end <= '9') ++end;
+  const size_t head = static_cast<size_t>(digits - frame);
+  const int written = std::snprintf(output, output_capacity, "%.*s%lu%s", (int)head,
+                                    frame, static_cast<unsigned long>(sequence), end);
+  return written > 0 && static_cast<size_t>(written) < output_capacity;
+}
+
+/* Feeds one producer cycle, in producer order, through the real CTRL-02 route.
+ * Every frame must be accepted: the producer now gives each frame its own
+ * sequence, and a shared value would make this return Stale on frame two. */
+void test_ctrl02_consumes_the_node_a_producer_vectors() {
+  TelemetryAccumulator accumulator{};
+  InitTelemetryAccumulator(&accumulator);
+  RouteOutput output{};
+
+  /* One cycle: env+oxygen, FAN-01, FAN-02, gas status, gas raw, actuators. */
+  for (size_t index = 0U; index < NODE_A_TELEMETRY_VECTOR_COUNT; ++index) {
+    const char* frame = kNodeATelemetryVectors[index];
+    CHECK_EQ(RouteResult::Ok,
+             RouteMqttMessage(Role::Ctrl02, "ut/v1/CTRL-01/telemetry", frame,
+                              std::strlen(frame), kNowMs + index, &accumulator,
+                              &output));
+  }
+
+  ScreenSnapshot snapshot{};
+  CHECK_EQ(Result::Ok,
+           ParseSnapshot(output.payload, output.payload_length,
+                         kNowMs + NODE_A_TELEMETRY_VECTOR_COUNT, &snapshot));
+  CHECK_EQ(NODE_A_TELEMETRY_VECTOR_COUNT, snapshot.sequence);
+
+  /* Environmental frame.  Node A reports only the installed sensor, and the
+   * consumer must carry its readings and quality through unchanged. */
+  CHECK_EQ(2345, snapshot.temperature.value);
+  CHECK_EQ(Quality::Valid, snapshot.temperature.quality);
+  CHECK_EQ(5210, snapshot.humidity.value);
+  CHECK_EQ(0, snapshot.smoke.value);
+  CHECK_EQ(0, snapshot.flame.value);
+  CHECK_EQ(0, snapshot.water.value);
+
+  /* Both fan frames, including the legacy 0..100 actual duty Node A reports in
+   * diag.pwmPercent.  The fixture uses the menu ladder value 60 for both. */
+  CHECK_EQ(11900U, snapshot.fans[0].voltage_mv);
+  CHECK_EQ(320U, snapshot.fans[0].current_ma);
+  CHECK_EQ(2400U, snapshot.fans[0].actual_rpm);
+  CHECK_EQ(60U, snapshot.fans[0].target_duty_percent);
+  CHECK_TRUE(snapshot.fans[0].running);
+  CHECK_EQ(Quality::Valid, snapshot.fans[0].quality);
+  CHECK_EQ(11800U, snapshot.fans[1].voltage_mv);
+  CHECK_EQ(280U, snapshot.fans[1].current_ma);
+  CHECK_EQ(1600U, snapshot.fans[1].actual_rpm);
+  CHECK_EQ(60U, snapshot.fans[1].target_duty_percent);
+  CHECK_TRUE(snapshot.fans[1].running);
+
+  /* Actuator frame. */
+  CHECK_TRUE(snapshot.actuators.relay_on);
+  CHECK_EQ(1U, snapshot.actuators.led_mode);
+  CHECK_EQ(75U, snapshot.actuators.led_brightness_percent);
+  CHECK_TRUE(!snapshot.actuators.buzzer_on);
+  CHECK_TRUE(!snapshot.actuators.buzzer_muted);
+
+  /* Connectivity observed on this wire. */
+  CHECK_TRUE(snapshot.connectivity.node_a == LinkStatus::Online);
+  CHECK_TRUE(snapshot.connectivity.mqtt == LinkStatus::Online);
+}
+
+/* The methane alarm is the operational gas channel.  The gas status frame is
+ * its only producer, so the bit has to appear, persist through the following
+ * frames of the same cycle, and clear when the producer clears it. */
+void test_ctrl02_tracks_the_methane_alarm_across_a_cycle() {
+  TelemetryAccumulator accumulator{};
+  InitTelemetryAccumulator(&accumulator);
+  RouteOutput output{};
+
+  /* Cycle 1: quiet.  Seed with the first frame so later frames follow it. */
+  CHECK_EQ(RouteResult::Ok,
+           RouteMqttMessage(Role::Ctrl02, "ut/v1/CTRL-01/telemetry",
+                            kNodeATelemetryVectors[0],
+                            std::strlen(kNodeATelemetryVectors[0]), kNowMs,
+                            &accumulator, &output));
+
+  /* Cycle 2: the producer raises the operational alarm.  Only the gas status
+   * frame changes, exactly as NodeATelemetry_FormatAll would emit it. */
+  constexpr char kMethaneAlarmFrame[] =
+      "{\"schema\":\"ut.telemetry.v1\",\"seq\":7,\"readings\":["
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.alarm\",\"value\":1,\"unit\":\"bool\",\"quality\":\"good\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.warning\",\"value\":1,\"unit\":\"bool\",\"quality\":\"good\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.alarm\",\"value\":0,\"unit\":\"bool\",\"quality\":\"suspect\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"co.alarm\",\"value\":0,\"unit\":\"bool\",\"quality\":\"suspect\"}]}";
+  CHECK_EQ(RouteResult::Ok,
+           RouteMqttMessage(Role::Ctrl02, "ut/v1/CTRL-01/telemetry",
+                            kMethaneAlarmFrame, sizeof(kMethaneAlarmFrame) - 1U,
+                            kNowMs + 1U, &accumulator, &output));
+
+  ScreenSnapshot snapshot{};
+  CHECK_EQ(Result::Ok,
+           ParseSnapshot(output.payload, output.payload_length, kNowMs + 1U,
+                         &snapshot));
+  CHECK_EQ(AlarmSeverity::Critical, snapshot.alarm_severity);
+  CHECK_TRUE((snapshot.critical_sources & (1U << 3U)) != 0U);
+
+  /* The frames that follow in the same cycle carry no methane state, and the
+   * derived-source rebuild must keep what the gas frame wrote.  Index 3 is the
+   * gas status frame, and replaying it would legitimately clear the bit (its
+   * fixture has the alarm off), so the frames around it are the ones that
+   * prove persistence.  They are re-sequenced to follow the alarm frame in
+   * wire order, exactly as NodeATelemetry_FormatAll emits them. */
+  const size_t kGasStatusIndex = 3U;
+  uint32_t next_sequence = 8U;
+  for (size_t index = 1U; index < NODE_A_TELEMETRY_VECTOR_COUNT; ++index) {
+    char rewritten[1024];
+    if (index == kGasStatusIndex) continue;
+    if (!reshape_frame(kNodeATelemetryVectors[index], next_sequence, rewritten,
+                       sizeof(rewritten))) {
+      CHECK_TRUE(false);
+      return;
+    }
+    CHECK_EQ(RouteResult::Ok,
+             RouteMqttMessage(Role::Ctrl02, "ut/v1/CTRL-01/telemetry",
+                              rewritten, std::strlen(rewritten),
+                              kNowMs + 1U + index, &accumulator, &output));
+    CHECK_EQ(Result::Ok,
+             ParseSnapshot(output.payload, output.payload_length,
+                           kNowMs + 1U + index, &snapshot));
+    CHECK_TRUE((snapshot.critical_sources & (1U << 3U)) != 0U);
+    ++next_sequence;
+  }
+
+  /* Now the producer's own gas status frame for a clear bench: the bit has to
+   * clear with it so a recovered site cannot keep the critical overlay. */
+  char clear_cycle[1024];
+  if (!reshape_frame(kNodeATelemetryVectors[kGasStatusIndex], next_sequence,
+                     clear_cycle, sizeof(clear_cycle))) {
+    CHECK_TRUE(false);
+    return;
+  }
+  CHECK_EQ(RouteResult::Ok,
+           RouteMqttMessage(Role::Ctrl02, "ut/v1/CTRL-01/telemetry",
+                            clear_cycle, std::strlen(clear_cycle),
+                            kNowMs + 2U + NODE_A_TELEMETRY_VECTOR_COUNT,
+                            &accumulator, &output));
+  CHECK_EQ(Result::Ok,
+           ParseSnapshot(output.payload, output.payload_length,
+                         kNowMs + 2U + NODE_A_TELEMETRY_VECTOR_COUNT, &snapshot));
+  CHECK_TRUE((snapshot.critical_sources & (1U << 3U)) == 0U);
+  CHECK_EQ(AlarmSeverity::None, snapshot.alarm_severity);
+}
+
+/* Node A acknowledges from a clock that is not epoch-synchronised, so its ACK
+ * has no completedAtMs.  CTRL-02 has to accept that exact wire form. */
+void test_ctrl02_accepts_a_node_a_ack_without_a_timestamp() {
+  /* Byte-for-byte the output of NodeACommand_FormatAck, pinned by
+   * node_a_command_host_test.c. */
+  constexpr char kNodeAAck[] =
+      "{\"schema\":\"ut.command.ack.v1\",\"cmdId\":\"menu-1\",\"status\":"
+      "\"accepted\",\"reason\":\"fan_duty_set\",\"appliedValue\":60}";
+  TelemetryAccumulator accumulator{};
+  InitTelemetryAccumulator(&accumulator);
+  RouteOutput output{};
+
+  CHECK_EQ(RouteResult::Ok,
+           RouteMqttMessage(Role::Ctrl02, "ut/v1/CTRL-01/cmd_ack", kNodeAAck,
+                            sizeof(kNodeAAck) - 1U, kNowMs, &accumulator,
+                            &output));
+  CHECK_EQ(OutputKind::UartLine, output.kind);
+  CommandAck ack{};
+  CHECK_EQ(Result::Ok,
+           ParseCommandAck(output.payload, output.payload_length, &ack));
+  CHECK_TRUE(std::strcmp(ack.command_id, "menu-1") == 0);
+  CHECK_EQ(AckStatus::Accepted, ack.status);
+  CHECK_EQ(60, ack.applied_value);
+  /* The absent timestamp is filled with the epoch floor the snapshot
+   * validator uses, never with zero (which validateAck rejects). */
+  CHECK_TRUE(ack.completed_at_ms >= kMinEpochSeconds * 1000ULL);
+}
+
 }  // namespace
 
 int main() {
@@ -715,6 +913,9 @@ int main() {
   test_sequence_gate_recovers_any_rollback_after_long_silence();
   test_ntp_configuration_is_once_per_wifi_association();
   test_time_sync_is_immediate_periodic_valid_and_wrap_safe();
+  test_ctrl02_consumes_the_node_a_producer_vectors();
+  test_ctrl02_tracks_the_methane_alarm_across_a_cycle();
+  test_ctrl02_accepts_a_node_a_ack_without_a_timestamp();
   if (failures == 0) std::puts("screen_routing tests passed");
   return failures == 0 ? 0 : 1;
 }

@@ -127,6 +127,17 @@ class Reader {
     return punctuation(':');
   }
 
+  /* Reports the next significant byte without consuming it or failing the
+   * reader.  Optional trailing fields have to be probed this way: comma()
+   * treats a following '}' as a hard error, so calling it speculatively turns
+   * a legitimately absent field into a rejected payload. */
+  bool peek(char* expected) {
+    skipWhitespace();
+    if (position_ >= length_) return false;
+    *expected = input_[position_];
+    return true;
+  }
+
   bool readString(char* output, size_t capacity,
                   Result invalid_result = Result::InvalidString) {
     skipWhitespace();
@@ -651,6 +662,16 @@ void writeReading(Writer* writer, const Reading& reading) {
   writer->character(']');
 }
 
+bool parseLinkStatus(Reader* reader, LinkStatus* status) {
+  uint8_t value = 0U;
+  if (!reader->readUnsigned8(&value) ||
+      value > static_cast<uint8_t>(LinkStatus::Offline)) {
+    return false;
+  }
+  *status = static_cast<LinkStatus>(value);
+  return true;
+}
+
 bool parseReading(Reader* reader, Reading* reading) {
   uint8_t quality = 0U;
   if (!reader->beginArray() || !reader->readSigned32(&reading->value) ||
@@ -763,13 +784,13 @@ Result BuildSnapshot(const ScreenSnapshot& snapshot, char* output,
   writer.character(',');
   writer.boolean(snapshot.actuators.buzzer_muted);
   writer.literal("],\"connectivity\":[");
-  writer.boolean(snapshot.connectivity.node_a_online);
+  writer.unsignedNumber(static_cast<uint8_t>(snapshot.connectivity.node_a));
   writer.character(',');
-  writer.boolean(snapshot.connectivity.gateway_online);
+  writer.unsignedNumber(static_cast<uint8_t>(snapshot.connectivity.mqtt));
   writer.character(',');
-  writer.boolean(snapshot.connectivity.iotda_online);
+  writer.unsignedNumber(static_cast<uint8_t>(snapshot.connectivity.gateway));
   writer.character(',');
-  writer.boolean(snapshot.connectivity.mqtt_online);
+  writer.unsignedNumber(static_cast<uint8_t>(snapshot.connectivity.iotda));
   writer.character(',');
   writer.unsignedNumber(snapshot.connectivity.updated_at_ms);
   writer.literal("],\"lastCommand\":[");
@@ -828,10 +849,10 @@ Result ParseSnapshot(const char* json, size_t length, uint64_t now_epoch_ms,
       !reader.comma() || !reader.readBool(&value.actuators.buzzer_muted) ||
       !reader.endArray() || !reader.comma() || !reader.key("connectivity") ||
       !reader.beginArray() ||
-      !reader.readBool(&value.connectivity.node_a_online) || !reader.comma() ||
-      !reader.readBool(&value.connectivity.gateway_online) || !reader.comma() ||
-      !reader.readBool(&value.connectivity.iotda_online) || !reader.comma() ||
-      !reader.readBool(&value.connectivity.mqtt_online) || !reader.comma() ||
+      !parseLinkStatus(&reader, &value.connectivity.node_a) || !reader.comma() ||
+      !parseLinkStatus(&reader, &value.connectivity.mqtt) || !reader.comma() ||
+      !parseLinkStatus(&reader, &value.connectivity.gateway) || !reader.comma() ||
+      !parseLinkStatus(&reader, &value.connectivity.iotda) || !reader.comma() ||
       !reader.readUnsigned64(&value.connectivity.updated_at_ms) ||
       !reader.endArray() || !reader.comma() || !reader.key("lastCommand") ||
       !reader.beginArray() ||
@@ -951,6 +972,7 @@ Result ParseCommandAck(const char* json, size_t length,
   if (result != Result::Ok) return result;
   CommandAck value{};
   char status[16];
+  bool has_completed_at = false;
   if (!reader.comma() || !reader.key("cmdId") ||
       !reader.readString(value.command_id, sizeof(value.command_id),
                          Result::InvalidIdentifier) ||
@@ -959,14 +981,29 @@ Result ParseCommandAck(const char* json, size_t length,
       !reader.key("reason") ||
       !reader.readString(value.reason, sizeof(value.reason)) || !reader.comma() ||
       !reader.key("appliedValue") ||
-      !reader.readSigned32(&value.applied_value) || !reader.comma() ||
-      !reader.key("completedAtMs") ||
-      !reader.readUnsigned64(&value.completed_at_ms) || !reader.endObject()) {
+      !reader.readSigned32(&value.applied_value)) {
     return readerFailure(reader);
   }
+  /* completedAtMs is optional on the wire.  Node A acknowledges commands from
+   * a clock that is not epoch-synchronised, so it cannot report one; ESP-02
+   * publishes its own completed acknowledgements with a real timestamp.  A
+   * value that is present still has to be a plausible epoch.  The probe must
+   * not consume the closing brace, so this peeks before taking the comma. */
+  char next = '\0';
+  if (reader.peek(&next) && next == ',') {
+    if (!reader.comma() || !reader.key("completedAtMs") ||
+        !reader.readUnsigned64(&value.completed_at_ms)) {
+      return readerFailure(reader);
+    }
+    has_completed_at = true;
+  }
+  if (!reader.endObject()) return readerFailure(reader);
   result = reader.finish();
   if (result != Result::Ok) return result;
   if (!parseAckStatus(status, &value.status)) return Result::InvalidEnum;
+  if (!has_completed_at || value.completed_at_ms == 0ULL) {
+    value.completed_at_ms = kMinEpochMs;
+  }
   result = validateAck(value);
   if (result != Result::Ok) return result;
   *acknowledgement = value;

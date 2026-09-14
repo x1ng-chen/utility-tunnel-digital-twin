@@ -26,6 +26,7 @@ using screen_protocol::BuildSnapshot;
 using screen_protocol::BuildTimeSync;
 using screen_protocol::CommandAck;
 using screen_protocol::CommandAction;
+using screen_protocol::LinkStatus;
 using screen_protocol::MenuCommand;
 using screen_protocol::ParseCommandAck;
 using screen_protocol::ParseMenuCommand;
@@ -40,6 +41,20 @@ using screen_protocol::kMinEpochSeconds;
 using screen_protocol::kUartLineLimit;
 
 constexpr char kCtrl01MenuCommand[] = "ut/v1/CTRL-01/cmd/menu";
+
+/* The local alarm-source bits the screen renders.  They mirror
+ * UiAlarmSource in firmware/stm32f103rct6/Core/Inc/ui_model.h: the gas status
+ * frame is the only place the methane bit can come from, and it has to reach
+ * the display or a gas alarm would never raise the critical overlay. */
+constexpr uint32_t kSourceOxygen = 1U << 2U;
+constexpr uint32_t kSourceMethane = 1U << 3U;
+constexpr uint32_t kSourceCarbonMonoxide = 1U << 4U;
+constexpr uint32_t kSourceSmoke = 1U << 5U;
+constexpr uint32_t kSourceWater = 1U << 6U;
+constexpr uint32_t kSourceFlame = 1U << 7U;
+constexpr uint32_t kAlarmSourceAll =
+    kSourceOxygen | kSourceMethane | kSourceCarbonMonoxide | kSourceSmoke |
+    kSourceWater | kSourceFlame;
 #if SCREEN_ROUTING_CTRL01
 constexpr char kCtrl01CommandWildcard[] = "ut/v1/CTRL-01/cmd/#";
 #endif
@@ -390,10 +405,32 @@ bool roundedInRange(double value, double scale, int64_t minimum,
   return true;
 }
 
+/* Recognising a metric means the frame carrying it may never be rejected for
+ * an unknown reading.  The list therefore covers every metric Node A emits on
+ * ut/v1/CTRL-01/telemetry, not only the ones the screen stores: raw ADC codes
+ * and their millivolt conversions are reported for the cloud contract and are
+ * validated here without being carried into the snapshot. */
 bool isKnownReading(const char* asset, const char* metric) {
   if (std::strcmp(asset, "ENV-01") == 0 &&
       (std::strcmp(metric, "temperature") == 0 ||
        std::strcmp(metric, "humidity") == 0)) {
+    return true;
+  }
+  if ((std::strcmp(asset, "FAN-01") == 0 ||
+       std::strcmp(asset, "FAN-02") == 0) &&
+      (std::strcmp(metric, "supply.voltage") == 0 ||
+       std::strcmp(metric, "motor.current") == 0 ||
+       std::strcmp(metric, "rotational.speed") == 0 ||
+       std::strcmp(metric, "power") == 0)) {
+    return true;
+  }
+  if ((std::strcmp(asset, "GAS-01") == 0) &&
+      (std::strcmp(metric, "oxygen.raw") == 0 ||
+       std::strcmp(metric, "oxygen.voltage") == 0 ||
+       std::strcmp(metric, "methane.raw") == 0 ||
+       std::strcmp(metric, "methane.voltage") == 0 ||
+       std::strcmp(metric, "co.raw") == 0 ||
+       std::strcmp(metric, "co.voltage") == 0)) {
     return true;
   }
   if (std::strcmp(metric, "oxygen.concentration") == 0 ||
@@ -402,6 +439,12 @@ bool isKnownReading(const char* asset, const char* metric) {
       std::strcmp(metric, "carbon_monoxide.concentration") == 0 ||
       std::strcmp(metric, "carbonMonoxide.concentration") == 0 ||
       std::strcmp(metric, "co.concentration") == 0 ||
+      std::strcmp(metric, "oxygen.warning") == 0 ||
+      std::strcmp(metric, "oxygen.alarm") == 0 ||
+      std::strcmp(metric, "methane.warning") == 0 ||
+      std::strcmp(metric, "methane.alarm") == 0 ||
+      std::strcmp(metric, "co.warning") == 0 ||
+      std::strcmp(metric, "co.alarm") == 0 ||
       std::strcmp(metric, "smoke.alarm") == 0 ||
       std::strcmp(metric, "level.detected") == 0 ||
       std::strcmp(metric, "water.raw") == 0 ||
@@ -409,11 +452,45 @@ bool isKnownReading(const char* asset, const char* metric) {
       std::strcmp(metric, "flame.rawLevel") == 0) {
     return true;
   }
-  return (std::strcmp(asset, "FAN-01") == 0 ||
-          std::strcmp(asset, "FAN-02") == 0) &&
-         (std::strcmp(metric, "supply.voltage") == 0 ||
-          std::strcmp(metric, "motor.current") == 0 ||
-          std::strcmp(metric, "rotational.speed") == 0);
+  return std::strcmp(asset, "CTRL-01") == 0 &&
+         (std::strcmp(metric, "led.mode") == 0 ||
+          std::strcmp(metric, "led.brightnessPercent") == 0 ||
+          std::strcmp(metric, "buzzer.active") == 0 ||
+          std::strcmp(metric, "buzzer.muted") == 0);
+}
+
+/* Maps an alarm flag onto the source bit the screen renders.  A flag whose
+ * channel reported a missing quality is not an observation, so it leaves the
+ * bit clear instead of asserting an alarm the producer could not measure. */
+uint32_t alarmSourceFor(const char* metric) {
+  if (std::strcmp(metric, "oxygen.warning") == 0 ||
+      std::strcmp(metric, "oxygen.alarm") == 0) {
+    return kSourceOxygen;
+  }
+  if (std::strcmp(metric, "methane.warning") == 0 ||
+      std::strcmp(metric, "methane.alarm") == 0) {
+    return kSourceMethane;
+  }
+  if (std::strcmp(metric, "co.warning") == 0 ||
+      std::strcmp(metric, "co.alarm") == 0) {
+    return kSourceCarbonMonoxide;
+  }
+  return 0U;
+}
+
+/* Validation bounds for the readings Node A reports for traceability.  They
+ * follow the producer's own derivations: a 12-bit ADC code and the same code
+ * scaled to the 3.3 V reference. */
+constexpr int64_t kAdcCodeMaximum = 4095;
+constexpr int64_t kMillivoltMaximum = 3300;
+
+bool inRange(double value, int64_t minimum, int64_t maximum) {
+  return std::isfinite(value) && value >= static_cast<double>(minimum) &&
+         value <= static_cast<double>(maximum);
+}
+
+uint8_t flagValue(double value) {
+  return value != 0.0 ? 1U : 0U;
 }
 
 bool updateReading(ScreenSnapshot* snapshot, const char* asset,
@@ -425,6 +502,87 @@ bool updateReading(ScreenSnapshot* snapshot, const char* asset,
   double scale = 1.0;
   int64_t minimum = 0;
   int64_t maximum = 0;
+
+  /* The residual analog channels.  Node A reports these for traceability and
+   * the cloud contract; the screen shows the alarm flags and their quality, so
+   * they are validated and accepted here without being stored. */
+  if (std::strcmp(asset, "GAS-01") == 0 &&
+      (std::strcmp(metric, "oxygen.raw") == 0 ||
+       std::strcmp(metric, "methane.raw") == 0 ||
+       std::strcmp(metric, "co.raw") == 0) &&
+      std::strcmp(unit, "adc") == 0) {
+    return inRange(value, 0, kAdcCodeMaximum);
+  }
+  if (std::strcmp(asset, "GAS-01") == 0 &&
+      (std::strcmp(metric, "oxygen.voltage") == 0 ||
+       std::strcmp(metric, "methane.voltage") == 0 ||
+       std::strcmp(metric, "co.voltage") == 0) &&
+      std::strcmp(unit, "mV") == 0) {
+    return inRange(value, 0, kMillivoltMaximum);
+  }
+  /* Delivered power is the product of the two readings the fan snapshot
+   * already carries, so it is accepted without a second copy. */
+  if ((std::strcmp(asset, "FAN-01") == 0 || std::strcmp(asset, "FAN-02") == 0) &&
+      std::strcmp(metric, "power") == 0 && std::strcmp(unit, "W") == 0) {
+    return inRange(value, -10000, 10000);
+  }
+  if (std::strcmp(asset, "GAS-01") == 0 &&
+      (std::strcmp(metric, "oxygen.warning") == 0 ||
+       std::strcmp(metric, "oxygen.alarm") == 0 ||
+       std::strcmp(metric, "methane.warning") == 0 ||
+       std::strcmp(metric, "methane.alarm") == 0 ||
+       std::strcmp(metric, "co.warning") == 0 ||
+       std::strcmp(metric, "co.alarm") == 0) &&
+      std::strcmp(unit, "bool") == 0) {
+    if (!inRange(value, 0, 1)) return false;
+    if (quality == Quality::Invalid || quality == Quality::Unknown) return true;
+    const uint32_t source = alarmSourceFor(metric);
+    if (source == 0U) return false;
+    const bool assertive = flagValue(value) != 0U;
+    const bool alarm = std::strstr(metric, ".alarm") != nullptr;
+    if (alarm) {
+      /* An alarm outranks a warning: the critical set keeps the bit and the
+       * warning set must not claim it as well. */
+      if (assertive) {
+        snapshot->critical_sources |= source;
+        snapshot->warning_sources &= ~source;
+      } else {
+        snapshot->critical_sources &= ~source;
+      }
+    } else if (assertive) {
+      snapshot->warning_sources |= source;
+    } else {
+      snapshot->warning_sources &= ~source;
+    }
+    return true;
+  }
+  if (std::strcmp(asset, "CTRL-01") == 0 &&
+      std::strcmp(metric, "led.mode") == 0 &&
+      std::strcmp(unit, "enum") == 0) {
+    if (!inRange(value, 0, 7)) return false;
+    snapshot->actuators.led_mode = static_cast<uint8_t>(value);
+    return true;
+  }
+  if (std::strcmp(asset, "CTRL-01") == 0 &&
+      std::strcmp(metric, "led.brightnessPercent") == 0 &&
+      std::strcmp(unit, "percent") == 0) {
+    if (!inRange(value, 0, 100)) return false;
+    snapshot->actuators.led_brightness_percent = static_cast<uint8_t>(value);
+    return true;
+  }
+  if (std::strcmp(asset, "CTRL-01") == 0 &&
+      (std::strcmp(metric, "buzzer.active") == 0 ||
+       std::strcmp(metric, "buzzer.muted") == 0) &&
+      std::strcmp(unit, "bool") == 0) {
+    if (!inRange(value, 0, 1)) return false;
+    const bool muted = std::strcmp(metric, "buzzer.muted") == 0;
+    if (muted) {
+      snapshot->actuators.buzzer_muted = flagValue(value) != 0U;
+    } else {
+      snapshot->actuators.buzzer_on = flagValue(value) != 0U;
+    }
+    return true;
+  }
   if (std::strcmp(asset, "ENV-01") == 0 &&
       std::strcmp(metric, "temperature") == 0 &&
       std::strcmp(unit, "degC") == 0) {
@@ -629,9 +787,12 @@ RouteResult updateTelemetry(TelemetryAccumulator* accumulator,
       candidate.snapshot.actuators.relay_on = value != 0U;
     }
     if (countKey(diag, diag_end + 1U, "pwmPercent") == 1U) {
+      /* The legacy Web/IoTDA controller path commands any duty from 0 to 100,
+       * so the reported actual duty is bounded the same way.  The 0/30/60/100
+       * ladder is a menu-command contract, not a telemetry one. */
       if (frame_fan_index < 0 ||
           !readUint32Field(diag, diag_end + 1U, "pwmPercent", &value) ||
-          !(value == 0U || value == 30U || value == 60U || value == 100U)) {
+          value > 100U) {
         return RouteResult::InvalidPayload;
       }
       screen_protocol::FanSnapshot& fan =
@@ -643,22 +804,30 @@ RouteResult updateTelemetry(TelemetryAccumulator* accumulator,
 
   candidate.snapshot.sequence = sequence;
   candidate.snapshot.generated_at_ms = now_epoch_ms;
-  candidate.snapshot.connectivity.node_a_online = true;
-  candidate.snapshot.connectivity.mqtt_online = true;
+  /* This frame is the observation: Node A produced it and the broker carried
+   * it, so both links are online by construction.  The gateway and IoTDA
+   * session are not observable from any topic CTRL-02 subscribes to, so they
+   * keep whatever the accumulator was initialised with - unknown - instead of
+   * being reported as a false OFFLINE. */
+  candidate.snapshot.connectivity.node_a = LinkStatus::Online;
+  candidate.snapshot.connectivity.mqtt = LinkStatus::Online;
   candidate.snapshot.connectivity.updated_at_ms = now_epoch_ms;
-  candidate.snapshot.warning_sources = 0U;
-  candidate.snapshot.critical_sources = 0U;
+  /* Recompute the derived sources from the snapshot.  The gas bits are written
+   * per reading by the gas status frame, which is the only place the producer
+   * reports the operational methane alarm, so they must survive this rebuild. */
+  candidate.snapshot.warning_sources &= kAlarmSourceAll;
+  candidate.snapshot.critical_sources &= kAlarmSourceAll;
   if (candidate.snapshot.water.quality != Quality::Unknown &&
       candidate.snapshot.water.value != 0) {
-    candidate.snapshot.warning_sources |= 0x04U;
+    candidate.snapshot.warning_sources |= kSourceWater;
   }
   if (candidate.snapshot.smoke.quality != Quality::Unknown &&
       candidate.snapshot.smoke.value != 0) {
-    candidate.snapshot.critical_sources |= 0x01U;
+    candidate.snapshot.critical_sources |= kSourceSmoke;
   }
   if (candidate.snapshot.flame.quality != Quality::Unknown &&
       candidate.snapshot.flame.value != 0) {
-    candidate.snapshot.critical_sources |= 0x02U;
+    candidate.snapshot.critical_sources |= kSourceFlame;
   }
   candidate.snapshot.alarm_severity =
       candidate.snapshot.critical_sources != 0U
