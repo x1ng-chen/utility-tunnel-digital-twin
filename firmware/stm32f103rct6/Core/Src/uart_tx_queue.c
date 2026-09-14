@@ -4,21 +4,36 @@
 
 void UartTx_Init(UartTxQueue *queue)
 {
+  UartTx_InitWithReserve(queue, 0U);
+}
+
+void UartTx_InitWithReserve(UartTxQueue *queue, uint16_t reserved_bytes)
+{
   if (queue == 0) return;
   (void)memset(queue, 0, sizeof(*queue));
   queue->capacity = UART_TX_CAPACITY;
+  queue->reserved_bytes = (reserved_bytes < UART_TX_CAPACITY)
+                              ? reserved_bytes : UART_TX_CAPACITY;
 }
 
-uint8_t UartTx_Enqueue(UartTxQueue *queue, const char *line, uint16_t length)
+static uint8_t enqueue_frame(UartTxQueue *queue, const char *line,
+                             uint16_t length, uint8_t priority)
 {
   uint16_t index;
+  uint16_t limit;
   if ((queue == 0) || (line == 0) || (length == 0U)) return 0U;
+  limit = priority ? queue->capacity
+                   : (uint16_t)(queue->capacity - queue->reserved_bytes);
   /* A partial frame would leave the peer unable to split lines, so an
    * oversized or non-fitting frame is refused whole and never queued. */
   if ((length > UART_TX_FRAME_LIMIT) ||
-      ((uint32_t)queue->used + (uint32_t)length > (uint32_t)queue->capacity)) {
+      ((uint32_t)queue->used + (uint32_t)length > (uint32_t)limit)) {
     ++queue->dropped_frames;
     queue->dropped_bytes = queue->dropped_bytes + length;
+    if (priority != 0U) {
+      ++queue->priority_dropped_frames;
+      queue->priority_dropped_bytes = queue->priority_dropped_bytes + length;
+    }
     return 0U;
   }
   for (index = 0U; index < length; ++index) {
@@ -31,6 +46,17 @@ uint8_t UartTx_Enqueue(UartTxQueue *queue, const char *line, uint16_t length)
   if (queue->used > queue->peak_used) queue->peak_used = queue->used;
   if (queue->frames > queue->peak_frames) queue->peak_frames = queue->frames;
   return 1U;
+}
+
+uint8_t UartTx_Enqueue(UartTxQueue *queue, const char *line, uint16_t length)
+{
+  return enqueue_frame(queue, line, length, 0U);
+}
+
+uint8_t UartTx_EnqueuePriority(UartTxQueue *queue, const char *line,
+                               uint16_t length)
+{
+  return enqueue_frame(queue, line, length, 1U);
 }
 
 uint16_t UartTx_Drain(UartTxQueue *queue, UART_HandleTypeDef *uart,

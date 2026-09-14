@@ -41,6 +41,7 @@
 typedef struct {
   uint8_t bytes[UART_TX_CAPACITY];
   uint16_t capacity;
+  uint16_t reserved_bytes;
   uint16_t head;
   uint16_t tail;
   uint16_t used;
@@ -50,16 +51,28 @@ typedef struct {
   uint32_t enqueued_frames;
   uint32_t dropped_frames;
   uint32_t dropped_bytes;
+  uint32_t priority_dropped_frames;
+  uint32_t priority_dropped_bytes;
   uint16_t peak_used;
   uint16_t peak_frames;
 } UartTxQueue;
 
 void UartTx_Init(UartTxQueue *queue);
 
+/* Initializes a queue with `reserved_bytes` unavailable to ordinary output.
+ * The reserve is a runtime admission limit, not merely a capacity assertion;
+ * priority output may consume it without waiting. */
+void UartTx_InitWithReserve(UartTxQueue *queue, uint16_t reserved_bytes);
+
 /* Copies `length` bytes when the whole frame fits, otherwise drops the frame.
  * Returns 1 when queued.  A frame longer than UART_TX_FRAME_LIMIT is always
  * refused: the peer splits lines at that bound. */
 uint8_t UartTx_Enqueue(UartTxQueue *queue, const char *line, uint16_t length);
+
+/* Enqueues an urgent frame (for example a command ACK).  It remains bounded
+ * by the physical queue capacity but may use the configured reserve. */
+uint8_t UartTx_EnqueuePriority(UartTxQueue *queue, const char *line,
+                               uint16_t length);
 
 /* Pushes at most `budget` bytes to `uart` with a zero HAL timeout, so the call
  * returns immediately whatever the link is doing.  `now_ms` stamps the stall

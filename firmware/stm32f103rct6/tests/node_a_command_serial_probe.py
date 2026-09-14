@@ -38,6 +38,27 @@ except ImportError:  # pragma: no cover - exercised by the host test
 TELEMETRY_SCHEMA = "ut.telemetry.v1"
 FRAME_COUNT = 6
 
+# A sequence identifies a fixed rotation slot, not just a unique payload.  The
+# probe checks the exact reading ownership so a frame cannot be relabelled or a
+# later slot emitted under an earlier sequence.
+ROTATION_SIGNATURES = (
+    (("ENV-01", "temperature"), ("ENV-01", "humidity"),
+     ("GAS-01", "smoke.alarm"), ("GAS-01", "flame.alarm"),
+     ("LEVEL-L01", "level.detected"), ("GAS-01", "oxygen.raw"),
+     ("GAS-01", "oxygen.voltage")),
+    (("FAN-01", "supply.voltage"), ("FAN-01", "motor.current"),
+     ("FAN-01", "rotational.speed")),
+    (("FAN-02", "supply.voltage"), ("FAN-02", "motor.current"),
+     ("FAN-02", "rotational.speed")),
+    (("GAS-01", "methane.alarm"), ("GAS-01", "methane.warning"),
+     ("GAS-01", "oxygen.alarm"), ("GAS-01", "co.alarm")),
+    (("GAS-01", "flame.rawLevel"), ("GAS-01", "methane.raw"),
+     ("GAS-01", "methane.voltage"), ("GAS-01", "co.raw"),
+     ("GAS-01", "co.voltage")),
+    (("CTRL-01", "led.mode"), ("CTRL-01", "led.brightnessPercent"),
+     ("CTRL-01", "buzzer.active"), ("CTRL-01", "buzzer.muted")),
+)
+
 # Metrics the gas status frame is the only producer of.  The oxygen and CO
 # channels are uncalibrated, so their alarm flags must never claim a good
 # quality; methane is the operational channel.
@@ -135,8 +156,24 @@ def validate_telemetry_burst(frames: list[dict]) -> dict:
     # sequence as a duplicate, so two frames may never share a value.
     if len(set(sequences)) != len(sequences):
         raise AssertionError(f"frames share a sequence: {sequences}")
-    if sequences != sorted(sequences):
-        raise AssertionError(f"sequences are not monotonic: {sequences}")
+    if any(type(sequence) is not int for sequence in sequences):
+        raise AssertionError(f"sequences must be integers: {sequences}")
+    expected_sequences = list(range(sequences[0], sequences[0] + FRAME_COUNT))
+    if sequences != expected_sequences:
+        raise AssertionError(f"sequences are not contiguous: {sequences}")
+
+    for payload, sequence in zip(frames, sequences):
+        slot = (sequence - 1) % FRAME_COUNT
+        actual_pairs = {
+            (reading.get("assetCode"), reading.get("metric"))
+            for reading in payload.get("readings", [])
+        }
+        expected_pairs = set(ROTATION_SIGNATURES[slot])
+        if actual_pairs != expected_pairs:
+            raise AssertionError(
+                f"sequence {sequence} has slot {slot} readings "
+                f"{sorted(actual_pairs)!r}, expected {sorted(expected_pairs)!r}"
+            )
 
     readings = readings_by_metric(frames)
 

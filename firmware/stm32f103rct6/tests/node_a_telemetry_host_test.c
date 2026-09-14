@@ -219,10 +219,12 @@ static int check_rotation_visits_every_frame(void)
     index = (uint8_t)(sequence % NODE_A_TELEMETRY_FRAME_COUNT);
 
     CHECK(seen[index] == 0U);
-    CHECK(NodeATelemetry_FormatFrame(&sequence, &snapshot, frame, &length) == 1U);
+    CHECK(NodeATelemetry_FormatFrame(sequence + 1U, &snapshot, frame,
+                                     &length) == 1U);
     CHECK(length != 0U);
     seen[index] = 1U;
     offered += length;
+    ++sequence;
   }
   /* Every frame of the cycle was emitted exactly once, and the offered bytes
    * are the whole cycle - inside the 6 * 1920 bytes the six intervals carry,

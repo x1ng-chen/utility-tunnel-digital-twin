@@ -26,7 +26,7 @@
  * exists to remove.
  *
  * So the board emits ONE frame per interval and rotates through the six
- * (NodeATelemetry_FormatFrame).  The offered rate is then one frame per
+ * NodeATelemetry_QueueNext slots.  The offered rate is then one frame per
  * interval: at most NODE_A_TELEMETRY_FRAME_SIZE bytes, comfortably inside the
  * link's share of the interval, and in the steady state well inside it (the
  * cycle averages 2870 / 6 bytes per interval, about 239 B/s against the link's
@@ -158,6 +158,10 @@ static NodeAActuatorState g_actuator = { 100U, 100U, 0U, 0U, 0U,
  * back the ESP link, and neither can hold back the safety loop. */
 static UartTxQueue esp_tx_queue;
 static UartTxQueue debug_tx_queue;
+static uint32_t tx_esp_enqueue_failures;
+static uint32_t tx_debug_enqueue_failures;
+static uint32_t ack_enqueue_failures;
+static uint32_t state_enqueue_failures;
 static uint32_t relay_started_at;
 static uint32_t relay_duration_ms;
 static uint32_t buzzer_started_at;
@@ -209,14 +213,17 @@ static uint8_t test_safety_smoke;
 static uint8_t test_safety_flame;
 static uint8_t test_safety_gas;
 static uint8_t test_safety_vent;
-/* Test-only: how many further intervals keep forcing a telemetry frame.  Zero
- * in production, where only the interval arms the cycle. */
+/* Test-only: whether one complete, retryable rotation request is pending.  Zero
+ * in production, where only the normal interval arms a single frame. */
 static uint8_t test_telemetry_burst;
-/* The rotation position, and the sequence the next frame will carry.  They are
- * the same number: frame `sequence % NODE_A_TELEMETRY_FRAME_COUNT` carries
- * `sequence`, so a frame the queue refused - and whose sequence was therefore
- * never committed - is retried as the same frame on the next pass. */
+/* The sequence the next frame will carry.  Sequence 1 is rotation slot 0 and
+ * a frame the queue refused - and whose sequence was therefore never
+ * committed - is retried as the same frame on the next pass. */
 static uint32_t telemetry_sequence;
+typedef struct {
+  UartTxQueue *esp;
+  UartTxQueue *debug;
+} TelemetryQueueContext;
 static void BuildTelemetrySnapshot(const Sht30Reading readings[3],
                                    uint8_t smoke_detected, uint8_t flame_detected,
                                    uint8_t level_is_detected, uint16_t oxygen_raw,
@@ -229,16 +236,16 @@ static void BuildTelemetrySnapshot(const Sht30Reading readings[3],
                                    uint32_t fan2_rpm,
                                    NodeATelemetrySnapshot *snapshot);
 static uint8_t Telemetry_EmitOneFrame(const NodeATelemetrySnapshot *snapshot);
-static void SendTelemetryFullRotation(const Sht30Reading readings[3],
-                                      uint8_t smoke_detected, uint8_t flame_detected,
-                                      uint8_t level_is_detected, uint16_t oxygen_raw,
-                                      uint32_t oxygen_microvolts, uint8_t oxygen_online,
-                                      uint16_t methane_raw, uint32_t methane_microvolts,
-                                      uint8_t methane_online, uint16_t co_raw,
-                                      uint32_t co_microvolts, uint8_t co_online,
-                                      const Ina226Reading *fan1_power,
-                                      uint32_t fan1_rpm, const Ina226Reading *fan2_power,
-                                      uint32_t fan2_rpm);
+static uint8_t SendTelemetryFullRotation(const Sht30Reading readings[3],
+                                         uint8_t smoke_detected, uint8_t flame_detected,
+                                         uint8_t level_is_detected, uint16_t oxygen_raw,
+                                         uint32_t oxygen_microvolts, uint8_t oxygen_online,
+                                         uint16_t methane_raw, uint32_t methane_microvolts,
+                                         uint8_t methane_online, uint16_t co_raw,
+                                         uint32_t co_microvolts, uint8_t co_online,
+                                         const Ina226Reading *fan1_power,
+                                         uint32_t fan1_rpm, const Ina226Reading *fan2_power,
+                                         uint32_t fan2_rpm);
 
 void SystemClock_Config(void);
 void Error_Handler(void);
@@ -268,11 +275,59 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
 /* Queues one already-formatted frame for both UARTs.  Nothing on the
  * telemetry or command-answer path writes a UART directly any more: the main
  * loop drains both queues under a fixed byte budget. */
-static void Tx_EnqueueLine(const char *line, uint16_t length)
+#define TX_ESP_ACCEPTED    0x01U
+#define TX_DEBUG_ACCEPTED  0x02U
+
+static uint8_t Tx_EnqueueLine(const char *line, uint16_t length)
 {
-  if ((line == 0) || (length == 0U)) return;
-  (void)UartTx_Enqueue(&esp_tx_queue, line, length);
-  (void)UartTx_Enqueue(&debug_tx_queue, line, length);
+  uint8_t accepted = 0U;
+
+  if ((line == 0) || (length == 0U)) return 0U;
+  if (UartTx_Enqueue(&esp_tx_queue, line, length) != 0U)
+    accepted |= TX_ESP_ACCEPTED;
+  else
+    ++tx_esp_enqueue_failures;
+  if (UartTx_Enqueue(&debug_tx_queue, line, length) != 0U)
+    accepted |= TX_DEBUG_ACCEPTED;
+  else
+    ++tx_debug_enqueue_failures;
+  return accepted;
+}
+
+static uint8_t Tx_EnqueueAckLine(const char *line, uint16_t length)
+{
+  uint8_t accepted = 0U;
+
+  if ((line == 0) || (length == 0U)) return 0U;
+  if (UartTx_EnqueuePriority(&esp_tx_queue, line, length) != 0U)
+    accepted |= TX_ESP_ACCEPTED;
+  else
+    ++ack_enqueue_failures;
+  if (UartTx_EnqueuePriority(&debug_tx_queue, line, length) != 0U)
+    accepted |= TX_DEBUG_ACCEPTED;
+  else
+    ++ack_enqueue_failures;
+  return accepted;
+}
+
+/* The ESP queue is the commit point for telemetry.  The debug mirror is
+ * best-effort and cannot move the rotation cursor: a frame accepted by ESP is
+ * already part of the wire contract even if a stalled debug console refuses
+ * its copy. */
+static uint8_t Telemetry_EnqueueBoth(void *context, const char *frame,
+                                     uint16_t length)
+{
+  TelemetryQueueContext *queues = (TelemetryQueueContext *)context;
+
+  if ((queues == NULL) || (queues->esp == NULL) || (queues->debug == NULL))
+    return 0U;
+  if (UartTx_Enqueue(queues->esp, frame, length) == 0U) {
+    ++tx_esp_enqueue_failures;
+    return 0U;
+  }
+  if (UartTx_Enqueue(queues->debug, frame, length) == 0U)
+    ++tx_debug_enqueue_failures;
+  return 1U;
 }
 
 static void Command_Poll(void);
@@ -779,28 +834,27 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
  * frames and their sequences are exactly the ones the interval path produces.
  * A frame the queue refuses stops the rotation; the forced interval it belongs
  * to is retried with the same head frame, so nothing is skipped. */
-static void SendTelemetryFullRotation(const Sht30Reading readings[3],
-                                      uint8_t smoke_detected, uint8_t flame_detected,
-                                      uint8_t level_is_detected, uint16_t oxygen_raw,
-                                      uint32_t oxygen_microvolts, uint8_t oxygen_online,
-                                      uint16_t methane_raw, uint32_t methane_microvolts,
-                                      uint8_t methane_online, uint16_t co_raw,
-                                      uint32_t co_microvolts, uint8_t co_online,
-                                      const Ina226Reading *fan1_power,
-                                      uint32_t fan1_rpm, const Ina226Reading *fan2_power,
-                                      uint32_t fan2_rpm)
+static uint8_t SendTelemetryFullRotation(const Sht30Reading readings[3],
+                                         uint8_t smoke_detected, uint8_t flame_detected,
+                                         uint8_t level_is_detected, uint16_t oxygen_raw,
+                                         uint32_t oxygen_microvolts, uint8_t oxygen_online,
+                                         uint16_t methane_raw, uint32_t methane_microvolts,
+                                         uint8_t methane_online, uint16_t co_raw,
+                                         uint32_t co_microvolts, uint8_t co_online,
+                                         const Ina226Reading *fan1_power,
+                                         uint32_t fan1_rpm, const Ina226Reading *fan2_power,
+                                         uint32_t fan2_rpm)
 {
   NodeATelemetrySnapshot snapshot;
-  uint8_t emitted;
+  TelemetryQueueContext queues = {&esp_tx_queue, &debug_tx_queue};
 
   BuildTelemetrySnapshot(readings, smoke_detected, flame_detected,
                          level_is_detected, oxygen_raw, oxygen_microvolts,
                          oxygen_online, methane_raw, methane_microvolts,
                          methane_online, co_raw, co_microvolts, co_online,
                          fan1_power, fan1_rpm, fan2_power, fan2_rpm, &snapshot);
-  for (emitted = 0U; emitted < NODE_A_TELEMETRY_FRAME_COUNT; ++emitted) {
-    if (Telemetry_EmitOneFrame(&snapshot) == 0U) break;
-  }
+  return NodeATelemetry_QueueFullRotation(&telemetry_sequence, &snapshot,
+                                           Telemetry_EnqueueBoth, &queues);
 }
 
 /* Copies one sample block into the frame formatter's input.  Slot 1 is the
@@ -858,15 +912,11 @@ static void BuildTelemetrySnapshot(const Sht30Reading readings[3],
  * was transmitted and the caller should try again next interval. */
 static uint8_t Telemetry_EmitOneFrame(const NodeATelemetrySnapshot *snapshot)
 {
-  char frame[NODE_A_TELEMETRY_FRAME_SIZE];
-  uint16_t length = 0U;
+  TelemetryQueueContext queues = {&esp_tx_queue, &debug_tx_queue};
 
-  if (NodeATelemetry_FormatFrame(&telemetry_sequence, snapshot, frame, &length) == 0U ||
-      (length == 0U)) {
+  if (NodeATelemetry_QueueNext(&telemetry_sequence, snapshot,
+                               Telemetry_EnqueueBoth, &queues) == 0U)
     return 0U;
-  }
-  if (UartTx_Enqueue(&esp_tx_queue, frame, length) == 0U) return 0U;
-  (void)UartTx_Enqueue(&debug_tx_queue, frame, length);
   /* A command can arrive while the frame is being handed to the queue, so keep
    * answering instead of waiting for the next pass. */
   while (esp_rx_count != 0U) Command_Poll();
@@ -1166,13 +1216,18 @@ static void Command_SendAck(const char *command_id, const char *status,
                             const char *reason, uint32_t applied_value)
 {
   char json[192];
+  uint8_t accepted;
   size_t length = NodeACommand_FormatAck(json, sizeof(json), command_id,
                                          status, reason, applied_value);
   if ((length > 0U) && ((length + 2U) <= sizeof(json)))
   {
     json[length++] = '\r';
     json[length++] = '\n';
-    Tx_EnqueueLine(json, (uint16_t)length);
+    accepted = Tx_EnqueueAckLine(json, (uint16_t)length);
+    /* An ACK is useful on either console, but the ESP link is the command
+     * contract.  The enqueue helper has already counted every failed copy;
+     * return immediately when that authoritative destination refused it. */
+    if ((accepted & TX_ESP_ACCEPTED) == 0U) return;
   }
 }
 
@@ -1311,9 +1366,10 @@ static void Command_Poll(void)
 
 static void NodeTest_ReportState(void)
 {
-  char message[160];
+  char message[256];
+  uint8_t accepted;
   const int length = snprintf(message, sizeof(message),
-    "#STATE fan1=%u fan2=%u relay=%u buzzer=%u muted=%u led_mode=%u led_bright=%u smoke=%u flame=%u gas=%u vent=%u\r\n",
+    "#STATE fan1=%u fan2=%u relay=%u buzzer=%u muted=%u led_mode=%u led_bright=%u smoke=%u flame=%u gas=%u vent=%u ack_enqueue_failures=%lu state_enqueue_failures=%lu esp_enqueue_failures=%lu debug_enqueue_failures=%lu\r\n",
     (unsigned int)g_actuator.fan1_pwm_percent,
     (unsigned int)g_actuator.fan2_pwm_percent,
     (unsigned int)g_actuator.relay_on, (unsigned int)g_actuator.buzzer_on,
@@ -1322,9 +1378,16 @@ static void NodeTest_ReportState(void)
     (unsigned int)((smoke_alarm != 0U) || (test_safety_smoke != 0U)),
     (unsigned int)((flame_alarm != 0U) || (test_safety_flame != 0U)),
     (unsigned int)((gas_alarm != 0U) || (test_safety_gas != 0U)),
-    (unsigned int)((gas_ventilation_active != 0U) || (test_safety_vent != 0U)));
+    (unsigned int)((gas_ventilation_active != 0U) || (test_safety_vent != 0U)),
+    (unsigned long)ack_enqueue_failures,
+    (unsigned long)state_enqueue_failures,
+    (unsigned long)tx_esp_enqueue_failures,
+    (unsigned long)tx_debug_enqueue_failures);
   if ((length > 0) && (length < (int)sizeof(message)))
-    Tx_EnqueueLine(message, (uint16_t)length);
+  {
+    accepted = Tx_EnqueueLine(message, (uint16_t)length);
+    if ((accepted & TX_ESP_ACCEPTED) == 0U) ++state_enqueue_failures;
+  }
 }
 
 /* The APB1 timer clock keeps the x2 boost whenever APB1 is prescaled, so the
@@ -1445,11 +1508,18 @@ static void NodeTest_HandleLine(void)
   if (strncmp(node_test_line, "#NODETEST CMD ", 14U) == 0)
   {
     Command_ProcessPayload(node_test_line + 14U, HAL_GetTick());
+    /* The serial probe's command contract is ACK followed by the resulting
+     * state snapshot.  Keep this explicit even for rejected/duplicate
+     * commands so callers never wait for a line the firmware does not emit. */
+    NodeTest_ReportState();
     return;
   }
   if (strcmp(node_test_line, "#NODETEST TELEMETRY") == 0)
   {
-    test_telemetry_burst = NODE_A_TELEMETRY_FRAME_COUNT;
+    /* One command requests one complete rotation.  The request remains armed
+     * until every frame is accepted, so a backpressured slot is retried rather
+     * than silently consuming the test. */
+    test_telemetry_burst = 1U;
     return;
   }
   if (strcmp(node_test_line, "#NODETEST STATE") == 0)
@@ -1714,8 +1784,8 @@ int main(void)
   Led_Render(HAL_GetTick());
   MX_ADC1_Init();
   if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) Error_Handler();
-  UartTx_Init(&esp_tx_queue);
-  UartTx_Init(&debug_tx_queue);
+  UartTx_InitWithReserve(&esp_tx_queue, NODE_A_UART_ACK_RESERVE_BYTES);
+  UartTx_InitWithReserve(&debug_tx_queue, NODE_A_UART_ACK_RESERVE_BYTES);
   MX_USART1_UART_Init(); MX_USART2_UART_Init();
   if (HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U) != HAL_OK) Error_Handler();
   /* The secondary screen is initialised last: its SPI3/DMA2 setup must not
@@ -1827,24 +1897,25 @@ int main(void)
       status_sensors.fan1_rpm = fan_rpm;
       status_sensors.fan2_rpm = fan2_rpm;
       if (test_telemetry_burst != 0U)
-        SendTelemetryFullRotation(readings, smoke_alarm, flame_alarm,
-                                  level_detected, oxygen_raw, oxygen_microvolts,
-                                  oxygen_online, methane_raw, methane_microvolts,
-                                  methane_online, co_raw, co_microvolts,
-                                  co_online, &fan_power, fan_rpm, &fan2_power,
-                                  fan2_rpm);
+      {
+        if (SendTelemetryFullRotation(readings, smoke_alarm, flame_alarm,
+                                       level_detected, oxygen_raw,
+                                       oxygen_microvolts, oxygen_online,
+                                       methane_raw, methane_microvolts,
+                                       methane_online, co_raw, co_microvolts,
+                                       co_online, &fan_power, fan_rpm,
+                                       &fan2_power, fan2_rpm) != 0U)
+        {
+          --test_telemetry_burst;
+          last_telemetry = now;
+        }
+      }
       else
+      {
         SendTelemetry(readings, smoke_alarm, flame_alarm, level_detected,
                       oxygen_raw, oxygen_microvolts, oxygen_online, methane_raw,
                       methane_microvolts, methane_online, co_raw, co_microvolts,
                       co_online, &fan_power, fan_rpm, &fan2_power, fan2_rpm);
-      /* The display already consumed this block from the gas repaint above, so
-       * only the interval timestamp is left to publish.  Publish it on the last
-       * forced frame too, so a probe burst hands the cadence straight back to
-       * the interval rather than producing a second cycle immediately. */
-      if (test_telemetry_burst != 0U) {
-        if (--test_telemetry_burst == 0U) last_telemetry = now;
-      } else {
         last_telemetry = now;
       }
     }

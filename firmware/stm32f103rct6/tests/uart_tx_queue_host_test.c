@@ -216,6 +216,50 @@ static void test_stalled_link_is_skipped_then_recovered(void)
   CHECK(queue.stall_until_ms == 0U);
 }
 
+/* A configured reserve is enforced at runtime: ordinary telemetry and
+ * diagnostics stop before the reserve, while an ACK may use those bytes. */
+static void test_normal_frames_leave_the_ack_reserve_available(void)
+{
+  UartTxQueue queue;
+  char frame[UART_TX_FRAME_LIMIT];
+  const uint16_t reserve = 350U;
+  const uint16_t ordinary_limit = (uint16_t)(UART_TX_CAPACITY - reserve);
+
+  UartTx_InitWithReserve(&queue, reserve);
+  (void)memset(frame, 'n', sizeof(frame));
+  while ((uint32_t)queue.used + UART_TX_FRAME_LIMIT <= ordinary_limit)
+    CHECK(UartTx_Enqueue(&queue, frame, UART_TX_FRAME_LIMIT) == 1U);
+
+  CHECK(queue.used <= ordinary_limit);
+  CHECK(UartTx_Enqueue(&queue, frame,
+                       (uint16_t)(ordinary_limit - queue.used)) == 1U);
+  CHECK(UartTx_Enqueue(&queue, frame,
+                       (uint16_t)(ordinary_limit - queue.used + 1U)) == 0U);
+  CHECK(queue.used <= ordinary_limit);
+
+  CHECK(UartTx_EnqueuePriority(&queue, frame, reserve) == 1U);
+  CHECK(queue.used == UART_TX_CAPACITY);
+}
+
+/* Priority output is still bounded and non-blocking when the entire ring is
+ * occupied; the caller can observe that an ACK was refused. */
+static void test_priority_refusal_is_counted(void)
+{
+  UartTxQueue queue;
+  char frame[UART_TX_FRAME_LIMIT];
+
+  UartTx_InitWithReserve(&queue, 350U);
+  (void)memset(frame, 'p', sizeof(frame));
+  CHECK(UartTx_EnqueuePriority(&queue, frame, UART_TX_FRAME_LIMIT) == 1U);
+  CHECK(UartTx_EnqueuePriority(&queue, frame, UART_TX_FRAME_LIMIT) == 1U);
+  CHECK(UartTx_EnqueuePriority(&queue, frame, UART_TX_FRAME_LIMIT) == 1U);
+  CHECK(UartTx_EnqueuePriority(&queue, frame, UART_TX_FRAME_LIMIT) == 1U);
+  CHECK(UartTx_EnqueuePriority(&queue, frame, 4U) == 1U);
+  CHECK(UartTx_EnqueuePriority(&queue, frame, 1U) == 0U);
+  CHECK(queue.priority_dropped_frames == 1U);
+  CHECK(queue.priority_dropped_bytes == 1U);
+}
+
 int main(void)
 {
   test_oversized_and_non_fitting_frames_are_refused_whole();
@@ -223,6 +267,8 @@ int main(void)
   test_frames_leave_in_order_and_intact();
   test_ring_buffer_wrap_preserves_order();
   test_stalled_link_is_skipped_then_recovered();
+  test_normal_frames_leave_the_ack_reserve_available();
+  test_priority_refusal_is_counted();
 
   if (failures != 0) {
     (void)fprintf(stderr, "%d check(s) failed\n", failures);

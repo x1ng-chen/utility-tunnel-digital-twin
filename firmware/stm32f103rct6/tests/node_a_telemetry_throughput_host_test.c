@@ -9,8 +9,8 @@
  *
  * This test drives the real production schedule and the real queue together:
  *
- *   - production is the board's rotation, one frame per interval
- *     (NodeATelemetry_FormatFrame over the same fixture the vector test uses);
+ *   - production is the board's rotation, one frame per interval through
+ *     NodeATelemetry_QueueNext (the same helper the firmware calls);
  *   - transport is Core/Src/uart_tx_queue.c with the board's byte budget;
  *   - the drain clock is virtual, one byte per 10 bit times at 9600.  A byte
  *     budget of N therefore cannot finish before N bytes worth of wire time
@@ -91,6 +91,47 @@ HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *uart, uint8_t *data,
 }
 
 static UART_HandleTypeDef kUart = {0};
+
+/* This is the same enqueue callback the board gives to the production
+ * telemetry helper.  The host therefore drives the formatter, queue offer and
+ * sequence commit as one transaction instead of copying that logic here. */
+typedef struct {
+  UartTxQueue *queue;
+  char last_frame[NODE_A_TELEMETRY_FRAME_SIZE];
+  uint16_t last_length;
+} QueueOffer;
+
+typedef struct {
+  UartTxQueue *esp;
+  UartTxQueue *debug;
+} DualQueueOffer;
+
+static uint8_t enqueue_to_uart_queue(void *context, const char *frame,
+                                     uint16_t length)
+{
+  QueueOffer *offer = (QueueOffer *)context;
+  (void)memcpy(offer->last_frame, frame, length);
+  offer->last_length = length;
+  return UartTx_Enqueue(offer->queue, frame, length);
+}
+
+static uint8_t enqueue_to_queue(void *context, const char *frame,
+                                uint16_t length)
+{
+  return UartTx_Enqueue((UartTxQueue *)context, frame, length);
+}
+
+static uint8_t enqueue_to_dual_queue(void *context, const char *frame,
+                                     uint16_t length)
+{
+  DualQueueOffer *offer = (DualQueueOffer *)context;
+
+  if (UartTx_Enqueue(offer->esp, frame, length) == 0U) return 0U;
+  /* ESP is the commit point.  The debug mirror is best-effort, exactly like
+   * the board callback; this test uses equal queues so both copies fit. */
+  (void)UartTx_Enqueue(offer->debug, frame, length);
+  return 1U;
+}
 
 /* Moves at most `budget` bytes, charging the wire time of each one to the
  * virtual clock.  This is the board's drain call with the HAL's own baud
@@ -194,9 +235,8 @@ static void collect_lines(RunResult *result, size_t *cursor)
 /* Runs the production schedule for `cycles` intervals and reports what the
  * link actually received. */
 static void run_cycles(UartTxQueue *queue, const NodeATelemetrySnapshot *snapshot,
-                       uint32_t cycles, RunResult *result)
+                       uint32_t cycles, uint32_t blocked_ms, RunResult *result)
 {
-  char frame[NODE_A_TELEMETRY_FRAME_SIZE];
   uint32_t sequence = 0U;
   uint32_t cycle;
   size_t cursor = 0U;
@@ -205,28 +245,31 @@ static void run_cycles(UartTxQueue *queue, const NodeATelemetrySnapshot *snapsho
   for (cycle = 0U; cycle < cycles; ++cycle) {
     const uint32_t interval_start = cycle * TEST_INTERVAL_US;
     const uint32_t interval_end = interval_start + TEST_INTERVAL_US;
-    uint16_t length = 0U;
-
     /* Sensor acquisition holds the foreground loop inside the sampling block,
      * so the drain is not called and the wire is idle.  Starting the model at
      * the end of the block is how that idle window is represented. */
-    hw_now_us = interval_start + (TEST_BLOCKED_MS * 1000U);
+    hw_now_us = interval_start + (blocked_ms * 1000U);
 
     /* One frame is offered per interval.  It is queued whole or refused whole,
      * and the sequence is committed only for a frame that was queued, so a
      * refused frame stays the next frame to offer. */
-    if (NodeATelemetry_FormatFrame(&sequence, snapshot, frame, &length) != 0U &&
-        (length != 0U)) {
-      ++result->offered;
-      if (UartTx_Enqueue(queue, frame, length) == 0U) ++result->refused;
-    }
+    ++result->offered;
+    if (NodeATelemetry_QueueNext(&sequence, snapshot, enqueue_to_queue,
+                                 queue) == 0U)
+      ++result->refused;
     if (queue->peak_used > result->peak_queue) result->peak_queue = queue->peak_used;
 
     /* The rest of the interval is the fast loop, draining under the byte
      * budget until the interval's wire time is used up.  A queue that cannot
      * empty in time simply carries over to the next interval. */
     while ((hw_now_us < interval_end) && (UartTx_Pending(queue) != 0U)) {
-      drain_once(queue, TEST_DRAIN_BUDGET);
+      const uint32_t remaining_us = interval_end - hw_now_us;
+      const uint32_t remaining_bytes = remaining_us / TEST_BYTE_TIME_US;
+      const uint16_t budget = (remaining_bytes < TEST_DRAIN_BUDGET)
+                                  ? (uint16_t)remaining_bytes
+                                  : TEST_DRAIN_BUDGET;
+      if (budget == 0U) break;
+      drain_once(queue, budget);
     }
     hw_now_us = interval_end;
 
@@ -251,11 +294,13 @@ static void test_one_frame_per_interval_fits_the_budget(void)
   build_snapshot(&snapshot);
   for (index = 0U; index < NODE_A_TELEMETRY_FRAME_COUNT; ++index) {
     uint16_t length = 0U;
-    CHECK(NodeATelemetry_FormatFrame(&sequence, &snapshot, frame, &length) == 1U);
+    CHECK(NodeATelemetry_FormatFrame(sequence + 1U, &snapshot, frame,
+                                     &length) == 1U);
     CHECK(length != 0U);
     CHECK((uint32_t)length < TEST_LINK_BYTES_PER_CYCLE);
     CHECK((uint32_t)length + TEST_ACK_RESERVE_BYTES <= TEST_LINK_BYTES_PER_CYCLE);
     offered += length;
+    ++sequence;
   }
   /* The whole cycle is still offered - just spread over six intervals, and
    * every byte of it still leaves the board. */
@@ -277,7 +322,7 @@ static void test_sustained_throughput_never_refuses_a_frame(void)
   link_length = 0U;
   link_calls = 0UL;
   UartTx_Init(&queue);
-  run_cycles(&queue, &snapshot, cycles, &result);
+  run_cycles(&queue, &snapshot, cycles, TEST_BLOCKED_MS, &result);
 
   /* No frame was refused, so no state-carrying frame could go stale. */
   CHECK(result.refused == 0U);
@@ -326,7 +371,7 @@ static void test_a_tighter_interval_still_delivers_exactly(void)
   available_bytes = ((TEST_INTERVAL_MS - blocked_ms) * 1000U) / TEST_BYTE_TIME_US;
   CHECK(available_bytes > TEST_WIDEST_FRAME_BYTES);
 
-  run_cycles(&queue, &snapshot, cycles, &result);
+  run_cycles(&queue, &snapshot, cycles, blocked_ms, &result);
   CHECK(result.refused == 0U);
   CHECK(queue.dropped_frames == 0U);
   for (index = 0U; index < NODE_A_TELEMETRY_FRAME_COUNT; ++index) {
@@ -354,9 +399,11 @@ static void test_the_drain_window_bounds_the_schedule(void)
   build_snapshot(&snapshot);
   for (index = 0U; index < NODE_A_TELEMETRY_FRAME_COUNT; ++index) {
     uint16_t length = 0U;
-    CHECK(NodeATelemetry_FormatFrame(&sequence, &snapshot, frame, &length) == 1U);
+    CHECK(NodeATelemetry_FormatFrame(sequence + 1U, &snapshot, frame,
+                                     &length) == 1U);
     if ((uint32_t)length > widest) widest = length;
     cycle_bytes += length;
+    ++sequence;
   }
   CHECK(widest == TEST_WIDEST_FRAME_BYTES);
   /* One frame drains inside the interval; the sampling block may grow to
@@ -367,34 +414,86 @@ static void test_the_drain_window_bounds_the_schedule(void)
   CHECK(cycle_bytes * 3U < TEST_LINK_BYTES_PER_CYCLE * NODE_A_TELEMETRY_FRAME_COUNT);
 }
 
-/* The ACK reserve has to be genuinely reserved: a command arriving while the
- * widest telemetry frame is pending must still get its ACK queued whole, and
- * the ring must still have the reserve left over for the diagnostics that
- * share it. */
-static void test_ack_fits_alongside_a_pending_frame(void)
+/* The caller supplies the sensor-block duration to the scheduler model.  A
+ * 1300 ms block leaves fewer wire bytes than the 683-byte environment frame;
+ * the model must therefore charge fewer than a full frame to the link.  A
+ * hard-coded 400 ms model incorrectly drains the entire frame and would let
+ * this regression through. */
+static void test_blocked_ms_is_applied_to_the_drain_window(void)
+{
+  NodeATelemetrySnapshot snapshot;
+  UartTxQueue queue;
+  RunResult result;
+
+  build_snapshot(&snapshot);
+  link_length = 0U;
+  link_calls = 0UL;
+  UartTx_Init(&queue);
+  run_cycles(&queue, &snapshot, 1U, 1300U, &result);
+
+  CHECK(result.refused == 0U);
+  CHECK(link_calls < TEST_WIDEST_FRAME_BYTES);
+}
+
+/* The ACK reserve has to be genuinely reserved on both output queues: normal
+ * telemetry/diagnostics stop at the ordinary limit, while an ACK can use the
+ * reserve.  A refused telemetry offer must leave the shared rotation cursor
+ * unchanged and observable through the real helper. */
+static void test_dual_queue_ack_and_diagnostics_compete(void)
 {
   const char ack[] =
       "{\"schema\":\"ut.command.ack.v1\",\"cmdId\":\"menu-CTRL-02-7-42\","
       "\"status\":\"accepted\",\"reason\":\"fan_pwm_set\",\"appliedValue\":60}"
       "\r\n";
   NodeATelemetrySnapshot snapshot;
-  char frame[NODE_A_TELEMETRY_FRAME_SIZE];
-  UartTxQueue queue;
+  char diagnostics[UART_TX_FRAME_LIMIT];
+  UartTxQueue esp_queue;
+  UartTxQueue debug_queue;
+  DualQueueOffer queues;
   uint32_t sequence = 0U;
-  uint16_t length = 0U;
+  const uint16_t reserve = TEST_ACK_RESERVE_BYTES;
 
   build_snapshot(&snapshot);
-  UartTx_Init(&queue);
-  /* The rotation starts on the widest frame, so queuing it first is the worst
-   * case for the ACK that follows. */
-  CHECK(NodeATelemetry_FormatFrame(&sequence, &snapshot, frame, &length) == 1U);
-  CHECK(length == TEST_WIDEST_FRAME_BYTES);
-  CHECK(UartTx_Enqueue(&queue, frame, length) == 1U);
+  UartTx_InitWithReserve(&esp_queue, reserve);
+  UartTx_InitWithReserve(&debug_queue, reserve);
+  queues.esp = &esp_queue;
+  queues.debug = &debug_queue;
+  (void)memset(diagnostics, 'd', sizeof(diagnostics));
 
-  CHECK(UartTx_Enqueue(&queue, ack, (uint16_t)(sizeof(ack) - 1U)) == 1U);
-  CHECK(queue.used == (uint16_t)(length + (uint16_t)(sizeof(ack) - 1U)));
-  /* Both still fit the ring with the diagnostics' reserve untouched. */
-  CHECK((uint32_t)queue.used + TEST_ACK_RESERVE_BYTES <= UART_TX_CAPACITY);
+  /* The first frame goes through the exact dual-queue production callback. */
+  CHECK(NodeATelemetry_QueueNext(&sequence, &snapshot,
+                                 enqueue_to_dual_queue, &queues) == 1U);
+  CHECK(sequence == 1U);
+  CHECK((uint32_t)esp_queue.used + reserve <= UART_TX_CAPACITY);
+  CHECK((uint32_t)debug_queue.used + reserve <= UART_TX_CAPACITY);
+
+  /* Ordinary diagnostics may fill only the non-reserved portion. */
+  while ((uint32_t)esp_queue.used + UART_TX_FRAME_LIMIT <=
+         (uint32_t)(UART_TX_CAPACITY - reserve))
+    CHECK(UartTx_Enqueue(&esp_queue, diagnostics, UART_TX_FRAME_LIMIT) == 1U);
+  while ((uint32_t)debug_queue.used + UART_TX_FRAME_LIMIT <=
+         (uint32_t)(UART_TX_CAPACITY - reserve))
+    CHECK(UartTx_Enqueue(&debug_queue, diagnostics, UART_TX_FRAME_LIMIT) == 1U);
+  CHECK(UartTx_Enqueue(&esp_queue, diagnostics,
+                       (uint16_t)(UART_TX_CAPACITY - reserve - esp_queue.used)) == 1U);
+  CHECK(UartTx_Enqueue(&debug_queue, diagnostics,
+                       (uint16_t)(UART_TX_CAPACITY - reserve - debug_queue.used)) == 1U);
+  CHECK((uint32_t)esp_queue.used + reserve <= UART_TX_CAPACITY);
+  CHECK((uint32_t)debug_queue.used + reserve <= UART_TX_CAPACITY);
+
+  /* A pending frame is refused by the ESP ordinary limit, so the sequence
+   * remains parked. */
+  CHECK(NodeATelemetry_QueueNext(&sequence, &snapshot,
+                                 enqueue_to_dual_queue, &queues) == 0U);
+  CHECK(sequence == 1U);
+
+  /* The same ACK fits in both reserved spaces and does not block. */
+  CHECK(UartTx_EnqueuePriority(&esp_queue, ack,
+                               (uint16_t)(sizeof(ack) - 1U)) == 1U);
+  CHECK(UartTx_EnqueuePriority(&debug_queue, ack,
+                               (uint16_t)(sizeof(ack) - 1U)) == 1U);
+  CHECK(esp_queue.used <= UART_TX_CAPACITY);
+  CHECK(debug_queue.used <= UART_TX_CAPACITY);
 }
 
 /* A frame the queue refuses must not move the rotation on.  This is the
@@ -407,60 +506,77 @@ static void test_ack_fits_alongside_a_pending_frame(void)
 static void test_a_refused_frame_does_not_advance_the_rotation(void)
 {
   NodeATelemetrySnapshot snapshot;
-  char frame[NODE_A_TELEMETRY_FRAME_SIZE];
-  char refused[NODE_A_TELEMETRY_FRAME_SIZE];
-  char retry[NODE_A_TELEMETRY_FRAME_SIZE];
   UartTxQueue queue;
+  QueueOffer offer;
+  char refused_frame[NODE_A_TELEMETRY_FRAME_SIZE];
   uint32_t sequence = 0U;
   uint32_t committed;
-  uint16_t length = 0U;
-  uint16_t refused_length = 0U;
-  uint16_t retry_length = 0U;
+  uint16_t refused_length;
 
   build_snapshot(&snapshot);
   UartTx_Init(&queue);
+  offer.queue = &queue;
+  offer.last_length = 0U;
 
   /* Fill the ring with whole rotations, committing the sequence for each frame
    * that really went in - exactly the board's loop - until the frame the
    * rotation would offer next no longer fits.  The sequence stays uncommitted
    * for that frame. */
   for (;;) {
-    uint16_t candidate_length = 0U;
-    uint32_t candidate_sequence = sequence;
-    if (NodeATelemetry_FormatFrame(&candidate_sequence, &snapshot, frame,
-                                   &candidate_length) == 0U) {
-      CHECK(0);
-      return;
-    }
-    if ((uint32_t)queue.used + (uint32_t)candidate_length > UART_TX_CAPACITY) {
-      committed = sequence;   /* the emitted sequence the caller still owes */
-      length = candidate_length;
+    const uint32_t before = sequence;
+    if (NodeATelemetry_QueueNext(&sequence, &snapshot,
+                                 enqueue_to_uart_queue, &offer) == 0U) {
+      committed = before; /* the emitted sequence the caller still owes */
+      refused_length = offer.last_length;
+      (void)memcpy(refused_frame, offer.last_frame, refused_length);
       break;
     }
-    length = candidate_length;
-    sequence = candidate_sequence;
-    CHECK(UartTx_Enqueue(&queue, frame, length) == 1U);
+    CHECK(sequence == before + 1U);
   }
-  CHECK((uint32_t)queue.used + (uint32_t)length > UART_TX_CAPACITY);
-  /* The frame really is refused, and refusing it did not move the rotation.
-   * Keep a copy of exactly what was refused for the comparison below. */
-  (void)memcpy(refused, frame, length);
-  refused_length = length;
-  CHECK(UartTx_Enqueue(&queue, frame, length) == 0U);
+  CHECK(refused_length != 0U);
+  CHECK((uint32_t)queue.used + (uint32_t)refused_length > UART_TX_CAPACITY);
+  /* The frame really is refused, and refusing it did not move the rotation. */
   CHECK(sequence == committed);
   CHECK(queue.dropped_frames == 1U);
-  CHECK(queue.dropped_bytes == length);
+  CHECK(queue.dropped_bytes == refused_length);
 
   /* Drain the ring: the same rotation position is what goes out next, because
    * the refused frame never committed its sequence. */
-  queue.used = 0U;
-  queue.head = 0U;
-  queue.tail = 0U;
-  queue.frames = 0U;
-  CHECK(NodeATelemetry_FormatFrame(&sequence, &snapshot, retry, &retry_length) == 1U);
+  UartTx_Init(&queue);
+  offer.queue = &queue;
+  CHECK(NodeATelemetry_QueueNext(&sequence, &snapshot,
+                                 enqueue_to_uart_queue, &offer) == 1U);
   CHECK(sequence == committed + 1U);
-  CHECK(retry_length == refused_length);
-  CHECK(memcmp(retry, refused, refused_length) == 0);
+  CHECK(offer.last_length == refused_length);
+  CHECK(memcmp(offer.last_frame, refused_frame, refused_length) == 0);
+}
+
+/* The node-test burst is one complete rotation request, not six independent
+ * requests.  If the queue refuses a later slot, the request remains pending;
+ * the next attempt starts at that exact slot and only a complete rotation
+ * reports success. */
+static void test_full_rotation_is_retryable_as_one_request(void)
+{
+  NodeATelemetrySnapshot snapshot;
+  UartTxQueue queue;
+  char filler[UART_TX_FRAME_LIMIT];
+  uint32_t sequence = 0U;
+
+  build_snapshot(&snapshot);
+  (void)memset(filler, 'x', sizeof(filler));
+  UartTx_Init(&queue);
+  CHECK(UartTx_Enqueue(&queue, filler, 300U) == 1U);
+
+  CHECK(NodeATelemetry_QueueFullRotation(&sequence, &snapshot,
+                                         enqueue_to_queue, &queue) == 0U);
+  CHECK(sequence == 5U);
+  CHECK(queue.dropped_frames == 1U);
+
+  /* A new forced interval retries the parked slot. */
+  UartTx_Init(&queue);
+  CHECK(NodeATelemetry_QueueFullRotation(&sequence, &snapshot,
+                                         enqueue_to_queue, &queue) == 1U);
+  CHECK(sequence == 5U + NODE_A_TELEMETRY_FRAME_COUNT);
 }
 
 int main(void)
@@ -469,8 +585,10 @@ int main(void)
   test_sustained_throughput_never_refuses_a_frame();
   test_a_tighter_interval_still_delivers_exactly();
   test_the_drain_window_bounds_the_schedule();
-  test_ack_fits_alongside_a_pending_frame();
+  test_blocked_ms_is_applied_to_the_drain_window();
+  test_dual_queue_ack_and_diagnostics_compete();
   test_a_refused_frame_does_not_advance_the_rotation();
+  test_full_rotation_is_retryable_as_one_request();
 
   if (failures != 0) {
     (void)fprintf(stderr, "%d check(s) failed\n", failures);

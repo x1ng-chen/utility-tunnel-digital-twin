@@ -250,28 +250,54 @@ void NodeATelemetry_FormatAll(uint32_t *sequence, const NodeATelemetrySnapshot *
   }
 }
 
-uint8_t NodeATelemetry_FormatFrame(uint32_t *sequence,
+uint8_t NodeATelemetry_FormatFrame(uint32_t sequence,
                                    const NodeATelemetrySnapshot *snapshot,
                                    char *frame, uint16_t *length)
 {
-  uint32_t committed;
-  uint32_t current;
-  if ((sequence == 0) || (frame == 0) || (length == 0)) return 0U;
+  if ((frame == 0) || (length == 0)) return 0U;
 
-  /* The frame index is read from the sequence value the frame will carry, and
-   * the caller commits that value only after the frame is really on the wire.
-   * A refused frame therefore leaves both the index and the sequence where
-   * they were, so it is retried as itself instead of being skipped. */
-  committed = *sequence;
-  current = committed + 1U;
+  /* Sequence 1 is the first rotation slot.  Subtraction deliberately wraps at
+   * zero so the mapping remains deterministic across a uint32 rollover. */
   *length = 0U;
   frame[0] = '\0';
   if (snapshot == 0) return 0U;
 
-  format_indexed_frame(frame, length, current, snapshot,
-                       (uint8_t)(committed % NODE_A_TELEMETRY_FRAME_COUNT));
+  format_indexed_frame(frame, length, sequence, snapshot,
+                       (uint8_t)((sequence - 1U) % NODE_A_TELEMETRY_FRAME_COUNT));
   if (*length == 0U) return 0U;
+  return 1U;
+}
 
-  *sequence = current;
+uint8_t NodeATelemetry_QueueNext(uint32_t *sequence,
+                                 const NodeATelemetrySnapshot *snapshot,
+                                 NodeATelemetryEnqueueFn enqueue,
+                                 void *context)
+{
+  char frame[NODE_A_TELEMETRY_FRAME_SIZE];
+  uint16_t length = 0U;
+  uint32_t candidate;
+
+  if ((sequence == 0) || (snapshot == 0) || (enqueue == 0)) return 0U;
+  candidate = *sequence + 1U;
+  if (NodeATelemetry_FormatFrame(candidate, snapshot, frame, &length) == 0U)
+    return 0U;
+  if ((length == 0U) || (enqueue(context, frame, length) == 0U)) return 0U;
+
+  *sequence = candidate;
+  return 1U;
+}
+
+uint8_t NodeATelemetry_QueueFullRotation(uint32_t *sequence,
+                                          const NodeATelemetrySnapshot *snapshot,
+                                          NodeATelemetryEnqueueFn enqueue,
+                                          void *context)
+{
+  uint8_t emitted;
+
+  if ((sequence == 0) || (snapshot == 0) || (enqueue == 0)) return 0U;
+  for (emitted = 0U; emitted < NODE_A_TELEMETRY_FRAME_COUNT; ++emitted) {
+    if (NodeATelemetry_QueueNext(sequence, snapshot, enqueue, context) == 0U)
+      return 0U;
+  }
   return 1U;
 }

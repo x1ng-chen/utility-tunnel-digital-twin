@@ -43,8 +43,9 @@ typedef struct
  *
  * A whole cycle does NOT fit the 9600 baud link inside one telemetry interval
  * (see the budget arithmetic in node_a.c), so the board emits ONE frame per
- * telemetry interval and rotates: the frame index is the low bits of the
- * sequence, and the sequence only advances for frames that were really queued.
+ * telemetry interval and rotates: sequence 1 is slot 0 (slot = (sequence - 1)
+ * % NODE_A_TELEMETRY_FRAME_COUNT), and the sequence only advances for frames
+ * that were really queued.
  * The CTRL-02 accumulator merges every accepted frame into the snapshot it
  * already holds, so the whole state converges over NODE_A_TELEMETRY_FRAME_COUNT
  * intervals and no field is ever dropped - only aged, by a bounded and
@@ -102,17 +103,34 @@ void NodeATelemetry_FormatAll(uint32_t *sequence, const NodeATelemetrySnapshot *
                               char frames[NODE_A_TELEMETRY_FRAME_COUNT][NODE_A_TELEMETRY_FRAME_SIZE],
                               uint16_t lengths[NODE_A_TELEMETRY_FRAME_COUNT]);
 
-/* Formats the single frame a rotation step emits.
- *
- * The rotation position is `*sequence % NODE_A_TELEMETRY_FRAME_COUNT`, and the
- * sequence only advances for frames the caller really put on the wire: a
- * caller that skips the commit on a refused frame keeps the rotation - and
- * that frame's turn - where it was.  Returns 1 when a frame was formatted, in
- * which case `*sequence` is the value the frame carries.  `frame` must hold
- * NODE_A_TELEMETRY_FRAME_SIZE bytes; `length` receives 0 when the frame could
- * not be formatted (a longer frame would only be refused later). */
-uint8_t NodeATelemetry_FormatFrame(uint32_t *sequence,
+/* Formats one frame for its wire sequence.  This function is pure with
+ * respect to rotation state: it does not advance a cursor or commit anything
+ * to a transport.  Sequence 1 is rotation slot 0, sequence 2 is slot 1, and
+ * so on. */
+uint8_t NodeATelemetry_FormatFrame(uint32_t sequence,
                                    const NodeATelemetrySnapshot *snapshot,
                                    char *frame, uint16_t *length);
+
+/* Transport callback used by the production offer path and by host tests.  It
+ * must enqueue the complete frame without blocking and return 1 only when the
+ * destination accepted it. */
+typedef uint8_t (*NodeATelemetryEnqueueFn)(void *context, const char *frame,
+                                          uint16_t length);
+
+/* Formats and offers the next rotation frame as one transaction.  The
+ * sequence is committed only after `enqueue` accepts the complete frame, so a
+ * refused frame is retried with the same sequence and slot. */
+uint8_t NodeATelemetry_QueueNext(uint32_t *sequence,
+                                 const NodeATelemetrySnapshot *snapshot,
+                                 NodeATelemetryEnqueueFn enqueue,
+                                 void *context);
+
+/* Offers exactly one complete rotation request.  A refusal leaves the cursor
+ * parked at the first unaccepted slot and returns 0; retrying the request
+ * resumes there and returns 1 only after all six slots are accepted. */
+uint8_t NodeATelemetry_QueueFullRotation(uint32_t *sequence,
+                                          const NodeATelemetrySnapshot *snapshot,
+                                          NodeATelemetryEnqueueFn enqueue,
+                                          void *context);
 
 #endif
