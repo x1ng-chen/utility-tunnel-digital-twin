@@ -1,0 +1,23 @@
+{
+  "date": "2026-09-14",
+  "participant": "史润佳",
+  "scope": "ZONE_1_BENCH_ACCEPTANCE",
+  "status": "BLOCKED_PENDING_PHYSICAL_EVIDENCE",
+  "hardware_release": false,
+  "static_checks": {
+    "firmware_digital_pc0": "CONFIRMED_FROM_SOURCE_NOT_MEASUREMENT",
+    "level_quality_hardcoded_good": "CONFIRMED_FROM_SOURCE",
+    "probe_disconnect_detection": "NOT_ESTABLISHED",
+    "visible_ports": ["COM3:Bluetooth", "COM4:Bluetooth"],
+    "node_a_connection": "NOT_IDENTIFIED",
+    "physical_tests_executed": false
+  },
+  "tests": [
+    {"id":"Z1-01","name":"干态","status":"NOT_RUN","tester":null,"tested_at":null,"measurements":null,"evidence":[]},
+    {"id":"Z1-02","name":"湿态","status":"NOT_RUN","tester":null,"tested_at":null,"measurements":null,"evidence":[]},
+    {"id":"Z1-03","name":"恢复及重复","status":"NOT_RUN","tester":null,"tested_at":null,"measurements":null,"evidence":[]},
+    {"id":"Z1-04","name":"断线","status":"NOT_RUN","tester":null,"tested_at":null,"measurements":null,"evidence":[]},
+    {"id":"Z1-05","name":"数据链路","status":"NOT_RUN","tester":null,"tested_at":null,"measurements":null,"evidence":[]},
+    {"id":"Z1-06","name":"模拟来源隔离","status":"NOT_RUN","tester":null,"tested_at":null,"measurements":null,"evidence":[]}
+  ]
+}

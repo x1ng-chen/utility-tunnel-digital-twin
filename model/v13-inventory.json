@@ -1,0 +1,714 @@
+{
+  "counts": {
+    "SHT30": 5,
+    "MQ4": 5,
+    "MQ7": 5,
+    "ME2O2": 5,
+    "MQ2": 5,
+    "FLAME": 5,
+    "FSIR02": 5,
+    "STM32": 2,
+    "ESP8266": 2,
+    "TFT": 1,
+    "FAN120": 2,
+    "LEAK": 2,
+    "FLOAT": 1,
+    "DOOR_CONTACT": 1,
+    "HEATER": 1,
+    "BUZZER": 1,
+    "LED_STRIP": 1,
+    "INA219": 1,
+    "RELAY": 1,
+    "POWER_SET": 1,
+    "INTERFACE": 2,
+    "TRAY": 1,
+    "SIMULATOR": 1,
+    "PUMP24": 1,
+    "AIR_PUMP": 1,
+    "K210": 1,
+    "VOICE": 1,
+    "ADC_CONDITIONING": 1,
+    "I2C_MUX": 1,
+    "MQ_DRIVER": 15,
+    "FAN_INTERFACE": 2
+  },
+  "assets": [
+    {
+      "kind": "MQ4",
+      "id": "MQ4-01",
+      "object": "MQ4-01-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ4-01-DRV",
+      "object": "MQ4-01-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ7",
+      "id": "MQ7-01",
+      "object": "MQ7-01-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ7-01-DRV",
+      "object": "MQ7-01-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "ME2O2",
+      "id": "ME2O2-01",
+      "object": "ME2O2-01-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ2",
+      "id": "MQ2-01",
+      "object": "MQ2-01-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ2-01-DRV",
+      "object": "MQ2-01-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "FLAME",
+      "id": "FLAME-01",
+      "object": "FLAME-01-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "SHT30",
+      "id": "SHT30-01",
+      "object": "SHT30-01-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ4",
+      "id": "MQ4-02",
+      "object": "MQ4-02-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ4-02-DRV",
+      "object": "MQ4-02-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ7",
+      "id": "MQ7-02",
+      "object": "MQ7-02-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ7-02-DRV",
+      "object": "MQ7-02-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "ME2O2",
+      "id": "ME2O2-02",
+      "object": "ME2O2-02-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ2",
+      "id": "MQ2-02",
+      "object": "MQ2-02-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ2-02-DRV",
+      "object": "MQ2-02-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "FLAME",
+      "id": "FLAME-02",
+      "object": "FLAME-02-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "SHT30",
+      "id": "SHT30-02",
+      "object": "SHT30-02-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ4",
+      "id": "MQ4-03",
+      "object": "MQ4-03-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ4-03-DRV",
+      "object": "MQ4-03-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ7",
+      "id": "MQ7-03",
+      "object": "MQ7-03-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ7-03-DRV",
+      "object": "MQ7-03-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "ME2O2",
+      "id": "ME2O2-03",
+      "object": "ME2O2-03-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ2",
+      "id": "MQ2-03",
+      "object": "MQ2-03-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ2-03-DRV",
+      "object": "MQ2-03-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "FLAME",
+      "id": "FLAME-03",
+      "object": "FLAME-03-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "SHT30",
+      "id": "SHT30-03",
+      "object": "SHT30-03-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ4",
+      "id": "MQ4-04",
+      "object": "MQ4-04-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ4-04-DRV",
+      "object": "MQ4-04-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ7",
+      "id": "MQ7-04",
+      "object": "MQ7-04-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ7-04-DRV",
+      "object": "MQ7-04-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "ME2O2",
+      "id": "ME2O2-04",
+      "object": "ME2O2-04-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ2",
+      "id": "MQ2-04",
+      "object": "MQ2-04-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ2-04-DRV",
+      "object": "MQ2-04-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "FLAME",
+      "id": "FLAME-04",
+      "object": "FLAME-04-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "SHT30",
+      "id": "SHT30-04",
+      "object": "SHT30-04-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ4",
+      "id": "MQ4-05",
+      "object": "MQ4-05-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ4-05-DRV",
+      "object": "MQ4-05-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ7",
+      "id": "MQ7-05",
+      "object": "MQ7-05-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ7-05-DRV",
+      "object": "MQ7-05-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "ME2O2",
+      "id": "ME2O2-05",
+      "object": "ME2O2-05-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ2",
+      "id": "MQ2-05",
+      "object": "MQ2-05-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "MQ_DRIVER",
+      "id": "MQ2-05-DRV",
+      "object": "MQ2-05-加热驱动",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "FLAME",
+      "id": "FLAME-05",
+      "object": "FLAME-05-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "SHT30",
+      "id": "SHT30-05",
+      "object": "SHT30-05-板",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "LED_STRIP",
+      "id": "LED-STRIP",
+      "object": "LED-STRIP",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "FAN120",
+      "id": "FAN-01",
+      "object": "FAN-01-下框",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "FAN_INTERFACE",
+      "id": "FAN-01-PWM-TACH",
+      "object": "FAN-01-接口",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "FAN120",
+      "id": "FAN-02",
+      "object": "FAN-02-下框",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "FAN_INTERFACE",
+      "id": "FAN-02-PWM-TACH",
+      "object": "FAN-02-接口",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "STM32",
+      "id": "CTRL-01",
+      "object": "CTRL-01",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "ESP8266",
+      "id": "NET-01",
+      "object": "NET-01",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "STM32",
+      "id": "CTRL-02",
+      "object": "CTRL-02",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "ESP8266",
+      "id": "NET-02",
+      "object": "NET-02",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "TFT",
+      "id": "TFT-01",
+      "object": "TFT-01",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "RELAY",
+      "id": "RELAY-01",
+      "object": "RELAY-01",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "BUZZER",
+      "id": "BUZZ-01",
+      "object": "BUZZ-01",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "ADC_CONDITIONING",
+      "id": "ADC",
+      "object": "ADC",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "I2C_MUX",
+      "id": "MUX",
+      "object": "MUX",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "INTERFACE",
+      "id": "IF-01",
+      "object": "IF-01",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "INTERFACE",
+      "id": "IF-02",
+      "object": "IF-02",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "INA219",
+      "id": "CURRENT",
+      "object": "CURRENT",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "VOICE",
+      "id": "VOICE",
+      "object": "VOICE",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "SIMULATOR",
+      "id": "SIM",
+      "object": "SIM",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "K210",
+      "id": "K210",
+      "object": "K210",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "POWER_SET",
+      "id": "POWER-SET",
+      "object": "POWER-SET",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "TRAY",
+      "id": "TRAY-01",
+      "object": "TRAY-01",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "PUMP24",
+      "id": "P-01",
+      "object": "PUMP24",
+      "status": "DCP-3620；80×40×50mm用户提供；接头/方向待核验"
+    },
+    {
+      "kind": "HEATER",
+      "id": "HEATER",
+      "object": "HEATER",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "DOOR_CONTACT",
+      "id": "DOOR-01",
+      "object": "门磁",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "AIR_PUMP",
+      "id": "AIR-PUMP-01",
+      "object": "AIR-PUMP",
+      "status": "DC24V气泵；泵头40.5mm与管嘴6.6mm据图；其他尺寸估计"
+    },
+    {
+      "kind": "FSIR02",
+      "id": "LEVEL-L01",
+      "object": "LEVEL-L01-探头",
+      "status": "局部单阈值；实物安装/输入电平待核验"
+    },
+    {
+      "kind": "FSIR02",
+      "id": "LEVEL-L02",
+      "object": "LEVEL-L02-探头",
+      "status": "局部单阈值；实物安装/输入电平待核验"
+    },
+    {
+      "kind": "FSIR02",
+      "id": "LEVEL-L03",
+      "object": "LEVEL-L03-探头",
+      "status": "局部单阈值；实物安装/输入电平待核验"
+    },
+    {
+      "kind": "FSIR02",
+      "id": "LEVEL-L04",
+      "object": "LEVEL-L04-探头",
+      "status": "局部单阈值；实物安装/输入电平待核验"
+    },
+    {
+      "kind": "FSIR02",
+      "id": "LEVEL-L05",
+      "object": "LEVEL-L05-探头",
+      "status": "局部单阈值；实物安装/输入电平待核验"
+    },
+    {
+      "kind": "FLOAT",
+      "id": "FLOAT-01",
+      "object": "FLOAT-01",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "LEAK",
+      "id": "LEAK-1",
+      "object": "LEAK-1",
+      "status": "计划配置／接口待核验"
+    },
+    {
+      "kind": "LEAK",
+      "id": "LEAK-2",
+      "object": "LEAK-2",
+      "status": "计划配置／接口待核验"
+    }
+  ],
+  "unresolved": [
+    "水泵80×40×50mm是否包含接头待复核；气泵其余尺寸为估计",
+    "螺纹、管径、密封、流向和气水管路完整贯通待核验",
+    "接口电路与围护尚未定版；不可直接加工或通电通水"
+  ],
+  "views": {
+    "hero": [
+      [
+        1.4,
+        -2,
+        1.5
+      ],
+      [
+        0,
+        0,
+        0.14
+      ],
+      2.1
+    ],
+    "front": [
+      [
+        0,
+        -3,
+        0.3
+      ],
+      [
+        0,
+        0,
+        0.2
+      ],
+      1.9
+    ],
+    "back": [
+      [
+        0,
+        3,
+        0.3
+      ],
+      [
+        0,
+        0,
+        0.2
+      ],
+      1.9
+    ],
+    "left": [
+      [
+        -3,
+        0,
+        0.3
+      ],
+      [
+        0,
+        0,
+        0.2
+      ],
+      1.4
+    ],
+    "right": [
+      [
+        3,
+        0,
+        0.3
+      ],
+      [
+        0,
+        0,
+        0.2
+      ],
+      1.4
+    ],
+    "top": [
+      [
+        0,
+        0,
+        3
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      1.9
+    ],
+    "station": [
+      [
+        0,
+        -1,
+        0.65
+      ],
+      [
+        0,
+        0.385,
+        0.19
+      ],
+      0.35
+    ],
+    "water": [
+      [
+        0,
+        -1,
+        0.75
+      ],
+      [
+        0,
+        -0.33,
+        0.12
+      ],
+      1.15
+    ],
+    "controls": [
+      [
+        -0.68,
+        -1,
+        0.6
+      ],
+      [
+        -0.68,
+        -0.1,
+        0.2
+      ],
+      0.4
+    ],
+    "water-pump": [
+      [
+        0.2,
+        -0.6,
+        0.36
+      ],
+      [
+        0.075,
+        -0.36,
+        0.115
+      ],
+      0.2
+    ],
+    "air-pump": [
+      [
+        0.47,
+        -0.1,
+        0.5
+      ],
+      [
+        0.33,
+        0.19,
+        0.1
+      ],
+      0.3
+    ],
+    "gas": [
+      [
+        0.85,
+        -0.7,
+        1.1
+      ],
+      [
+        0,
+        0.26,
+        0.105
+      ],
+      1.32
+    ],
+    "probe": [
+      [
+        -0.1,
+        -0.62,
+        0.35
+      ],
+      [
+        0,
+        -0.404,
+        0.222
+      ],
+      0.18
+    ],
+    "feed-gap": [
+      [
+        0.62,
+        -0.65,
+        0.48
+      ],
+      [
+        0.45,
+        -0.38,
+        0.265
+      ],
+      0.22
+    ],
+    "leak-valve": [
+      [
+        -0.24,
+        0.06,
+        0.38
+      ],
+      [
+        -0.1,
+        0.31,
+        0.14
+      ],
+      0.25
+    ]
+  },
+  "status": "AWAITING_VISUAL_REVIEW"
+}
