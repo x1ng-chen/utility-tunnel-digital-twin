@@ -64,6 +64,16 @@ static void link_reset(void)
 
 static UART_HandleTypeDef kUart = {0};
 
+static void test_a_single_byte_uses_a_nonzero_timeout(void)
+{
+  uint8_t byte = (uint8_t)'{';
+  link_reset();
+
+  CHECK(UartTx_WriteByte(&kUart, &byte) == HAL_OK);
+  CHECK(link_timeout == 2U);
+  CHECK(link_length == 1U && link_bytes[0] == '{');
+}
+
 /* A frame of `length` printable bytes, with a CRLF terminator. */
 static void build_frame(char *frame, size_t capacity, size_t length, char fill)
 {
@@ -265,6 +275,7 @@ static void test_priority_refusal_is_counted(void)
 
 int main(void)
 {
+  test_a_single_byte_uses_a_nonzero_timeout();
   test_oversized_and_non_fitting_frames_are_refused_whole();
   test_a_drain_call_never_exceeds_its_budget();
   test_frames_leave_in_order_and_intact();

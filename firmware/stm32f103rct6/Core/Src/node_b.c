@@ -401,7 +401,7 @@ static void PollCommandTx(void)
   HAL_StatusTypeDef status;
   uint8_t byte;
   if (!MenuCommandTx_Peek(&command_tx, &byte)) return;
-  status = HAL_UART_Transmit(&huart2, &byte, 1U, 0U);
+  status = UartTx_WriteByte(&huart2, &byte);
   if (status == HAL_OK) {
     MenuCommandTx_Commit(&command_tx);
   } else if (status == HAL_ERROR) {

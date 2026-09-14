@@ -75,6 +75,10 @@ uint8_t UartTx_Enqueue(UartTxQueue *queue, const char *line, uint16_t length);
 uint8_t UartTx_EnqueuePriority(UartTxQueue *queue, const char *line,
                                uint16_t length);
 
+/* Sends exactly one byte with the STM32F1-safe short timeout shared by every
+ * foreground UART producer. */
+HAL_StatusTypeDef UartTx_WriteByte(UART_HandleTypeDef *uart, uint8_t *byte);
+
 /* Pushes at most `budget` bytes to `uart` with a two-tick per-byte timeout.
  * `now_ms` stamps the stall backoff.  Returns the bytes written; a stalled
  * queue writes none. */

@@ -59,6 +59,15 @@ uint8_t UartTx_EnqueuePriority(UartTxQueue *queue, const char *line,
   return enqueue_frame(queue, line, length, 1U);
 }
 
+HAL_StatusTypeDef UartTx_WriteByte(UART_HandleTypeDef *uart, uint8_t *byte)
+{
+  if ((uart == 0) || (byte == 0)) return HAL_ERROR;
+  /* STM32F1 HAL writes DR before waiting for TC.  A zero timeout can therefore
+   * return HAL_TIMEOUT for a byte that was already transmitted, which makes a
+   * caller retry the same byte forever. */
+  return HAL_UART_Transmit(uart, byte, 1U, 2U);
+}
+
 uint16_t UartTx_Drain(UartTxQueue *queue, UART_HandleTypeDef *uart,
                       uint16_t budget, uint32_t now_ms)
 {
@@ -78,7 +87,7 @@ uint16_t UartTx_Drain(UartTxQueue *queue, UART_HandleTypeDef *uart,
      * queue head fixed and retransmitted its first byte forever.  Two ticks
      * comfortably cover one 9600-8N1 character while still bounding a
      * genuinely stalled link. */
-    if (HAL_UART_Transmit(uart, (uint8_t *)&byte, 1U, 2U) != HAL_OK) break;
+    if (UartTx_WriteByte(uart, (uint8_t *)&byte) != HAL_OK) break;
     queue->head = (uint16_t)((queue->head + 1U) % queue->capacity);
     --queue->used;
     ++written;
