@@ -12,7 +12,7 @@ GIS 总览使用 WGS84 经纬度显示开发板实物模块的地理位置与接
 | --- | --- | --- |
 | H-01 | `CTRL-01` | STM32F103RCT6 主控，已验证 |
 | H-02 | `LED-01` | RGB 灯带，待供电与时序验证 |
-| H-03 | `DISP-01` | ST7735S TFT，PB4–PB9 软件 SPI，已验证 |
+| H-03 | `DISP-01` | ST7735S TFT 双屏：Node A SPI3（PB3/PB5+PC4–PC7）/ Node B SPI1（PA5/PA7+PB6–PB9）；旧的 PB4–PB9 软件 SPI 单屏方案已废弃，实物接线未验证 |
 | H-04 | `SEEP-W01` | 水位 ADC，PC0/ADC1_IN10，已接入待标定 |
 | H-05 | `MOIST-01` | 土壤湿度，仅作辅助展示 |
 | H-06 | `ENV-01` | DHT11，PA1，约 2 秒采样，已验证 |

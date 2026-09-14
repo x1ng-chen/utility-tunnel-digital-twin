@@ -36,9 +36,10 @@ Node A 的 `CS/BLK` 是 `PC6/PC7`：`PB8/PB9` 在 Node A 上是 `TIM4_CH3/CH4`
 两路 25 kHz 风机 PWM，**不可占用**。Node B 无此冲突，沿用开发板 LCD 排针
 原有控制线。`PA6` 在 Node B 不连接。
 
-Node A 的 `HAL_MspInit()` 执行 `__HAL_AFIO_REMAP_SWJ_NOJTAG()`（关闭 JTAG、
-保留 SWD 于 `PA13/PA14`），以释放 `PB3` 作 SPI3_SCK。SWD 与串口 BootLoader
-烧录路径不受影响。
+两节点**共用**的 `HAL_MspInit()`（`Core/Src/stm32f1xx_hal_msp.c`）**无条件**
+执行 `__HAL_AFIO_REMAP_SWJ_NOJTAG()`：**两块板都关闭 JTAG、都保留 SWD 于
+`PA13/PA14`**。Node A 借此释放 `PB3` 作 SPI3_SCK；Node B 的 `PA15/PB3/PB4`
+也因此释放但当前未使用。SWD 与串口 BootLoader 烧录路径不受影响。
 
 ### 摇杆（仅 Node B）
 
@@ -69,7 +70,8 @@ ESP-01S 必须独立稳定 3.3 V 供电，不得接 5 V。烧录模式见
 |---|---|
 | SHT30 软件 I²C 总线 1 / 总线 2 | `PB6=SCL`、`PB7=SDA` / `PB10`、`PB11` |
 | 氧气 / 甲烷 / CO ADC | `PC3 / ADC1_IN13`、`PC2 / ADC1_IN12`、`PC1 / ADC1_IN11` |
-| 烟雾 / 火焰数字量 | `PB12` / `PB14`（低电平触发，保持 12 s） |
+| 烟雾数字量 | `PB12`（低电平触发；4 次 50 ms 稳定采样后才报警，无保持时间） |
+| 火焰数字量 | `PB14`（低电平触发；立即报警，告警保持 12 s） |
 | 液位 L01 | `PC0` |
 | 风机 1 / 2 TACH | `PA6` / `PA7`（每转 2 脉冲） |
 | 风机 1 / 2 PWM | `PB8 / TIM4_CH3`、`PB9 / TIM4_CH4`（25 kHz） |
@@ -157,7 +159,7 @@ Node B 摇杆 → 菜单命令 → USART2 → ESP-02
 | 角色 | 订阅 | 发布 |
 |---|---|---|
 | ESP-01 `CTRL-01` | `ut/v1/CTRL-01/cmd/#`（已覆盖 `cmd/menu`，不重复订阅） | `ut/v1/CTRL-01/telemetry`、`ut/v1/CTRL-01/cmd_ack`、`ut/v1/CTRL-01/status` |
-| ESP-02 `CTRL-02` | `ut/v1/CTRL-01/telemetry`、`ut/v1/CTRL-01/cmd_ack` | `ut/v1/CTRL-01/cmd/menu`、`ut/v1/CTRL-02/*` |
+| ESP-02 `CTRL-02` | `ut/v1/CTRL-01/telemetry`、`ut/v1/CTRL-01/cmd_ack` | `ut/v1/CTRL-01/cmd/menu`（**唯一**串口发布主题；`ut/v1/CTRL-02/*` 遥测发布未实现） |
 
 安全联动优先级始终高于菜单命令：已验证的甲烷报警可强制通风、红色闪烁和
 蜂鸣；未标定的氧气与 CO 通道只显示数据，不驱动执行器。5 秒内没有匹配回执
@@ -178,8 +180,8 @@ Node B 摇杆 → 菜单命令 → USART2 → ESP-02
 2. 使用 STM32CubeProgrammer 或兼容工具写入相应的 `.bin`，起始地址 `0x08000000`；
 3. 校验成功后恢复 `BOOT0=0`、`BOOT1=0`，再次复位。
 
-SWD（`PA13/PA14`）在两块板上都保留，可随时用 ST-Link 连接；Node A 只关闭
-JTAG，不影响 SWD 调试与烧录。
+SWD（`PA13/PA14`）在两块板上都保留，可随时用 ST-Link 连接；两块板共享的
+`HAL_MspInit()` 都关闭 JTAG，这同样不影响 SWD 调试与烧录。
 
 ## 旧 bench 说明
 
