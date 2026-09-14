@@ -5,6 +5,19 @@ The probe talks to the `#NODETEST` diagnostic adapter in node_a.c.  It injects
 `ut.command.v1` payloads directly, bypassing the MQTT framing, and observes the
 `ut.command.ack.v1` acknowledgement plus the `ut.telemetry.v1` output.
 
+The telemetry contract this pins:
+
+* one frame per telemetry interval, rotating through the cycle, so each frame
+  carries its own monotonic ``seq`` (a whole cycle shares no value);
+* the fan's actual duty is reported in ``diag.pwmPercent`` - the legacy
+  Web/IoTDA controller path may hold it at any 0..100 percent, so it is not the
+  menu's 0/30/60/100 preset ladder;
+* the operational gas state is the ``methane.*`` / ``oxygen.alarm`` /
+  ``co.alarm`` vocabulary in the gas status frame.
+
+``#NODETEST TELEMETRY`` forces one whole rotation so the probe can observe the
+cycle within its timeout.
+
 Run against a flashed Node A image::
 
     python tests/node_a_command_serial_probe.py --port COM6 --baud 9600
@@ -16,15 +29,32 @@ import argparse
 import json
 import time
 
-import serial
+try:  # the host test imports this module without pyserial installed
+    import serial
+except ImportError:  # pragma: no cover - exercised by the host test
+    serial = None
 
 
-def send(port: serial.Serial, line: str) -> None:
+TELEMETRY_SCHEMA = "ut.telemetry.v1"
+FRAME_COUNT = 6
+
+# Metrics the gas status frame is the only producer of.  The oxygen and CO
+# channels are uncalibrated, so their alarm flags must never claim a good
+# quality; methane is the operational channel.
+GAS_QUALITY = {
+    "methane.alarm": ("good", "missing"),
+    "methane.warning": ("good", "missing"),
+    "oxygen.alarm": ("suspect", "missing"),
+    "co.alarm": ("suspect", "missing"),
+}
+
+
+def send(port: "serial.Serial", line: str) -> None:
     port.write((line + "\n").encode("ascii"))
     port.flush()
 
 
-def read_until(port: serial.Serial, predicate, timeout_s: float = 3.0) -> str:
+def read_until(port: "serial.Serial", predicate, timeout_s: float = 3.0) -> str:
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         raw = port.readline()
@@ -36,7 +66,7 @@ def read_until(port: serial.Serial, predicate, timeout_s: float = 3.0) -> str:
     raise AssertionError("timed out waiting for a matching line")
 
 
-def read_state(port: serial.Serial) -> dict:
+def read_state(port: "serial.Serial") -> dict:
     line = read_until(port, lambda l: l.startswith("#STATE "))
     fields = line.split()
     state: dict = {}
@@ -47,14 +77,14 @@ def read_state(port: serial.Serial) -> dict:
     return state
 
 
-def require_state(port: serial.Serial, **expected) -> None:
+def require_state(port: "serial.Serial", **expected) -> None:
     state = read_state(port)
     for key, value in expected.items():
         if state.get(key) != value:
             raise AssertionError(f"expected {key}={value} in {state!r}")
 
 
-def read_ack(port: serial.Serial, command_id: str, timeout_s: float = 3.0) -> dict:
+def read_ack(port: "serial.Serial", command_id: str, timeout_s: float = 3.0) -> dict:
     def matches(line: str) -> bool:
         if '"schema":"ut.command.ack.v1"' not in line:
             return False
@@ -68,40 +98,96 @@ def read_ack(port: serial.Serial, command_id: str, timeout_s: float = 3.0) -> di
     return json.loads(line)
 
 
-def read_telemetry_burst(port: serial.Serial, timeout_s: float = 5.0) -> list[dict]:
-    """Collect every telemetry frame from the next single emission burst.
+def readings_by_metric(frames: list[dict]) -> dict:
+    """Flattens a burst's frames into one (asset, metric) -> reading mapping.
 
-    Node A emits several `ut.telemetry.v1` frames sharing one monotonic
-    sequence per cycle; return all frames observed for that sequence."""
+    The key is the pair, because the two fans report the same metric names for
+    different assets - exactly as the consumer indexes them.  A repeated pair
+    would mean the producer emitted the same reading twice in one cycle, which
+    is itself a fault worth failing on rather than silently overwriting.
+    """
+    readings: dict = {}
+    for frame in frames:
+        for reading in frame.get("readings", []):
+            key = (reading.get("assetCode"), reading.get("metric"))
+            if key in readings:
+                raise AssertionError(f"reading {key} appears twice in one cycle")
+            readings[key] = reading
+    return readings
+
+
+def validate_telemetry_burst(frames: list[dict]) -> dict:
+    """Checks one forced rotation against the producer's wire contract.
+
+    Returns the flattened readings so a caller (or a test) can make the
+    value-level assertions; everything structural lives here.
+    """
+    if not frames:
+        raise AssertionError("no telemetry frame observed")
+    if len(frames) != FRAME_COUNT:
+        raise AssertionError(f"expected {FRAME_COUNT} frames in a rotation, got {len(frames)}")
+
+    sequences = [frame.get("seq") for frame in frames]
+    for frame in frames:
+        if frame.get("schema") != TELEMETRY_SCHEMA:
+            raise AssertionError(f"unexpected schema in {frame.get('schema')!r}")
+    # One frame is one sequenced snapshot: the consumer drops a repeated
+    # sequence as a duplicate, so two frames may never share a value.
+    if len(set(sequences)) != len(sequences):
+        raise AssertionError(f"frames share a sequence: {sequences}")
+    if sequences != sorted(sequences):
+        raise AssertionError(f"sequences are not monotonic: {sequences}")
+
+    readings = readings_by_metric(frames)
+
+    # The fan's actual duty rides in the diagnostic block, not as a ladder
+    # reading, and the two fans report their own.
+    fan_frames = [f for f in frames if '"FAN-01"' in json.dumps(f)]
+    if len(fan_frames) != 1:
+        raise AssertionError("expected exactly one FAN-01 frame in a rotation")
+    if "diag" not in fan_frames[0] or "pwmPercent" not in fan_frames[0]["diag"]:
+        raise AssertionError("the fan frame must report diag.pwmPercent")
+    duty = fan_frames[0]["diag"]["pwmPercent"]
+    if not isinstance(duty, int) or not 0 <= duty <= 100:
+        raise AssertionError(f"diag.pwmPercent out of range: {duty!r}")
+
+    for metric, allowed in GAS_QUALITY.items():
+        key = ("GAS-01", metric)
+        if key not in readings:
+            raise AssertionError(f"the gas status frame is missing {metric}")
+        quality = readings[key].get("quality")
+        if quality not in allowed:
+            raise AssertionError(f"{metric} quality {quality!r} not in {allowed}")
+
+    if ("CTRL-01", "led.mode") not in readings:
+        raise AssertionError("the actuator frame is missing led.mode")
+    return readings
+
+
+def read_telemetry_burst(port: "serial.Serial", timeout_s: float = 5.0) -> list[dict]:
+    """Collects one forced rotation of `ut.telemetry.v1` frames."""
     frames: list[dict] = []
-    sequence: int | None = None
     deadline = time.monotonic() + timeout_s
 
-    while time.monotonic() < deadline:
+    while time.monotonic() < deadline and len(frames) < FRAME_COUNT:
         raw = port.readline()
         if not raw:
             continue
         line = raw.decode("ascii", errors="replace").strip()
-        if '"schema":"ut.telemetry.v1"' not in line:
+        if f'"schema":"{TELEMETRY_SCHEMA}"' not in line:
             continue
         try:
             payload = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if sequence is None:
-            sequence = payload.get("seq")
-        if payload.get("seq") != sequence:
-            continue
         frames.append(payload)
-        if len(frames) >= 6:
-            break
 
     if not frames:
         raise AssertionError("no telemetry frame observed")
     return frames
 
 
-def inject(port: serial.Serial, command_id: str, action: str, ttl_ms: int = 10000,
+def inject(port: "serial.Serial", command_id: str, action: str, ttl_ms: int = 10000,
            value: int | None = None, duty_percent: int | None = None) -> None:
     fields = [f'"schema":"ut.command.v1","cmdId":"{command_id}"',
               f'"action":"{action}","ttlMs":{ttl_ms}']
@@ -164,7 +250,9 @@ def main() -> None:
         assert read_ack(port, "buz-restore")["status"] == "accepted"
         require_state(port, muted=0)
 
-        # Invalid action and value leave the actuator state unchanged.
+        # Invalid action and value leave the actuator state unchanged.  The menu
+        # ladder is a COMMAND contract and stays one: 45 is not a preset the
+        # screen can send, even though telemetry reports any applied 0..100.
         inject(port, "bad-act", "no_such_action")
         ack = read_ack(port, "bad-act")
         assert ack["status"] == "rejected", ack
@@ -197,8 +285,10 @@ def main() -> None:
         require_state(port, fan1=100)
         send(port, "#NODETEST SAFETY 0 0 0 0")
 
-        # Truthful telemetry: one monotonic sequence per burst, with the fan
-        # target duty and LED mode reported as first-class readings.
+        # Truthful telemetry: one forced rotation, so every frame of the cycle
+        # is observable.  Each frame carries its own sequence, the fan's actual
+        # duty is diag.pwmPercent, and the gas status frame carries the
+        # operational alarm vocabulary with its channel quality.
         send(port, "#NODETEST RESET")
         inject(port, "tel-1", "fan1_duty", value=60)
         assert read_ack(port, "tel-1")["status"] == "accepted"
@@ -206,19 +296,10 @@ def main() -> None:
         assert read_ack(port, "tel-2")["status"] == "accepted"
         send(port, "#NODETEST TELEMETRY")
         frames = read_telemetry_burst(port)
-        sequences = {f["seq"] for f in frames}
-        assert len(sequences) == 1, sequences
-        readings = {r["metric"]: r for f in frames for r in f["readings"]}
-        assert readings["target.dutyPercent"]["value"] == 60, readings
-        assert readings["led.mode"]["value"] == 3, readings
-        # Alarm flags inherit the corresponding sensor quality. The
-        # uncalibrated oxygen/CO channels must never be advertised as good.
-        assert readings["oxygen.warning"]["quality"] in {"suspect", "missing"}, readings
-        assert readings["oxygen.alarm"]["quality"] in {"suspect", "missing"}, readings
-        assert readings["co.warning"]["quality"] in {"suspect", "missing"}, readings
-        assert readings["co.alarm"]["quality"] in {"suspect", "missing"}, readings
-        assert readings["methane.warning"]["quality"] in {"good", "missing"}, readings
-        assert readings["methane.alarm"]["quality"] in {"good", "missing"}, readings
+        readings = validate_telemetry_burst(frames)
+        fan_frame = next(f for f in frames if '"FAN-01"' in json.dumps(f))
+        assert fan_frame["diag"]["pwmPercent"] == 60, fan_frame
+        assert readings[("CTRL-01", "led.mode")]["value"] == 3, readings
 
     print("Node A command serial probe: PASS")
 

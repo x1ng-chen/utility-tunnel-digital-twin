@@ -14,6 +14,11 @@
 #define LCD_CYAN 0x07FFU
 #define LCD_MAGENTA 0xF81FU
 
+/* The renderer-local palette.  Mirrored here so a test can assert the colour a
+ * field was actually drawn in rather than only its text. */
+#define UI_COLOR_MUTED 0x8C71U
+#define UI_COLOR_DANGER 0xF9A6U
+
 void ST7735_Clear(uint16_t color);
 void ST7735_BeginFrame(void);
 uint8_t ST7735_FrameFailed(void);

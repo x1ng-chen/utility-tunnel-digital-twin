@@ -15,6 +15,39 @@
 
 #define NODE_ID                         "node-a"
 #define TELEMETRY_INTERVAL_MS           2000U
+/* Telemetry link budget.
+ *
+ * A whole telemetry cycle measures 2870 bytes (the vector host test re-derives
+ * that number from this formatter), while one TELEMETRY_INTERVAL_MS of 9600 8N1
+ * carries NODE_A_TX_LINK_BYTES_PER_CYCLE (1920) at ten bit times per byte.
+ * Offering the whole cycle every interval would present the link with ~1.5x
+ * what it can drain, and the bounded queue would refuse the frames it could not
+ * take - which is exactly the state-carrying-frame staleness this budget
+ * exists to remove.
+ *
+ * So the board emits ONE frame per interval and rotates through the six
+ * (NodeATelemetry_FormatFrame).  The offered rate is then one frame per
+ * interval: at most NODE_A_TELEMETRY_FRAME_SIZE bytes, comfortably inside the
+ * link's share of the interval, and in the steady state well inside it (the
+ * cycle averages 2870 / 6 bytes per interval, about 239 B/s against the link's
+ * 960 B/s).  The rest of the interval's bytes are the reserve the command ACKs
+ * and the #STATE/#NODETEST diagnostics draw on;
+ * NODE_A_UART_ACK_RESERVE_BYTES is the smallest reserve the queue has to be
+ * able to hold on top of one frame.  These assertions fail the build if a
+ * frame stops fitting the interval or the queue stops being able to hold a
+ * frame plus that reserve. */
+#define NODE_A_TX_LINK_BYTES_PER_CYCLE \
+  ((NODE_A_UART_BAUD * (TELEMETRY_INTERVAL_MS / 1000U)) / 10U)
+#define NODE_A_UART_ACK_RESERVE_BYTES   350U
+_Static_assert(NODE_A_TX_LINK_BYTES_PER_CYCLE == 1920U,
+               "one telemetry interval must carry 1920 bytes at 9600 8N1");
+_Static_assert(NODE_A_TELEMETRY_FRAME_SIZE < NODE_A_TX_LINK_BYTES_PER_CYCLE,
+               "one telemetry frame per interval must fit the link budget");
+_Static_assert((NODE_A_TELEMETRY_FRAME_SIZE - 2U) <= UART_TX_FRAME_LIMIT,
+               "a telemetry frame without its CRLF must fit the queue's limit");
+_Static_assert(UART_TX_CAPACITY >=
+                   NODE_A_TELEMETRY_FRAME_SIZE + NODE_A_UART_ACK_RESERVE_BYTES,
+               "the queue must hold a whole frame plus the ACK reserve");
 #define LED_INTERVAL_MS                  500U
 #define LED_ANIM_INTERVAL_MS              50U
 #define BUZZER_TEST_DURATION_MS         1000U
@@ -176,7 +209,36 @@ static uint8_t test_safety_smoke;
 static uint8_t test_safety_flame;
 static uint8_t test_safety_gas;
 static uint8_t test_safety_vent;
-static volatile uint8_t test_force_telemetry;
+/* Test-only: how many further intervals keep forcing a telemetry frame.  Zero
+ * in production, where only the interval arms the cycle. */
+static uint8_t test_telemetry_burst;
+/* The rotation position, and the sequence the next frame will carry.  They are
+ * the same number: frame `sequence % NODE_A_TELEMETRY_FRAME_COUNT` carries
+ * `sequence`, so a frame the queue refused - and whose sequence was therefore
+ * never committed - is retried as the same frame on the next pass. */
+static uint32_t telemetry_sequence;
+static void BuildTelemetrySnapshot(const Sht30Reading readings[3],
+                                   uint8_t smoke_detected, uint8_t flame_detected,
+                                   uint8_t level_is_detected, uint16_t oxygen_raw,
+                                   uint32_t oxygen_microvolts, uint8_t oxygen_online,
+                                   uint16_t methane_raw, uint32_t methane_microvolts,
+                                   uint8_t methane_online, uint16_t co_raw,
+                                   uint32_t co_microvolts, uint8_t co_online,
+                                   const Ina226Reading *fan1_power,
+                                   uint32_t fan1_rpm, const Ina226Reading *fan2_power,
+                                   uint32_t fan2_rpm,
+                                   NodeATelemetrySnapshot *snapshot);
+static uint8_t Telemetry_EmitOneFrame(const NodeATelemetrySnapshot *snapshot);
+static void SendTelemetryFullRotation(const Sht30Reading readings[3],
+                                      uint8_t smoke_detected, uint8_t flame_detected,
+                                      uint8_t level_is_detected, uint16_t oxygen_raw,
+                                      uint32_t oxygen_microvolts, uint8_t oxygen_online,
+                                      uint16_t methane_raw, uint32_t methane_microvolts,
+                                      uint8_t methane_online, uint16_t co_raw,
+                                      uint32_t co_microvolts, uint8_t co_online,
+                                      const Ina226Reading *fan1_power,
+                                      uint32_t fan1_rpm, const Ina226Reading *fan2_power,
+                                      uint32_t fan2_rpm);
 
 void SystemClock_Config(void);
 void Error_Handler(void);
@@ -702,54 +764,113 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
                           uint32_t fan1_rpm, const Ina226Reading *fan2_power,
                           uint32_t fan2_rpm)
 {
-  static uint32_t sequence = 0U;
   NodeATelemetrySnapshot snapshot;
-  char frames[NODE_A_TELEMETRY_FRAME_COUNT][NODE_A_TELEMETRY_FRAME_SIZE];
-  uint16_t lengths[NODE_A_TELEMETRY_FRAME_COUNT] = {0U};
-  uint8_t index;
 
-  /* Slot 1 is the physically installed environmental sensor.  Report only
-   * that truthful source in the platform contract; Slots 2/3 are reserved
-   * buses and must not create fabricated zero-value readings. */
-  (void)memset(&snapshot, 0, sizeof(snapshot));
-  snapshot.environment = readings[0];
-  snapshot.smoke_alarm = smoke_detected;
-  snapshot.flame_alarm = flame_detected;
-  snapshot.level_detected = level_is_detected;
-  snapshot.smoke_sampled = (smoke_last_sample_at != 0U) ? 1U : 0U;
-  snapshot.flame_sampled = (flame_last_sample_at != 0U) ? 1U : 0U;
-  snapshot.level_stable =
-      (level_candidate_samples >= LEVEL_STABLE_SAMPLE_COUNT) ? 1U : 0U;
-  snapshot.oxygen_raw = oxygen_raw;
-  snapshot.oxygen_microvolts = oxygen_microvolts;
-  snapshot.oxygen_online = oxygen_online;
-  snapshot.methane_raw = methane_raw;
-  snapshot.methane_microvolts = methane_microvolts;
-  snapshot.methane_online = methane_online;
-  snapshot.co_raw = co_raw;
-  snapshot.co_microvolts = co_microvolts;
-  snapshot.co_online = co_online;
-  snapshot.gas_warning = gas_warning;
-  snapshot.gas_alarm = gas_alarm;
-  snapshot.oxygen_warning = oxygen_warning;
-  snapshot.oxygen_alarm = oxygen_alarm;
-  snapshot.co_warning = co_warning;
-  snapshot.co_alarm = co_alarm;
-  if (fan1_power != NULL) snapshot.fan1_power = *fan1_power;
-  if (fan2_power != NULL) snapshot.fan2_power = *fan2_power;
-  snapshot.fan1_rpm = fan1_rpm;
-  snapshot.fan2_rpm = fan2_rpm;
-  snapshot.actuators = g_actuator;
-  snapshot.auto_ventilation_active = gas_ventilation_active;
-  snapshot.cooldown_active = gas_ventilation_cooling;
+  BuildTelemetrySnapshot(readings, smoke_detected, flame_detected,
+                         level_is_detected, oxygen_raw, oxygen_microvolts,
+                         oxygen_online, methane_raw, methane_microvolts,
+                         methane_online, co_raw, co_microvolts, co_online,
+                         fan1_power, fan1_rpm, fan2_power, fan2_rpm, &snapshot);
+  (void)Telemetry_EmitOneFrame(&snapshot);
+}
 
-  NodeATelemetry_FormatAll(&sequence, &snapshot, frames, lengths);
-  for (index = 0U; index < NODE_A_TELEMETRY_FRAME_COUNT; ++index) {
-    if (lengths[index] != 0U) Tx_EnqueueLine(frames[index], lengths[index]);
-    /* A command can arrive while the cycle is being handed to the queues, so
-     * keep answering between frames instead of waiting for the next pass. */
-    while (esp_rx_count != 0U) Command_Poll();
+/* Test-only: emits one full rotation without waiting an interval per frame, so
+ * the serial probe can observe every frame of a cycle within its timeout.  The
+ * frames and their sequences are exactly the ones the interval path produces.
+ * A frame the queue refuses stops the rotation; the forced interval it belongs
+ * to is retried with the same head frame, so nothing is skipped. */
+static void SendTelemetryFullRotation(const Sht30Reading readings[3],
+                                      uint8_t smoke_detected, uint8_t flame_detected,
+                                      uint8_t level_is_detected, uint16_t oxygen_raw,
+                                      uint32_t oxygen_microvolts, uint8_t oxygen_online,
+                                      uint16_t methane_raw, uint32_t methane_microvolts,
+                                      uint8_t methane_online, uint16_t co_raw,
+                                      uint32_t co_microvolts, uint8_t co_online,
+                                      const Ina226Reading *fan1_power,
+                                      uint32_t fan1_rpm, const Ina226Reading *fan2_power,
+                                      uint32_t fan2_rpm)
+{
+  NodeATelemetrySnapshot snapshot;
+  uint8_t emitted;
+
+  BuildTelemetrySnapshot(readings, smoke_detected, flame_detected,
+                         level_is_detected, oxygen_raw, oxygen_microvolts,
+                         oxygen_online, methane_raw, methane_microvolts,
+                         methane_online, co_raw, co_microvolts, co_online,
+                         fan1_power, fan1_rpm, fan2_power, fan2_rpm, &snapshot);
+  for (emitted = 0U; emitted < NODE_A_TELEMETRY_FRAME_COUNT; ++emitted) {
+    if (Telemetry_EmitOneFrame(&snapshot) == 0U) break;
   }
+}
+
+/* Copies one sample block into the frame formatter's input.  Slot 1 is the
+ * physically installed environmental sensor: report only that truthful source
+ * in the platform contract, because Slots 2/3 are reserved buses and must not
+ * create fabricated zero-value readings. */
+static void BuildTelemetrySnapshot(const Sht30Reading readings[3],
+                                   uint8_t smoke_detected, uint8_t flame_detected,
+                                   uint8_t level_is_detected, uint16_t oxygen_raw,
+                                   uint32_t oxygen_microvolts, uint8_t oxygen_online,
+                                   uint16_t methane_raw, uint32_t methane_microvolts,
+                                   uint8_t methane_online, uint16_t co_raw,
+                                   uint32_t co_microvolts, uint8_t co_online,
+                                   const Ina226Reading *fan1_power,
+                                   uint32_t fan1_rpm, const Ina226Reading *fan2_power,
+                                   uint32_t fan2_rpm,
+                                   NodeATelemetrySnapshot *snapshot)
+{
+  (void)memset(snapshot, 0, sizeof(*snapshot));
+  snapshot->environment = readings[0];
+  snapshot->smoke_alarm = smoke_detected;
+  snapshot->flame_alarm = flame_detected;
+  snapshot->level_detected = level_is_detected;
+  snapshot->smoke_sampled = (smoke_last_sample_at != 0U) ? 1U : 0U;
+  snapshot->flame_sampled = (flame_last_sample_at != 0U) ? 1U : 0U;
+  snapshot->level_stable =
+      (level_candidate_samples >= LEVEL_STABLE_SAMPLE_COUNT) ? 1U : 0U;
+  snapshot->oxygen_raw = oxygen_raw;
+  snapshot->oxygen_microvolts = oxygen_microvolts;
+  snapshot->oxygen_online = oxygen_online;
+  snapshot->methane_raw = methane_raw;
+  snapshot->methane_microvolts = methane_microvolts;
+  snapshot->methane_online = methane_online;
+  snapshot->co_raw = co_raw;
+  snapshot->co_microvolts = co_microvolts;
+  snapshot->co_online = co_online;
+  snapshot->gas_warning = gas_warning;
+  snapshot->gas_alarm = gas_alarm;
+  snapshot->oxygen_warning = oxygen_warning;
+  snapshot->oxygen_alarm = oxygen_alarm;
+  snapshot->co_warning = co_warning;
+  snapshot->co_alarm = co_alarm;
+  if (fan1_power != NULL) snapshot->fan1_power = *fan1_power;
+  if (fan2_power != NULL) snapshot->fan2_power = *fan2_power;
+  snapshot->fan1_rpm = fan1_rpm;
+  snapshot->fan2_rpm = fan2_rpm;
+  snapshot->actuators = g_actuator;
+  snapshot->auto_ventilation_active = gas_ventilation_active;
+  snapshot->cooldown_active = gas_ventilation_cooling;
+}
+
+/* Puts one rotation frame on the wire.  The sequence is committed only when the
+ * frame was really queued, so a frame the queue refused stays the next frame to
+ * emit and cannot be starved by the frames behind it.  Returns 0 when nothing
+ * was transmitted and the caller should try again next interval. */
+static uint8_t Telemetry_EmitOneFrame(const NodeATelemetrySnapshot *snapshot)
+{
+  char frame[NODE_A_TELEMETRY_FRAME_SIZE];
+  uint16_t length = 0U;
+
+  if (NodeATelemetry_FormatFrame(&telemetry_sequence, snapshot, frame, &length) == 0U ||
+      (length == 0U)) {
+    return 0U;
+  }
+  if (UartTx_Enqueue(&esp_tx_queue, frame, length) == 0U) return 0U;
+  (void)UartTx_Enqueue(&debug_tx_queue, frame, length);
+  /* A command can arrive while the frame is being handed to the queue, so keep
+   * answering instead of waiting for the next pass. */
+  while (esp_rx_count != 0U) Command_Poll();
+  return 1U;
 }
 
 /* MH-FMG is a high-level-triggered active buzzer.  PB0 is deliberately
@@ -1328,7 +1449,7 @@ static void NodeTest_HandleLine(void)
   }
   if (strcmp(node_test_line, "#NODETEST TELEMETRY") == 0)
   {
-    test_force_telemetry = 1U;
+    test_telemetry_burst = NODE_A_TELEMETRY_FRAME_COUNT;
     return;
   }
   if (strcmp(node_test_line, "#NODETEST STATE") == 0)
@@ -1641,7 +1762,7 @@ int main(void)
     /* Smoke, flame and level are already sampled by now, so this repaint is
      * early enough for them.  Only the gas block on a telemetry iteration has
      * a fresher safety sample than this one, and it repaints again below. */
-    telemetry_due = (uint8_t)((test_force_telemetry != 0U) ||
+    telemetry_due = (uint8_t)((test_telemetry_burst != 0U) ||
                               ((now - last_telemetry) >= TELEMETRY_INTERVAL_MS));
     if (telemetry_due == 0U)
       Status_Tick(now);
@@ -1705,15 +1826,27 @@ int main(void)
                              &status_sensors.fan2_milliamps);
       status_sensors.fan1_rpm = fan_rpm;
       status_sensors.fan2_rpm = fan2_rpm;
-      SendTelemetry(readings, smoke_alarm, flame_alarm, level_detected, oxygen_raw,
-                    oxygen_microvolts, oxygen_online, methane_raw,
-                    methane_microvolts, methane_online, co_raw,
-                    co_microvolts, co_online, &fan_power, fan_rpm,
-                    &fan2_power, fan2_rpm);
+      if (test_telemetry_burst != 0U)
+        SendTelemetryFullRotation(readings, smoke_alarm, flame_alarm,
+                                  level_detected, oxygen_raw, oxygen_microvolts,
+                                  oxygen_online, methane_raw, methane_microvolts,
+                                  methane_online, co_raw, co_microvolts,
+                                  co_online, &fan_power, fan_rpm, &fan2_power,
+                                  fan2_rpm);
+      else
+        SendTelemetry(readings, smoke_alarm, flame_alarm, level_detected,
+                      oxygen_raw, oxygen_microvolts, oxygen_online, methane_raw,
+                      methane_microvolts, methane_online, co_raw, co_microvolts,
+                      co_online, &fan_power, fan_rpm, &fan2_power, fan2_rpm);
       /* The display already consumed this block from the gas repaint above, so
-       * only the interval timestamp is left to publish. */
-      last_telemetry = now;
-      test_force_telemetry = 0U;
+       * only the interval timestamp is left to publish.  Publish it on the last
+       * forced frame too, so a probe burst hands the cadence straight back to
+       * the interval rather than producing a second cycle immediately. */
+      if (test_telemetry_burst != 0U) {
+        if (--test_telemetry_burst == 0U) last_telemetry = now;
+      } else {
+        last_telemetry = now;
+      }
     }
     if ((now - last_led) >= LED_INTERVAL_MS)
     {

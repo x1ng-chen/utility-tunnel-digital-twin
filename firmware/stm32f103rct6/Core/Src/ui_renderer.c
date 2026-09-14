@@ -423,14 +423,31 @@ static void format_reading(char *output, size_t size, const UiReading *reading,
                  quality_suffix(reading->quality));
 }
 
+/* The header's MQTT indicator, drawn from the same tri-state the NETWORK page
+ * spells out.  An unobserved link reads as unknown rather than as a confirmed
+ * failure: OFFLINE is only shown when the ESP observed it, and UNKNOWN gets the
+ * same muted treatment the network rows give an unobserved link. */
+static const char *mqtt_indicator(uint8_t status)
+{
+  if (status == (uint8_t)UI_LINK_ONLINE) return "M+";
+  if (status == (uint8_t)UI_LINK_OFFLINE) return "M-";
+  return "M?";
+}
+
+static uint16_t mqtt_indicator_color(uint8_t status)
+{
+  if (status == (uint8_t)UI_LINK_ONLINE) return LCD_GREEN;
+  if (status == (uint8_t)UI_LINK_OFFLINE) return UI_COLOR_DANGER;
+  return UI_COLOR_MUTED;
+}
+
 static void draw_header(const UiSnapshot *snapshot)
 {
   char time_field[6];
   ST7735_FillRect(0, 0, LCD_WIDTH, UI_HEADER_HEIGHT, UI_COLOR_HEADER);
   ST7735_DrawString(2, 2, "CTRL-02", LCD_WHITE, UI_COLOR_HEADER);
-  ST7735_DrawString(61, 2, (snapshot->connectivity.mqtt == UI_LINK_ONLINE) ? "M+" : "M-",
-                    (snapshot->connectivity.mqtt == UI_LINK_ONLINE) ? LCD_GREEN : UI_COLOR_DANGER,
-                    UI_COLOR_HEADER);
+  ST7735_DrawString(61, 2, mqtt_indicator(snapshot->connectivity.mqtt),
+                    mqtt_indicator_color(snapshot->connectivity.mqtt), UI_COLOR_HEADER);
   format_clock(snapshot, time_field);
   ST7735_DrawString(88, 2, time_field, LCD_WHITE, UI_COLOR_HEADER);
 }
@@ -971,9 +988,8 @@ static void redraw_header_delta(const UiSnapshot *snapshot, uint8_t redraw_time,
   if (redraw_mqtt) {
     invalidate((UiDirtyRect){56, 0, 30, UI_HEADER_HEIGHT});
     ST7735_FillRect(56, 0, 30, UI_HEADER_HEIGHT, UI_COLOR_HEADER);
-    ST7735_DrawString(61, 2, (snapshot->connectivity.mqtt == UI_LINK_ONLINE) ? "M+" : "M-",
-                      (snapshot->connectivity.mqtt == UI_LINK_ONLINE) ? LCD_GREEN : UI_COLOR_DANGER,
-                      UI_COLOR_HEADER);
+    ST7735_DrawString(61, 2, mqtt_indicator(snapshot->connectivity.mqtt),
+                      mqtt_indicator_color(snapshot->connectivity.mqtt), UI_COLOR_HEADER);
   }
   if (redraw_time) {
     invalidate((UiDirtyRect){86, 0, 42, UI_HEADER_HEIGHT});

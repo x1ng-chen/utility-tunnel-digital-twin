@@ -207,10 +207,60 @@ static int test_send_failure_and_late_ack(void)
   return 0;
 }
 
+/* The fan duty and LED brightness in a snapshot are the percent actually
+ * applied, not a menu selection.  The legacy Web/IoTDA controller path can hold
+ * a fan at 45 percent and the LED at 60, and Node B has to render that rather
+ * than discard the whole line - which is what the old ladder check did, taking
+ * every sensor and alarm in the snapshot down with it.  The menu ladder is
+ * enforced on the command path, not here. */
+static int test_non_preset_duty_and_brightness_are_telemetry(void)
+{
+  ScreenSnapshotContext context;
+  UiSnapshot snapshot;
+  char legacy[sizeof(kSnapshot)];
+  const char *fan0;
+  const char *fan1;
+
+  ScreenSnapshot_Init(&context);
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+  (void)snprintf(legacy, sizeof(legacy), "%s", kSnapshot);
+
+  /* Rewrite the two fan duty fields (60 -> 45, 30 -> " 7") and the brightness
+   * (75 -> 60), leaving every other byte of the committed line alone. */
+  fan0 = strstr(legacy, "\"fans\":[[60,");
+  fan1 = strstr(legacy, ",[30,");
+  CHECK(fan0 != NULL);
+  CHECK(fan1 != NULL);
+  legacy[(size_t)(fan0 - legacy) + 9U] = '4';
+  legacy[(size_t)(fan0 - legacy) + 10U] = '5';
+  legacy[(size_t)(fan1 - legacy) + 2U] = '7';
+  legacy[(size_t)(fan1 - legacy) + 3U] = ' ';
+  legacy[(size_t)(fan1 - legacy) + 4U] = ',';
+  {
+    char *brightness = strstr(legacy, "\"actuators\":[true,3,");
+    CHECK(brightness != NULL);
+    legacy[(size_t)(brightness - legacy) + 20U] = '6';
+    legacy[(size_t)(brightness - legacy) + 21U] = '0';
+  }
+
+  CHECK(ScreenSnapshot_Apply(&context, legacy, strlen(legacy), 100U, &snapshot) == 1U);
+  CHECK(snapshot.fans[0].target_duty_percent == 45U);
+  CHECK(snapshot.fans[1].target_duty_percent == 7U);
+  CHECK(snapshot.actuators.led_brightness_percent == 60U);
+  /* The readings that share the line are intact: the point of accepting the
+   * duty is that the rest of the snapshot is not thrown away with it. */
+  CHECK(snapshot.temperature_centi_c.value == 2234);
+  CHECK(snapshot.fans[0].voltage_mv == 11900U);
+  CHECK(snapshot.fans[0].actual_rpm == 2400U);
+  CHECK(snapshot.actuators.led_mode == (uint8_t)UI_LED_YELLOW);
+  return 0;
+}
+
 int main(void)
 {
   if (test_snapshot_validation_and_atomicity() != 0) return 1;
   if (test_sequence_staleness_wraparound_and_bounds() != 0) return 1;
+  if (test_non_preset_duty_and_brightness_are_telemetry() != 0) return 1;
   if (test_time_and_mqtt_lifecycle() != 0) return 1;
   if (test_commands_and_ack_atomicity() != 0) return 1;
   if (test_send_failure_and_late_ack() != 0) return 1;

@@ -386,12 +386,29 @@ bool isSafeToken(const char* value, size_t maximum_length, bool allow_empty) {
   return true;
 }
 
+/* The menu ladder.  Node B only offers these presets, so a command carrying
+ * anything else is a protocol error and is rejected before it can reach the
+ * screen.  The ladder is a command contract and stays one: it is enforced here
+ * and in Node A's IsFanPreset/IsBrightness, never on telemetry. */
 bool validFanDuty(uint8_t value) {
   return value == 0U || value == 30U || value == 60U || value == 100U;
 }
 
 bool validBrightness(uint8_t value) {
   return value == 25U || value == 50U || value == 75U || value == 100U;
+}
+
+/* The same two fields once they are telemetry.
+ *
+ * `target_duty_percent` and `led_brightness_percent` in a snapshot are the
+ * actual applied percent, not a menu selection: the legacy Web/IoTDA
+ * controller path may command any whole percent, and Node A reports whatever
+ * is really driving the hardware.  Restricting the snapshot to the ladder
+ * would make the consumer discard an entire frame - its sensors, alarms and
+ * actuator state along with the duty - whenever a fan or the LED sat off a
+ * preset, so the bound here is the field's own domain. */
+bool validTelemetryPercent(uint8_t value) {
+  return value <= 100U;
 }
 
 bool validQuality(Quality value) {
@@ -451,14 +468,14 @@ Result validateSnapshot(const ScreenSnapshot& value) {
   for (size_t index = 0U; index < 2U; ++index) {
     const FanSnapshot& fan = value.fans[index];
     if (!validQuality(fan.quality)) return Result::InvalidEnum;
-    if (!validFanDuty(fan.target_duty_percent) || fan.actual_rpm > 100000U ||
+    if (!validTelemetryPercent(fan.target_duty_percent) || fan.actual_rpm > 100000U ||
         fan.voltage_mv > 36000U || fan.current_ma > 10000U ||
         !validTimestamp(fan.sampled_at_ms, value.generated_at_ms, fan.quality)) {
       return Result::OutOfRange;
     }
   }
   if (value.actuators.led_mode > 7U ||
-      !validBrightness(value.actuators.led_brightness_percent)) {
+      !validTelemetryPercent(value.actuators.led_brightness_percent)) {
     return Result::OutOfRange;
   }
   if (value.connectivity.updated_at_ms < kMinEpochMs ||

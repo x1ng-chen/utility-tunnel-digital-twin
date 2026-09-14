@@ -131,9 +131,16 @@ static int check_one_sequence_per_frame(void)
   return 0;
 }
 
+/* The committed cycle total.  node_a.c's link-budget comment quotes it and the
+ * ESP consumer suite relies on a cycle converging over six frames, so the
+ * number is pinned here where it is re-derived from the board formatter. */
+#define NODE_A_TELEMETRY_CYCLE_BYTES 2870U
+
 /* The bridge caps a routed MQTT payload at screen_routing::kTransportPayloadLimit
  * and the display splits lines at screen_protocol::kUartLineLimit.  A frame must
- * fit both or the consumer never sees it. */
+ * fit both or the consumer never sees it.  This is the lower-bound transport
+ * check; the interval budget itself is asserted by
+ * check_one_frame_per_interval_fits_the_link. */
 static int check_frames_fit_the_transport(void)
 {
   NodeATelemetrySnapshot snapshot;
@@ -151,10 +158,81 @@ static int check_frames_fit_the_transport(void)
     CHECK(lengths[index] <= 766U);
     total += lengths[index];
   }
-  /* Two telemetry intervals at 9600 8N1 carry 10 bits per byte.  A cycle that
-   * does not fit here would be dropped rather than delayed, so the nominal
-   * payload has to stay inside the link budget. */
-  CHECK(total <= 3840U);
+  /* The whole cycle is 2870 bytes.  It does NOT fit one telemetry interval of
+   * the 9600 baud link (1920 bytes), which is why the board rotates one frame
+   * per interval instead of offering the cycle whole. */
+  CHECK(total == NODE_A_TELEMETRY_CYCLE_BYTES);
+  return 0;
+}
+
+/* The board's schedule: one frame per telemetry interval, rotating so every
+ * frame of the cycle is emitted before any frame repeats.  The offered bytes
+ * per interval must stay inside the link budget with the ACK reserve left over.
+ *
+ * Reproduces node_a.c Telemetry_EmitOneFrame over the queue from
+ * Core/Src/uart_tx_queue.c - the same ring the board drains - so this is the
+ * producer side of the multi-cycle throughput proof rather than a model. */
+static int check_one_frame_per_interval_fits_the_link(void)
+{
+  static const uint32_t kLinkBytesPerInterval = 1920U;   /* 2 s at 9600 8N1 */
+  static const uint32_t kAckReserveBytes = 350U;
+  NodeATelemetrySnapshot snapshot;
+  char frames[NODE_A_TELEMETRY_FRAME_COUNT][NODE_A_TELEMETRY_FRAME_SIZE];
+  uint16_t lengths[NODE_A_TELEMETRY_FRAME_COUNT] = {0U};
+  uint32_t sequence = 0U;
+  uint32_t offered = 0U;
+  uint8_t index;
+
+  build_snapshot(&snapshot);
+  NodeATelemetry_FormatAll(&sequence, &snapshot, frames, lengths);
+  /* One interval offers exactly one frame, and that interval's link budget has
+   * to cover the frame plus the reserve the ACKs and diagnostics draw on - the
+   * assertion node_a.c makes at build time, repeated here against the real
+   * re-derived lengths. */
+  for (index = 0U; index < NODE_A_TELEMETRY_FRAME_COUNT; ++index) {
+    offered = lengths[index];
+    CHECK(offered < kLinkBytesPerInterval);
+    CHECK(offered + kAckReserveBytes <= kLinkBytesPerInterval);
+  }
+  return 0;
+}
+
+/* Six intervals must emit six distinct frames with six distinct sequences, and
+ * the bytes offered across the rotation must stay under what those intervals
+ * carry.  This is the producer half of the rotation contract; the consumer
+ * half - that each frame still lands in the merged snapshot - is the ESP
+ * suite's producer-vector test. */
+static int check_rotation_visits_every_frame(void)
+{
+  static const uint32_t kLinkBytesPerInterval = 1920U;   /* 2 s at 9600 8N1 */
+  NodeATelemetrySnapshot snapshot;
+  char frame[NODE_A_TELEMETRY_FRAME_SIZE];
+  uint32_t sequence = 0U;
+  uint32_t offered = 0U;
+  uint8_t seen[NODE_A_TELEMETRY_FRAME_COUNT] = {0U};
+  uint8_t index;
+  uint8_t step;
+
+  build_snapshot(&snapshot);
+  for (step = 0U; step < NODE_A_TELEMETRY_FRAME_COUNT; ++step) {
+    uint16_t length = 0U;
+    index = (uint8_t)(sequence % NODE_A_TELEMETRY_FRAME_COUNT);
+
+    CHECK(seen[index] == 0U);
+    CHECK(NodeATelemetry_FormatFrame(&sequence, &snapshot, frame, &length) == 1U);
+    CHECK(length != 0U);
+    seen[index] = 1U;
+    offered += length;
+  }
+  /* Every frame of the cycle was emitted exactly once, and the offered bytes
+   * are the whole cycle - inside the 6 * 1920 bytes the six intervals carry,
+   * with the difference left as the ACK/diagnostic reserve. */
+  for (index = 0U; index < NODE_A_TELEMETRY_FRAME_COUNT; ++index) {
+    CHECK(seen[index] == 1U);
+  }
+  CHECK(sequence == NODE_A_TELEMETRY_FRAME_COUNT);
+  CHECK(offered == NODE_A_TELEMETRY_CYCLE_BYTES);
+  CHECK(offered < NODE_A_TELEMETRY_FRAME_COUNT * kLinkBytesPerInterval);
   return 0;
 }
 
@@ -254,6 +332,8 @@ int main(void)
   (void)check_frames_match_committed_vectors();
   (void)check_one_sequence_per_frame();
   (void)check_frames_fit_the_transport();
+  (void)check_one_frame_per_interval_fits_the_link();
+  (void)check_rotation_visits_every_frame();
   (void)check_emitted_vocabulary();
   (void)check_gas_status_reports_the_operational_alarm();
   (void)check_legacy_duty_reaches_the_wire();

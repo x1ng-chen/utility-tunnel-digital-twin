@@ -195,6 +195,39 @@ static void format_actuator_frame(char *frame, uint16_t *length, uint32_t sequen
   write_frame(frame, length, written);
 }
 
+/* Writes frame `index` into `frame` and reports its length.  Shared by the
+ * whole-cycle formatter the host tests and the vector generator drive, and by
+ * the single-frame rotation step the board emits.  `index` is always the
+ * rotation slot itself (0..NODE_A_TELEMETRY_FRAME_COUNT-1), which is why the
+ * frame order here is the rotation order. */
+static void format_indexed_frame(char *frame, uint16_t *length, uint32_t sequence,
+                                 const NodeATelemetrySnapshot *snapshot,
+                                 uint8_t index)
+{
+  *length = 0U;
+  frame[0] = '\0';
+  switch (index) {
+    case 0U:
+      format_environment_frame(frame, length, sequence, snapshot);
+      break;
+    case 1U:
+      format_fan_frame(frame, length, sequence, snapshot, 0U);
+      break;
+    case 2U:
+      format_fan_frame(frame, length, sequence, snapshot, 1U);
+      break;
+    case 3U:
+      format_gas_status_frame(frame, length, sequence, snapshot);
+      break;
+    case 4U:
+      format_gas_raw_frame(frame, length, sequence, snapshot);
+      break;
+    default:
+      format_actuator_frame(frame, length, sequence, snapshot);
+      break;
+  }
+}
+
 void NodeATelemetry_FormatAll(uint32_t *sequence, const NodeATelemetrySnapshot *snapshot,
                               char frames[NODE_A_TELEMETRY_FRAME_COUNT][NODE_A_TELEMETRY_FRAME_SIZE],
                               uint16_t lengths[NODE_A_TELEMETRY_FRAME_COUNT])
@@ -213,27 +246,32 @@ void NodeATelemetry_FormatAll(uint32_t *sequence, const NodeATelemetrySnapshot *
     uint16_t *length = (lengths != 0) ? &lengths[index] : &scratch_length;
     const uint32_t current = next_sequence(sequence);
 
-    *length = 0U;
-    frame[0] = '\0';
-    switch (index) {
-      case 0U:
-        format_environment_frame(frame, length, current, snapshot);
-        break;
-      case 1U:
-        format_fan_frame(frame, length, current, snapshot, 0U);
-        break;
-      case 2U:
-        format_fan_frame(frame, length, current, snapshot, 1U);
-        break;
-      case 3U:
-        format_gas_status_frame(frame, length, current, snapshot);
-        break;
-      case 4U:
-        format_gas_raw_frame(frame, length, current, snapshot);
-        break;
-      default:
-        format_actuator_frame(frame, length, current, snapshot);
-        break;
-    }
+    format_indexed_frame(frame, length, current, snapshot, index);
   }
+}
+
+uint8_t NodeATelemetry_FormatFrame(uint32_t *sequence,
+                                   const NodeATelemetrySnapshot *snapshot,
+                                   char *frame, uint16_t *length)
+{
+  uint32_t committed;
+  uint32_t current;
+  if ((sequence == 0) || (frame == 0) || (length == 0)) return 0U;
+
+  /* The frame index is read from the sequence value the frame will carry, and
+   * the caller commits that value only after the frame is really on the wire.
+   * A refused frame therefore leaves both the index and the sequence where
+   * they were, so it is retried as itself instead of being skipped. */
+  committed = *sequence;
+  current = committed + 1U;
+  *length = 0U;
+  frame[0] = '\0';
+  if (snapshot == 0) return 0U;
+
+  format_indexed_frame(frame, length, current, snapshot,
+                       (uint8_t)(committed % NODE_A_TELEMETRY_FRAME_COUNT));
+  if (*length == 0U) return 0U;
+
+  *sequence = current;
+  return 1U;
 }

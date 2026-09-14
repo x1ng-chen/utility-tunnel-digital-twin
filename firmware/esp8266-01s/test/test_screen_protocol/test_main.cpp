@@ -253,11 +253,20 @@ void test_snapshot_enforces_bounds_and_freshness() {
 
   snapshot.humidity.value = 10001;
   CHECK_EQ(Result::OutOfRange, BuildSnapshot(snapshot, encoded, sizeof(encoded), &length));
+  /* Duty and brightness are telemetry percent fields, not the menu ladder: the
+   * legacy controller path can hold a fan at any whole percent, and a snapshot
+   * that rejected it would discard every other reading with it. */
   snapshot = validSnapshot();
   snapshot.fans[0].target_duty_percent = 45U;
-  CHECK_EQ(Result::OutOfRange, BuildSnapshot(snapshot, encoded, sizeof(encoded), &length));
+  CHECK_EQ(Result::Ok, BuildSnapshot(snapshot, encoded, sizeof(encoded), &length));
   snapshot = validSnapshot();
   snapshot.actuators.led_brightness_percent = 60U;
+  CHECK_EQ(Result::Ok, BuildSnapshot(snapshot, encoded, sizeof(encoded), &length));
+  snapshot = validSnapshot();
+  snapshot.fans[0].target_duty_percent = 101U;
+  CHECK_EQ(Result::OutOfRange, BuildSnapshot(snapshot, encoded, sizeof(encoded), &length));
+  snapshot = validSnapshot();
+  snapshot.actuators.led_brightness_percent = 101U;
   CHECK_EQ(Result::OutOfRange, BuildSnapshot(snapshot, encoded, sizeof(encoded), &length));
   snapshot = validSnapshot();
   retimeSnapshot(&snapshot, kFreshNowMs - kSnapshotMaxAgeMs);

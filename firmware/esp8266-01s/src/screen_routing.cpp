@@ -460,8 +460,13 @@ bool isKnownReading(const char* asset, const char* metric) {
 }
 
 /* Maps an alarm flag onto the source bit the screen renders.  A flag whose
- * channel reported a missing quality is not an observation, so it leaves the
- * bit clear instead of asserting an alarm the producer could not measure. */
+ * channel reported a missing or invalid quality is not an observation and is
+ * skipped entirely (see the early return in updateReading), which leaves the
+ * bit exactly as it was: it is never asserted, but a bit a real measurement
+ * raised is also never cleared by an unmeasurable one.  That is deliberate -
+ * turning an alarm off because the sensor went offline would report an
+ * all-clear nobody measured - so the bit stays latched until the channel comes
+ * back and reports a real clear. */
 uint32_t alarmSourceFor(const char* metric) {
   if (std::strcmp(metric, "oxygen.warning") == 0 ||
       std::strcmp(metric, "oxygen.alarm") == 0) {

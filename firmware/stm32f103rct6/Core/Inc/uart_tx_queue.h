@@ -23,8 +23,14 @@
  * a debug console with no reader attached would otherwise consume the whole
  * budget that the ESP link and the 60 FPS UI loop share. */
 #define UART_TX_FRAME_LIMIT 767U
-/* Holds a whole telemetry cycle for one UART, so a cycle is refused only when
- * the previous one is genuinely still on the wire. */
+/* Holds the largest frame either image queues plus the reserve its ACK and
+ * diagnostic lines draw on, so a frame is refused only when the link really
+ * has not drained.  It is deliberately NOT sized to hold a whole Node A
+ * telemetry cycle: a cycle does not fit the 9600 baud link inside one
+ * telemetry interval, so Node A emits one frame per interval and rotates
+ * (node_a.c derives that budget and asserts the reserve this constant has to
+ * cover).  Sizing the ring to a whole cycle would only let ~1.5 intervals of
+ * frames pile up before the whole cycle was refused. */
 #define UART_TX_CAPACITY 3072U
 /* Consecutive fully-blocked drain calls after which a queue is considered
  * stalled.  At the Node A loop rate this is a small fraction of a second. */

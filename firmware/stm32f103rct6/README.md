@@ -118,6 +118,9 @@ sh tests/run_display_host.sh            # 光栅/总线/时钟/运行/串口探�
 sh tests/run_ui_renderer_host.sh        # UiRenderer 与菜单适配器
 sh tests/run_task8_host.sh              # 快照解析、陈旧判断、时钟保持
 sh tests/run_node_a_command_host.sh     # Node A 命令分发与回执
+sh tests/run_node_a_telemetry_host.sh   # 遥测帧字节与已提交向量一致
+sh tests/run_node_a_telemetry_throughput_host.sh  # 轮转调度与 9600 链路预算（多周期）
+sh tests/run_node_a_command_probe_host.sh         # 串口探针的遥测校验器
 sh tests/run_node_a_clock_host.sh       # 72 MHz 时钟/外设时序契约
 ARM_GCC=arm-none-eabi-gcc.exe sh tests/run_node_a_contract_arm.sh
 ```

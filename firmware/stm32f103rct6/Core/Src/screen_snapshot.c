@@ -155,6 +155,13 @@ static uint8_t reading(Cursor *cursor, UiReading *reading, int32_t minimum,
   return 1U;
 }
 
+/* `target` is the actual duty percent the producer applied, and `brightness`
+ * below is the same domain: the menu offers 0/30/60/100 and 25/50/75/100
+ * presets, but the legacy Web/IoTDA controller path may command any whole
+ * percent, and the menu ladder is enforced on the command path (Node A's
+ * IsFanPreset/IsBrightness), never here.  Rejecting a non-preset here would
+ * discard the entire snapshot - every sensor and alarm in it - over a fan that
+ * is simply not on a preset. */
 static uint8_t fan(Cursor *cursor, UiFanSnapshot *fan_snapshot, uint64_t generated)
 {
   uint64_t target, running, rpm, voltage, current, sampled, quality;
@@ -168,7 +175,6 @@ static uint8_t fan(Cursor *cursor, UiFanSnapshot *fan_snapshot, uint64_t generat
       !character(cursor, ']') || target > 100U || running > 1U ||
       rpm > 100000U || voltage > 36000U || current > 10000U ||
       quality > UI_QUALITY_INVALID ||
-      !((target == 0U) || (target == 30U) || (target == 60U) || (target == 100U)) ||
       !valid_timestamp(sampled, generated, (UiDataQuality)quality)) return 0U;
   fan_snapshot->target_duty_percent = (uint8_t)target;
   fan_snapshot->running = (uint8_t)running;
@@ -223,8 +229,7 @@ static uint8_t parse_model(const char *line, size_t length, uint32_t received_ms
       !character(&cursor, ']') || !character(&cursor, ',') || !named_key(&cursor, "actuators") ||
       !character(&cursor, '[') || !boolean_value(&cursor, &relay) ||
       !character(&cursor, ',') || !unsigned_value(&cursor, &led_mode) || led_mode > UI_LED_FLASH ||
-      !character(&cursor, ',') || !unsigned_value(&cursor, &brightness) ||
-      !(brightness == 25U || brightness == 50U || brightness == 75U || brightness == 100U) ||
+      !character(&cursor, ',') || !unsigned_value(&cursor, &brightness) || brightness > 100U ||
       !character(&cursor, ',') || !boolean_value(&cursor, &buzzer) ||
       !character(&cursor, ',') || !boolean_value(&cursor, &muted) ||
       !character(&cursor, ']') || !character(&cursor, ',') || !named_key(&cursor, "connectivity") ||

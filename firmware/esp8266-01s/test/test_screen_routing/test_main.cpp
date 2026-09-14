@@ -781,6 +781,167 @@ void test_ctrl02_consumes_the_node_a_producer_vectors() {
   CHECK_TRUE(snapshot.connectivity.mqtt == LinkStatus::Online);
 }
 
+/* A fan held off the menu ladder by the legacy Web/IoTDA controller path.
+ *
+ * These are the exact bytes NodeATelemetry_FormatAll emits for a snapshot with
+ * both fans at 45 percent and the LED at 60 percent - captured from the board
+ * formatter, not hand-written.  The old consumer rejected the whole frame on a
+ * non-preset duty, which cleared the output and lost the fan's voltage,
+ * current, RPM and running state along with it; Node B's parser would have
+ * dropped the entire snapshot line the same way.  The ladder is a menu-command
+ * contract, so the telemetry path must carry whatever duty is really applied. */
+void test_ctrl02_accepts_a_legacy_non_ladder_fan_duty() {
+  constexpr char kFan1Legacy[] =
+      "{\"schema\":\"ut.telemetry.v1\",\"seq\":2,\"readings\":["
+      "{\"assetCode\":\"FAN-01\",\"metric\":\"supply.voltage\",\"value\":11.900,"
+      "\"unit\":\"V\",\"quality\":\"good\"},"
+      "{\"assetCode\":\"FAN-01\",\"metric\":\"motor.current\",\"value\":320.000,"
+      "\"unit\":\"mA\",\"quality\":\"good\"},"
+      "{\"assetCode\":\"FAN-01\",\"metric\":\"rotational.speed\",\"value\":1800,"
+      "\"unit\":\"rpm\",\"quality\":\"good\"}],"
+      "\"diag\":{\"relayActive\":1,\"pwmPercent\":45,\"autoVentilation\":0,"
+      "\"cooldown\":0,\"power\":3.808,\"inaFault\":0}}\r\n";
+  constexpr char kFan2Legacy[] =
+      "{\"schema\":\"ut.telemetry.v1\",\"seq\":3,\"readings\":["
+      "{\"assetCode\":\"FAN-02\",\"metric\":\"supply.voltage\",\"value\":11.800,"
+      "\"unit\":\"V\",\"quality\":\"good\"},"
+      "{\"assetCode\":\"FAN-02\",\"metric\":\"motor.current\",\"value\":280.000,"
+      "\"unit\":\"mA\",\"quality\":\"good\"},"
+      "{\"assetCode\":\"FAN-02\",\"metric\":\"rotational.speed\",\"value\":1200,"
+      "\"unit\":\"rpm\",\"quality\":\"good\"}],"
+      "\"diag\":{\"relayActive\":1,\"pwmPercent\":45,\"autoVentilation\":0,"
+      "\"cooldown\":0,\"power\":3.304,\"inaFault\":0}}\r\n";
+  constexpr char kActuatorLegacyBrightness[] =
+      "{\"schema\":\"ut.telemetry.v1\",\"seq\":6,\"readings\":["
+      "{\"assetCode\":\"CTRL-01\",\"metric\":\"led.mode\",\"value\":1,"
+      "\"unit\":\"enum\",\"quality\":\"good\"},"
+      "{\"assetCode\":\"CTRL-01\",\"metric\":\"led.brightnessPercent\",\"value\":60,"
+      "\"unit\":\"percent\",\"quality\":\"good\"},"
+      "{\"assetCode\":\"CTRL-01\",\"metric\":\"buzzer.active\",\"value\":0,"
+      "\"unit\":\"bool\",\"quality\":\"good\"},"
+      "{\"assetCode\":\"CTRL-01\",\"metric\":\"buzzer.muted\",\"value\":0,"
+      "\"unit\":\"bool\",\"quality\":\"good\"}]}\r\n";
+  TelemetryAccumulator accumulator{};
+  InitTelemetryAccumulator(&accumulator);
+  RouteOutput output{};
+  ScreenSnapshot snapshot{};
+
+  /* The environmental frame seeds the cycle, as it does on the wire. */
+  CHECK_EQ(RouteResult::Ok,
+           RouteMqttMessage(Role::Ctrl02, "ut/v1/CTRL-01/telemetry",
+                            kNodeATelemetryVectors[0],
+                            std::strlen(kNodeATelemetryVectors[0]), kNowMs,
+                            &accumulator, &output));
+  CHECK_EQ(RouteResult::Ok,
+           RouteMqttMessage(Role::Ctrl02, "ut/v1/CTRL-01/telemetry", kFan1Legacy,
+                            std::strlen(kFan1Legacy), kNowMs + 1U, &accumulator,
+                            &output));
+  CHECK_EQ(Result::Ok,
+           ParseSnapshot(output.payload, output.payload_length, kNowMs + 1U,
+                         &snapshot));
+  /* The fan's whole reading survives, not just the duty. */
+  CHECK_EQ(45U, snapshot.fans[0].target_duty_percent);
+  CHECK_TRUE(snapshot.fans[0].running);
+  CHECK_EQ(11900U, snapshot.fans[0].voltage_mv);
+  CHECK_EQ(320U, snapshot.fans[0].current_ma);
+  CHECK_EQ(1800U, snapshot.fans[0].actual_rpm);
+  CHECK_EQ(Quality::Valid, snapshot.fans[0].quality);
+  /* And the snapshot as a whole is still whole: the environmental readings
+   * that share it are untouched. */
+  CHECK_EQ(2345, snapshot.temperature.value);
+
+  CHECK_EQ(RouteResult::Ok,
+           RouteMqttMessage(Role::Ctrl02, "ut/v1/CTRL-01/telemetry", kFan2Legacy,
+                            std::strlen(kFan2Legacy), kNowMs + 2U, &accumulator,
+                            &output));
+  CHECK_EQ(Result::Ok,
+           ParseSnapshot(output.payload, output.payload_length, kNowMs + 2U,
+                         &snapshot));
+  CHECK_EQ(45U, snapshot.fans[1].target_duty_percent);
+  CHECK_EQ(11800U, snapshot.fans[1].voltage_mv);
+  CHECK_EQ(1200U, snapshot.fans[1].actual_rpm);
+
+  /* A non-ladder brightness is the same telemetry-domain case. */
+  CHECK_EQ(RouteResult::Ok,
+           RouteMqttMessage(Role::Ctrl02, "ut/v1/CTRL-01/telemetry",
+                            kActuatorLegacyBrightness,
+                            std::strlen(kActuatorLegacyBrightness), kNowMs + 3U,
+                            &accumulator, &output));
+  CHECK_EQ(Result::Ok,
+           ParseSnapshot(output.payload, output.payload_length, kNowMs + 3U,
+                         &snapshot));
+  CHECK_EQ(60U, snapshot.actuators.led_brightness_percent);
+  CHECK_EQ(1U, snapshot.actuators.led_mode);
+}
+
+/* The board emits one frame per telemetry interval and rotates, so the screen
+ * state has to converge over the cycle rather than arrive in one burst.  Each
+ * frame updates only its own fields and leaves the rest of the merged snapshot
+ * standing - which is what makes a rotation safe to run in service. */
+void test_ctrl02_converges_over_a_frame_rotation() {
+  TelemetryAccumulator accumulator{};
+  InitTelemetryAccumulator(&accumulator);
+  RouteOutput output{};
+  ScreenSnapshot snapshot{};
+  uint32_t next_sequence = NODE_A_TELEMETRY_VECTOR_COUNT;
+  uint64_t now = kNowMs;
+  size_t rotation;
+
+  /* The environment frame alone: everything it carries is fresh, and every
+   * field the later frames own is still unknown rather than fabricated. */
+  CHECK_EQ(RouteResult::Ok,
+           RouteMqttMessage(Role::Ctrl02, "ut/v1/CTRL-01/telemetry",
+                            kNodeATelemetryVectors[0],
+                            std::strlen(kNodeATelemetryVectors[0]), now,
+                            &accumulator, &output));
+  CHECK_EQ(Result::Ok, ParseSnapshot(output.payload, output.payload_length, now,
+                                     &snapshot));
+  CHECK_EQ(2345, snapshot.temperature.value);
+  CHECK_EQ(5210, snapshot.humidity.value);
+  CHECK_EQ(0, snapshot.water.value);          /* the level.detected reading */
+  CHECK_EQ(Quality::Valid, snapshot.temperature.quality);
+  /* The fan and actuator fields belong to frames that have not arrived yet, so
+   * they keep the accumulator's seed - zero duty, quality unknown, and the
+   * 100 percent brightness the producer starts from - rather than being
+   * fabricated from this frame. */
+  CHECK_EQ(0U, snapshot.fans[0].target_duty_percent);
+  CHECK_EQ(Quality::Unknown, snapshot.fans[0].quality);
+  CHECK_EQ(0U, snapshot.fans[1].target_duty_percent);
+  CHECK_EQ(0U, snapshot.actuators.led_mode);
+  CHECK_EQ(100U, snapshot.actuators.led_brightness_percent);
+
+  /* Sweep four rotations.  Nothing may be refused at any point, and by the end
+   * of each rotation every frame has been through the route again. */
+  for (rotation = 0U; rotation < 4U; ++rotation) {
+    size_t index;
+    for (index = 0U; index < NODE_A_TELEMETRY_VECTOR_COUNT; ++index) {
+      char frame[1024];
+      if (!reshape_frame(kNodeATelemetryVectors[index], next_sequence++, frame,
+                         sizeof(frame))) {
+        CHECK_TRUE(false);
+        return;
+      }
+      now += 2000ULL;   /* one telemetry interval */
+      CHECK_EQ(RouteResult::Ok,
+               RouteMqttMessage(Role::Ctrl02, "ut/v1/CTRL-01/telemetry", frame,
+                                std::strlen(frame), now, &accumulator, &output));
+    }
+    CHECK_EQ(Result::Ok,
+             ParseSnapshot(output.payload, output.payload_length, now,
+                           &snapshot));
+    /* Every field of the last rotation is present and current, so a screen fed
+     * only by this rotation shows a complete state after six intervals. */
+    CHECK_EQ(2345, snapshot.temperature.value);
+    CHECK_EQ(11900U, snapshot.fans[0].voltage_mv);
+    CHECK_EQ(60U, snapshot.fans[0].target_duty_percent);
+    CHECK_EQ(11800U, snapshot.fans[1].voltage_mv);
+    CHECK_EQ(60U, snapshot.fans[1].target_duty_percent);
+    CHECK_EQ(1U, snapshot.actuators.led_mode);
+    CHECK_EQ(75U, snapshot.actuators.led_brightness_percent);
+    CHECK_TRUE(snapshot.connectivity.node_a == LinkStatus::Online);
+  }
+}
+
 /* The methane alarm is the operational gas channel.  The gas status frame is
  * its only producer, so the bit has to appear, persist through the following
  * frames of the same cycle, and clear when the producer clears it. */
@@ -914,6 +1075,8 @@ int main() {
   test_ntp_configuration_is_once_per_wifi_association();
   test_time_sync_is_immediate_periodic_valid_and_wrap_safe();
   test_ctrl02_consumes_the_node_a_producer_vectors();
+  test_ctrl02_accepts_a_legacy_non_ladder_fan_duty();
+  test_ctrl02_converges_over_a_frame_rotation();
   test_ctrl02_tracks_the_methane_alarm_across_a_cycle();
   test_ctrl02_accepts_a_node_a_ack_without_a_timestamp();
   if (failures == 0) std::puts("screen_routing tests passed");

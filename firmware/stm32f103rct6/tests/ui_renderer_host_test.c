@@ -746,6 +746,36 @@ static int check_page_animation_and_header_delta(void)
   return 0;
 }
 
+/* The header indicator carries the same tri-state the NETWORK page spells out.
+ * An unobserved link has to read UNKNOWN, not a confirmed OFFLINE: the header
+ * used to draw anything that was not Online as the danger-coloured "M-". */
+static int check_header_mqtt_indicator_tristate(void)
+{
+  UiState state;
+  UiSnapshot snapshot;
+
+  UiState_Init(&state);
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+  UiRenderer_Init();
+
+  snapshot.connectivity.mqtt = (uint8_t)UI_LINK_ONLINE;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 0U) == 1U);
+  CHECK(string_was_drawn_at("M+", 2, LCD_GREEN));
+
+  snapshot.connectivity.mqtt = (uint8_t)UI_LINK_OFFLINE;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 1U) == 1U);
+  CHECK(string_was_drawn_at("M-", 2, UI_COLOR_DANGER));
+
+  snapshot.connectivity.mqtt = (uint8_t)UI_LINK_UNKNOWN;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 2U) == 1U);
+  CHECK(string_was_drawn_at("M?", 2, UI_COLOR_MUTED));
+  CHECK(!string_was_drawn_at("M-", 2, UI_COLOR_DANGER));
+  return 0;
+}
+
 static int check_page_specific_selection_geometry(void)
 {
   UiState state;
@@ -808,6 +838,7 @@ int main(void)
   if (check_interpolation_contract() != 0) return 1;
   if (check_dirty_and_cadence_contract() != 0) return 1;
   if (check_page_animation_and_header_delta() != 0) return 1;
+  if (check_header_mqtt_indicator_tristate() != 0) return 1;
   if (check_page_specific_selection_geometry() != 0) return 1;
   if (check_confirmation_modal_names_critical_action() != 0) return 1;
   if (check_frame_failure_recovery_contract() != 0) return 1;
