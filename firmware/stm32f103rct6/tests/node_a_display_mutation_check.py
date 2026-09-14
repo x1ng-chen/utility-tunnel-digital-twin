@@ -76,8 +76,23 @@ MUTATIONS = [
      "#define NODE_A_DISPLAY_IRQ_PRIORITY                   1U"),
     ("Node A stops consuming the ESP-01 time sync",
      "Core/Src/node_a.c", "    EspTime_Poll();\n", ""),
+    # The loop now ticks on both paths, so the pattern carries its full six-space
+    # indent: a bare four-space pattern would still match as a substring of the
+    # deeper line and silently stop identifying a whole statement.  replace(...,
+    # 1) drops the first (plain-path) call; the contract suite requires both.
     ("main loop stops ticking the secondary screen",
-     "Core/Src/node_a.c", "    Status_Tick(now);\n", ""),
+     "Core/Src/node_a.c", "      Status_Tick(now);\n", ""),
+    # The fresh-gas reaction must stay ahead of the multi-second INA226 reads.
+    ("gas repaint moved behind the blocking INA226 reads",
+     "Core/Src/node_a.c",
+     "      GasVentilation_Update(now);\n"
+     "      Status_Tick(now);\n"
+     "      (void)Ina226_Read(&i2c1_bus, &ina226_fan1_state, &fan_power);\n"
+     "      (void)Ina226_Read(&i2c2_bus, &ina226_fan2_state, &fan2_power);\n",
+     "      (void)Ina226_Read(&i2c1_bus, &ina226_fan1_state, &fan_power);\n"
+     "      (void)Ina226_Read(&i2c2_bus, &ina226_fan2_state, &fan2_power);\n"
+     "      GasVentilation_Update(now);\n"
+     "      Status_Tick(now);\n"),
     ("panel never initialised at boot",
      "Core/Src/node_a.c", "  ST7735_Init();\n", ""),
 ]

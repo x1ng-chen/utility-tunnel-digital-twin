@@ -217,6 +217,50 @@ static int check_alarm_sources(void)
   return 0;
 }
 
+static int check_alarm_reaction_is_one_step(void)
+{
+  /* The gas path in node_a.c repaints with one Status_Tick() call placed
+   * directly after the sample that latched the alarm, and that same call has to
+   * carry both halves of the reaction: the takeover and the ventilation.  It is
+   * the ordering contract test that keeps the call before the blocking INA226
+   * read; this one pins what the call must show once it is there. */
+  NodeAStatusScreen screen;
+  NodeAStatusSnapshot snapshot = idle_snapshot();
+  NodeAStatus_Init(&screen, 0U);
+  reset_recorder();
+  NodeAStatus_Update(&screen, &snapshot, 0U, 0U);
+  CHECK(saw_text("ENV"));
+  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_ENVIRONMENT);
+
+  /* One dwell away from the environment page, then the fresh sample latches. */
+  snapshot.methane_alarm = 1U;
+  snapshot.gas_alarm = 1U;
+  snapshot.relay_on = 1U;
+  reset_recorder();
+  NodeAStatus_Update(&screen, &snapshot, 1U,
+                     NODE_A_STATUS_DWELL_MS - 1U);
+  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_ALARM);
+  CHECK(alarm_fill_count == 1U && normal_fill_count == 0U);
+  CHECK(saw_text("ALARM"));
+  CHECK(saw_text("CH4"));
+  CHECK(saw_text("VENT") && saw_text("ON"));
+  CHECK(saw_text("BUZZ"));
+
+  /* The takeover must not wait for the refresh interval either: a tick well
+   * inside NODE_A_STATUS_REFRESH_MS still has to leave the alarm page up. */
+  reset_recorder();
+  NodeAStatus_Update(&screen, &snapshot, 1U, NODE_A_STATUS_DWELL_MS - 1U + 1U);
+  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_ALARM);
+  CHECK(alarm_fill_count == 0U);
+
+  /* Repainting the environment page while an alarm is up is never allowed, even
+   * if a caller passes the data before the relay transition. */
+  snapshot.relay_on = 0U;
+  NodeAStatus_Update(&screen, &snapshot, 1U, 2U * NODE_A_STATUS_DWELL_MS);
+  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_ALARM);
+  return 0;
+}
+
 static int check_render_pages(void)
 {
   NodeAStatusScreen screen;
@@ -298,6 +342,7 @@ int main(void)
   if (check_alarm_takeover() != 0) return 1;
   if (check_clock_placeholder() != 0) return 1;
   if (check_alarm_sources() != 0) return 1;
+  if (check_alarm_reaction_is_one_step() != 0) return 1;
   if (check_render_pages() != 0) return 1;
   if (check_redraw_policy() != 0) return 1;
   puts("Node A status screen host test: PASS");

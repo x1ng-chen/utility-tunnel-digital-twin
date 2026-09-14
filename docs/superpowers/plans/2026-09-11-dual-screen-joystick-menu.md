@@ -423,7 +423,11 @@ git commit -m "perf(firmware): retune Node A for 72 mhz"
 - Consumes Node A's actual local sensor/safety/actuator state directly.
 - Consumes `ut.time.sync.v1` from ESP-01 through the shared `network_time` module and shows `--:--` until the first valid sync.
 - Produces a read-only 5-second carousel and immediate alarm page.
-- Mapping: PB3=SPI3_SCK, PB5=SPI3_MOSI, PC4=RES, PC5=DC, PB8=CS, PB9=BLK.
+- Mapping: PB3=SPI3_SCK, PB5=SPI3_MOSI, PC4=RES, PC5=DC, PC6=CS, PC7=BLK.
+  PB8/PB9 stay on TIM4_CH3/CH4 fan PWM and must not be reclaimed for the panel.
+  The PC6/PC7 continuity and panel operation are physical checks that remain
+  pending; the software-side pin contract is asserted by
+  `tests/node_a_display_contract_test.py`.
 
 - [ ] **Step 1: Add failing secondary-screen diagnostics**
 
@@ -431,7 +435,7 @@ Assert page sequence `environment → gas → fans`, 5000 ms dwell, immediate al
 
 - [ ] **Step 2: Configure SPI3 and DMA2 Channel2**
 
-Disable JTAG while retaining SWD, configure 18 MHz SPI3 Mode 0, and reuse the transport API from Task 3 through the Node A adapter. Confirm PB6/PB7 SHT30 and PA7 fan2 tach remain untouched.
+Disable JTAG while retaining SWD, configure 18 MHz SPI3 Mode 0, and reuse the transport API from Task 3 through the Node A adapter. Confirm PB6/PB7 SHT30, PA7 fan2 tach and PB8/PB9 TIM4 fan PWM remain untouched.
 
 - [ ] **Step 3: Implement read-only pages**
 

@@ -1608,6 +1608,8 @@ static void Status_CaptureFanPower(const Ina226Reading *power, uint8_t *online,
 
 static void Status_Tick(uint32_t now)
 {
+  uint8_t alarm_active;
+
   /* One atomic copy per frame: the renderer never sees a half-updated mix. */
   NodeAStatusSnapshot snapshot = status_sensors;
 
@@ -1625,10 +1627,12 @@ static void Status_Tick(uint32_t now)
   snapshot.buzzer_muted = g_actuator.buzzer_muted;
   NetworkTime_ToSnapshot(&esp_clock, now, &snapshot.clock);
 
-  NodeAStatus_Update(&status_screen, &snapshot,
-                     (uint8_t)((snapshot.smoke_alarm != 0U) ||
-                               (snapshot.flame_alarm != 0U) ||
-                               (snapshot.gas_alarm != 0U)), now);
+  /* The state is latched before the (slow) draw so a repaint that outlives the
+   * rest of the loop cannot make the alarm transition look newer than it is. */
+  alarm_active = (uint8_t)((snapshot.smoke_alarm != 0U) ||
+                           (snapshot.flame_alarm != 0U) ||
+                           (snapshot.gas_alarm != 0U));
+  NodeAStatus_Update(&status_screen, &snapshot, alarm_active, now);
 }
 
 static void NodeTest_ReportDisplay(void)
@@ -1776,6 +1780,7 @@ int main(void)
   {
     uint32_t now;
     uint8_t alarm_active;
+    uint8_t telemetry_due;
 
     while (esp_rx_count != 0U) Command_Poll();
     EspTime_Poll();
@@ -1801,11 +1806,14 @@ int main(void)
     if ((gas_ventilation_active == 0U) && (g_actuator.relay_on != 0U) &&
         ((now - relay_started_at) >= relay_duration_ms))
       Relay_Disable();
-    /* Repaint before the slow telemetry block so a fresh alarm reaches the
-     * panel without waiting for the software I2C reads. */
-    Status_Tick(now);
-    if ((test_force_telemetry != 0U) ||
-        ((now - last_telemetry) >= TELEMETRY_INTERVAL_MS))
+    /* Smoke, flame and level are already sampled by now, so this repaint is
+     * early enough for them.  Only the gas block on a telemetry iteration has
+     * a fresher safety sample than this one, and it repaints again below. */
+    telemetry_due = (uint8_t)((test_force_telemetry != 0U) ||
+                              ((now - last_telemetry) >= TELEMETRY_INTERVAL_MS));
+    if (telemetry_due == 0U)
+      Status_Tick(now);
+    if (telemetry_due != 0U)
     {
       (void)Sht30_Read(&i2c1_bus, SHT30_ADDRESS_44, &readings[0]);
       (void)Sht30_Read(&i2c1_bus, SHT30_ADDRESS_45, &readings[1]);
@@ -1823,6 +1831,18 @@ int main(void)
           (co_filter.count >= 3U))
         GasAlarm_Update(oxygen_raw, oxygen_online, methane_raw, methane_online,
                         co_raw, co_online);
+      /* Re-evaluate the gas safety state on this iteration's sample, not the
+       * previous one, and hand the panel its page before either INA226 read.
+       * A single worst-case INA226 transfer is budgeted at thousands of
+       * milliseconds (NODE_A_INA226_WORST_CASE_MS), so an alarm that waited for
+       * the telemetry block to finish would take the screen over and open the
+       * ventilation far too late.  GasVentilation_Update() is idempotent on an
+       * unchanged gas state, so running it twice here only acts on a real
+       * transition.  The fan power and tach fields still belong to the previous
+       * telemetry block: they are captured after the reads below, and the
+       * alarm page reports the relay and not the fan meters. */
+      GasVentilation_Update(now);
+      Status_Tick(now);
       (void)Ina226_Read(&i2c1_bus, &ina226_fan1_state, &fan_power);
       (void)Ina226_Read(&i2c2_bus, &ina226_fan2_state, &fan2_power);
       /* Sensor acquisition is deliberately slow on the software I2C buses.
@@ -1851,6 +1871,8 @@ int main(void)
                     methane_microvolts, methane_online, co_raw,
                     co_microvolts, co_online, &fan_power, fan_rpm,
                     &fan2_power, fan2_rpm);
+      /* The display already consumed this block from the gas repaint above, so
+       * only the interval timestamp is left to publish. */
       last_telemetry = now;
       test_force_telemetry = 0U;
     }

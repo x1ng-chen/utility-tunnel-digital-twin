@@ -251,16 +251,29 @@ static void FormatFanRow(char *output, size_t size, uint8_t pwm_percent, uint32_
                  (unsigned int)rpm);
 }
 
+/* The unsigned fields are reduced before formatting, not merely before the
+ * division: -Wformat-truncation otherwise has to assume every one of them can
+ * print all ten digits of a 32-bit value, and would flag this row as possibly
+ * overflowing the 24-byte value buffer.  These ceilings are far above anything
+ * a 0.01 V / 0.01 A fan meter on a 12 V rail can report, so no real reading is
+ * altered; a reading that somehow exceeded them would show its low-order digits
+ * rather than overrun the panel buffer. */
+#define NODE_A_STATUS_VOLT_MAX_MV   1000000UL
+#define NODE_A_STATUS_CURR_MAX_MA  10000000UL
+
 static void FormatPowerRow(char *output, size_t size, uint32_t millivolts,
                            int32_t milliamps)
 {
-  const int64_t current = (milliamps < 0) ? -(int64_t)milliamps : (int64_t)milliamps;
+  const uint32_t magnitude =
+      ((milliamps < 0) ? (uint32_t)(-(int64_t)milliamps) : (uint32_t)milliamps) %
+      NODE_A_STATUS_CURR_MAX_MA;
+
   (void)snprintf(output, size, "%s%u.%uV %s%u.%02uA", (milliamps < 0) ? "-" : "",
-                 (unsigned int)(millivolts / 1000U),
+                 (unsigned int)((millivolts % NODE_A_STATUS_VOLT_MAX_MV) / 1000U),
                  (unsigned int)((millivolts / 100U) % 10U),
                  (milliamps < 0) ? "-" : "",
-                 (unsigned int)(current / 1000),
-                 (unsigned int)((current % 1000) / 10U));
+                 (unsigned int)(magnitude / 1000U),
+                 (unsigned int)((magnitude % 1000U) / 10U));
 }
 
 static void DrawFans(const NodeAStatusSnapshot *snapshot)
