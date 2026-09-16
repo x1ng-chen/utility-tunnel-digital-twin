@@ -52,8 +52,8 @@ static int failures = 0;
 #define TEST_LINK_BYTES_PER_CYCLE \
   ((TEST_BAUD * (TEST_INTERVAL_MS / 1000U)) / TEST_BITS_PER_BYTE)
 #define TEST_ACK_RESERVE_BYTES        350U   /* NODE_A_UART_ACK_RESERVE_BYTES */
-#define TEST_CYCLE_BYTES             2870U
-#define TEST_WIDEST_FRAME_BYTES       683U   /* the environmental frame */
+#define TEST_CYCLE_BYTES             2867U
+#define TEST_WIDEST_FRAME_BYTES       682U   /* the environmental frame */
 
 /* Microseconds one byte occupies the wire at the modelled baud: 10 bit times
  * at 9600 is 1041 us.  The clock is kept in microseconds so the model runs at
@@ -154,9 +154,28 @@ static void drain_once(UartTxQueue *queue, uint16_t budget)
 
 /* The same fixture tests/node_a_telemetry_host_test.c pins against the
  * committed vectors, so the schedule below emits the real frames. */
+static const SensorReading fixture_sensors[] = {
+  { .asset_code = "SHT-01", .kind = SENSOR_KIND_SHT30, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .temperature_centi_c = 2345, .humidity_centi_rh = 5210U },
+  { .asset_code = "O2-01", .kind = SENSOR_KIND_O2, .quality = SENSOR_QUALITY_SUSPECT,
+    .online = 1U, .raw = 812U, .microvolts = 654000UL },
+  { .asset_code = "MQ4-01", .kind = SENSOR_KIND_MQ4, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .raw = 0U, .microvolts = 0UL },
+  { .asset_code = "CO-01", .kind = SENSOR_KIND_CO, .quality = SENSOR_QUALITY_SUSPECT,
+    .online = 1U, .raw = 138U, .microvolts = 111000UL },
+  { .asset_code = "MQ2-01", .kind = SENSOR_KIND_MQ2, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .alarm = 0U },
+  { .asset_code = "FLAME-01", .kind = SENSOR_KIND_FLAME, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .alarm = 0U },
+  { .asset_code = "LEVEL-01", .kind = SENSOR_KIND_LEVEL, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .alarm = 0U }
+};
+
 static void build_snapshot(NodeATelemetrySnapshot *snapshot)
 {
   (void)memset(snapshot, 0, sizeof(*snapshot));
+  snapshot->sensors = fixture_sensors;
+  snapshot->sensor_count = (uint8_t)(sizeof(fixture_sensors) / sizeof(fixture_sensors[0]));
   snapshot->environment.online = 1U;
   snapshot->environment.temperature_centi_c = 2345;
   snapshot->environment.humidity_centi_rh = 5210U;

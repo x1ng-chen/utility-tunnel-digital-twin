@@ -88,6 +88,7 @@ endif()
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/multi_sensor.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/sensor_telemetry.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/node_a_command.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/uart_tx_queue.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735.c"

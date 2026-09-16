@@ -26,9 +26,28 @@ static int failures = 0;
 
 /* The same fixture the vector generator uses.  Kept in sync by the drift check
  * in tests/update_node_a_telemetry_vectors.sh. */
+static const SensorReading fixture_sensors[] = {
+  { .asset_code = "SHT-01", .kind = SENSOR_KIND_SHT30, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .temperature_centi_c = 2345, .humidity_centi_rh = 5210U },
+  { .asset_code = "O2-01", .kind = SENSOR_KIND_O2, .quality = SENSOR_QUALITY_SUSPECT,
+    .online = 1U, .raw = 812U, .microvolts = 654000UL },
+  { .asset_code = "MQ4-01", .kind = SENSOR_KIND_MQ4, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .raw = 0U, .microvolts = 0UL },
+  { .asset_code = "CO-01", .kind = SENSOR_KIND_CO, .quality = SENSOR_QUALITY_SUSPECT,
+    .online = 1U, .raw = 138U, .microvolts = 111000UL },
+  { .asset_code = "MQ2-01", .kind = SENSOR_KIND_MQ2, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .alarm = 0U },
+  { .asset_code = "FLAME-01", .kind = SENSOR_KIND_FLAME, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .alarm = 0U },
+  { .asset_code = "LEVEL-01", .kind = SENSOR_KIND_LEVEL, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .alarm = 0U }
+};
+
 static void build_snapshot(NodeATelemetrySnapshot *snapshot)
 {
   (void)memset(snapshot, 0, sizeof(*snapshot));
+  snapshot->sensors = fixture_sensors;
+  snapshot->sensor_count = (uint8_t)(sizeof(fixture_sensors) / sizeof(fixture_sensors[0]));
   snapshot->environment.online = 1U;
   snapshot->environment.temperature_centi_c = 2345;
   snapshot->environment.humidity_centi_rh = 5210U;
@@ -134,7 +153,7 @@ static int check_one_sequence_per_frame(void)
 /* The committed cycle total.  node_a.c's link-budget comment quotes it and the
  * ESP consumer suite relies on a cycle converging over six frames, so the
  * number is pinned here where it is re-derived from the board formatter. */
-#define NODE_A_TELEMETRY_CYCLE_BYTES 2870U
+#define NODE_A_TELEMETRY_CYCLE_BYTES 2867U
 
 /* The bridge caps a routed MQTT payload at screen_routing::kTransportPayloadLimit
  * and the display splits lines at screen_protocol::kUartLineLimit.  A frame must

@@ -2,6 +2,7 @@
 #define NODE_A_TELEMETRY_H
 
 #include "node_a_command.h"
+#include "multi_sensor.h"
 
 #include <stdint.h>
 
@@ -56,6 +57,8 @@ typedef struct
 /* Slot 1 is the physically installed SHT30; the other slots are reserved
  * buses and must not create fabricated zero-value readings. */
 typedef struct {
+  const SensorReading *sensors;
+  uint8_t sensor_count;
   Sht30Reading environment;
   uint16_t oxygen_raw;
   uint32_t oxygen_microvolts;

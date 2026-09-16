@@ -903,6 +903,8 @@ static void BuildTelemetrySnapshot(const Sht30Reading readings[3],
                                    NodeATelemetrySnapshot *snapshot)
 {
   (void)memset(snapshot, 0, sizeof(*snapshot));
+  snapshot->sensors = NodeASensorBank_Readings(&sensor_bank);
+  snapshot->sensor_count = NodeASensorBank_Count(&sensor_bank);
   snapshot->environment = readings[0];
   snapshot->smoke_alarm = smoke_detected;
   snapshot->flame_alarm = flame_detected;

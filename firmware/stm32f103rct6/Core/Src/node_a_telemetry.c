@@ -39,52 +39,113 @@ static const char *fan_quality(const Ina226Reading *reading)
   return reading->plausible ? "good" : "suspect";
 }
 
+static const SensorReading *find_reading_by_code(const SensorReading *sensors, uint8_t count,
+                                                 const char *code)
+{
+  if ((sensors == NULL) || (count == 0U) || (code == NULL)) return NULL;
+  for (uint8_t i = 0U; i < count; ++i) {
+    if (strcmp(sensors[i].asset_code, code) == 0) {
+      return &sensors[i];
+    }
+  }
+  return NULL;
+}
+
 /* The AG-02 channels feed the cloud contract as raw ADC codes plus the
  * derived millivolts; the alarm states are reported separately by the gas
  * status frame. */
 static void format_environment_frame(char *frame, uint16_t *length, uint32_t sequence,
                                      const NodeATelemetrySnapshot *snapshot)
 {
-  const Sht30Reading *environment = &snapshot->environment;
-  int32_t temperature_abs = environment->temperature_centi_c;
-  const char *temperature_sign = "";
-  const char *quality = sht30_quality(environment);
-  const char *oxygen_quality = snapshot->oxygen_online ? "suspect" : "missing";
-  const char *smoke_quality = snapshot->smoke_sampled ? "good" : "missing";
-  const char *flame_quality = snapshot->flame_sampled ? "good" : "missing";
-  const char *level_quality = snapshot->level_stable ? "good" : "suspect";
   int written;
+  if (snapshot->sensors != NULL && snapshot->sensor_count > 0U) {
+    const SensorReading *sht = find_reading_by_code(snapshot->sensors, snapshot->sensor_count, "SHT-01");
+    const SensorReading *smoke = find_reading_by_code(snapshot->sensors, snapshot->sensor_count, "MQ2-01");
+    const SensorReading *flame = find_reading_by_code(snapshot->sensors, snapshot->sensor_count, "FLAME-01");
+    const SensorReading *level = find_reading_by_code(snapshot->sensors, snapshot->sensor_count, "LEVEL-01");
+    const SensorReading *o2 = find_reading_by_code(snapshot->sensors, snapshot->sensor_count, "O2-01");
 
-  if (temperature_abs < 0) {
-    temperature_sign = "-";
-    temperature_abs = -temperature_abs;
+    int32_t temperature_abs = (sht != NULL) ? sht->temperature_centi_c : 0;
+    const char *temperature_sign = "";
+    if (temperature_abs < 0) {
+      temperature_sign = "-";
+      temperature_abs = -temperature_abs;
+    }
+    const char *sht_code = (sht != NULL) ? sht->asset_code : "SHT-01";
+    const char *quality = (sht != NULL && sht->online && sht->quality != SENSOR_QUALITY_MISSING) ? "good" : "missing";
+    uint32_t hum_rh = (sht != NULL) ? (uint32_t)sht->humidity_centi_rh : 0U;
+
+    const char *smoke_code = (smoke != NULL) ? smoke->asset_code : "MQ2-01";
+    const char *smoke_quality = (smoke != NULL && smoke->quality == SENSOR_QUALITY_GOOD) ? "good" : "missing";
+    unsigned int smoke_alarm = (smoke != NULL) ? (unsigned int)smoke->alarm : 0U;
+
+    const char *flame_code = (flame != NULL) ? flame->asset_code : "FLAME-01";
+    const char *flame_quality = (flame != NULL && flame->quality == SENSOR_QUALITY_GOOD) ? "good" : "missing";
+    unsigned int flame_alarm = (flame != NULL) ? (unsigned int)flame->alarm : 0U;
+
+    const char *level_code = (level != NULL) ? level->asset_code : "LEVEL-01";
+    const char *level_quality = (level != NULL && level->quality == SENSOR_QUALITY_GOOD) ? "good" : ((level != NULL) ? "suspect" : "missing");
+    unsigned int level_detected = (level != NULL) ? (unsigned int)level->alarm : 0U;
+
+    const char *o2_code = (o2 != NULL) ? o2->asset_code : "O2-01";
+    const char *oxygen_quality = (o2 != NULL && o2->online && o2->quality != SENSOR_QUALITY_MISSING) ? "suspect" : "missing";
+    unsigned int oxygen_raw = (o2 != NULL) ? (unsigned int)o2->raw : 0U;
+    unsigned long oxygen_uv = (o2 != NULL) ? (unsigned long)o2->microvolts : 0UL;
+
+    written = snprintf(frame, TELEMETRY_LINE_LIMIT,
+      "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
+      "{\"assetCode\":\"%s\",\"metric\":\"temperature\",\"value\":%s%ld.%02ld,\"unit\":\"degC\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"%s\",\"metric\":\"humidity\",\"value\":%lu.%02lu,\"unit\":\"%%RH\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"%s\",\"metric\":\"smoke.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"%s\",\"metric\":\"flame.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"%s\",\"metric\":\"level.detected\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"%s\",\"metric\":\"oxygen.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"%s\",\"metric\":\"oxygen.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"}]}\r\n",
+      (unsigned long)sequence,
+      sht_code, temperature_sign, (long)(temperature_abs / 100), (long)(temperature_abs % 100), quality,
+      sht_code, (unsigned long)(hum_rh / 100U), (unsigned long)(hum_rh % 100U), quality,
+      smoke_code, smoke_alarm, smoke_quality,
+      flame_code, flame_alarm, flame_quality,
+      level_code, level_detected, level_quality,
+      o2_code, oxygen_raw, oxygen_quality,
+      o2_code, (unsigned long)(oxygen_uv / 1000UL), (unsigned long)(oxygen_uv % 1000UL), oxygen_quality);
+  } else {
+    const Sht30Reading *environment = &snapshot->environment;
+    int32_t temperature_abs = environment->temperature_centi_c;
+    const char *temperature_sign = "";
+    const char *quality = sht30_quality(environment);
+    const char *oxygen_quality = snapshot->oxygen_online ? "suspect" : "missing";
+    const char *smoke_quality = snapshot->smoke_sampled ? "good" : "missing";
+    const char *flame_quality = snapshot->flame_sampled ? "good" : "missing";
+    const char *level_quality = snapshot->level_stable ? "good" : "suspect";
+
+    if (temperature_abs < 0) {
+      temperature_sign = "-";
+      temperature_abs = -temperature_abs;
+    }
+    written = snprintf(frame, TELEMETRY_LINE_LIMIT,
+      "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
+      "{\"assetCode\":\"ENV-01\",\"metric\":\"temperature\",\"value\":%s%ld.%02ld,\"unit\":\"degC\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"ENV-01\",\"metric\":\"humidity\",\"value\":%lu.%02lu,\"unit\":\"%%RH\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"smoke.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"flame.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"LEVEL-L01\",\"metric\":\"level.detected\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"}]}\r\n",
+      (unsigned long)sequence,
+      temperature_sign, (long)(temperature_abs / 100), (long)(temperature_abs % 100), quality,
+      (unsigned long)(environment->humidity_centi_rh / 100U),
+      (unsigned long)(environment->humidity_centi_rh % 100U), quality,
+      (unsigned int)snapshot->smoke_alarm, smoke_quality,
+      (unsigned int)snapshot->flame_alarm, flame_quality,
+      (unsigned int)snapshot->level_detected, level_quality,
+      (unsigned int)snapshot->oxygen_raw, oxygen_quality,
+      (unsigned long)(snapshot->oxygen_microvolts / 1000UL),
+      (unsigned long)(snapshot->oxygen_microvolts % 1000UL), oxygen_quality);
   }
-  written = snprintf(frame, TELEMETRY_LINE_LIMIT,
-    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
-    "{\"assetCode\":\"ENV-01\",\"metric\":\"temperature\",\"value\":%s%ld.%02ld,\"unit\":\"degC\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"ENV-01\",\"metric\":\"humidity\",\"value\":%lu.%02lu,\"unit\":\"%%RH\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"smoke.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"flame.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"LEVEL-L01\",\"metric\":\"level.detected\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"}]}\r\n",
-    (unsigned long)sequence,
-    temperature_sign, (long)(temperature_abs / 100), (long)(temperature_abs % 100), quality,
-    (unsigned long)(environment->humidity_centi_rh / 100U),
-    (unsigned long)(environment->humidity_centi_rh % 100U), quality,
-    (unsigned int)snapshot->smoke_alarm, smoke_quality,
-    (unsigned int)snapshot->flame_alarm, flame_quality,
-    (unsigned int)snapshot->level_detected, level_quality,
-    (unsigned int)snapshot->oxygen_raw, oxygen_quality,
-    (unsigned long)(snapshot->oxygen_microvolts / 1000UL),
-    (unsigned long)(snapshot->oxygen_microvolts % 1000UL), oxygen_quality);
   write_frame(frame, length, written);
 }
 
-/* One fan frame carries the electrical readings the screen shows plus the
- * bounded diagnostic block.  The INA226 register dumps that used to pad this
- * frame are gone: they pushed it past the bridge's 1024-byte transport limit
- * and no consumer reads them. */
 static void format_fan_frame(char *frame, uint16_t *length, uint32_t sequence,
                              const NodeATelemetrySnapshot *snapshot, uint8_t fan_index)
 {
@@ -132,49 +193,108 @@ static void format_fan_frame(char *frame, uint16_t *length, uint32_t sequence,
  * automatic ventilation; oxygen and CO carry their own provisional states
  * so the local screen can show them without acting on them. */
 static void format_gas_status_frame(char *frame, uint16_t *length, uint32_t sequence,
-                                    const NodeATelemetrySnapshot *snapshot)
+                                     const NodeATelemetrySnapshot *snapshot)
 {
-  const char *oxygen_quality = snapshot->oxygen_online ? "suspect" : "missing";
-  const char *methane_quality = snapshot->methane_online ? "good" : "missing";
-  const char *co_quality = snapshot->co_online ? "suspect" : "missing";
-  int written = snprintf(frame, TELEMETRY_LINE_LIMIT,
-    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"}]}\r\n",
-    (unsigned long)sequence,
-    (unsigned int)snapshot->gas_alarm, methane_quality,
-    (unsigned int)snapshot->gas_warning, methane_quality,
-    (unsigned int)snapshot->oxygen_alarm, oxygen_quality,
-    (unsigned int)snapshot->co_alarm, co_quality);
+  int written;
+  if (snapshot->sensors != NULL && snapshot->sensor_count > 0U) {
+    const SensorReading *mq4 = find_reading_by_code(snapshot->sensors, snapshot->sensor_count, "MQ4-01");
+    const SensorReading *o2 = find_reading_by_code(snapshot->sensors, snapshot->sensor_count, "O2-01");
+    const SensorReading *co = find_reading_by_code(snapshot->sensors, snapshot->sensor_count, "CO-01");
+
+    const char *mq4_code = (mq4 != NULL) ? mq4->asset_code : "MQ4-01";
+    const char *o2_code = (o2 != NULL) ? o2->asset_code : "O2-01";
+    const char *co_code = (co != NULL) ? co->asset_code : "CO-01";
+
+    const char *methane_quality = (mq4 != NULL && mq4->online && mq4->quality != SENSOR_QUALITY_MISSING) ? "good" : "missing";
+    const char *oxygen_quality = (o2 != NULL && o2->online && o2->quality != SENSOR_QUALITY_MISSING) ? "suspect" : "missing";
+    const char *co_quality = (co != NULL && co->online && co->quality != SENSOR_QUALITY_MISSING) ? "suspect" : "missing";
+
+    written = snprintf(frame, TELEMETRY_LINE_LIMIT,
+      "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
+      "{\"assetCode\":\"%s\",\"metric\":\"methane.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"%s\",\"metric\":\"methane.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"%s\",\"metric\":\"oxygen.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"%s\",\"metric\":\"co.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"}]}\r\n",
+      (unsigned long)sequence,
+      mq4_code, (unsigned int)snapshot->gas_alarm, methane_quality,
+      mq4_code, (unsigned int)snapshot->gas_warning, methane_quality,
+      o2_code, (unsigned int)snapshot->oxygen_alarm, oxygen_quality,
+      co_code, (unsigned int)snapshot->co_alarm, co_quality);
+  } else {
+    const char *oxygen_quality = snapshot->oxygen_online ? "suspect" : "missing";
+    const char *methane_quality = snapshot->methane_online ? "good" : "missing";
+    const char *co_quality = snapshot->co_online ? "suspect" : "missing";
+    written = snprintf(frame, TELEMETRY_LINE_LIMIT,
+      "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.warning\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"co.alarm\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"}]}\r\n",
+      (unsigned long)sequence,
+      (unsigned int)snapshot->gas_alarm, methane_quality,
+      (unsigned int)snapshot->gas_warning, methane_quality,
+      (unsigned int)snapshot->oxygen_alarm, oxygen_quality,
+      (unsigned int)snapshot->co_alarm, co_quality);
+  }
   write_frame(frame, length, written);
 }
 
-/* The residual analog channels.  Oxygen and CO already reported their alarm
- * states; this frame carries the raw evidence the cloud contract keeps for
- * traceability. */
 static void format_gas_raw_frame(char *frame, uint16_t *length, uint32_t sequence,
                                  const NodeATelemetrySnapshot *snapshot)
 {
-  const char *methane_quality = snapshot->methane_online ? "good" : "missing";
-  const char *co_quality = snapshot->co_online ? "suspect" : "missing";
-  const char *flame_quality = snapshot->flame_sampled ? "good" : "missing";
-  int written = snprintf(frame, TELEMETRY_LINE_LIMIT,
-    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"flame.rawLevel\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
-    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"}]}\r\n",
-    (unsigned long)sequence,
-    (unsigned int)snapshot->flame_alarm, flame_quality,
-    (unsigned int)snapshot->methane_raw, methane_quality,
-    (unsigned long)(snapshot->methane_microvolts / 1000UL),
-    (unsigned long)(snapshot->methane_microvolts % 1000UL), methane_quality,
-    (unsigned int)snapshot->co_raw, co_quality,
-    (unsigned long)(snapshot->co_microvolts / 1000UL),
-    (unsigned long)(snapshot->co_microvolts % 1000UL), co_quality);
+  int written;
+  if (snapshot->sensors != NULL && snapshot->sensor_count > 0U) {
+    const SensorReading *flame = find_reading_by_code(snapshot->sensors, snapshot->sensor_count, "FLAME-01");
+    const SensorReading *mq4 = find_reading_by_code(snapshot->sensors, snapshot->sensor_count, "MQ4-01");
+    const SensorReading *co = find_reading_by_code(snapshot->sensors, snapshot->sensor_count, "CO-01");
+
+    const char *flame_code = (flame != NULL) ? flame->asset_code : "FLAME-01";
+    const char *mq4_code = (mq4 != NULL) ? mq4->asset_code : "MQ4-01";
+    const char *co_code = (co != NULL) ? co->asset_code : "CO-01";
+
+    const char *flame_quality = (flame != NULL && flame->quality == SENSOR_QUALITY_GOOD) ? "good" : "missing";
+    const char *methane_quality = (mq4 != NULL && mq4->online && mq4->quality != SENSOR_QUALITY_MISSING) ? "good" : "missing";
+    const char *co_quality = (co != NULL && co->online && co->quality != SENSOR_QUALITY_MISSING) ? "suspect" : "missing";
+
+    unsigned int flame_alarm = (flame != NULL) ? (unsigned int)flame->alarm : 0U;
+    unsigned int mq4_raw = (mq4 != NULL) ? (unsigned int)mq4->raw : 0U;
+    unsigned long mq4_uv = (mq4 != NULL) ? (unsigned long)mq4->microvolts : 0UL;
+    unsigned int co_raw = (co != NULL) ? (unsigned int)co->raw : 0U;
+    unsigned long co_uv = (co != NULL) ? (unsigned long)co->microvolts : 0UL;
+
+    written = snprintf(frame, TELEMETRY_LINE_LIMIT,
+      "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
+      "{\"assetCode\":\"%s\",\"metric\":\"flame.rawLevel\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"%s\",\"metric\":\"methane.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"%s\",\"metric\":\"methane.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"%s\",\"metric\":\"co.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"%s\",\"metric\":\"co.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"}]}\r\n",
+      (unsigned long)sequence,
+      flame_code, flame_alarm, flame_quality,
+      mq4_code, mq4_raw, methane_quality,
+      mq4_code, (unsigned long)(mq4_uv / 1000UL), (unsigned long)(mq4_uv % 1000UL), methane_quality,
+      co_code, co_raw, co_quality,
+      co_code, (unsigned long)(co_uv / 1000UL), (unsigned long)(co_uv % 1000UL), co_quality);
+  } else {
+    const char *methane_quality = snapshot->methane_online ? "good" : "missing";
+    const char *co_quality = snapshot->co_online ? "suspect" : "missing";
+    const char *flame_quality = snapshot->flame_sampled ? "good" : "missing";
+    written = snprintf(frame, TELEMETRY_LINE_LIMIT,
+      "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"flame.rawLevel\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"methane.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"co.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
+      "{\"assetCode\":\"GAS-01\",\"metric\":\"co.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"}]}\r\n",
+      (unsigned long)sequence,
+      (unsigned int)snapshot->flame_alarm, flame_quality,
+      (unsigned int)snapshot->methane_raw, methane_quality,
+      (unsigned long)(snapshot->methane_microvolts / 1000UL),
+      (unsigned long)(snapshot->methane_microvolts % 1000UL), methane_quality,
+      (unsigned int)snapshot->co_raw, co_quality,
+      (unsigned long)(snapshot->co_microvolts / 1000UL),
+      (unsigned long)(snapshot->co_microvolts % 1000UL), co_quality);
+  }
   write_frame(frame, length, written);
 }
 
