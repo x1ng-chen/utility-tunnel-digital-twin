@@ -86,9 +86,12 @@ if(FIRMWARE_VARIANT STREQUAL "node_b")
 endif()
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/multi_sensor.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/node_a_command.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/uart_tx_queue.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/kk_ui_catalog.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/kk_ui_motion.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_menu.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_renderer.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_state.c"
