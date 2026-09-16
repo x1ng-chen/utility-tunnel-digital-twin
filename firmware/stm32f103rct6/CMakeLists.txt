@@ -83,6 +83,7 @@ if(FIRMWARE_VARIANT STREQUAL "node_b")
         "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/screen_snapshot.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/network_time.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/menu_command.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/node_b_sensor_bank.c"
     )
 endif()
 

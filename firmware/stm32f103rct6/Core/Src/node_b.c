@@ -8,12 +8,15 @@
 #include "network_time.h"
 #include "menu_command.h"
 #include "uart_tx_queue.h"
+#include "node_b_sensor_bank.h"
+#include "sensor_telemetry.h"
 
 #include <stdio.h>
 #include <string.h>
 
 #define NODE_ID "node-b"
 #define ESP_HEARTBEAT_INTERVAL_MS 2000U
+#define TELEMETRY_INTERVAL_MS 2000U
 /* Bytes moved per UART per UI-loop iteration.  The loop must keep parsing the
  * ESP snapshot and polling the joystick at the 60 FPS cadence, so the transmit
  * work of one iteration is bounded in bytes (and therefore in milliseconds)
@@ -48,12 +51,18 @@ static char ui_test_line[UI_TEST_LINE_SIZE];
 static uint8_t ui_test_length;
 static uint16_t display_test_completed;
 static uint8_t display_test_active;
-static MenuCommandTxQueue command_tx;
 /* Both UARTs keep their own queue so a stalled debug console can never hold
- * back the ESP link, and neither can hold back the UI loop.  The menu command
- * path keeps its own byte-at-a-time queue in menu_command.c. */
+ * back the ESP link, and neither can hold back the UI loop.  Every ESP-bound
+ * frame, including menu commands, shares esp_tx_queue so JSON lines cannot be
+ * interleaved on USART2. */
 static UartTxQueue esp_tx_queue;
 static UartTxQueue debug_tx_queue;
+static NodeBSensorBank sensor_bank;
+static SensorTelemetryCursor telemetry_cursor;
+ADC_HandleTypeDef hadc1;
+
+static void MX_ADC1_Init(void);
+static void SendTelemetry(void);
 
 void SystemClock_Config(void);
 void Error_Handler(void);
@@ -64,7 +73,6 @@ static void SendHeartbeat(void);
 static void PollEsp(uint32_t *received_count, PeerReading *peer);
 static void PollUiTest(void);
 static void HandleUiEffect(UiEffect effect, uint32_t now_ms);
-static void PollCommandTx(void);
 
 /* Queues one already-formatted line for both UARTs.  Nothing on the diagnostic
  * or heartbeat path writes a UART directly any more: the UI loop drains both
@@ -176,7 +184,6 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
       if (MenuCommand_ParseAck(line, length, &acknowledgement) &&
           MenuCommand_AcceptAck(&command_context, &acknowledgement))
       {
-        command_tx.active = 0U;
         (void)UiState_HandleAcknowledgement(&ui_state, acknowledgement.command_id,
                                             acknowledgement.accepted);
       }
@@ -307,7 +314,6 @@ static void UiTest_HandleLine(void)
     ScreenSnapshot_Init(&snapshot_context);
     NetworkTime_Init(&ui_clock);
     MenuCommand_Init(&command_context, HAL_GetTick());
-    MenuCommandTx_Init(&command_tx);
     UiRenderer_Init();
   } else if (sscanf(ui_test_line, "#UITEST GOTO %15s", page_name) == 1) {
     if (!UiRenderer_PageFromName(page_name, &target_page)) return;
@@ -384,28 +390,12 @@ static void HandleUiEffect(UiEffect effect, uint32_t now_ms)
     (void)UiState_CommandSendFailed(&ui_state);
     return;
   }
-  if (!MenuCommandTx_Enqueue(&command_tx, line, length)) {
+  if (!UartTx_EnqueuePriority(&esp_tx_queue, line, (uint16_t)length)) {
     command_context.pending = 0U;
     (void)UiState_CommandSendFailed(&ui_state);
     return;
   }
   if (!UiState_CommandDispatched(&ui_state, command_context.active_command_id)) {
-    command_context.pending = 0U;
-    command_tx.active = 0U;
-    (void)UiState_CommandSendFailed(&ui_state);
-  }
-}
-
-static void PollCommandTx(void)
-{
-  HAL_StatusTypeDef status;
-  uint8_t byte;
-  if (!MenuCommandTx_Peek(&command_tx, &byte)) return;
-  status = UartTx_WriteByte(&huart2, &byte);
-  if (status == HAL_OK) {
-    MenuCommandTx_Commit(&command_tx);
-  } else if (status == HAL_ERROR) {
-    MenuCommandTx_Fail(&command_tx);
     command_context.pending = 0U;
     (void)UiState_CommandSendFailed(&ui_state);
   }
@@ -443,7 +433,6 @@ int main(void)
   ScreenSnapshot_Init(&snapshot_context);
   NetworkTime_Init(&ui_clock);
   MenuCommand_Init(&command_context, NextBootId());
-  MenuCommandTx_Init(&command_tx);
   UartTx_Init(&esp_tx_queue);
   UartTx_Init(&debug_tx_queue);
   Joystick_Init();
@@ -451,11 +440,17 @@ int main(void)
   ST7735_Init();
   UiRenderer_Init();
   (void)UiRenderer_RenderFrame(&ui_state, &ui_snapshot, HAL_GetTick());
+  MX_ADC1_Init();
+  if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) Error_Handler();
+  NodeBSensorBank_Init(&sensor_bank, &hadc1);
+  SensorTelemetry_Init(&telemetry_cursor, 1U);
   Tx_EnqueueLine("#NODE node-b boot\r\n", 19U);
 
+  static uint32_t last_telemetry = HAL_MAX_DELAY;
   for (;;)
   {
     const uint32_t now = HAL_GetTick();
+    NodeBSensorBank_Tick(&sensor_bank, now);
     UiInputEvent event;
     event = Joystick_Poll(now);
     if (event != UI_EVT_NONE) {
@@ -464,7 +459,6 @@ int main(void)
     }
     PollUiTest();
     PollEsp(&received_count, &peer);
-    PollCommandTx();
     /* Hand the queued diagnostic and heartbeat lines to the links under a byte
      * budget, so a busy or unplugged console cannot delay the input poll, the
      * snapshot parse or the render above. */
@@ -496,6 +490,11 @@ int main(void)
     else {
       (void)UiRenderer_RenderFrame(&ui_state, &ui_snapshot, now);
     }
+    if ((now - last_telemetry) >= TELEMETRY_INTERVAL_MS)
+    {
+      SendTelemetry();
+      last_telemetry = now;
+    }
     if ((now - last_heartbeat) >= ESP_HEARTBEAT_INTERVAL_MS)
     {
       SendHeartbeat();
@@ -505,6 +504,38 @@ int main(void)
     {
       HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
       last_led = now;
+    }
+  }
+}
+
+static void MX_ADC1_Init(void)
+{
+  hadc1.Instance = ADC1;
+  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 1;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK) Error_Handler();
+}
+
+static void SendTelemetry(void)
+{
+  char buffer[768];
+  uint16_t length = 0U;
+  SensorTelemetryCursor next_cursor = telemetry_cursor;
+  if (SensorTelemetry_FormatNext(NodeBSensorBank_Readings(&sensor_bank),
+                                 NodeBSensorBank_Count(&sensor_bank),
+                                 &next_cursor,
+                                 buffer,
+                                 sizeof(buffer),
+                                 &length))
+  {
+    if (UartTx_Enqueue(&esp_tx_queue, buffer, length))
+    {
+      (void)UartTx_Enqueue(&debug_tx_queue, buffer, length);
+      telemetry_cursor = next_cursor;
     }
   }
 }
@@ -553,6 +584,17 @@ static void MX_GPIO_Init(void)
   gpio.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOB, &gpio);
   HAL_GPIO_WritePin(GPIOB, gpio.Pin, GPIO_PIN_RESET);
+
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  gpio.Pin = GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_10 | GPIO_PIN_11;
+  gpio.Mode = GPIO_MODE_INPUT;
+  gpio.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &gpio);
+
+  gpio.Pin = GPIO_PIN_8 | GPIO_PIN_9;
+  gpio.Mode = GPIO_MODE_INPUT;
+  gpio.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOC, &gpio);
 }
 
 static void MX_USART1_UART_Init(void)
