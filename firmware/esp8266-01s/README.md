@@ -28,7 +28,10 @@
 
 电脑上的 IoTDA 网关会每 3 秒向 UDP `4210` 广播本地 MQTT 服务。ESP 使用广播包的来源 IP 与其中的端口连接 Broker，因此手机热点重新分配电脑 IP 后不需要重新编译。只有 MQTT 连接成功后，端点才会连同版本和 CRC 写入 EEPROM；下次启动先尝试已保存端点，同时继续监听新广播并自动切换。
 
-串口输入 `STATUS` 可查看 Wi-Fi、ESP IP、RSSI、MQTT、当前 Broker 与可用堆。STM32 发送一行 `ut.telemetry.v1` JSON 后，固件发布到对应设备的 `ut/v1/<DEVICE_ID>/telemetry`；收到的命令以 `MQTT|topic|payload` 格式转发给 STM32。
+串口输入 `STATUS` 可查看 Wi-Fi、ESP IP、RSSI、MQTT、当前 Broker 与可用堆。STM32 发送一行 `ut.telemetry.v1` JSON 后，固件发布到对应角色的主题：
+- **`esp01_ctrl01`** 发布至 `ut/v1/CTRL-01/telemetry`，携带 Node A 本地传感器项；订阅 `ut/v1/CTRL-01/cmd/#` 接收云端与菜单命令。
+- **`esp01_ctrl02`** 发布至 `ut/v1/CTRL-02/telemetry`，携带 Node B 本地传感器项；同时订阅 `ut/v1/CTRL-01/telemetry` 接收远端快照供主屏浏览，菜单命令定向发布至 `ut/v1/CTRL-01/cmd/menu`。
+两角色均支持包含 `items` 与 `alarmLabel` 的多传感器完整序列化，不丢弃 assetCode。
 
 正常启动时可观察到：
 

@@ -190,6 +190,23 @@ SWD（`PA13/PA14`）在两块板上都保留，可随时用 ST-Link 连接；两
 
 `Core/Src/main.c`、DHT11（PA1）、PC0 水位 ADC 和 SW-420（PA4）是早期单板台架程序的历史记录。它们仍可通过显式 `FIRMWARE_VARIANT=bench` 供回归使用，但不是当前控制器默认映像，不能作为 SHT30 双节点系统的接线或烧录依据。
 
+
+## 双节点 32 路多传感器扩展架构
+
+固件已全面扩展支持双节点 32 路物理传感器拓扑（Node A 20 路，Node B 12 路）：
+
+- **SHT30 温湿度**：4 路（Node A 两条独立软件 I2C 总线，每条总线支持 0x44/0x45 双地址）
+- **模拟量输入**：13 路（Node A 7 路：3 路已有 PC1-PC3 + 4 路新增 PA0, PA4, PA5, PB1；Node B 6 路：PA0, PA1, PA4, PA6, PB0, PB1）
+- **数字量输入**：15 路（Node A 9 路：PB12, PB14, PC0 + PC8-PC13；Node B 6 路：PC6-PC11）
+- **安全与隔离策略**：
+  - 新增通道固件默认置为禁用（`enabled=0`）；
+  - 仅显式标定且受权通道（`MQ4-01` 等）触发自动通风与声光联锁；
+  - 模拟未标定通道上报 `suspect`，数字通道实施 4 次去抖滤波；
+  - 各传感器独立陈旧超时，单点断线不影响同总线或其余 31 路通道。
+- **文档与接线指引**：
+  - 完整接线预检清单：`docs/hardware/dual-node-sensor-wiring-checklist.md`
+  - 实机调试记录模板：`docs/hardware/dual-node-sensor-commissioning-log.md`
+
 ## 尚未完成的实体验收
 
 以下项目**全部未完成**，构建通过不代表已经验收：
