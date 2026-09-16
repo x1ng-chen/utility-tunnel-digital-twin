@@ -19,6 +19,8 @@ void SensorReading_Init(SensorReading *reading, const char *asset_code,
   reading->quality = SENSOR_QUALITY_MISSING;
   reading->enabled = enabled ? 1U : 0U;
   reading->online = 0U;
+  reading->calibrated = 0U;
+  reading->commissioned_for_alarm = 0U;
 }
 
 void SensorReading_SetAnalog(SensorReading *reading, uint16_t raw,

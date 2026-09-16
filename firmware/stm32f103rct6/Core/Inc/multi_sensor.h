@@ -31,6 +31,8 @@ typedef struct {
   uint8_t enabled;
   uint8_t online;
   uint8_t alarm;
+  uint8_t calibrated;
+  uint8_t commissioned_for_alarm;
   uint8_t digital_value;
   uint16_t raw;
   uint32_t microvolts;

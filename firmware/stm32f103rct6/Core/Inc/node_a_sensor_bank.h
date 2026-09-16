@@ -45,6 +45,8 @@ void NodeASensorBank_SetEnabled(NodeASensorBank *bank, uint8_t index, uint8_t en
 
 void NodeASensorBank_SetCalibrated(NodeASensorBank *bank, uint8_t index, uint8_t calibrated);
 
+void NodeASensorBank_SetCommissionedForAlarm(NodeASensorBank *bank, uint8_t index, uint8_t commissioned);
+
 #ifdef __cplusplus
 }
 #endif

@@ -165,11 +165,18 @@ void NodeASensorBank_Init(NodeASensorBank *bank, ADC_HandleTypeDef *hadc,
   if ((pos = NodeASensorBank_FindIndex(bank, "MQ4-01")) >= 0) {
     NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
     NodeASensorBank_SetCalibrated(bank, (uint8_t)pos, 1U);
+    NodeASensorBank_SetCommissionedForAlarm(bank, (uint8_t)pos, 1U);
   }
   if ((pos = NodeASensorBank_FindIndex(bank, "CO-01")) >= 0) NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
   if ((pos = NodeASensorBank_FindIndex(bank, "O2-01")) >= 0) NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
-  if ((pos = NodeASensorBank_FindIndex(bank, "MQ2-01")) >= 0) NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
-  if ((pos = NodeASensorBank_FindIndex(bank, "FLAME-01")) >= 0) NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
+  if ((pos = NodeASensorBank_FindIndex(bank, "MQ2-01")) >= 0) {
+    NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
+    NodeASensorBank_SetCommissionedForAlarm(bank, (uint8_t)pos, 1U);
+  }
+  if ((pos = NodeASensorBank_FindIndex(bank, "FLAME-01")) >= 0) {
+    NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
+    NodeASensorBank_SetCommissionedForAlarm(bank, (uint8_t)pos, 1U);
+  }
   if ((pos = NodeASensorBank_FindIndex(bank, "LEVEL-01")) >= 0) NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
 }
 
@@ -209,6 +216,12 @@ void NodeASensorBank_SetEnabled(NodeASensorBank *bank, uint8_t index, uint8_t en
 void NodeASensorBank_SetCalibrated(NodeASensorBank *bank, uint8_t index, uint8_t calibrated) {
   if (!bank || index >= NODE_A_SENSOR_COUNT) return;
   bank->calibrated[index] = calibrated ? 1U : 0U;
+  bank->readings[index].calibrated = calibrated ? 1U : 0U;
+}
+
+void NodeASensorBank_SetCommissionedForAlarm(NodeASensorBank *bank, uint8_t index, uint8_t commissioned) {
+  if (!bank || index >= NODE_A_SENSOR_COUNT) return;
+  bank->readings[index].commissioned_for_alarm = commissioned ? 1U : 0U;
 }
 
 void NodeASensorBank_Tick(NodeASensorBank *bank, uint32_t now_ms) {
@@ -284,6 +297,7 @@ void NodeASensorBank_Tick(NodeASensorBank *bank, uint32_t now_ms) {
       } else {
         q = SENSOR_QUALITY_SUSPECT;
       }
+      reading->calibrated = bank->calibrated[item];
       SensorReading_SetAnalog(reading, val, uv, now_ms, q);
     } else {
       SensorReading_SetMissing(reading, now_ms);

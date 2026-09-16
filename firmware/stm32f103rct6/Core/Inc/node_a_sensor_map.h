@@ -1,7 +1,15 @@
 #ifndef NODE_A_SENSOR_MAP_H
 #define NODE_A_SENSOR_MAP_H
 
-#include "stm32f1xx_hal.h"
+#if defined(__has_include)
+  #if __has_include("stm32f1xx_hal.h")
+    #include "stm32f1xx_hal.h"
+  #endif
+#else
+  #include "stm32f1xx_hal.h"
+#endif
+#include "multi_sensor.h"
+#include <string.h>
 
 /* Node A gas-sensor analog inputs. Keep this mapping aligned with the
  * physical harness and the ADC GPIO configuration in stm32f1xx_hal_msp.c. */
@@ -52,5 +60,72 @@
   ((uint8_t)(((alarm) != 0U) || \
              (((cooling) != 0U) && \
               ((elapsed_ms) < NODE_A_GAS_VENTILATION_HOLD_MS))))
+
+#define SENSOR_SAFETY_MAX_SOURCES 16U
+
+typedef struct {
+  uint8_t alarm_active;
+  uint8_t ventilation_required;
+  uint8_t audible_required;
+  uint8_t source_count;
+  char sources[SENSOR_SAFETY_MAX_SOURCES][12];
+} SensorSafetyResult;
+
+static inline uint8_t has_source(const SensorSafetyResult *result, const char *asset_code) {
+  if (result == NULL || asset_code == NULL) return 0U;
+  for (uint8_t i = 0U; i < result->source_count; ++i) {
+    if (strncmp(result->sources[i], asset_code, sizeof(result->sources[i])) == 0) {
+      return 1U;
+    }
+  }
+  return 0U;
+}
+
+static inline SensorSafetyResult SensorSafety_Evaluate(const SensorReading *readings, uint8_t count) {
+  SensorSafetyResult result;
+  memset(&result, 0, sizeof(result));
+  if (readings == NULL || count == 0U) {
+    return result;
+  }
+
+  for (uint8_t i = 0U; i < count; ++i) {
+    const SensorReading *r = &readings[i];
+    if (!r->enabled || !r->online || r->quality != SENSOR_QUALITY_GOOD) {
+      continue;
+    }
+    if (!r->commissioned_for_alarm) {
+      continue;
+    }
+
+    uint8_t is_analog = (r->kind == SENSOR_KIND_MQ4 || r->kind == SENSOR_KIND_O2 || r->kind == SENSOR_KIND_CO);
+    if (is_analog && !r->calibrated) {
+      continue;
+    }
+
+    if (r->alarm) {
+      result.alarm_active = 1U;
+      if (result.source_count < SENSOR_SAFETY_MAX_SOURCES) {
+        size_t j = 0;
+        while (j < sizeof(result.sources[result.source_count]) - 1U && r->asset_code[j] != '\0') {
+          result.sources[result.source_count][j] = r->asset_code[j];
+          ++j;
+        }
+        result.sources[result.source_count][j] = '\0';
+        result.source_count++;
+      }
+
+      if (r->kind == SENSOR_KIND_MQ4 || r->kind == SENSOR_KIND_MQ2 || r->kind == SENSOR_KIND_CO) {
+        result.ventilation_required = 1U;
+        result.audible_required = 1U;
+      } else if (r->kind == SENSOR_KIND_FLAME) {
+        result.audible_required = 1U;
+      } else if (r->kind == SENSOR_KIND_LEVEL) {
+        result.audible_required = 1U;
+      }
+    }
+  }
+
+  return result;
+}
 
 #endif

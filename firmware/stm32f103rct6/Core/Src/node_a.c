@@ -1235,12 +1235,17 @@ static uint8_t Command_IsForThisController(const char *topic)
 
 static void Safety_Snapshot(NodeASafetyState *safety)
 {
+  SensorSafetyResult safety_eval = SensorSafety_Evaluate(
+      NodeASensorBank_Readings(&sensor_bank),
+      NodeASensorBank_Count(&sensor_bank));
   safety->smoke_alarm = (smoke_alarm != 0U) || (test_safety_smoke != 0U);
   safety->flame_alarm = (flame_alarm != 0U) || (test_safety_flame != 0U);
-  safety->gas_alarm = (gas_alarm != 0U) || (test_safety_gas != 0U);
+  safety->gas_alarm = (gas_alarm != 0U) || (test_safety_gas != 0U) ||
+                      (safety_eval.alarm_active != 0U);
   safety->gas_warning = gas_warning;
   safety->gas_ventilation_active =
-      (gas_ventilation_active != 0U) || (test_safety_vent != 0U);
+      (gas_ventilation_active != 0U) || (test_safety_vent != 0U) ||
+      (safety_eval.ventilation_required != 0U);
 }
 
 static void Command_SendAck(const char *command_id, const char *status,
@@ -1847,7 +1852,13 @@ int main(void)
     Flame_Poll(now);
     Level_Poll(now);
     GasVentilation_Update(now);
-    alarm_active = ((smoke_alarm != 0U) || (flame_alarm != 0U) || (gas_alarm != 0U)) ? 1U : 0U;
+    {
+      SensorSafetyResult safety_eval = SensorSafety_Evaluate(
+          NodeASensorBank_Readings(&sensor_bank),
+          NodeASensorBank_Count(&sensor_bank));
+      alarm_active = ((smoke_alarm != 0U) || (flame_alarm != 0U) ||
+                      (gas_alarm != 0U) || (safety_eval.audible_required != 0U)) ? 1U : 0U;
+    }
     if ((alarm_active == 0U) && (g_actuator.buzzer_on != 0U) &&
         ((now - buzzer_started_at) >= buzzer_duration_ms))
       Buzzer_Silence();
@@ -2068,7 +2079,12 @@ static void GasAlarm_Update(uint16_t oxygen_raw, uint8_t oxygen_online,
 
 static void GasVentilation_Update(uint32_t now)
 {
-  if (gas_alarm != 0U)
+  SensorSafetyResult safety_eval = SensorSafety_Evaluate(
+      NodeASensorBank_Readings(&sensor_bank),
+      NodeASensorBank_Count(&sensor_bank));
+  uint8_t vent_required = (gas_alarm != 0U) || (safety_eval.ventilation_required != 0U);
+
+  if (vent_required != 0U)
   {
     gas_ventilation_active = 1U;
     gas_ventilation_cooling = 0U;
@@ -2080,7 +2096,7 @@ static void GasVentilation_Update(uint32_t now)
   }
   else if ((gas_ventilation_active != 0U) &&
            (NODE_A_GAS_VENTILATION_SHOULD_RUN(
-               gas_alarm, gas_ventilation_cooling,
+               vent_required, gas_ventilation_cooling,
                now - gas_ventilation_clear_started_at) == 0U))
   {
     gas_ventilation_active = 0U;

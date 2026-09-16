@@ -57,6 +57,12 @@ void NodeBSensorBank_SetEnabled(NodeBSensorBank *bank, uint8_t index, uint8_t en
 void NodeBSensorBank_SetCalibrated(NodeBSensorBank *bank, uint8_t index, uint8_t calibrated) {
   if (!bank || index >= NODE_B_SENSOR_COUNT) return;
   bank->calibrated[index] = calibrated ? 1U : 0U;
+  bank->readings[index].calibrated = calibrated ? 1U : 0U;
+}
+
+void NodeBSensorBank_SetCommissionedForAlarm(NodeBSensorBank *bank, uint8_t index, uint8_t commissioned) {
+  if (!bank || index >= NODE_B_SENSOR_COUNT) return;
+  bank->readings[index].commissioned_for_alarm = commissioned ? 1U : 0U;
 }
 
 void NodeBSensorBank_Tick(NodeBSensorBank *bank, uint32_t now_ms) {
@@ -114,6 +120,7 @@ void NodeBSensorBank_Tick(NodeBSensorBank *bank, uint32_t now_ms) {
       } else {
         q = SENSOR_QUALITY_SUSPECT;
       }
+      reading->calibrated = bank->calibrated[item];
       SensorReading_SetAnalog(reading, val, uv, now_ms, q);
     } else {
       SensorReading_SetMissing(reading, now_ms);
