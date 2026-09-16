@@ -243,7 +243,65 @@ static uint8_t parse_model(const char *line, size_t length, uint32_t received_ms
       !character(&cursor, ',') || !boolean_value(&cursor, &command_accepted) ||
       !character(&cursor, ',') || !boolean_value(&cursor, &command_complete) ||
       !character(&cursor, ',') || !unsigned_value(&cursor, &command_completed) ||
-      !character(&cursor, ']') || !character(&cursor, '}')) return 0U;
+      !character(&cursor, ']')) return 0U;
+  while (character(&cursor, ',')) {
+    if (named_key(&cursor, "items")) {
+      if (!character(&cursor, '[')) return 0U;
+      if (!character(&cursor, ']')) {
+        while (1) {
+          char item_id[16];
+          char item_src[16];
+          uint64_t item_k, item_q, item_a, item_t;
+          int32_t item_v, item_sc;
+          size_t i;
+          if (!character(&cursor, '{') ||
+              !named_key(&cursor, "id") || !string_value(&cursor, item_id, sizeof(item_id)) ||
+              !character(&cursor, ',') || !named_key(&cursor, "k") || !unsigned_value(&cursor, &item_k) ||
+              !character(&cursor, ',') || !named_key(&cursor, "v") || !signed_value(&cursor, &item_v) ||
+              !character(&cursor, ',') || !named_key(&cursor, "sc") || !signed_value(&cursor, &item_sc) ||
+              !character(&cursor, ',') || !named_key(&cursor, "q") || !unsigned_value(&cursor, &item_q) ||
+              !character(&cursor, ',') || !named_key(&cursor, "a") || !unsigned_value(&cursor, &item_a) ||
+              !character(&cursor, ',') || !named_key(&cursor, "s") || !string_value(&cursor, item_src, sizeof(item_src)) ||
+              !character(&cursor, ',') || !named_key(&cursor, "t") || !unsigned_value(&cursor, &item_t) ||
+              !character(&cursor, '}')) return 0U;
+          if (item_q > (uint64_t)UI_QUALITY_MISSING || item_a > 1U) return 0U;
+          for (i = 0U; i < snapshot->sensor_count; ++i) {
+            if (strcmp(snapshot->sensors[i].asset_code, item_id) == 0) return 0U;
+          }
+          if (snapshot->sensor_count < SCREEN_SENSOR_CAPACITY) {
+            ScreenSensorReading *r = &snapshot->sensors[snapshot->sensor_count++];
+            (void)strncpy(r->asset_code, item_id, sizeof(r->asset_code) - 1U);
+            r->asset_code[sizeof(r->asset_code) - 1U] = '\0';
+            r->kind = (uint8_t)item_k;
+            r->value = item_v;
+            r->scale = item_sc;
+            r->quality = (UiDataQuality)item_q;
+            r->alarm = (uint8_t)item_a;
+            (void)strncpy(r->source, item_src, sizeof(r->source) - 1U);
+            r->source[sizeof(r->source) - 1U] = '\0';
+            r->updated_at_ms = item_t;
+          }
+          if (character(&cursor, ']')) break;
+          if (!character(&cursor, ',')) return 0U;
+        }
+      }
+    } else if (named_key(&cursor, "alarmLabel")) {
+      if (!string_value(&cursor, snapshot->alarm_label, sizeof(snapshot->alarm_label))) return 0U;
+    } else {
+      return 0U;
+    }
+  }
+  if (!character(&cursor, '}')) return 0U;
+  if (snapshot->alarm_label[0] == '\0') {
+    size_t i;
+    for (i = 0U; i < snapshot->sensor_count; ++i) {
+      if (snapshot->sensors[i].alarm != 0U) {
+        (void)strncpy(snapshot->alarm_label, snapshot->sensors[i].asset_code, sizeof(snapshot->alarm_label) - 1U);
+        snapshot->alarm_label[sizeof(snapshot->alarm_label) - 1U] = '\0';
+        break;
+      }
+    }
+  }
   skip_space(&cursor);
   if (cursor.at != cursor.end || generated < 1704067200000ULL ||
       generated > 4102444799999ULL || connectivity_updated < 1704067200000ULL ||
@@ -298,6 +356,8 @@ uint8_t ScreenSnapshot_Apply(ScreenSnapshotContext *context, const char *line,
 {
   UiSnapshot temporary;
   uint32_t sequence;
+  size_t i, j;
+  uint8_t found;
   (void)memset(&temporary, 0, sizeof(temporary));
   if ((context == 0) || (snapshot == 0) || (length == 0U) ||
       (length > SCREEN_SNAPSHOT_LINE_SIZE) ||
@@ -306,7 +366,52 @@ uint8_t ScreenSnapshot_Apply(ScreenSnapshotContext *context, const char *line,
   context->initialized = 1U;
   context->sequence = sequence;
   context->received_ms = now_ms;
-  *snapshot = temporary;
+
+  /* Merge rotation: preserve existing sensors and update/replace by asset code */
+  for (i = 0U; i < temporary.sensor_count; ++i) {
+    found = 0U;
+    for (j = 0U; j < snapshot->sensor_count; ++j) {
+      if (strcmp(snapshot->sensors[j].asset_code, temporary.sensors[i].asset_code) == 0) {
+        snapshot->sensors[j] = temporary.sensors[i];
+        found = 1U;
+        break;
+      }
+    }
+    if (!found && (snapshot->sensor_count < SCREEN_SENSOR_CAPACITY)) {
+      snapshot->sensors[snapshot->sensor_count++] = temporary.sensors[i];
+    }
+  }
+  if (temporary.alarm_label[0] != '\0') {
+    (void)strncpy(snapshot->alarm_label, temporary.alarm_label, sizeof(snapshot->alarm_label) - 1U);
+    snapshot->alarm_label[sizeof(snapshot->alarm_label) - 1U] = '\0';
+  } else {
+    for (i = 0U; i < snapshot->sensor_count; ++i) {
+      if (snapshot->sensors[i].alarm != 0U) {
+        (void)strncpy(snapshot->alarm_label, snapshot->sensors[i].asset_code, sizeof(snapshot->alarm_label) - 1U);
+        snapshot->alarm_label[sizeof(snapshot->alarm_label) - 1U] = '\0';
+        break;
+      }
+    }
+  }
+
+  /* Copy standard fields */
+  snapshot->temperature_centi_c = temporary.temperature_centi_c;
+  snapshot->humidity_centi_rh = temporary.humidity_centi_rh;
+  snapshot->oxygen_milli_percent = temporary.oxygen_milli_percent;
+  snapshot->methane_ppm = temporary.methane_ppm;
+  snapshot->carbon_monoxide_ppm = temporary.carbon_monoxide_ppm;
+  snapshot->smoke = temporary.smoke;
+  snapshot->water_level_raw = temporary.water_level_raw;
+  snapshot->flame = temporary.flame;
+  snapshot->alarm_severity = temporary.alarm_severity;
+  snapshot->warning_sources = temporary.warning_sources;
+  snapshot->critical_sources = temporary.critical_sources;
+  snapshot->alarm_sources = temporary.alarm_sources;
+  snapshot->fans[0] = temporary.fans[0];
+  snapshot->fans[1] = temporary.fans[1];
+  snapshot->actuators = temporary.actuators;
+  snapshot->connectivity = temporary.connectivity;
+  snapshot->last_command = temporary.last_command;
   return 1U;
 }
 
@@ -332,17 +437,69 @@ void ScreenSnapshot_Tick(const ScreenSnapshotContext *context, uint32_t now_ms,
 {
   UiReading *readings;
   size_t index;
-  if ((snapshot == 0) || !ScreenSnapshot_IsStale(context, now_ms)) return;
-  readings = &snapshot->temperature_centi_c;
-  for (index = 0U; index < 8U; ++index) {
-    if (readings[index].quality == UI_QUALITY_VALID) readings[index].quality = UI_QUALITY_STALE;
+  if (snapshot == 0) return;
+  if (ScreenSnapshot_IsStale(context, now_ms)) {
+    readings = &snapshot->temperature_centi_c;
+    for (index = 0U; index < 8U; ++index) {
+      if (readings[index].quality == UI_QUALITY_VALID) readings[index].quality = UI_QUALITY_STALE;
+    }
+    for (index = 0U; index < 2U; ++index) {
+      if (snapshot->fans[index].quality == UI_QUALITY_VALID) snapshot->fans[index].quality = UI_QUALITY_STALE;
+    }
+    snapshot->connectivity.mqtt = (uint8_t)UI_LINK_UNKNOWN;
+    snapshot->connectivity.updated_ms = now_ms;
   }
-  for (index = 0U; index < 2U; ++index) {
-    if (snapshot->fans[index].quality == UI_QUALITY_VALID) snapshot->fans[index].quality = UI_QUALITY_STALE;
+  /* Expire individual readings to missing after the freshness window */
+  for (index = 0U; index < snapshot->sensor_count; ++index) {
+    if (snapshot->sensors[index].quality != UI_QUALITY_MISSING) {
+      if ((context != 0) && context->initialized &&
+          ((uint32_t)(now_ms - (uint32_t)snapshot->sensors[index].updated_at_ms) >= SCREEN_SNAPSHOT_STALE_MS)) {
+        snapshot->sensors[index].quality = UI_QUALITY_MISSING;
+      }
+    }
   }
-  /* A stale snapshot still proves the link carried it at the time, but the
-   * link is no longer known to be up: report unknown rather than a confident
-   * OFFLINE, so the page does not claim more than was measured. */
-  snapshot->connectivity.mqtt = (uint8_t)UI_LINK_UNKNOWN;
-  snapshot->connectivity.updated_ms = now_ms;
+}
+
+uint8_t ScreenSnapshot_AlarmCount(const UiSnapshot *snapshot)
+{
+  uint8_t count = 0U;
+  size_t i;
+  if (snapshot == 0) return 0U;
+  for (i = 0U; i < snapshot->sensor_count; ++i) {
+    if (snapshot->sensors[i].alarm != 0U) {
+      ++count;
+    }
+  }
+  if ((count == 0U) && (snapshot->alarm_severity != UI_ALARM_NONE)) {
+    return 1U;
+  }
+  return count;
+}
+
+UiDataQuality ScreenSnapshot_WorstQuality(const UiSnapshot *snapshot)
+{
+  UiDataQuality worst = UI_QUALITY_VALID;
+  size_t i;
+  if (snapshot == 0) return UI_QUALITY_UNKNOWN;
+  for (i = 0U; i < snapshot->sensor_count; ++i) {
+    const UiDataQuality q = snapshot->sensors[i].quality;
+    if (q == UI_QUALITY_MISSING) return UI_QUALITY_MISSING;
+    if ((q == UI_QUALITY_INVALID) && (worst != UI_QUALITY_MISSING)) worst = UI_QUALITY_INVALID;
+    else if ((q == UI_QUALITY_STALE) && (worst != UI_QUALITY_MISSING) && (worst != UI_QUALITY_INVALID)) worst = UI_QUALITY_STALE;
+    else if ((q == UI_QUALITY_UNKNOWN) && (worst == UI_QUALITY_VALID)) worst = UI_QUALITY_UNKNOWN;
+  }
+  return worst;
+}
+
+const char *ScreenSnapshot_AlarmLabel(const UiSnapshot *snapshot)
+{
+  size_t i;
+  if (snapshot == 0) return "";
+  if (snapshot->alarm_label[0] != '\0') return snapshot->alarm_label;
+  for (i = 0U; i < snapshot->sensor_count; ++i) {
+    if (snapshot->sensors[i].alarm != 0U) {
+      return snapshot->sensors[i].asset_code;
+    }
+  }
+  return "";
 }

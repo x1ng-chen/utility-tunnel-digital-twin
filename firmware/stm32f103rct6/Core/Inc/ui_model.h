@@ -9,7 +9,33 @@ typedef enum {
   UI_QUALITY_VALID,
   UI_QUALITY_STALE,
   UI_QUALITY_INVALID,
+  UI_QUALITY_MISSING,
 } UiDataQuality;
+
+#ifndef SCREEN_SENSOR_CAPACITY
+#define SCREEN_SENSOR_CAPACITY 32U
+#endif
+
+typedef enum {
+  SCREEN_SENSOR_KIND_SHT30 = 0,
+  SCREEN_SENSOR_KIND_FLAME = 1,
+  SCREEN_SENSOR_KIND_MQ4 = 2,
+  SCREEN_SENSOR_KIND_MQ2 = 3,
+  SCREEN_SENSOR_KIND_O2 = 4,
+  SCREEN_SENSOR_KIND_CO = 5,
+  SCREEN_SENSOR_KIND_LEVEL = 6,
+} ScreenSensorKind;
+
+typedef struct {
+  char asset_code[12];
+  uint8_t kind;
+  int32_t value;
+  int32_t scale;
+  UiDataQuality quality;
+  uint8_t alarm;
+  char source[8];
+  uint64_t updated_at_ms;
+} ScreenSensorReading;
 
 typedef enum {
   UI_ALARM_NONE = 0,
@@ -116,6 +142,9 @@ typedef struct {
   UiConnectivitySnapshot connectivity;
   UiCommandResult last_command;
   UiClockSnapshot clock;
+  uint8_t sensor_count;
+  ScreenSensorReading sensors[SCREEN_SENSOR_CAPACITY];
+  char alarm_label[16];
 } UiSnapshot;
 
 #endif /* UI_MODEL_H */

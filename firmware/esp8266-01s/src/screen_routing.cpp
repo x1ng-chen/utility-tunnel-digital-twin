@@ -33,6 +33,9 @@ using screen_protocol::ParseMenuCommand;
 using screen_protocol::Quality;
 using screen_protocol::Result;
 using screen_protocol::ScreenSnapshot;
+using screen_protocol::SensorKind;
+using screen_protocol::ScreenSensorReading;
+using screen_protocol::kScreenSensorCapacity;
 using screen_protocol::TimeSource;
 using screen_protocol::TimeState;
 using screen_protocol::TimeSync;
@@ -509,6 +512,80 @@ uint8_t flagValue(double value) {
   return value != 0.0 ? 1U : 0U;
 }
 
+static void updateScreenSensorCatalog(ScreenSnapshot* snapshot, const char* asset,
+                                      const char* metric, double value, Quality quality,
+                                      uint64_t sampled_at_ms) {
+  if (snapshot == nullptr || asset == nullptr) return;
+  uint8_t kind = 0U;
+  int32_t scale = 1;
+  uint8_t is_alarm = 0U;
+  if (std::strncmp(asset, "SHT-", 4) == 0) {
+    kind = static_cast<uint8_t>(SensorKind::Sht30);
+    scale = 100;
+  } else if (std::strncmp(asset, "FLAME-", 6) == 0) {
+    kind = static_cast<uint8_t>(SensorKind::Flame);
+    if (std::strstr(metric, "alarm") != nullptr || std::strcmp(metric, "flame.rawLevel") == 0) {
+      is_alarm = (value != 0.0) ? 1U : 0U;
+    }
+  } else if (std::strncmp(asset, "MQ4-", 4) == 0) {
+    kind = static_cast<uint8_t>(SensorKind::Mq4);
+    if (std::strstr(metric, "alarm") != nullptr) is_alarm = 1U;
+    else if (std::strcmp(metric, "raw") != 0 && std::strcmp(metric, "voltage") != 0 && value >= 2000.0) is_alarm = 1U;
+  } else if (std::strncmp(asset, "MQ2-", 4) == 0) {
+    kind = static_cast<uint8_t>(SensorKind::Mq2);
+    if (std::strstr(metric, "alarm") != nullptr || value != 0.0) is_alarm = 1U;
+  } else if (std::strncmp(asset, "O2-", 3) == 0) {
+    kind = static_cast<uint8_t>(SensorKind::O2);
+    scale = 1000;
+  } else if (std::strncmp(asset, "CO-", 3) == 0) {
+    kind = static_cast<uint8_t>(SensorKind::Co);
+  } else if (std::strncmp(asset, "LEVEL-", 6) == 0) {
+    kind = static_cast<uint8_t>(SensorKind::Level);
+    if (std::strstr(metric, "detected") != nullptr || std::strcmp(metric, "level") == 0) {
+      is_alarm = (value != 0.0) ? 1U : 0U;
+    }
+  } else {
+    return;
+  }
+
+  const char* source = "CTRL-01";
+  if (std::strcmp(asset, "MQ4-03") == 0 || std::strcmp(asset, "MQ4-04") == 0 || std::strcmp(asset, "MQ4-05") == 0 ||
+      std::strcmp(asset, "O2-03") == 0 ||
+      std::strcmp(asset, "CO-04") == 0 || std::strcmp(asset, "CO-05") == 0 ||
+      std::strcmp(asset, "FLAME-04") == 0 || std::strcmp(asset, "FLAME-05") == 0 ||
+      std::strcmp(asset, "MQ2-04") == 0 || std::strcmp(asset, "MQ2-05") == 0 ||
+      std::strcmp(asset, "LEVEL-04") == 0 || std::strcmp(asset, "LEVEL-05") == 0) {
+    source = "CTRL-02";
+  }
+
+  ScreenSensorReading* target = nullptr;
+  for (size_t i = 0U; i < snapshot->sensor_count; ++i) {
+    if (std::strcmp(snapshot->sensors[i].asset_code, asset) == 0) {
+      target = &snapshot->sensors[i];
+      break;
+    }
+  }
+  if (target == nullptr && snapshot->sensor_count < kScreenSensorCapacity) {
+    target = &snapshot->sensors[snapshot->sensor_count++];
+    std::strncpy(target->asset_code, asset, sizeof(target->asset_code) - 1U);
+    target->asset_code[sizeof(target->asset_code) - 1U] = '\0';
+    std::strncpy(target->source, source, sizeof(target->source));
+    target->source[sizeof(target->source) - 1U] = '\0';
+  }
+  if (target != nullptr) {
+    target->kind = kind;
+    target->scale = scale;
+    target->value = static_cast<int32_t>(value * scale);
+    target->quality = quality;
+    target->alarm = is_alarm;
+    target->updated_at_ms = sampled_at_ms;
+    if (is_alarm != 0U && snapshot->alarm_label[0] == '\0') {
+      std::strncpy(snapshot->alarm_label, asset, sizeof(snapshot->alarm_label) - 1U);
+      snapshot->alarm_label[sizeof(snapshot->alarm_label) - 1U] = '\0';
+    }
+  }
+}
+
 bool updateReading(ScreenSnapshot* snapshot, const char* asset,
                    const char* metric, const char* unit, double value,
                    Quality quality, uint64_t sampled_at_ms,
@@ -522,19 +599,33 @@ bool updateReading(ScreenSnapshot* snapshot, const char* asset,
   /* The residual analog channels.  Node A reports these for traceability and
    * the cloud contract; the screen shows the alarm flags and their quality, so
    * they are validated and accepted here without being stored. */
-  if (std::strcmp(asset, "GAS-01") == 0 &&
+  if ((std::strcmp(asset, "GAS-01") == 0 ||
+       std::strncmp(asset, "O2-", 3) == 0 ||
+       std::strncmp(asset, "MQ4-", 4) == 0 ||
+       std::strncmp(asset, "CO-", 3) == 0 ||
+       std::strncmp(asset, "MQ2-", 4) == 0) &&
       (std::strcmp(metric, "oxygen.raw") == 0 ||
        std::strcmp(metric, "methane.raw") == 0 ||
-       std::strcmp(metric, "co.raw") == 0) &&
+       std::strcmp(metric, "co.raw") == 0 ||
+       std::strcmp(metric, "raw") == 0) &&
       std::strcmp(unit, "adc") == 0) {
-    return inRange(value, 0, kAdcCodeMaximum);
+    if (!inRange(value, 0, kAdcCodeMaximum)) return false;
+    updateScreenSensorCatalog(snapshot, asset, metric, value, quality, sampled_at_ms);
+    return true;
   }
-  if (std::strcmp(asset, "GAS-01") == 0 &&
+  if ((std::strcmp(asset, "GAS-01") == 0 ||
+       std::strncmp(asset, "O2-", 3) == 0 ||
+       std::strncmp(asset, "MQ4-", 4) == 0 ||
+       std::strncmp(asset, "CO-", 3) == 0 ||
+       std::strncmp(asset, "MQ2-", 4) == 0) &&
       (std::strcmp(metric, "oxygen.voltage") == 0 ||
        std::strcmp(metric, "methane.voltage") == 0 ||
-       std::strcmp(metric, "co.voltage") == 0) &&
+       std::strcmp(metric, "co.voltage") == 0 ||
+       std::strcmp(metric, "voltage") == 0) &&
       std::strcmp(unit, "mV") == 0) {
-    return inRange(value, 0, kMillivoltMaximum);
+    if (!inRange(value, 0, kMillivoltMaximum)) return false;
+    updateScreenSensorCatalog(snapshot, asset, metric, value, quality, sampled_at_ms);
+    return true;
   }
   /* Delivered power is the product of the two readings the fan snapshot
    * already carries, so it is accepted without a second copy. */
@@ -660,6 +751,7 @@ bool updateReading(ScreenSnapshot* snapshot, const char* asset,
     reading->value = static_cast<int32_t>(converted);
     reading->sampled_at_ms = sampled_at_ms;
     reading->quality = quality;
+    updateScreenSensorCatalog(snapshot, asset, metric, value, quality, sampled_at_ms);
     return true;
   }
 

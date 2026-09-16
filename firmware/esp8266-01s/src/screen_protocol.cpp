@@ -412,7 +412,7 @@ bool validTelemetryPercent(uint8_t value) {
 }
 
 bool validQuality(Quality value) {
-  return static_cast<uint8_t>(value) <= static_cast<uint8_t>(Quality::Invalid);
+  return static_cast<uint8_t>(value) <= static_cast<uint8_t>(Quality::Missing);
 }
 
 bool validTimestamp(uint64_t value, uint64_t generated_at_ms, Quality quality) {
@@ -498,6 +498,38 @@ Result validateSnapshot(const ScreenSnapshot& value) {
     if (value.last_command.accepted || value.last_command.completed_at_ms != 0ULL) {
       return Result::OutOfRange;
     }
+  }
+  if (value.sensor_count > kScreenSensorCapacity) {
+    return Result::OutOfRange;
+  }
+  for (size_t i = 0U; i < value.sensor_count; ++i) {
+    const ScreenSensorReading& s = value.sensors[i];
+    if (!hasTerminator(s.asset_code) || !isSafeToken(s.asset_code, sizeof(s.asset_code) - 1U, false)) {
+      return Result::InvalidIdentifier;
+    }
+    if (!hasTerminator(s.source) || !isSafeToken(s.source, sizeof(s.source) - 1U, false)) {
+      return Result::InvalidIdentifier;
+    }
+    if (!validQuality(s.quality)) {
+      return Result::InvalidEnum;
+    }
+    if (s.alarm > 1U) {
+      return Result::OutOfRange;
+    }
+    if (s.updated_at_ms != 0ULL && (s.updated_at_ms < kMinEpochMs || s.updated_at_ms > value.generated_at_ms)) {
+      return Result::OutOfRange;
+    }
+    for (size_t j = i + 1U; j < value.sensor_count; ++j) {
+      if (std::strcmp(s.asset_code, value.sensors[j].asset_code) == 0) {
+        return Result::InvalidIdentifier;
+      }
+    }
+  }
+  if (!hasTerminator(value.alarm_label)) {
+    return Result::InvalidIdentifier;
+  }
+  if (value.alarm_label[0] != '\0' && !isSafeToken(value.alarm_label, sizeof(value.alarm_label) - 1U, false)) {
+    return Result::InvalidIdentifier;
   }
   return Result::Ok;
 }
@@ -748,6 +780,41 @@ Result readerFailure(const Reader& reader) {
 
 }  // namespace
 
+uint8_t SummaryAlarmCount(const ScreenSnapshot& snapshot) {
+  uint8_t count = 0U;
+  for (size_t i = 0U; i < snapshot.sensor_count; ++i) {
+    if (snapshot.sensors[i].alarm != 0U) {
+      ++count;
+    }
+  }
+  if (count == 0U && snapshot.alarm_severity != AlarmSeverity::None) {
+    return 1U;
+  }
+  return count;
+}
+
+Quality WorstQuality(const ScreenSnapshot& snapshot) {
+  Quality worst = Quality::Valid;
+  for (size_t i = 0U; i < snapshot.sensor_count; ++i) {
+    const Quality q = snapshot.sensors[i].quality;
+    if (q == Quality::Missing) return Quality::Missing;
+    if (q == Quality::Invalid && worst != Quality::Missing) worst = Quality::Invalid;
+    else if (q == Quality::Stale && worst != Quality::Missing && worst != Quality::Invalid) worst = Quality::Stale;
+    else if (q == Quality::Unknown && worst == Quality::Valid) worst = Quality::Unknown;
+  }
+  return worst;
+}
+
+const char* AlarmLabel(const ScreenSnapshot& snapshot) {
+  if (snapshot.alarm_label[0] != '\0') return snapshot.alarm_label;
+  for (size_t i = 0U; i < snapshot.sensor_count; ++i) {
+    if (snapshot.sensors[i].alarm != 0U) {
+      return snapshot.sensors[i].asset_code;
+    }
+  }
+  return "";
+}
+
 Result BuildSnapshot(const ScreenSnapshot& snapshot, char* output,
                      size_t output_capacity, size_t* written) {
   Result result = prepareOutput(output, output_capacity, written);
@@ -818,7 +885,37 @@ Result BuildSnapshot(const ScreenSnapshot& snapshot, char* output,
   writer.boolean(snapshot.last_command.complete);
   writer.character(',');
   writer.unsignedNumber(snapshot.last_command.completed_at_ms);
-  writer.literal("]}");
+  writer.character(']');
+  if (snapshot.sensor_count > 0U) {
+    writer.literal(",\"items\":[");
+    for (size_t i = 0U; i < snapshot.sensor_count; ++i) {
+      if (i != 0U) writer.character(',');
+      const ScreenSensorReading& s = snapshot.sensors[i];
+      writer.literal("{\"id\":");
+      writer.string(s.asset_code);
+      writer.literal(",\"k\":");
+      writer.unsignedNumber(s.kind);
+      writer.literal(",\"v\":");
+      writer.signedNumber(s.value);
+      writer.literal(",\"sc\":");
+      writer.signedNumber(s.scale);
+      writer.literal(",\"q\":");
+      writer.unsignedNumber(static_cast<uint8_t>(s.quality));
+      writer.literal(",\"a\":");
+      writer.unsignedNumber(s.alarm);
+      writer.literal(",\"s\":");
+      writer.string(s.source);
+      writer.literal(",\"t\":");
+      writer.unsignedNumber(s.updated_at_ms);
+      writer.character('}');
+    }
+    writer.character(']');
+  }
+  if (snapshot.alarm_label[0] != '\0') {
+    writer.literal(",\"alarmLabel\":");
+    writer.string(snapshot.alarm_label);
+  }
+  writer.character('}');
   return finishOutput(&writer, output, written);
 }
 
@@ -880,8 +977,71 @@ Result ParseSnapshot(const char* json, size_t length, uint64_t now_epoch_ms,
       !reader.comma() || !reader.readBool(&value.last_command.complete) ||
       !reader.comma() ||
       !reader.readUnsigned64(&value.last_command.completed_at_ms) ||
-      !reader.endArray() || !reader.endObject()) {
+      !reader.endArray()) {
     return readerFailure(reader);
+  }
+  while (reader.comma()) {
+    if (reader.key("items")) {
+      if (!reader.beginArray()) return readerFailure(reader);
+      bool first = true;
+      while (!reader.endArray()) {
+        if (!first) {
+          if (!reader.comma()) return readerFailure(reader);
+        }
+        first = false;
+        if (reader.endArray()) break;
+        if (!reader.beginObject()) return readerFailure(reader);
+        ScreenSensorReading item{};
+        item.scale = 1;
+        uint64_t kind_val = 0U, q_val = 0U, a_val = 0U, t_val = 0U;
+        int32_t scale_val = 1;
+        if (!reader.key("id") || !reader.readString(item.asset_code, sizeof(item.asset_code)) ||
+            !reader.comma() || !reader.key("k") || !reader.readUnsigned64(&kind_val) ||
+            !reader.comma() || !reader.key("v") || !reader.readSigned32(&item.value) ||
+            !reader.comma() || !reader.key("sc") || !reader.readSigned32(&scale_val) ||
+            !reader.comma() || !reader.key("q") || !reader.readUnsigned64(&q_val) ||
+            !reader.comma() || !reader.key("a") || !reader.readUnsigned64(&a_val) ||
+            !reader.comma() || !reader.key("s") || !reader.readString(item.source, sizeof(item.source)) ||
+            !reader.comma() || !reader.key("t") || !reader.readUnsigned64(&t_val) ||
+            !reader.endObject()) {
+          return readerFailure(reader);
+        }
+        item.kind = static_cast<uint8_t>(kind_val);
+        item.scale = scale_val;
+        item.quality = static_cast<Quality>(q_val);
+        item.alarm = static_cast<uint8_t>(a_val);
+        item.updated_at_ms = t_val;
+        if (!validQuality(item.quality) || item.alarm > 1U) {
+          return Result::OutOfRange;
+        }
+        for (size_t idx = 0U; idx < value.sensor_count; ++idx) {
+          if (std::strcmp(value.sensors[idx].asset_code, item.asset_code) == 0) {
+            return Result::MalformedJson;
+          }
+        }
+        if (value.sensor_count < kScreenSensorCapacity) {
+          value.sensors[value.sensor_count++] = item;
+        }
+      }
+    } else if (reader.key("alarmLabel")) {
+      if (!reader.readString(value.alarm_label, sizeof(value.alarm_label))) {
+        return readerFailure(reader);
+      }
+    } else {
+      return readerFailure(reader);
+    }
+  }
+  if (!reader.endObject()) {
+    return readerFailure(reader);
+  }
+  if (value.alarm_label[0] == '\0') {
+    for (size_t idx = 0U; idx < value.sensor_count; ++idx) {
+      if (value.sensors[idx].alarm != 0U) {
+        std::strncpy(value.alarm_label, value.sensors[idx].asset_code, sizeof(value.alarm_label) - 1U);
+        value.alarm_label[sizeof(value.alarm_label) - 1U] = '\0';
+        break;
+      }
+    }
   }
   result = reader.finish();
   if (result != Result::Ok) return result;

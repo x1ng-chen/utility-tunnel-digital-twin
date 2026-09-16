@@ -124,7 +124,8 @@ static int test_time_and_mqtt_lifecycle(void)
   NetworkTime_Init(&clock);
   CHECK(NetworkTime_Update(&clock, line, strlen(line), 100U) == 1U);
   NetworkTime_ToSnapshot(&clock, 61000U, &display);
-  CHECK(display.synchronized == 1U && display.hour == 0U && display.minute == 1U);
+  /* Wire epochs are UTC; both panels display China Standard Time (UTC+8). */
+  CHECK(display.synchronized == 1U && display.hour == 8U && display.minute == 1U);
   CHECK(NetworkTime_Update(0, line, strlen(line), 100U) == 0U);
   CHECK(NetworkTime_Update(&clock, 0, 0U, 100U) == 0U);
   CHECK(NetworkTime_Update(&clock, line, NETWORK_TIME_LINE_SIZE + 1U, 100U) == 0U);
@@ -160,6 +161,7 @@ static int test_commands_and_ack_atomicity(void)
                           line, sizeof(line), &length) == 1U);
   CHECK(strstr(line, "\"action\":\"buzzer_mute\"") != NULL);
   CHECK(strstr(line, "\"value\":0") != NULL);
+  CHECK(strstr(line, "\"createdAtMs\":1704067200000") != NULL);
   CHECK(MenuCommand_Begin(&context, UI_ACTION_BUZZER_RESTORE, UI_BUZZER_RESTORE, 1704067200000ULL,
                           line, sizeof(line), &length) == 1U);
   CHECK(strstr(line, "\"action\":\"buzzer_restore\"") != NULL);
@@ -256,9 +258,102 @@ static int test_non_preset_duty_and_brightness_are_telemetry(void)
   return 0;
 }
 
+static int test_multi_sensor_snapshot_and_rotation(void)
+{
+  ScreenSnapshotContext context;
+  UiSnapshot snapshot;
+  const char snap1[] =
+    "{\"schema\":\"ut.screen.snapshot.v1\",\"source\":\"CTRL-01\","
+    "\"generatedAtMs\":1704067205000,\"seq\":1,"
+    "\"sensors\":{\"temperature\":[2234,1704067205000,1],"
+    "\"humidity\":[5210,1704067205000,1],\"oxygen\":[20900,1704067205000,1],"
+    "\"methane\":[12,1704067205000,1],\"carbonMonoxide\":[4,1704067205000,1],"
+    "\"smoke\":[0,1704067205000,1],\"water\":[0,1704067205000,1],"
+    "\"flame\":[1,1704067205000,1]},\"alarm\":[2,0,2],"
+    "\"fans\":[[60,1,2400,11900,320,1704067205000,1],"
+    "[30,0,1600,11800,280,1704067205000,1]],"
+    "\"actuators\":[true,3,75,true,false],"
+    "\"connectivity\":[1,1,0,0,1704067200000],"
+    "\"lastCommand\":[\"menu-1\",true,true,1704067204000],"
+    "\"items\":["
+    "{\"id\":\"FLAME-04\",\"k\":1,\"v\":1,\"sc\":1,\"q\":1,\"a\":1,\"s\":\"CTRL-02\",\"t\":1704067205000},"
+    "{\"id\":\"MQ4-01\",\"k\":2,\"v\":120,\"sc\":1,\"q\":1,\"a\":0,\"s\":\"CTRL-01\",\"t\":1704067205000},"
+    "{\"id\":\"SHT-03\",\"k\":0,\"v\":0,\"sc\":100,\"q\":4,\"a\":0,\"s\":\"CTRL-01\",\"t\":1704067205000}"
+    "],\"alarmLabel\":\"FLAME-04\"}";
+
+  const char dup_snap[] =
+    "{\"schema\":\"ut.screen.snapshot.v1\",\"source\":\"CTRL-01\","
+    "\"generatedAtMs\":1704067205000,\"seq\":2,"
+    "\"sensors\":{\"temperature\":[2234,1704067205000,1],"
+    "\"humidity\":[5210,1704067205000,1],\"oxygen\":[20900,1704067205000,1],"
+    "\"methane\":[12,1704067205000,1],\"carbonMonoxide\":[4,1704067205000,1],"
+    "\"smoke\":[0,1704067205000,1],\"water\":[0,1704067205000,1],"
+    "\"flame\":[1,1704067205000,1]},\"alarm\":[2,0,2],"
+    "\"fans\":[[60,1,2400,11900,320,1704067205000,1],"
+    "[30,0,1600,11800,280,1704067205000,1]],"
+    "\"actuators\":[true,3,75,true,false],"
+    "\"connectivity\":[1,1,0,0,1704067200000],"
+    "\"lastCommand\":[\"menu-1\",true,true,1704067204000],"
+    "\"items\":["
+    "{\"id\":\"FLAME-04\",\"k\":1,\"v\":1,\"sc\":1,\"q\":1,\"a\":1,\"s\":\"CTRL-02\",\"t\":1704067205000},"
+    "{\"id\":\"FLAME-04\",\"k\":1,\"v\":1,\"sc\":1,\"q\":1,\"a\":1,\"s\":\"CTRL-02\",\"t\":1704067205000}"
+    "]}";
+
+  const char snap2_rotation[] =
+    "{\"schema\":\"ut.screen.snapshot.v1\",\"source\":\"CTRL-01\","
+    "\"generatedAtMs\":1704067206000,\"seq\":3,"
+    "\"sensors\":{\"temperature\":[2234,1704067206000,1],"
+    "\"humidity\":[5210,1704067206000,1],\"oxygen\":[20900,1704067206000,1],"
+    "\"methane\":[12,1704067206000,1],\"carbonMonoxide\":[4,1704067206000,1],"
+    "\"smoke\":[0,1704067206000,1],\"water\":[0,1704067206000,1],"
+    "\"flame\":[0,1704067206000,1]},\"alarm\":[0,0,0],"
+    "\"fans\":[[60,1,2400,11900,320,1704067206000,1],"
+    "[30,0,1600,11800,280,1704067206000,1]],"
+    "\"actuators\":[true,3,75,true,false],"
+    "\"connectivity\":[1,1,0,0,1704067200000],"
+    "\"lastCommand\":[\"menu-1\",true,true,1704067204000],"
+    "\"items\":["
+    "{\"id\":\"FLAME-04\",\"k\":1,\"v\":0,\"sc\":1,\"q\":1,\"a\":0,\"s\":\"CTRL-02\",\"t\":1704067206000},"
+    "{\"id\":\"O2-01\",\"k\":4,\"v\":20900,\"sc\":1000,\"q\":1,\"a\":0,\"s\":\"CTRL-01\",\"t\":1704067206000}"
+    "]}";
+
+  ScreenSnapshot_Init(&context);
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+
+  CHECK(ScreenSnapshot_Apply(&context, snap1, strlen(snap1), 1000U, &snapshot) == 1U);
+  CHECK(snapshot.sensor_count == 3U);
+  CHECK(strcmp(snapshot.sensors[0].asset_code, "FLAME-04") == 0);
+  CHECK(strcmp(snapshot.sensors[0].source, "CTRL-02") == 0);
+  CHECK(snapshot.sensors[0].alarm == 1U);
+  CHECK(strcmp(snapshot.sensors[1].asset_code, "MQ4-01") == 0);
+  CHECK(snapshot.sensors[1].quality == UI_QUALITY_VALID);
+  CHECK(strcmp(snapshot.sensors[2].asset_code, "SHT-03") == 0);
+  CHECK(snapshot.sensors[2].quality == UI_QUALITY_MISSING);
+  CHECK(ScreenSnapshot_AlarmCount(&snapshot) == 1U);
+  CHECK(ScreenSnapshot_WorstQuality(&snapshot) == UI_QUALITY_MISSING);
+  CHECK(strcmp(ScreenSnapshot_AlarmLabel(&snapshot), "FLAME-04") == 0);
+
+  /* Duplicate asset codes in one payload must be rejected */
+  CHECK(ScreenSnapshot_Apply(&context, dup_snap, strlen(dup_snap), 1100U, &snapshot) == 0U);
+
+  /* Next rotation merges: replaces FLAME-04, adds O2-01, keeps MQ4-01 and SHT-03 */
+  CHECK(ScreenSnapshot_Apply(&context, snap2_rotation, strlen(snap2_rotation), 2000U, &snapshot) == 1U);
+  CHECK(snapshot.sensor_count == 4U);
+  CHECK(snapshot.sensors[0].alarm == 0U);
+  CHECK(strcmp(snapshot.sensors[3].asset_code, "O2-01") == 0);
+  CHECK(ScreenSnapshot_AlarmCount(&snapshot) == 0U);
+
+  /* Individual expiration: after 5000ms from 2000ms, older readings expire to missing */
+  ScreenSnapshot_Tick(&context, 8000U, &snapshot);
+  CHECK(snapshot.sensors[1].quality == UI_QUALITY_MISSING);
+
+  return 0;
+}
+
 int main(void)
 {
   if (test_snapshot_validation_and_atomicity() != 0) return 1;
+  if (test_multi_sensor_snapshot_and_rotation() != 0) return 1;
   if (test_sequence_staleness_wraparound_and_bounds() != 0) return 1;
   if (test_non_preset_duty_and_brightness_are_telemetry() != 0) return 1;
   if (test_time_and_mqtt_lifecycle() != 0) return 1;

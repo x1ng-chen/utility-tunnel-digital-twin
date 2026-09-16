@@ -27,4 +27,8 @@ void ScreenSnapshot_Tick(const ScreenSnapshotContext *context, uint32_t now_ms,
 /* Alias kept small and HAL-free for host probes and board adapters. */
 uint8_t ScreenSnapshot_Parse(const char *line, size_t length, UiSnapshot *snapshot);
 
+uint8_t ScreenSnapshot_AlarmCount(const UiSnapshot *snapshot);
+UiDataQuality ScreenSnapshot_WorstQuality(const UiSnapshot *snapshot);
+const char *ScreenSnapshot_AlarmLabel(const UiSnapshot *snapshot);
+
 #endif /* SCREEN_SNAPSHOT_H */

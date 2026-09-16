@@ -9,6 +9,10 @@ constexpr size_t kUartLineLimit = 768U;
 constexpr size_t kCommandIdCapacity = 40U;  // 39 characters plus NUL.
 constexpr size_t kDeviceIdCapacity = 8U;
 constexpr size_t kAckReasonCapacity = 48U;
+constexpr size_t kScreenSensorCapacity = 32U;
+#ifndef SCREEN_SENSOR_CAPACITY
+#define SCREEN_SENSOR_CAPACITY 32U
+#endif
 constexpr uint64_t kMinEpochSeconds = 1704067200ULL;  // 2024-01-01T00:00:00Z.
 // End of 2099 UTC. Keeping both representations bounded makes subtraction and
 // seconds-to-milliseconds conversion safe in the STM32/ESP uint64_t consumers.
@@ -42,6 +46,17 @@ enum class Quality : uint8_t {
   Valid = 1,
   Stale = 2,
   Invalid = 3,
+  Missing = 4,
+};
+
+enum class SensorKind : uint8_t {
+  Sht30 = 0,
+  Flame = 1,
+  Mq4 = 2,
+  Mq2 = 3,
+  O2 = 4,
+  Co = 5,
+  Level = 6,
 };
 
 enum class AlarmSeverity : uint8_t {
@@ -133,6 +148,17 @@ struct LastCommandResult {
   uint64_t completed_at_ms;
 };
 
+struct ScreenSensorReading {
+  char asset_code[12];
+  uint8_t kind;
+  int32_t value;
+  int32_t scale;
+  Quality quality;
+  uint8_t alarm;
+  char source[kDeviceIdCapacity];
+  uint64_t updated_at_ms;
+};
+
 struct ScreenSnapshot {
   char source[kDeviceIdCapacity];
   uint64_t generated_at_ms;
@@ -152,6 +178,9 @@ struct ScreenSnapshot {
   ActuatorSnapshot actuators;
   ConnectivitySnapshot connectivity;
   LastCommandResult last_command;
+  uint8_t sensor_count;
+  ScreenSensorReading sensors[kScreenSensorCapacity];
+  char alarm_label[16];
 };
 
 struct MenuCommand {
@@ -177,6 +206,10 @@ struct TimeSync {
   uint64_t epoch_seconds;
   uint32_t sequence;
 };
+
+uint8_t SummaryAlarmCount(const ScreenSnapshot& snapshot);
+Quality WorstQuality(const ScreenSnapshot& snapshot);
+const char* AlarmLabel(const ScreenSnapshot& snapshot);
 
 Result BuildSnapshot(const ScreenSnapshot& snapshot, char* output,
                      size_t output_capacity, size_t* written);
