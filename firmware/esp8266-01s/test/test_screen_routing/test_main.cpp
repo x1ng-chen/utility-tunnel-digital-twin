@@ -353,6 +353,37 @@ void test_ctrl02_serial_menu_has_one_safe_publish_route() {
                            &output));
 }
 
+void test_ctrl02_publishes_local_telemetry_and_preserves_menu_routing() {
+  RouteOutput output{};
+  const char local[] =
+      "{\"schema\":\"ut.telemetry.v1\",\"seq\":1,\"readings\":["
+      "{\"assetCode\":\"MQ4-03\",\"metric\":\"raw\",\"value\":321,"
+      "\"unit\":\"adc\",\"quality\":\"suspect\"}]}";
+  CHECK_EQ(RouteResult::Ok,
+           RouteSerialLine(Role::Ctrl02, local, std::strlen(local), kNowMs,
+                           &output));
+  CHECK_EQ(OutputKind::MqttPublish, output.kind);
+  CHECK_TRUE(std::strcmp(output.topic, "ut/v1/CTRL-02/telemetry") == 0);
+  CHECK_TRUE(std::strcmp(output.payload, local) == 0);
+
+  /* CTRL-02 still rejects command-ack payloads as local telemetry */
+  CHECK_EQ(RouteResult::InvalidPayload,
+           RouteSerialLine(Role::Ctrl02, kAck, std::strlen(kAck), kNowMs,
+                           &output));
+
+  /* CTRL-02 still routes menu commands to CTRL-01 */
+  CHECK_EQ(RouteResult::Ok,
+           RouteSerialLine(Role::Ctrl02, kValidMenu, std::strlen(kValidMenu),
+                           kNowMs, &output));
+  CHECK_EQ(OutputKind::MqttPublish, output.kind);
+  CHECK_TRUE(std::strcmp(output.topic, "ut/v1/CTRL-01/cmd/menu") == 0);
+
+  /* Role::Ctrl01 rejects RouteSerialLine */
+  CHECK_EQ(RouteResult::WrongRole,
+           RouteSerialLine(Role::Ctrl01, local, std::strlen(local), kNowMs,
+                           &output));
+}
+
 void test_ctrl02_aggregates_telemetry_into_complete_bounded_snapshot() {
   TelemetryAccumulator accumulator{};
   InitTelemetryAccumulator(&accumulator);
@@ -679,6 +710,44 @@ void test_mqtt_link_status_emits_initial_and_changed_state() {
            BuildMqttLinkStatus(&state, true, output, sizeof(output), &written));
   CHECK_TRUE(std::strcmp(output, "MQTT|UP") == 0);
   CHECK_EQ(7U, written);
+}
+
+void test_ctrl02_status_heartbeat_requests_resynchronization() {
+  constexpr char status[] =
+      "{\"schema\":\"ut.node-b.status.v1\",\"nodeId\":\"node-b\","
+      "\"seq\":171,\"display\":\"online\"}";
+  CHECK_TRUE(IsCtrl02StatusHeartbeat(status, sizeof(status) - 1U));
+  CHECK_TRUE(!IsCtrl02StatusHeartbeat(
+      "{\"schema\":\"ut.menu.command.v1\"}",
+      sizeof("{\"schema\":\"ut.menu.command.v1\"}") - 1U));
+  CHECK_TRUE(!IsCtrl02StatusHeartbeat(nullptr, 0U));
+
+  TimeSyncSchedule time_schedule{};
+  InitTimeSyncSchedule(&time_schedule);
+  char time_output[kUartLineLimit + 1U]{};
+  size_t time_written = 0U;
+  CHECK_EQ(TimeEmitResult::Emitted,
+           BuildDueTimeSync(&time_schedule, 100U, kMinEpochSeconds,
+                            time_output, sizeof(time_output), &time_written));
+  RequestTimeSync(&time_schedule);
+  CHECK_EQ(TimeEmitResult::Emitted,
+           BuildDueTimeSync(&time_schedule, 101U, kMinEpochSeconds,
+                            time_output, sizeof(time_output), &time_written));
+  TimeSync sync{};
+  CHECK_EQ(Result::Ok, ParseTimeSync(time_output, time_written, &sync));
+  CHECK_EQ(1U, sync.sequence);
+
+  MqttLinkStatusState mqtt_state{};
+  char mqtt_output[16]{};
+  size_t mqtt_written = 0U;
+  InitMqttLinkStatusState(&mqtt_state);
+  CHECK_EQ(MqttLinkStatusResult::Emitted,
+           BuildMqttLinkStatus(&mqtt_state, true, mqtt_output,
+                               sizeof(mqtt_output), &mqtt_written));
+  RequestMqttLinkStatus(&mqtt_state);
+  CHECK_EQ(MqttLinkStatusResult::Emitted,
+           BuildMqttLinkStatus(&mqtt_state, true, mqtt_output,
+                               sizeof(mqtt_output), &mqtt_written));
 }
 
 void test_time_sync_is_immediate_periodic_valid_and_wrap_safe() {
@@ -1083,6 +1152,7 @@ int main() {
   test_normalization_preserves_every_menu_field();
   test_normalization_rejects_missing_future_expired_and_oversized_input();
   test_ctrl02_serial_menu_has_one_safe_publish_route();
+  test_ctrl02_publishes_local_telemetry_and_preserves_menu_routing();
   test_ctrl02_aggregates_telemetry_into_complete_bounded_snapshot();
   test_ctrl02_forwards_only_valid_ack_and_preserves_result();
   test_roles_reject_wrong_topics_without_crosstalk();
@@ -1092,6 +1162,7 @@ int main() {
   test_sequence_gate_recovers_any_rollback_after_long_silence();
   test_ntp_configuration_is_once_per_wifi_association();
   test_mqtt_link_status_emits_initial_and_changed_state();
+  test_ctrl02_status_heartbeat_requests_resynchronization();
   test_time_sync_is_immediate_periodic_valid_and_wrap_safe();
   test_ctrl02_consumes_the_node_a_producer_vectors();
   test_ctrl02_accepts_a_legacy_non_ladder_fan_duty();

@@ -61,6 +61,7 @@ constexpr char kCtrl01CommandWildcard[] = "ut/v1/CTRL-01/cmd/#";
 #if SCREEN_ROUTING_CTRL02
 constexpr char kCtrl01Telemetry[] = "ut/v1/CTRL-01/telemetry";
 constexpr char kCtrl01CommandAck[] = "ut/v1/CTRL-01/cmd_ack";
+constexpr char kCtrl02Telemetry[] = "ut/v1/CTRL-02/telemetry";
 #endif
 
 #if SCREEN_ROUTING_CTRL01
@@ -411,7 +412,8 @@ bool roundedInRange(double value, double scale, int64_t minimum,
  * and their millivolt conversions are reported for the cloud contract and are
  * validated here without being carried into the snapshot. */
 bool isKnownReading(const char* asset, const char* metric) {
-  if (std::strcmp(asset, "ENV-01") == 0 &&
+  if ((std::strcmp(asset, "ENV-01") == 0 ||
+       std::strncmp(asset, "SHT-", 4) == 0) &&
       (std::strcmp(metric, "temperature") == 0 ||
        std::strcmp(metric, "humidity") == 0)) {
     return true;
@@ -424,13 +426,22 @@ bool isKnownReading(const char* asset, const char* metric) {
        std::strcmp(metric, "power") == 0)) {
     return true;
   }
-  if ((std::strcmp(asset, "GAS-01") == 0) &&
+  if ((std::strcmp(asset, "GAS-01") == 0 ||
+       std::strncmp(asset, "O2-", 3) == 0 ||
+       std::strncmp(asset, "MQ4-", 4) == 0 ||
+       std::strncmp(asset, "CO-", 3) == 0 ||
+       std::strncmp(asset, "MQ2-", 4) == 0 ||
+       std::strncmp(asset, "FLAME-", 6) == 0 ||
+       std::strncmp(asset, "LEVEL-", 6) == 0) &&
       (std::strcmp(metric, "oxygen.raw") == 0 ||
        std::strcmp(metric, "oxygen.voltage") == 0 ||
        std::strcmp(metric, "methane.raw") == 0 ||
        std::strcmp(metric, "methane.voltage") == 0 ||
        std::strcmp(metric, "co.raw") == 0 ||
-       std::strcmp(metric, "co.voltage") == 0)) {
+       std::strcmp(metric, "co.voltage") == 0 ||
+       std::strcmp(metric, "raw") == 0 ||
+       std::strcmp(metric, "voltage") == 0 ||
+       std::strcmp(metric, "alarm") == 0)) {
     return true;
   }
   if (std::strcmp(metric, "oxygen.concentration") == 0 ||
@@ -588,40 +599,47 @@ bool updateReading(ScreenSnapshot* snapshot, const char* asset,
     }
     return true;
   }
-  if (std::strcmp(asset, "ENV-01") == 0 &&
+  if ((std::strcmp(asset, "ENV-01") == 0 ||
+       std::strncmp(asset, "SHT-", 4) == 0) &&
       std::strcmp(metric, "temperature") == 0 &&
       std::strcmp(unit, "degC") == 0) {
     reading = &snapshot->temperature;
     scale = 100.0; minimum = -5000; maximum = 10000;
-  } else if (std::strcmp(asset, "ENV-01") == 0 &&
+  } else if ((std::strcmp(asset, "ENV-01") == 0 ||
+              std::strncmp(asset, "SHT-", 4) == 0) &&
              std::strcmp(metric, "humidity") == 0 &&
              std::strcmp(unit, "%RH") == 0) {
     reading = &snapshot->humidity;
     scale = 100.0; maximum = 10000;
-  } else if (std::strcmp(asset, "GAS-01") == 0 &&
+  } else if ((std::strcmp(asset, "GAS-01") == 0 ||
+              std::strncmp(asset, "O2-", 3) == 0) &&
              std::strcmp(metric, "oxygen.concentration") == 0 &&
              std::strcmp(unit, "%Vol") == 0) {
     reading = &snapshot->oxygen;
     scale = 1000.0; maximum = 100000;
-  } else if (std::strcmp(asset, "GAS-01") == 0 &&
+  } else if ((std::strcmp(asset, "GAS-01") == 0 ||
+              std::strncmp(asset, "MQ4-", 4) == 0) &&
              (std::strcmp(metric, "methane.concentration") == 0 ||
               std::strcmp(metric, "methane.ppm") == 0) &&
              std::strcmp(unit, "ppm") == 0) {
     reading = &snapshot->methane;
     maximum = 100000;
-  } else if (std::strcmp(asset, "GAS-01") == 0 &&
+  } else if ((std::strcmp(asset, "GAS-01") == 0 ||
+              std::strncmp(asset, "CO-", 3) == 0) &&
              (std::strcmp(metric, "carbon_monoxide.concentration") == 0 ||
               std::strcmp(metric, "carbonMonoxide.concentration") == 0 ||
               std::strcmp(metric, "co.concentration") == 0) &&
              std::strcmp(unit, "ppm") == 0) {
     reading = &snapshot->carbon_monoxide;
     maximum = 100000;
-  } else if (std::strcmp(asset, "GAS-01") == 0 &&
+  } else if ((std::strcmp(asset, "GAS-01") == 0 ||
+              std::strncmp(asset, "MQ2-", 4) == 0) &&
              std::strcmp(metric, "smoke.alarm") == 0 &&
              std::strcmp(unit, "bool") == 0) {
     reading = &snapshot->smoke;
     maximum = 1;
-  } else if (((std::strcmp(asset, "LEVEL-L01") == 0 &&
+  } else if ((((std::strcmp(asset, "LEVEL-L01") == 0 ||
+                std::strncmp(asset, "LEVEL-", 6) == 0) &&
                std::strcmp(metric, "level.detected") == 0) ||
               (std::strcmp(asset, "SEEP-W01") == 0 &&
                std::strcmp(metric, "water.raw") == 0)) &&
@@ -629,7 +647,8 @@ bool updateReading(ScreenSnapshot* snapshot, const char* asset,
               std::strcmp(unit, "adc") == 0)) {
     reading = &snapshot->water;
     maximum = 4095;
-  } else if (std::strcmp(asset, "GAS-01") == 0 &&
+  } else if ((std::strcmp(asset, "GAS-01") == 0 ||
+              std::strncmp(asset, "FLAME-", 6) == 0) &&
              (std::strcmp(metric, "flame.alarm") == 0 ||
               std::strcmp(metric, "flame.rawLevel") == 0) &&
              std::strcmp(unit, "bool") == 0) {
@@ -1090,6 +1109,24 @@ RouteResult RouteSerialLine(Role role, const char* line, size_t length,
   return RouteResult::WrongRole;
 #else
   if (role != Role::Ctrl02) return RouteResult::WrongRole;
+  if (length > kTransportPayloadLimit) return RouteResult::TooLarge;
+
+  static constexpr char kTelemetrySchema[] = "\"schema\":\"ut.telemetry.v1\"";
+  if (std::strstr(line, kTelemetrySchema) != nullptr) {
+    if (length > screen_protocol::kUartLineLimit) return RouteResult::TooLarge;
+    JsonSyntaxParser parser(line, line + length);
+    if (!parser.parseObjectDocument()) return RouteResult::InvalidPayload;
+    if (!copyTopic(kCtrl02Telemetry, output->topic)) {
+      clearOutput(output);
+      return RouteResult::OutputTooSmall;
+    }
+    std::memcpy(output->payload, line, length);
+    output->payload[length] = '\0';
+    output->payload_length = length;
+    output->kind = OutputKind::MqttPublish;
+    return RouteResult::Ok;
+  }
+
   MenuCommand command{};
   const Result parsed = ParseMenuCommand(line, length, now_epoch_ms, &command);
   if (parsed != Result::Ok) return mapProtocolResult(parsed);
@@ -1199,6 +1236,21 @@ void InitMqttLinkStatusState(MqttLinkStatusState* state) {
   if (state == nullptr) return;
   state->initialized = false;
   state->connected = false;
+}
+
+bool IsCtrl02StatusHeartbeat(const char* line, size_t length) {
+  static constexpr char prefix[] =
+      "{\"schema\":\"ut.node-b.status.v1\",\"nodeId\":\"node-b\",";
+  return line != nullptr && length >= sizeof(prefix) - 1U &&
+         std::memcmp(line, prefix, sizeof(prefix) - 1U) == 0;
+}
+
+void RequestMqttLinkStatus(MqttLinkStatusState* state) {
+  if (state != nullptr) state->initialized = false;
+}
+
+void RequestTimeSync(TimeSyncSchedule* schedule) {
+  if (schedule != nullptr) schedule->emitted = false;
 }
 
 MqttLinkStatusResult BuildMqttLinkStatus(MqttLinkStatusState* state,

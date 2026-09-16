@@ -44,8 +44,8 @@ PubSubClient mqtt(networkClient);
 char serialFrame[kMaxSerialFrame + 1U] = {};
 size_t serialFrameLength = 0U;
 String statusTopic;
-#if !defined(BUILD_ROLE_CTRL02)
 String telemetryTopic;
+#if !defined(BUILD_ROLE_CTRL02)
 String commandAckTopic;
 #endif
 char pendingFrames[kPendingFrameCapacity][kMaxSerialFrame + 1] = {};
@@ -339,7 +339,7 @@ void connectMqtt() {
 
 const char* topicForPending(PendingKind kind) {
 #if defined(BUILD_ROLE_CTRL02)
-  (void)kind;
+  if (kind == PendingKind::Telemetry) return telemetryTopic.c_str();
   return screen_routing::TopicsForRole(kBuildRole).serial_publish_topic;
 #else
   if (kind == PendingKind::CommandAck) return commandAckTopic.c_str();
@@ -396,6 +396,14 @@ void handleSerialLine(const char* line, size_t length) {
     return;
   }
 #if defined(BUILD_ROLE_CTRL02)
+  if (screen_routing::IsCtrl02StatusHeartbeat(line, length)) {
+    /* Node B can reboot independently after a firmware update.  Its heartbeat
+     * is the readiness handshake that makes ESP-02 replay the current link and
+     * clock instead of leaving the display stale for up to ten minutes. */
+    screen_routing::RequestMqttLinkStatus(&mqttLinkStatus);
+    screen_routing::RequestTimeSync(&timeSyncSchedule);
+    return;
+  }
   screen_routing::RouteOutput routed{};
   const screen_routing::RouteResult result = screen_routing::RouteSerialLine(
       kBuildRole, line, length, currentEpochMilliseconds(), &routed);
@@ -405,16 +413,18 @@ void handleSerialLine(const char* line, size_t length) {
                   static_cast<unsigned int>(result));
     return;
   }
+  const bool isTelemetry =
+      std::strcmp(routed.topic, telemetryTopic.c_str()) == 0;
+  const PendingKind kind = isTelemetry ? PendingKind::Telemetry
+                                       : PendingKind::MenuCommand;
   if (!mqtt.connected()) {
-    enqueueFrame(routed.payload, routed.payload_length,
-                 PendingKind::MenuCommand);
+    enqueueFrame(routed.payload, routed.payload_length, kind);
     return;
   }
   if (mqtt.publish(routed.topic, routed.payload, false)) {
-    Serial.println("#MENU_PUBLISHED");
+    Serial.println(isTelemetry ? "#PUBLISHED" : "#MENU_PUBLISHED");
   } else {
-    enqueueFrame(routed.payload, routed.payload_length,
-                 PendingKind::MenuCommand);
+    enqueueFrame(routed.payload, routed.payload_length, kind);
   }
 #else
   const bool isCommandAck =
@@ -461,8 +471,8 @@ void setup() {
   digitalWrite(kLedPin, HIGH);
   Serial.begin(kSerialBaud);
   Serial.setTimeout(50);
-#if !defined(BUILD_ROLE_CTRL02)
   telemetryTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/telemetry";
+#if !defined(BUILD_ROLE_CTRL02)
   commandAckTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/cmd_ack";
 #endif
   statusTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/status";

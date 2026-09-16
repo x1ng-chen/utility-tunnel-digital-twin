@@ -163,6 +163,12 @@ bool ShouldConfigureNtp(NtpAssociationState* state, bool wifi_connected);
 
 void InitMqttLinkStatusState(MqttLinkStatusState* state);
 
+bool IsCtrl02StatusHeartbeat(const char* line, size_t length);
+
+void RequestMqttLinkStatus(MqttLinkStatusState* state);
+
+void RequestTimeSync(TimeSyncSchedule* schedule);
+
 MqttLinkStatusResult BuildMqttLinkStatus(MqttLinkStatusState* state,
                                          bool connected, char* output,
                                          size_t output_capacity,
