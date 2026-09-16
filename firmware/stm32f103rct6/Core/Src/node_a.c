@@ -6,6 +6,7 @@
 #include "node_a_sensor_map.h"
 #include "node_a_status_screen.h"
 #include "node_a_telemetry.h"
+#include "node_a_sensor_bank.h"
 #include "uart_tx_queue.h"
 #include "st7735.h"
 #include "st7735_bus.h"
@@ -201,6 +202,7 @@ static uint16_t node_test_length;
  * safety and actuator fields by the display tick. */
 static NodeAStatusScreen status_screen;
 static NodeAStatusSnapshot status_sensors;
+static NodeASensorBank sensor_bank;
 /* ut.time.sync.v1 arrives from ESP-01 on USART2 as a bare JSON line, so it gets
  * its own bounded slot instead of the command queue. */
 static UiClock esp_clock;
@@ -331,6 +333,29 @@ static uint8_t Telemetry_EnqueueBoth(void *context, const char *frame,
 }
 
 static void Command_Poll(void);
+static void UartTx_DrainBoth(uint32_t now_ms);
+static void Communication_Service(void);
+
+static void Communication_Service(void)
+{
+  Command_Poll();
+  UartTx_DrainBoth(HAL_GetTick());
+}
+
+static void DelayWithCommunication(uint32_t delay_ms)
+{
+  uint32_t elapsed;
+  for (elapsed = 0U; elapsed < delay_ms; ++elapsed) {
+    Communication_Service();
+    HAL_Delay(1U);
+  }
+}
+
+static void SensorBank_ServiceCallback(void *context)
+{
+  (void)context;
+  Communication_Service();
+}
 static void Command_ProcessPayload(const char *payload, uint32_t received_at);
 static void Command_SendAck(const char *command_id, const char *status,
                             const char *reason, uint32_t applied_value);
@@ -453,7 +478,11 @@ static void MX_FAN1_PWM_Init(void)
  * conversion delay or the 40 ms INA226 sample settle), and the bus is always
  * released before returning.  The bus depends on the pull-ups fitted on the
  * sensor modules; clock stretching is not supported. */
-static void I2c_Delay(void) { HAL_Delay(NODE_A_SOFT_I2C_DELAY_MS); }
+static void I2c_Delay(void)
+{
+  Communication_Service();
+  HAL_Delay(NODE_A_SOFT_I2C_DELAY_MS);
+}
 static uint8_t I2c_DeadlineReached(uint32_t deadline_ms)
 {
   /* Signed difference keeps the comparison correct across the 49.7 day wrap. */
@@ -614,7 +643,7 @@ static uint8_t Sht30_Read(const SoftI2cBus *bus, uint8_t address, Sht30Reading *
   {
     I2c_Stop(bus); return 0U;
   }
-  I2c_Stop(bus); HAL_Delay(NODE_A_SHT30_MEASUREMENT_DELAY_MS); I2c_Start(bus);
+  I2c_Stop(bus); DelayWithCommunication(NODE_A_SHT30_MEASUREMENT_DELAY_MS); I2c_Start(bus);
   if (!I2c_WriteByte(bus, (uint8_t)((address << 1U) | 1U), deadline_ms))
   {
     I2c_Stop(bus); return 0U;
@@ -680,7 +709,7 @@ static uint8_t Ina226_Configure(const SoftI2cBus *bus, Ina226State *state,
       reading->fault = INA226_FAULT_CONFIGURATION;
       return 0U;
     }
-    HAL_Delay(INA226_SAMPLE_SETTLE_MS);
+    DelayWithCommunication(INA226_SAMPLE_SETTLE_MS);
   }
   if (!I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CONFIG,
                           &reading->config_raw, deadline_ms) ||
@@ -705,7 +734,7 @@ static uint8_t Ina226_Configure(const SoftI2cBus *bus, Ina226State *state,
     if (I2c_WriteRegister16(bus, INA226_ADDRESS, INA226_REG_CALIBRATION,
                            INA226_CALIBRATION_VALUE, deadline_ms))
     {
-      HAL_Delay(INA226_SAMPLE_SETTLE_MS);
+      DelayWithCommunication(INA226_SAMPLE_SETTLE_MS);
       if (I2c_ReadRegister16(bus, INA226_ADDRESS, INA226_REG_CALIBRATION,
                             &calibration, deadline_ms))
         reading->calibration_raw = calibration;
@@ -743,7 +772,7 @@ static uint8_t Ina226_ReadSamples(const SoftI2cBus *bus,
     shunt_samples[sample] = (int16_t)shunt_word;
     current_samples[sample] = (int16_t)current_word;
     if ((sample + 1U) < INA226_SAMPLE_COUNT)
-      HAL_Delay(INA226_SAMPLE_SETTLE_MS);
+      DelayWithCommunication(INA226_SAMPLE_SETTLE_MS);
   }
   reading->bus_raw = Median3U16(bus_samples[0], bus_samples[1], bus_samples[2]);
   reading->shunt_raw = Median3S16(shunt_samples[0], shunt_samples[1],
@@ -1054,7 +1083,7 @@ static void Level_Poll(uint32_t now)
 }
 
 /* SPI2 on PB15 runs at 4.5 MHz (36 MHz APB1 / 8). Each WS2812 bit is encoded
- * as six SPI bits: 0=100000 and 1=111100, giving a 1.333 us cell. */
+ * as six SPI bits: 0=110000 and 1=111100, giving a 1.333 us cell. */
 static uint8_t *Ws2812_EncodeByte(uint8_t value, uint8_t *output,
                                   uint8_t *pending, uint8_t *pending_bits)
 {
@@ -1784,6 +1813,7 @@ int main(void)
   Led_Render(HAL_GetTick());
   MX_ADC1_Init();
   if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) Error_Handler();
+  NodeASensorBank_Init(&sensor_bank, &hadc1, SensorBank_ServiceCallback, NULL);
   UartTx_InitWithReserve(&esp_tx_queue, NODE_A_UART_ACK_RESERVE_BYTES);
   UartTx_InitWithReserve(&debug_tx_queue, NODE_A_UART_ACK_RESERVE_BYTES);
   MX_USART1_UART_Init(); MX_USART2_UART_Init();
@@ -1834,8 +1864,11 @@ int main(void)
      * a fresher safety sample than this one, and it repaints again below. */
     telemetry_due = (uint8_t)((test_telemetry_burst != 0U) ||
                               ((now - last_telemetry) >= TELEMETRY_INTERVAL_MS));
-    if (telemetry_due == 0U)
-      Status_Tick(now);
+    /* Repaint independently of telemetry.  A worst-case sensor acquisition is
+     * longer than TELEMETRY_INTERVAL_MS, so gating this tick on sampling state
+     * can starve the panel forever and hide both time and environment data. */
+    Status_Tick(now);
+    NodeASensorBank_Tick(&sensor_bank, now);
     if (telemetry_due != 0U)
     {
       (void)Sht30_Read(&i2c1_bus, SHT30_ADDRESS_44, &readings[0]);
@@ -1873,6 +1906,7 @@ int main(void)
        * alarm page reports the relay and not the fan meters. */
       GasVentilation_Update(now);
       Status_Tick(now);
+    NodeASensorBank_Tick(&sensor_bank, now);
       (void)Ina226_Read(&i2c1_bus, &ina226_fan1_state, &fan_power);
       (void)Ina226_Read(&i2c2_bus, &ina226_fan2_state, &fan2_power);
       /* Sensor acquisition is deliberately slow on the software I2C buses.
@@ -1907,7 +1941,7 @@ int main(void)
                                        &fan2_power, fan2_rpm) != 0U)
         {
           --test_telemetry_burst;
-          last_telemetry = now;
+          last_telemetry = HAL_GetTick();
         }
       }
       else
@@ -1916,7 +1950,7 @@ int main(void)
                       oxygen_raw, oxygen_microvolts, oxygen_online, methane_raw,
                       methane_microvolts, methane_online, co_raw, co_microvolts,
                       co_online, &fan_power, fan_rpm, &fan2_power, fan2_rpm);
-        last_telemetry = now;
+        last_telemetry = HAL_GetTick();
       }
     }
     if ((now - last_led) >= LED_INTERVAL_MS)
@@ -2080,6 +2114,10 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(FLAME_GPIO_Port, &gpio);
   gpio.Pin = LEVEL_Pin; gpio.Mode = GPIO_MODE_INPUT; gpio.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(LEVEL_GPIO_Port, &gpio);
+  gpio.Pin = GPIO_PIN_8 | GPIO_PIN_9; gpio.Mode = GPIO_MODE_INPUT; gpio.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOC, &gpio);
+  gpio.Pin = GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13; gpio.Mode = GPIO_MODE_INPUT; gpio.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &gpio);
   /* Standard four-wire PC fan TACH is open collector.  The external 10 kOhm
    * pull-up to 3.3 V defines a safe logic level; the internal pull-up is also
    * enabled so a temporarily disconnected resistor cannot leave PA6 floating. */
