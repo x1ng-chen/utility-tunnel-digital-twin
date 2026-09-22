@@ -1,0 +1,46 @@
+id,status,value,unit,source,date,notes
+KICAD_VERSION,verified,10.0.5,version,D:/KiCad/bin/kicad-cli.exe,2026-09-22,CLI version output
+SENSOR_POPULATION,verified,32,count,project owner confirmation,2026-09-22,4 SHT30 + 5 level + 5 MQ-2 + 5 MQ-4 + 5 MQ-7 + 3 O2 + 5 flame
+FAN01_RATED_VOLTAGE,verified,12,V,project owner confirmation,2026-09-22,BINGDU B12
+FAN01_RATED_CURRENT,verified,0.2,A,project owner confirmation,2026-09-22,BINGDU B12
+FAN02_RATED_VOLTAGE,verified,12,V,project owner confirmation,2026-09-22,BINGDU B12
+FAN02_RATED_CURRENT,verified,0.2,A,project owner confirmation,2026-09-22,BINGDU B12
+ENCLOSURE_INTERNAL_LENGTH,measurement_required,,mm,,,Measure clear internal length
+ENCLOSURE_INTERNAL_WIDTH,measurement_required,,mm,,,Measure clear internal width
+ENCLOSURE_INTERNAL_HEIGHT,measurement_required,,mm,,,Measure clear internal height above and below PCB
+STM32_BOARD_LENGTH,measurement_required,,mm,,,Measure both boards and record worst case
+STM32_BOARD_WIDTH,measurement_required,,mm,,,Measure both boards and record worst case
+STM32_HEADER_ROW_SPACING,measurement_required,,mm,,,Measure center-to-center spacing
+STM32_HEADER_PIN_COUNT,measurement_required,,count,,,Confirm both sides and both boards
+STM32_UNDERSIDE_HEIGHT,measurement_required,,mm,,,Measure tallest underside component
+STM32_MOUNTING_HOLES,measurement_required,,mm,,,Record XY centers and hole diameters
+STM32_USB_PROTRUSION,measurement_required,,mm,,,Record enclosure clearance
+STM32_5V_INPUT_BEHAVIOR,measurement_required,,text,,,Verify allowed input and USB backfeed behavior
+ESP01S_DIMENSIONS,measurement_required,,mm,,,Measure purchased modules
+ESP01S_ANTENNA_KEEPOUT,measurement_required,,mm,,,Confirm from module data and physical antenna edge
+POWER_ADAPTER_RATING,measurement_required,,V/A,,,Verify nameplate is at least 12 V 5 A
+POWER_ADAPTER_POLARITY,measurement_required,,text,,,Verify terminal polarity
+POWER_ADAPTER_FULL_LOAD,measurement_required,,V,,,Record regulation temperature and protection
+FAN01_START_CURRENT,measurement_required,,A,,,Capture startup waveform
+FAN02_START_CURRENT,measurement_required,,A,,,Capture startup waveform
+MQ2_MODULE_PIN_ORDER,measurement_required,,text,,,Verify all five modules
+MQ2_HEATER_CURRENT,measurement_required,,A,,,Measure per module and group
+MQ2_AO_DO_LEVELS,measurement_required,,V,,,Record maximum and idle levels
+MQ4_MODULE_PIN_ORDER,measurement_required,,text,,,Verify all five modules
+MQ4_HEATER_CURRENT,measurement_required,,A,,,Measure per module and group
+MQ4_AO_DO_LEVELS,measurement_required,,V,,,Record maximum and idle levels
+MQ7_MODULE_PIN_ORDER,measurement_required,,text,,,Verify all five modules
+MQ7_HEATER_CURRENT,measurement_required,,A,,,Measure per module and group
+MQ7_AO_DO_LEVELS,measurement_required,,V,,,Record maximum and idle levels
+MQ7_HEATER_CONTROL,measurement_required,,text,,,Record whether heater is independently accessible
+O2_MODULE_MODEL,measurement_required,,text,,,Exact model for all three modules
+O2_SUPPLY_AND_OUTPUT,measurement_required,,V,,,Supply output type and maximum output
+FLAME_OUTPUT_STRUCTURE,measurement_required,,text,,,Verify push-pull or open collector and active level
+LEVEL_OUTPUT_STRUCTURE,measurement_required,,text,,,Verify all five FS-IR02 boards
+SHT30_ADDRESS_CONFIG,measurement_required,,hex,,,Verify one 0x44 and one 0x45 per bus
+SHT30_PULLUP_RESISTANCE,measurement_required,,ohm,,,Measure fitted pull-ups on all modules
+INA226_SHUNT_VALUE,measurement_required,,ohm,,,Measure both modules and direction
+INA226_RANGE,measurement_required,,A,,,Calculate from shunt and configuration
+BUZZER_RATING_AND_PINOUT,measurement_required,,text,,,Record voltage pins and active level
+SCREEN_CONNECTOR_PIN_ORDER,measurement_required,,text,,,Verify both ST7735S modules
+JOYSTICK_CONNECTOR_PIN_ORDER,measurement_required,,text,,,Verify physical connector order
