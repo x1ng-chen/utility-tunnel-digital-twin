@@ -476,6 +476,8 @@ NodeACommandResult NodeACommand_Apply(const NodeACommand *command,
       if (safety->gas_ventilation_active != 0U)
         return Result(NODE_A_STATUS_REJECTED, kReasonAutoVentActive, 0U);
       actual->fan1_pwm_percent = (uint8_t)command->value;
+      actual->relay_on = (actual->fan1_pwm_percent != 0U) ||
+                         (actual->fan2_pwm_percent != 0U);
       return Result(NODE_A_STATUS_ACCEPTED, kReasonFanPwmSet, command->value);
 
     case NODE_A_ACTION_FAN2_PWM:
@@ -484,6 +486,8 @@ NodeACommandResult NodeACommand_Apply(const NodeACommand *command,
       if (safety->gas_ventilation_active != 0U)
         return Result(NODE_A_STATUS_REJECTED, kReasonAutoVentActive, 0U);
       actual->fan2_pwm_percent = (uint8_t)command->value;
+      actual->relay_on = (actual->fan1_pwm_percent != 0U) ||
+                         (actual->fan2_pwm_percent != 0U);
       return Result(NODE_A_STATUS_ACCEPTED, kReasonFan2PwmSet, command->value);
 
     case NODE_A_ACTION_LED_OFF:
@@ -516,6 +520,8 @@ NodeACommandResult NodeACommand_Apply(const NodeACommand *command,
       if (safety->gas_ventilation_active != 0U)
         return Result(NODE_A_STATUS_REJECTED, kReasonAutoVentActive, 0U);
       actual->fan1_pwm_percent = (uint8_t)command->value;
+      actual->relay_on = (actual->fan1_pwm_percent != 0U) ||
+                         (actual->fan2_pwm_percent != 0U);
       return Result(NODE_A_STATUS_ACCEPTED, kReasonFanDutySet, command->value);
 
     case NODE_A_ACTION_FAN2_DUTY:
@@ -524,6 +530,8 @@ NodeACommandResult NodeACommand_Apply(const NodeACommand *command,
       if (safety->gas_ventilation_active != 0U)
         return Result(NODE_A_STATUS_REJECTED, kReasonAutoVentActive, 0U);
       actual->fan2_pwm_percent = (uint8_t)command->value;
+      actual->relay_on = (actual->fan1_pwm_percent != 0U) ||
+                         (actual->fan2_pwm_percent != 0U);
       return Result(NODE_A_STATUS_ACCEPTED, kReasonFanDutySet, command->value);
 
     case NODE_A_ACTION_FANS_BOTH_START:
@@ -549,7 +557,7 @@ NodeACommandResult NodeACommand_Apply(const NodeACommand *command,
     case NODE_A_ACTION_LED_MODE:
       if (SafetyAlarmActive(safety))
         return Result(NODE_A_STATUS_REJECTED, "active_safety_alarm", 0U);
-      if ((command->has_value == 0U) || (command->value > (uint32_t)NODE_A_LED_FLASH))
+      if ((command->has_value == 0U) || (command->value > (uint32_t)NODE_A_LED_CONVERGE))
         return Result(NODE_A_STATUS_REJECTED, kReasonInvalidValue, 0U);
       actual->led_mode = (uint8_t)command->value;
       return Result(NODE_A_STATUS_ACCEPTED, kReasonLedModeSet, command->value);

@@ -98,12 +98,25 @@ static uint8_t action_value_valid(UiAction action, uint8_t value)
   if ((action == UI_ACTION_FAN_1_SET_DUTY) || (action == UI_ACTION_FAN_2_SET_DUTY)) {
     return (value == 0U) || (value == 30U) || (value == 60U) || (value == 100U);
   }
-  if (action == UI_ACTION_LED_MODE) return value <= (uint8_t)UI_LED_FLASH;
+  if (action == UI_ACTION_LED_MODE) return value <= (uint8_t)UI_LED_CONVERGE;
   if (action == UI_ACTION_LED_BRIGHTNESS) {
     return (value == 25U) || (value == 50U) || (value == 75U) || (value == 100U);
   }
   if ((action == UI_ACTION_BUZZER_MUTE) || (action == UI_ACTION_BUZZER_RESTORE)) return value <= 2U;
   return value == 0U;
+}
+
+static void unsigned64_text(uint64_t value, char output[21])
+{
+  char reverse[20];
+  size_t count = 0U;
+  size_t index;
+  do {
+    reverse[count++] = (char)('0' + (value % 10ULL));
+    value /= 10ULL;
+  } while ((value != 0ULL) && (count < sizeof(reverse)));
+  for (index = 0U; index < count; ++index) output[index] = reverse[count - index - 1U];
+  output[count] = '\0';
 }
 
 void MenuCommand_Init(MenuCommandContext *context, uint32_t boot_id)
@@ -127,6 +140,7 @@ uint8_t MenuCommand_Begin(MenuCommandContext *context, UiAction action, uint8_t 
   int length;
   uint32_t next;
   uint8_t wire_value;
+  char created_at_text[21];
   if ((context == 0) || (line == 0) || (written == 0) ||
       ((uint8_t)action == (uint8_t)UI_ACTION_NONE) || created_at_ms == 0ULL) return 0U;
   if (!action_value_valid(action, value)) return 0U;
@@ -134,13 +148,16 @@ uint8_t MenuCommand_Begin(MenuCommandContext *context, UiAction action, uint8_t 
   next = context->sequence + 1U;
   if (next == 0U) next = 1U;
   context->sequence = next;
+  /* newlib-nano does not reliably enable long-long printf conversion on the
+   * target, so serialize the epoch explicitly instead of using %llu. */
+  unsigned64_text(created_at_ms, created_at_text);
   length = snprintf(line, line_capacity,
                     "{\"schema\":\"ut.menu.command.v1\",\"cmdId\":\"menu-CTRL-02-%lu-%lu\","
                     "\"target\":\"CTRL-01\",\"action\":\"%s\",\"value\":%u,"
-                    "\"createdAtMs\":%llu,\"ttlMs\":%u}\r\n",
+                    "\"createdAtMs\":%s,\"ttlMs\":%u}\r\n",
                     (unsigned long)context->boot_id, (unsigned long)next,
                     action_name(action), (unsigned int)wire_value,
-                    (unsigned long long)created_at_ms, MENU_COMMAND_TTL_MS);
+                    created_at_text, MENU_COMMAND_TTL_MS);
   if ((length <= 0) || ((size_t)length >= line_capacity) || ((size_t)length > MENU_COMMAND_LINE_SIZE)) {
     context->sequence = next - 1U;
     *written = 0U;

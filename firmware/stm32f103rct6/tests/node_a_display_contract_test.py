@@ -193,51 +193,49 @@ def check_read_only_screen():
 def check_alarm_reaction_path():
     """A fresh gas sample must move the safety state and the panel first.
 
-    The INA226 software-I2C reads that follow the gas sample are budgeted at
-    thousands of milliseconds, so an alarm evaluated before them but painted
-    after them would take the screen over far too late.  Node A therefore has to
-    re-run the gas safety transition and the display tick on the sample it just
-    took, before either blocking read."""
+    Gas sampling runs on its own fast tick (GAS_SAMPLE_INTERVAL_MS), decoupled
+    from the telemetry block: the INA226 software-I2C reads inside telemetry
+    are budgeted at thousands of milliseconds, so an alarm that waited for
+    that block would take the screen over far too late.  The single
+    unconditional display tick must therefore follow the gas block (so a
+    fresh sample repaints immediately) and precede every blocking read."""
     main = function(NODE_A, "int main(void)")
-    gas_sample = main.index("GasAlarm_Update(")
+    gas_start = NODE_A.rindex("static void GasSafety_Service(uint32_t now)")
+    gas_service = NODE_A[gas_start:NODE_A.index("static void Status_CaptureFanPower", gas_start)]
+    assert "GAS_SAMPLE_INTERVAL_MS" in gas_service
+    assert "GasAlarm_Update(" in gas_service
+    gas_sample = main.index("GasSafety_Service(now);")
     ina = [index for index in range(len(main))
            if main.startswith("Ina226_Read(", index)]
     assert len(ina) == 2, f"expected exactly two INA226 reads, found {len(ina)}"
 
     redraw = [index for index in range(len(main))
               if main.startswith("Status_Tick(now)", index)]
-    assert redraw, "the main loop must tick the screen"
-    assert len(redraw) == 2, (
-        "the tick belongs on both the telemetry and the plain path, not on a "
-        f"shared trailing one: {len(redraw)}")
-    assert main.count("telemetry_due") == 4, (
-        "one telemetry-due computation must drive both the tick and the block")
+    assert len(redraw) == 1, (
+        "one unconditional tick must serve both paths: "
+        f"{len(redraw)}")
+    assert main.count("telemetry_due") == 3, (
+        "the display tick must not be gated by telemetry_due")
 
-    after_sample = [index for index in redraw if index > gas_sample]
-    assert after_sample, (
-        "a fresh gas sample must repaint before the loop moves on")
+    # The gas block must live on its own fast tick, outside the telemetry block.
+    assert gas_sample < redraw[0], (
+        "a fresh gas sample must be painted by the tick that follows it")
     for index in ina:
-        assert after_sample[0] < index, (
-            "the gas repaint must precede every blocking INA226 read")
-    assert len(after_sample) == 1, "the telemetry path must repaint exactly once"
+        assert redraw[0] < index, (
+            "the repaint must precede every blocking INA226 read")
 
-    before_sample = [index for index in redraw if index < gas_sample]
-    assert len(before_sample) == 1, (
-        "the plain path must keep its own repaint, after the smoke/flame polls")
-    for poll in ("Smoke_Poll(now);", "Flame_Poll(now);", "Level_Poll(now);"):
-        assert main.index(poll) < before_sample[0], (
-            f"{poll} must be sampled by the repaint that precedes telemetry")
-    assert main.index("GasVentilation_Update(now);") < before_sample[0], (
-        "the plain path must keep re-evaluating ventilation")
-
-    # The gas transition has to run again on the sample the alarm was computed
-    # from; running it only before the sample would delay the relay and fans.
+    # The top-level loop evaluates the previous state, then the gas service
+    # samples and applies the fresh state before repainting.
     transitions = [index for index in range(len(main))
                    if main.startswith("GasVentilation_Update(now);", index)]
-    assert len(transitions) == 2, len(transitions)
-    assert before_sample[0] < transitions[1] < after_sample[0], (
-        "the gas transition must sit between the two repaints")
-    return "gas_sample<vent<repaint<ina226"
+    assert len(transitions) == 1, len(transitions)
+    assert transitions[0] < gas_sample < redraw[0], (
+        "the gas transition must run on the fresh sample before the repaint")
+
+    for poll in ("Smoke_Poll(now);", "Flame_Poll(now);", "Level_Poll(now);"):
+        assert main.index(poll) < transitions[0], (
+            f"{poll} must be sampled before the first ventilation evaluation")
+    return "polls<gas<vent<repaint<ina226"
 
 
 def check_build_registration():

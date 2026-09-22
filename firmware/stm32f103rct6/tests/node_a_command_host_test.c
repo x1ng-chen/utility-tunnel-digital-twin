@@ -132,6 +132,7 @@ static int test_fan_duties(void)
       1U, &SAFE, &actual);
   CHECK(result.status == NODE_A_STATUS_ACCEPTED);
   CHECK(actual.fan1_pwm_percent == 30U && actual.fan2_pwm_percent == 100U);
+  CHECK(actual.relay_on == 1U);
 
   actual = default_actuators();
   result = apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"m-2\","
@@ -139,6 +140,17 @@ static int test_fan_duties(void)
       1U, &SAFE, &actual);
   CHECK(result.applied_value == 60U);
   CHECK(actual.fan1_pwm_percent == 60U);
+  CHECK(actual.relay_on == 1U);
+
+  actual = default_actuators();
+  actual.fan1_pwm_percent = 0U;
+  actual.fan2_pwm_percent = 0U;
+  actual.relay_on = 0U;
+  result = apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"m-2b\","
+      "\"action\":\"fan1_duty\",\"ttlMs\":10000,\"value\":60}",
+      1U, &SAFE, &actual);
+  CHECK(result.status == NODE_A_STATUS_ACCEPTED);
+  CHECK(actual.fan1_pwm_percent == 60U && actual.relay_on == 1U);
 
   actual = default_actuators();
   CHECK(apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"m-3\","
@@ -201,7 +213,7 @@ static int test_led_modes_and_brightness(void)
   NodeAActuatorState actual;
   unsigned int mode;
 
-  for (mode = 0U; mode <= (unsigned int)NODE_A_LED_FLASH; ++mode)
+  for (mode = 0U; mode <= (unsigned int)NODE_A_LED_CONVERGE; ++mode)
   {
     char json[256];
     actual = default_actuators();
@@ -214,7 +226,7 @@ static int test_led_modes_and_brightness(void)
 
   actual = default_actuators();
   CHECK(apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"led-bad\","
-      "\"action\":\"led_mode\",\"ttlMs\":10000,\"value\":8}",
+      "\"action\":\"led_mode\",\"ttlMs\":10000,\"value\":16}",
       1U, &SAFE, &actual).status == NODE_A_STATUS_REJECTED);
   CHECK(actual.led_mode == NODE_A_LED_OFF);
 

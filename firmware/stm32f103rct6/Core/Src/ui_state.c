@@ -2,9 +2,10 @@
 
 #include <string.h>
 
+#include "kk_ui_catalog.h"
+
 #define UI_COMMAND_TIMEOUT_MS 5000U
-#define UI_SELECTION_ANIMATION_MS 140U
-#define UI_PAGE_ANIMATION_MS 180U
+#define UI_COMMAND_RESULT_DISPLAY_MS 1500U
 #define UI_COMMAND_ID_SIZE 40U
 
 static UiEffect effect(UiEffectKind kind, uint8_t action, uint8_t value)
@@ -18,31 +19,19 @@ static UiEffect effect(UiEffectKind kind, uint8_t action, uint8_t value)
 
 static uint8_t page_row_count(UiPage page)
 {
-  switch (page) {
-    case UI_HOME: return 7U;
-    case UI_MONITOR: return 4U;
-    case UI_FANS: return 4U;
-    case UI_LIGHT_SOUND: return 3U;
-    case UI_SETTINGS: return 2U;
-    case UI_OVERVIEW:
-    case UI_ALERTS:
-    case UI_NETWORK:
-    default: return 1U;
-  }
+  const KkUiPageDescriptor *descriptor = KK_UI_CatalogPage(page);
+  return (descriptor != NULL) ? descriptor->row_count : 1U;
 }
 
 static uint8_t page_wraps(UiPage page)
 {
-  return (page == UI_HOME) || (page == UI_FANS) || (page == UI_LIGHT_SOUND);
+  const KkUiPageDescriptor *descriptor = KK_UI_CatalogPage(page);
+  return (descriptor != NULL) ? descriptor->wraps : 0U;
 }
 
 static UiPage home_destination(uint8_t selected_row)
 {
-  static const UiPage destinations[] = {
-    UI_OVERVIEW, UI_MONITOR, UI_ALERTS, UI_FANS,
-    UI_LIGHT_SOUND, UI_NETWORK, UI_SETTINGS,
-  };
-  return destinations[selected_row];
+  return KK_UI_CatalogHomeDestination(selected_row);
 }
 
 static uint8_t action_requires_confirmation(UiAction action)
@@ -116,8 +105,8 @@ static void step_selected_option(UiState *state, int8_t direction)
     const uint8_t fan = (state->selected_row == 0U) ? 0U : 1U;
     state->fan_duty_option[fan] = next_fan_duty(state->fan_duty_option[fan], direction);
   } else if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 0U)) {
-    const int16_t next = (int16_t)state->led_mode_option + direction + 8;
-    state->led_mode_option = (UiLedMode)(next % 8);
+    const int16_t next = (int16_t)state->led_mode_option + direction + 16;
+    state->led_mode_option = (UiLedMode)(next % 16);
   } else if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 1U)) {
     state->led_brightness_option = next_brightness(state->led_brightness_option, direction);
   } else if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 2U)) {
@@ -139,6 +128,29 @@ static uint8_t selected_option_value(const UiState *state)
   return 0U;
 }
 
+static uint8_t editable_option_value(const UiState *state)
+{
+  if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 2U)) {
+    return (uint8_t)state->buzzer_option;
+  }
+  return selected_option_value(state);
+}
+
+static void restore_editable_option(UiState *state)
+{
+  if ((state->page == UI_FANS) && (state->selected_row == 0U)) {
+    state->fan_duty_option[0] = state->option_original_value;
+  } else if ((state->page == UI_FANS) && (state->selected_row == 3U)) {
+    state->fan_duty_option[1] = state->option_original_value;
+  } else if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 0U)) {
+    state->led_mode_option = (UiLedMode)state->option_original_value;
+  } else if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 1U)) {
+    state->led_brightness_option = state->option_original_value;
+  } else if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 2U)) {
+    state->buzzer_option = (UiBuzzerOption)state->option_original_value;
+  }
+}
+
 static void start_selection_animation(UiState *state, uint32_t now_ms)
 {
   state->animation_start_ms = now_ms;
@@ -155,6 +167,7 @@ static void clear_command_lifecycle(UiState *state)
 {
   state->command_phase = UI_CMD_IDLE;
   state->command_started_ms = 0U;
+  state->command_result_started_ms = 0U;
   state->pending_action = UI_ACTION_NONE;
   state->pending_value = 0U;
   state->active_command_id[0] = '\0';
@@ -208,12 +221,13 @@ UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms)
   if ((state == 0) || (event == UI_EVT_NONE)) return effect(UI_EFFECT_NONE, 0U, 0U);
 
   if (event == UI_EVT_LONG_PRESS) {
+    if (state->option_editing) restore_editable_option(state);
     return_home(state, now_ms);
     return effect(UI_EFFECT_GO_HOME, 0U, 0U);
   }
 
   if (state->dialog == UI_DIALOG_CONFIRM) {
-    if ((event == UI_EVT_LEFT) || (event == UI_EVT_UP) || (event == UI_EVT_DOWN)) {
+    if (event == UI_EVT_LEFT) {
       state->dialog = UI_DIALOG_NONE;
       clear_command_lifecycle(state);
       return effect(UI_EFFECT_DIRTY, 0U, 0U);
@@ -222,7 +236,38 @@ UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms)
     return effect(UI_EFFECT_NONE, 0U, 0U);
   }
 
-  if (state->command_phase == UI_CMD_SENDING) return effect(UI_EFFECT_NONE, 0U, 0U);
+  if ((state->command_phase == UI_CMD_SENDING) &&
+      ((event == UI_EVT_PRESS) || (event == UI_EVT_RIGHT))) return effect(UI_EFFECT_NONE, 0U, 0U);
+
+  if (state->option_editing) {
+    if (event == UI_EVT_UP) {
+      step_selected_option(state, 1);
+      return effect(UI_EFFECT_DIRTY, 0U, 0U);
+    }
+    if (event == UI_EVT_DOWN) {
+      step_selected_option(state, -1);
+      return effect(UI_EFFECT_DIRTY, 0U, 0U);
+    }
+    if (event == UI_EVT_LEFT) {
+      restore_editable_option(state);
+      state->option_editing = 0U;
+      return effect(UI_EFFECT_DIRTY, 0U, 0U);
+    }
+    if ((event != UI_EVT_RIGHT) && (event != UI_EVT_PRESS)) {
+      return effect(UI_EFFECT_NONE, 0U, 0U);
+    }
+
+    state->option_editing = 0U;
+    selected_action = action_for_selection(state);
+    state->pending_action = (uint8_t)selected_action;
+    state->pending_value = selected_option_value(state);
+    if (action_requires_confirmation(selected_action)) {
+      state->dialog = UI_DIALOG_CONFIRM;
+      state->command_phase = UI_CMD_CONFIRM;
+      return effect(UI_EFFECT_OPEN_CONFIRM, state->pending_action, state->pending_value);
+    }
+    return send_pending_command(state, now_ms);
+  }
 
   if (event == UI_EVT_LEFT) {
     if (state->page != UI_HOME) {
@@ -272,9 +317,9 @@ UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms)
   if (selected_action == UI_ACTION_NONE) return effect(UI_EFFECT_NONE, 0U, 0U);
   if (!command_send_allowed(state)) return effect(UI_EFFECT_DIRTY, 0U, 0U);
 
-  if ((event == UI_EVT_RIGHT) && selection_has_options(state)) {
+  if (selection_has_options(state)) {
     state->option_editing = 1U;
-    step_selected_option(state, 1);
+    state->option_original_value = editable_option_value(state);
     return effect(UI_EFFECT_DIRTY, 0U, 0U);
   }
 
@@ -293,6 +338,14 @@ void UiState_Tick(UiState *state, uint32_t now_ms)
   if ((state != 0) && (state->command_phase == UI_CMD_SENDING) &&
       ((uint32_t)(now_ms - state->command_started_ms) >= UI_COMMAND_TIMEOUT_MS)) {
     state->command_phase = UI_CMD_TIMEOUT;
+    state->command_result_started_ms = now_ms;
+  } else if ((state != 0) &&
+             ((state->command_phase == UI_CMD_ACCEPTED) ||
+              (state->command_phase == UI_CMD_REJECTED) ||
+              (state->command_phase == UI_CMD_TIMEOUT)) &&
+             ((uint32_t)(now_ms - state->command_result_started_ms) >=
+              UI_COMMAND_RESULT_DISPLAY_MS)) {
+    clear_command_lifecycle(state);
   }
 }
 
@@ -320,14 +373,16 @@ uint8_t UiState_CommandDispatched(UiState *state, const char *command_id)
   return 0U;
 }
 
-uint8_t UiState_CommandSendFailed(UiState *state)
+uint8_t UiState_CommandSendFailed(UiState *state, uint32_t now_ms)
 {
   if ((state == 0) || (state->command_phase != UI_CMD_SENDING)) return 0U;
   state->command_phase = UI_CMD_REJECTED;
+  state->command_result_started_ms = now_ms;
   return 1U;
 }
 
-uint8_t UiState_HandleAcknowledgement(UiState *state, const char *command_id, uint8_t accepted)
+uint8_t UiState_HandleAcknowledgement(UiState *state, const char *command_id, uint8_t accepted,
+                                      uint32_t now_ms)
 {
   if ((state == 0) || (command_id == 0) || (state->command_phase != UI_CMD_SENDING) ||
       (state->active_command_id[0] == '\0') || (strcmp(state->active_command_id, command_id) != 0)) {
@@ -335,5 +390,6 @@ uint8_t UiState_HandleAcknowledgement(UiState *state, const char *command_id, ui
   }
 
   state->command_phase = accepted ? UI_CMD_ACCEPTED : UI_CMD_REJECTED;
+  state->command_result_started_ms = now_ms;
   return 1U;
 }

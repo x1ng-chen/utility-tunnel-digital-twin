@@ -321,6 +321,33 @@ test('dead-letters an idempotency conflict instead of retrying forever', async (
   }
 });
 
+test('dead-letters a poison transient conflict after the retry budget', async () => {
+  const server = await startServer((record, response) => {
+    if (record.url === '/api/auth/login/') {
+      loginResponse(response, 'token-1');
+      return;
+    }
+    response.writeHead(409, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ error: 'database_busy' }));
+  });
+  try {
+    const forwarder = createDjangoForwarder({
+      baseUrl: server.baseUrl,
+      email: 'gateway@example.com',
+      password: 'secret',
+      retryDelayMs: 5,
+      maxRetryDelayMs: 5,
+      maxItemRetries: 2,
+    });
+    forwarder.forward(singleReading(1), RECEIVED_AT);
+    await waitFor(() => forwarder.counters.deadLetters === 1 && forwarder.counters.queued === 0);
+    assert.equal(server.seen.filter((record) => record.url === '/api/telemetry/').length, 3);
+    forwarder.close();
+  } finally {
+    server.server.close();
+  }
+});
+
 test('drops a batch rejected with a validation error and keeps the lane flowing', async () => {
   let rejected = true;
   const server = await startServer((record, response) => {

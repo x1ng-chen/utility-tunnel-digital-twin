@@ -49,11 +49,15 @@
 #define NODE_A_OXYGEN_ALARM_ON_RAW          32U
 #define NODE_A_OXYGEN_ALARM_OFF_RAW         35U
 
-/* Only the methane channel has completed a physical alarm-response bench
- * check. Oxygen and CO remain telemetry-only until their analog front ends
- * are calibrated; their provisional raw thresholds must not drive actuators. */
+/* Gas inputs remain telemetry-only until their analog front ends have warmed
+ * up and been calibrated against known references.  Set this flag to 1 only
+ * after MQ4 commissioning; provisional raw thresholds must not drive outputs. */
+#define NODE_A_OXYGEN_SAFETY_COMMISSIONED  0U
+#define NODE_A_METHANE_SAFETY_COMMISSIONED 0U
+#define NODE_A_CO_SAFETY_COMMISSIONED      0U
 #define NODE_A_OPERATIONAL_GAS_ALARM(oxygen_state, methane_state, co_state) \
-  ((uint8_t)((methane_state) != 0U))
+  ((uint8_t)((NODE_A_METHANE_SAFETY_COMMISSIONED != 0U) && \
+             ((methane_state) != 0U)))
 
 #define NODE_A_GAS_VENTILATION_HOLD_MS    30000U
 #define NODE_A_GAS_VENTILATION_SHOULD_RUN(alarm, cooling, elapsed_ms) \

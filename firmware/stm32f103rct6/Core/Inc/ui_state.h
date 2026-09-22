@@ -5,6 +5,9 @@
 
 #include "ui_model.h"
 
+#define UI_SELECTION_ANIMATION_MS 140U
+#define UI_PAGE_ANIMATION_MS 240U
+
 typedef enum {
   UI_HOME = 0,
   UI_OVERVIEW,
@@ -86,9 +89,11 @@ typedef struct {
   uint32_t animation_end_ms;
   UiCommandPhase command_phase;
   uint32_t command_started_ms;
+  uint32_t command_result_started_ms;
   uint8_t pending_action;
   uint8_t pending_value;
   uint8_t option_editing;
+  uint8_t option_original_value;
   uint8_t fan_duty_option[2];
   UiLedMode led_mode_option;
   uint8_t led_brightness_option;
@@ -102,7 +107,8 @@ UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms);
 void UiState_Tick(UiState *state, uint32_t now_ms);
 void UiState_SetControlAvailability(UiState *state, uint8_t mqtt_online, uint8_t safety_locked);
 uint8_t UiState_CommandDispatched(UiState *state, const char *command_id);
-uint8_t UiState_CommandSendFailed(UiState *state);
-uint8_t UiState_HandleAcknowledgement(UiState *state, const char *command_id, uint8_t accepted);
+uint8_t UiState_CommandSendFailed(UiState *state, uint32_t now_ms);
+uint8_t UiState_HandleAcknowledgement(UiState *state, const char *command_id, uint8_t accepted,
+                                      uint32_t now_ms);
 
 #endif /* UI_STATE_H */

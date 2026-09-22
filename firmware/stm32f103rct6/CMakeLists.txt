@@ -95,7 +95,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/kk_ui_catalog.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/kk_ui_motion.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_menu.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_renderer.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_state.c"
 )
@@ -107,7 +106,6 @@ set_source_files_properties(
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735_bus_node_a.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735_bus_node_b.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/node_a_status_screen.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_menu.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_renderer.c"
     PROPERTIES COMPILE_OPTIONS "-O3"
 )

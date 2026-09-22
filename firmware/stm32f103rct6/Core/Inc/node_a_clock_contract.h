@@ -123,7 +123,7 @@
 #define NODE_A_WS2812_PATTERN(high_bits) \
   ((0xFFU >> (8U - NODE_A_WS2812_BITS_PER_DATA_BIT)) & \
    (0xFFU << (NODE_A_WS2812_BITS_PER_DATA_BIT - (high_bits))))
-#define NODE_A_WS2812_ZERO_HIGH_BITS                    1UL
+#define NODE_A_WS2812_ZERO_HIGH_BITS                    2UL
 #define NODE_A_WS2812_ONE_HIGH_BITS                     4UL
 #define NODE_A_WS2812_ZERO_PATTERN \
   NODE_A_WS2812_PATTERN(NODE_A_WS2812_ZERO_HIGH_BITS)
@@ -295,15 +295,16 @@ _Static_assert(NODE_A_WS2812_SPI_HZ == 4500000UL,
 _Static_assert(NODE_A_WS2812_SPI_HZ >= 4000000UL &&
                NODE_A_WS2812_SPI_HZ <= 5000000UL,
                "WS2812 SPI clock must remain in the timing window");
-_Static_assert(NODE_A_WS2812_ZERO_PATTERN == 0x20U,
-               "WS2812 zero symbol must stay 100000");
+_Static_assert(NODE_A_WS2812_ZERO_PATTERN == 0x30U,
+               "WS2812 zero symbol must stay 110000");
 _Static_assert(NODE_A_WS2812_ONE_PATTERN == 0x3CU,
                "WS2812 one symbol must stay 111100");
 _Static_assert(NODE_A_WS2812_CELL_NS >= 650ULL &&
                NODE_A_WS2812_CELL_NS <= 1850ULL,
                "WS2812 cell must stay inside the 1.25 us +-600 ns window");
-_Static_assert(NODE_A_WS2812_ZERO_HIGH_NS >= 200ULL,
-               "WS2812 zero high pulse must clear the 0.35 us -150 ns minimum");
+_Static_assert(NODE_A_WS2812_ZERO_HIGH_NS >= 250ULL &&
+               NODE_A_WS2812_ZERO_HIGH_NS <= 550ULL,
+               "WS2812 zero high pulse must stay in the 0.4 us timing window");
 _Static_assert(NODE_A_WS2812_ONE_HIGH_NS >= 750ULL &&
                NODE_A_WS2812_ONE_HIGH_NS <= 1050ULL,
                "WS2812 one high pulse must stay in the 0.9 us +-150 ns window");

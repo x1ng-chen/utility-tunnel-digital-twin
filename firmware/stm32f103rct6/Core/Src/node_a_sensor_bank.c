@@ -159,13 +159,13 @@ void NodeASensorBank_Init(NodeASensorBank *bank, ADC_HandleTypeDef *hadc,
                        kNodeADigitalPins[i].kind, 0U);
   }
 
-  /* Default enabled: commission existing MQ4-01, CO-01, O2-01, SHT-01, MQ2-01, FLAME-01, LEVEL-01 */
+  /* Default enabled. MQ4-01 safety is owned by the dedicated 200 ms gas path;
+   * this slower inventory-bank copy remains telemetry-only to avoid duplicate
+   * alarm ownership. MQ2-01 and FLAME-01 retain bank safety linkage. */
   int8_t pos;
   if ((pos = NodeASensorBank_FindIndex(bank, "SHT-01")) >= 0) NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
   if ((pos = NodeASensorBank_FindIndex(bank, "MQ4-01")) >= 0) {
     NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
-    NodeASensorBank_SetCalibrated(bank, (uint8_t)pos, 1U);
-    NodeASensorBank_SetCommissionedForAlarm(bank, (uint8_t)pos, 1U);
   }
   if ((pos = NodeASensorBank_FindIndex(bank, "CO-01")) >= 0) NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
   if ((pos = NodeASensorBank_FindIndex(bank, "O2-01")) >= 0) NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);

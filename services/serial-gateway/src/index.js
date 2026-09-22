@@ -8,6 +8,8 @@ const environment = z.object({
   API_URL: z.string().url(),
   DEVICE_ID: z.string().regex(/^[a-z0-9-]{1,64}$/i),
   DEVICE_INGEST_TOKEN: z.string().min(32),
+  API_TIMEOUT_MS: z.coerce.number().int().min(500).max(60000).default(5000),
+  SERIAL_QUEUE_MAX: z.coerce.number().int().min(1).max(10000).default(256),
 });
 
 const parsed = environment.safeParse(process.env);
@@ -16,8 +18,11 @@ if (!parsed.success) {
 }
 const config = parsed.data;
 let pendingText = '';
-let deliveryQueue = Promise.resolve();
+const deliveryQueue = [];
+let draining = false;
 let opening = false;
+let reopenTimer = null;
+let stopping = false;
 
 async function forwardLine(line) {
   if (!line.trim()) return;
@@ -37,12 +42,39 @@ async function forwardLine(line) {
       'x-device-ingest-token': config.DEVICE_INGEST_TOKEN,
     },
     body: JSON.stringify(telemetry),
+    signal: AbortSignal.timeout(config.API_TIMEOUT_MS),
   });
   if (!response.ok) {
     console.warn(`API rejected telemetry: HTTP ${response.status}.`);
     return;
   }
   console.info(`Forwarded telemetry at ${new Date().toLocaleTimeString()}.`);
+}
+
+async function drainDeliveryQueue() {
+  if (draining || stopping) return;
+  draining = true;
+  try {
+    while (deliveryQueue.length && !stopping) {
+      const line = deliveryQueue.shift();
+      try {
+        await forwardLine(line);
+      } catch (error) {
+        console.error('Failed to forward telemetry.', error instanceof Error ? error.message : error);
+      }
+    }
+  } finally {
+    draining = false;
+  }
+}
+
+function enqueueLine(line) {
+  if (deliveryQueue.length >= config.SERIAL_QUEUE_MAX) {
+    deliveryQueue.shift();
+    console.warn('Dropped the oldest serial frame because the delivery queue is full.');
+  }
+  deliveryQueue.push(line);
+  void drainDeliveryQueue();
 }
 
 const port = new SerialPort({
@@ -61,15 +93,26 @@ port.on('data', (chunk) => {
   const lines = pendingText.split(/\r?\n/);
   pendingText = lines.pop() ?? '';
   for (const line of lines) {
-    deliveryQueue = deliveryQueue.then(() => forwardLine(line)).catch((error) => {
-      console.error('Failed to forward telemetry.', error instanceof Error ? error.message : error);
-    });
+    enqueueLine(line);
   }
 });
 
 port.on('error', (error) => {
   console.error('Serial gateway error:', error.message);
+  if (!port.isOpen) scheduleOpen();
 });
+
+port.on('close', () => {
+  if (!stopping) scheduleOpen();
+});
+
+function scheduleOpen() {
+  if (stopping || reopenTimer || opening || port.isOpen) return;
+  reopenTimer = setTimeout(() => {
+    reopenTimer = null;
+    openPort();
+  }, 3000);
+}
 
 function openPort() {
   if (opening || port.isOpen) return;
@@ -77,8 +120,8 @@ function openPort() {
   port.open((error) => {
     opening = false;
     if (error) {
-      console.warn(`COM10 is not ready; retrying in 3 seconds (${error.message}).`);
-      setTimeout(openPort, 3000);
+      console.warn(`${config.SERIAL_PORT} is not ready; retrying in 3 seconds (${error.message}).`);
+      scheduleOpen();
       return;
     }
     // Windows may defer opening an SPP session until the first write. The STM32
@@ -91,6 +134,8 @@ function openPort() {
 openPort();
 
 const shutdown = () => {
+  stopping = true;
+  if (reopenTimer) clearTimeout(reopenTimer);
   if (port.isOpen) port.close();
 };
 process.once('SIGINT', shutdown);

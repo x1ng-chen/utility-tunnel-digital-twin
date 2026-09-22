@@ -199,13 +199,13 @@ static int test_send_failure_and_late_ack(void)
   UiState state;
   UiState_Init(&state);
   state.command_phase = UI_CMD_SENDING;
-  CHECK(UiState_CommandSendFailed(&state) == 1U);
+  CHECK(UiState_CommandSendFailed(&state, 10U) == 1U);
   CHECK(state.command_phase == UI_CMD_REJECTED);
   state.command_phase = UI_CMD_SENDING;
   CHECK(UiState_CommandDispatched(&state, "menu-CTRL-02-1-1") == 1U);
   UiState_Tick(&state, 5000U);
   CHECK(state.command_phase == UI_CMD_TIMEOUT);
-  CHECK(UiState_HandleAcknowledgement(&state, "menu-CTRL-02-1-1", 1U) == 0U);
+  CHECK(UiState_HandleAcknowledgement(&state, "menu-CTRL-02-1-1", 1U, 6000U) == 0U);
   return 0;
 }
 

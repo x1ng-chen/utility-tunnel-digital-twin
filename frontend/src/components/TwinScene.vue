@@ -6,9 +6,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Alert, Asset } from '../types';
 import { cameraFitDistance } from '../utils/cameraFit';
-import { modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
+import { leakPipeNodeNames, modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
 
-const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string }>();
+const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string; leakAssetCode?: string | null }>();
 const emit = defineEmits<{ select: [code: string]; modelReport: [report: TwinModelBindingReport] }>();
 const host = ref<HTMLDivElement>();
 const modelState = ref<'loading' | 'loaded' | 'fallback'>('loading');
@@ -37,6 +37,8 @@ const materialBaselines = new WeakMap<MeshStandardMaterial, { color: Color; emis
 let modelRoot: Object3D | undefined;
 let fallbackSceneRoot: Group | undefined;
 let fallbackAssetRoot: Group | undefined;
+let leakOverlayRoot: Group | undefined;
+let leakOverlayMaterial: MeshBasicMaterial | undefined;
 let modelLoadToken = 0;
 let modelLoadTimeout = 0;
 let sceneRadius = 18;
@@ -176,6 +178,51 @@ function syncSceneAssets() {
   }
 }
 
+function clearLeakOverlay() {
+  if (!leakOverlayRoot) return;
+  leakOverlayRoot.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    object.geometry.dispose();
+    (Array.isArray(object.material) ? object.material : [object.material]).forEach((material) => material.dispose());
+  });
+  leakOverlayRoot.removeFromParent();
+  leakOverlayRoot = undefined;
+  leakOverlayMaterial = undefined;
+}
+
+function syncLeakOverlay() {
+  clearLeakOverlay();
+  if (!scene || !props.leakAssetCode) return;
+  const asset = props.assets.find((item) => item.code === props.leakAssetCode);
+  if (!asset) return;
+  let target: Object3D | undefined;
+  if (modelRoot) {
+    for (const name of leakPipeNodeNames(asset)) {
+      target = modelRoot.getObjectByName(name);
+      if (target) break;
+    }
+  }
+  target ||= assetObjects.get(asset.code);
+  const bounds = target ? new Box3().setFromObject(target) : new Box3();
+  const centre = bounds.isEmpty()
+    ? new Vector3((Number(asset.position.x) / 100 - .5) * 27, .6, (Number(asset.position.y) / 100 - .5) * 14)
+    : bounds.getCenter(new Vector3());
+  const size = bounds.isEmpty() ? new Vector3(4.2, .34, .34) : bounds.getSize(new Vector3());
+  const pipeLength = Math.max(size.x, size.z, sceneRadius * .11, 2.2);
+  const pipeWidth = Math.max(Math.min(size.y, pipeLength * .18), sceneRadius * .008, .16);
+  leakOverlayRoot = new Group();
+  leakOverlayRoot.name = `LEAK_PIPE_OVERLAY_${asset.code}`;
+  leakOverlayRoot.userData.assetCode = asset.code;
+  leakOverlayRoot.position.copy(centre);
+  leakOverlayMaterial = new MeshBasicMaterial({ color: 0xff244f, transparent: true, opacity: .48, depthWrite: false });
+  const body = new Mesh(new BoxGeometry(pipeLength, pipeWidth, pipeWidth), leakOverlayMaterial);
+  const outline = new Mesh(new BoxGeometry(pipeLength * 1.04, pipeWidth * 1.75, pipeWidth * 1.75), new MeshBasicMaterial({ color: 0xff708c, wireframe: true, transparent: true, opacity: .82, depthWrite: false }));
+  const beacon = new PointLight(0xff1748, 3.2, Math.max(pipeLength * 1.8, 5), 2);
+  beacon.position.y = pipeWidth * 2;
+  leakOverlayRoot.add(body, outline, beacon);
+  scene.add(leakOverlayRoot);
+}
+
 function clearLoadedModel() {
   window.clearTimeout(modelLoadTimeout);
   const disposableRoots = [modelRoot, fallbackSceneRoot, fallbackAssetRoot].filter(Boolean) as Object3D[];
@@ -202,6 +249,7 @@ function clearLoadedModel() {
   modelBoundCodes.clear();
   assetObjects.clear();
   animatedMaterials.clear();
+  clearLeakOverlay();
 }
 
 function visualIntensity(state: TwinVisualState, selected: boolean, critical: boolean, now = 0) {
@@ -367,6 +415,11 @@ function animate(timestamp = 0) {
   if (minimumFrameInterval && timestamp - lastRenderedAt < minimumFrameInterval) return;
   lastRenderedAt = timestamp;
   const now = performance.now() / 1000;
+  if (leakOverlayRoot && leakOverlayMaterial) {
+    const pulse = .72 + Math.sin(now * 6.5) * .22;
+    leakOverlayMaterial.opacity = pulse;
+    leakOverlayRoot.scale.set(1, 1 + pulse * .28, 1 + pulse * .28);
+  }
   props.assets.forEach((asset) => {
     const materials = animatedMaterials.get(asset.code);
     if (!materials?.length) return;
@@ -394,6 +447,7 @@ function loadModel() {
     modelState.value = 'fallback';
     modelMessage.value = '实体模型加载超时，已切换到安全预览，可重新检测';
     applyVisualState();
+    syncLeakOverlay();
     resetView();
     // The GLTF success/error paths restore focus after a late model ready; the
     // timeout fallback must do the same so a new-alarm auto-locate that arrived
@@ -410,6 +464,7 @@ function loadModel() {
     modelProgress.value = 100;
     modelMessage.value = '已加载实体三维模型';
     applyVisualState();
+    syncLeakOverlay();
     resetView();
     if (props.selectedCode) focusAsset(props.selectedCode);
   }, (progress) => {
@@ -428,6 +483,7 @@ function loadModel() {
     modelState.value = 'fallback';
     modelMessage.value = '等待实体模型交付，当前为可交互预览场景';
     applyVisualState();
+    syncLeakOverlay();
     resetView();
     if (props.selectedCode) focusAsset(props.selectedCode);
   });
@@ -502,8 +558,9 @@ onMounted(() => {
 // Camera focus is a deliberate selection action. Live telemetry and alert
 // refreshes must never re-run it, otherwise OrbitControls appears to "spring
 // back" while an operator is zooming or rotating the model.
-watch(() => props.assets, () => { syncSceneAssets(); applyVisualState(); }, { deep: true });
+watch(() => props.assets, () => { syncSceneAssets(); applyVisualState(); syncLeakOverlay(); }, { deep: true });
 watch(() => props.alerts, applyVisualState, { deep: true });
+watch(() => props.leakAssetCode, syncLeakOverlay);
 watch(() => props.selectedCode, (next, previous) => {
   applyVisualState();
   if (next && next !== previous) focusAsset(next);

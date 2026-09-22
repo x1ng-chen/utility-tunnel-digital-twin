@@ -156,6 +156,10 @@ static void format_fan_frame(char *frame, uint16_t *length, uint32_t sequence,
   const uint32_t rpm = (fan_index == 0U) ? snapshot->fan1_rpm : snapshot->fan2_rpm;
   const uint8_t duty = (fan_index == 0U) ? snapshot->actuators.fan1_pwm_percent
                                          : snapshot->actuators.fan2_pwm_percent;
+  /* Tach capture is independent of INA226. A missing power monitor must not
+   * erase a valid RPM measurement; conversely, nonzero duty with no pulses is
+   * explicitly suspect rather than reported as healthy zero speed. */
+  const char *rpm_quality = (duty == 0U || rpm != 0U) ? "good" : "suspect";
   int32_t current_abs = power->current_microamps;
   const char *current_sign = "";
   int written;
@@ -176,7 +180,7 @@ static void format_fan_frame(char *frame, uint16_t *length, uint32_t sequence,
     asset, (unsigned long)(power->bus_microvolts / 1000000UL),
     (unsigned long)((power->bus_microvolts % 1000000UL) / 1000UL), quality,
     asset, current_sign, (long)(current_abs / 1000L), (long)(current_abs % 1000L), quality,
-    asset, (unsigned long)rpm, quality,
+    asset, (unsigned long)rpm, rpm_quality,
     (unsigned int)snapshot->actuators.relay_on, (unsigned int)duty,
     (unsigned int)(snapshot->auto_ventilation_active ? 1U : 0U),
     (unsigned int)(snapshot->cooldown_active ? 1U : 0U),

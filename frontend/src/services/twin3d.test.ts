@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeTwinAlerts, modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, summarizeTwinModelDelivery } from './twin3d';
+import { activeTwinAlerts, alertIndicatesLeak, leakCapableAsset, leakPipeLabel, leakPipeNodeNames, modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, summarizeTwinModelDelivery } from './twin3d';
 import type { Alert, Asset } from '../types';
 
 const asset = { id: 1, code: 'ENV-01', mesh: 'MESH_ENV_01', status: 'normal' } as Asset;
@@ -58,5 +58,14 @@ describe('3D twin binding rules', () => {
     expect(nextTwinCameraDistance(10, 1.55, 2, 20)).toBe(15.5);
     expect(nextTwinCameraDistance(2, .62, 2, 20)).toBe(2);
     expect(nextTwinCameraDistance(20, 1.55, 2, 20)).toBe(20);
+  });
+
+  it('maps gas and water incidents to deterministic pipe nodes', () => {
+    expect(alertIndicatesLeak({ category: '气体安全', title: '甲烷泄漏', detail: '燃气浓度上升' } as Alert)).toBe(true);
+    expect(alertIndicatesLeak({ category: '设备反馈', title: '风机离线', detail: '无反馈' } as Alert)).toBe(false);
+    const level = { ...asset, code: 'LEVEL-L03', name: '液位3 · 泵入口', type: '管道液位测点', mesh: 'MESH_V12-FSIR02_L03_PROBE', capabilities: [] };
+    expect(leakCapableAsset(level)).toBe(true);
+    expect(leakPipeNodeNames(level)).toContain('MESH_V12-FSIR02_L03_PIPE');
+    expect(leakPipeLabel(level)).toBe('管段 · 泵入口');
   });
 });

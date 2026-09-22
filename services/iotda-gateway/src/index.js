@@ -16,6 +16,8 @@ const environment = z.object({
   MQTT_DISCOVERY_PORT: z.coerce.number().int().min(1).max(65535).default(4210),
   MQTT_DISCOVERY_INTERVAL_MS: z.coerce.number().int().min(250).max(60000).default(3000),
   MQTT_PUBLIC_PORT: z.coerce.number().int().min(1).max(65535).default(1884),
+  MQTT_DISCOVERY_HMAC_KEY: z.string().min(16).optional(),
+  MQTT_DISCOVERY_TARGETS: z.string().optional(),
   IOTDA_ENABLED: z.enum(['true', 'false']).default('true'),
   IOTDA_HOST: z.string().min(4).optional(),
   IOTDA_PORT: z.coerce.number().int().min(1).max(65535).default(8883),
@@ -28,6 +30,7 @@ const environment = z.object({
   DJANGO_INGEST_API_KEY: z.string().min(32).optional(),
   DJANGO_TIMEOUT_MS: z.coerce.number().int().min(500).max(60000).default(5000),
   DJANGO_QUEUE_MAX: z.coerce.number().int().min(1).max(500000).default(43200),
+  DJANGO_MAX_ITEM_RETRIES: z.coerce.number().int().min(0).max(1000).default(8),
   DJANGO_QUEUE_DB: z.string().min(1).default('./data/iotda-outbox.sqlite'),
 });
 
@@ -49,14 +52,10 @@ if (!configResult.success) {
   throw new Error(`Invalid IoTDA gateway configuration: ${configResult.error.issues.map((issue) => issue.path.join('.')).join(', ')}`);
 }
 const config = configResult.data;
-
-const discovery = config.MQTT_DISCOVERY_ENABLED === 'true'
-  ? startDiscoveryBroadcaster({
-    mqttPort: config.MQTT_PUBLIC_PORT,
-    discoveryPort: config.MQTT_DISCOVERY_PORT,
-    intervalMs: config.MQTT_DISCOVERY_INTERVAL_MS,
-  })
-  : null;
+const discoveryTargets = (config.MQTT_DISCOVERY_TARGETS ?? '')
+  .split(',')
+  .map((address) => address.trim())
+  .filter(Boolean);
 
 // Dual-output sinks: Huawei Cloud IoTDA and/or the Django ingest API. At
 // least one must stay enabled; keeping both disabled would silently drop
@@ -64,6 +63,9 @@ const discovery = config.MQTT_DISCOVERY_ENABLED === 'true'
 const iotdaEnabled = config.IOTDA_ENABLED !== 'false';
 const djangoEnabled = Boolean(config.DJANGO_API_URL);
 const missing = [];
+if (config.MQTT_DISCOVERY_ENABLED === 'true' && !config.MQTT_DISCOVERY_HMAC_KEY) {
+  missing.push('MQTT_DISCOVERY_HMAC_KEY');
+}
 if (iotdaEnabled) {
   if (!config.IOTDA_HOST) missing.push('IOTDA_HOST');
   if (!config.IOTDA_DEVICE_ID) missing.push('IOTDA_DEVICE_ID');
@@ -78,6 +80,16 @@ if (!iotdaEnabled && !djangoEnabled) {
 if (missing.length) {
   throw new Error(`Invalid IoTDA gateway configuration: ${missing.join(', ')}`);
 }
+
+const discovery = config.MQTT_DISCOVERY_ENABLED === 'true'
+  ? startDiscoveryBroadcaster({
+    mqttPort: config.MQTT_PUBLIC_PORT,
+    discoveryPort: config.MQTT_DISCOVERY_PORT,
+    intervalMs: config.MQTT_DISCOVERY_INTERVAL_MS,
+    hmacKey: config.MQTT_DISCOVERY_HMAC_KEY,
+    unicastTargets: discoveryTargets,
+  })
+  : null;
 
 const localTelemetryTopic = `ut/v1/${config.LOCAL_DEVICE_ID}/telemetry`;
 const localCloudCommandTopic = `ut/v1/${config.LOCAL_DEVICE_ID}/cmd/iotda`;
@@ -145,6 +157,7 @@ const django = djangoEnabled
     deviceId: config.LOCAL_DEVICE_ID,
     timeoutMs: config.DJANGO_TIMEOUT_MS,
     queueMax: config.DJANGO_QUEUE_MAX,
+    maxItemRetries: config.DJANGO_MAX_ITEM_RETRIES,
     queueDbPath: config.DJANGO_QUEUE_DB,
   })
   : null;

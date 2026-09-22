@@ -1,0 +1,6 @@
+interface:
+  display_name: "KK_OLED 移植"
+  short_description: "将 KK_OLED 驱动移植到兼容的嵌入式工程"
+  default_prompt: "使用 $kk-oled-port 将 KK_OLED 移植到当前嵌入式工程，并按证据验证具体驱动。"
+policy:
+  allow_implicit_invocation: true

@@ -7,8 +7,9 @@ import {
 } from '../src/discovery.js';
 
 test('builds the versioned MQTT discovery packet', () => {
-  assert.equal(buildDiscoveryPacket({ mqttPort: 1884 }).toString('utf8'),
-    'UT-MQTT-DISCOVERY/1|utility-tunnel|1884');
+  assert.equal(buildDiscoveryPacket({ mqttPort: 1884, hmacKey: 'bench-discovery-key' }).toString('utf8'),
+    'UT-MQTT-DISCOVERY/2|utility-tunnel|1884|0ecd20b0b1069e60760f442846cbdfd028600e21a6f442b385c9de05636671ff');
+  assert.throws(() => buildDiscoveryPacket({ mqttPort: 1884, hmacKey: '' }), /hmacKey/);
   assert.throws(() => buildDiscoveryPacket({ mqttPort: 0 }), /mqttPort/);
   assert.throws(() => buildDiscoveryPacket({ mqttPort: 70000 }), /mqttPort/);
 });
@@ -39,6 +40,7 @@ test('broadcasts immediately and periodically, then closes cleanly', () => {
   };
   const broadcaster = startDiscoveryBroadcaster({
     mqttPort: 1884,
+    hmacKey: 'bench-discovery-key',
     discoveryPort: 4210,
     interfacesProvider: () => ({
       WiFi: [{ family: 'IPv4', internal: false, address: '10.0.0.9', netmask: '255.255.255.0' }],
@@ -53,7 +55,7 @@ test('broadcasts immediately and periodically, then closes cleanly', () => {
     logger: { info() {}, warn() {} },
   });
   assert.deepEqual(sends, [{
-    packet: 'UT-MQTT-DISCOVERY/1|utility-tunnel|1884',
+    packet: 'UT-MQTT-DISCOVERY/2|utility-tunnel|1884|0ecd20b0b1069e60760f442846cbdfd028600e21a6f442b385c9de05636671ff',
     port: 4210,
     address: '10.0.0.255',
   }]);
@@ -61,6 +63,39 @@ test('broadcasts immediately and periodically, then closes cleanly', () => {
   assert.equal(sends.length, 2);
   broadcaster.close();
   assert.equal(closed, true);
+});
+
+test('also sends authenticated discovery to configured unicast targets', () => {
+  const sends = [];
+  const socket = {
+    on() {},
+    bind(callback) { callback(); },
+    setBroadcast() {},
+    send(_packet, port, address, callback) {
+      sends.push({ port, address });
+      callback?.();
+    },
+    close() {},
+  };
+  const broadcaster = startDiscoveryBroadcaster({
+    mqttPort: 1884,
+    hmacKey: 'bench-discovery-key',
+    discoveryPort: 4210,
+    unicastTargets: ['10.0.0.200', '10.0.0.1'],
+    interfacesProvider: () => ({
+      WiFi: [{ family: 'IPv4', internal: false, address: '10.0.0.9', netmask: '255.255.255.0' }],
+    }),
+    createSocket: () => socket,
+    setIntervalFn: () => 77,
+    clearIntervalFn() {},
+    logger: { info() {}, warn() {} },
+  });
+  assert.deepEqual(sends, [
+    { port: 4210, address: '10.0.0.255' },
+    { port: 4210, address: '10.0.0.200' },
+    { port: 4210, address: '10.0.0.1' },
+  ]);
+  broadcaster.close();
 });
 
 test('recreates the UDP socket after a bind or fatal socket error', () => {
@@ -84,6 +119,7 @@ test('recreates the UDP socket after a bind or fatal socket error', () => {
 
   const broadcaster = startDiscoveryBroadcaster({
     mqttPort: 1884,
+    hmacKey: 'bench-discovery-key',
     createSocket,
     setTimeoutFn: (callback, milliseconds) => {
       assert.equal(milliseconds, 1000);

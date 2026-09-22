@@ -85,7 +85,7 @@ def main() -> None:
             ("alerts", "alarm_center", 1, "active_alarms"),
             ("fans", "fan_control", 4, "fan_1_start_stop_30_60_100"),
             ("light_sound", "led_and_buzzer", 3,
-             "led_modes_off_white_green_yellow_red_blue_breathe_flash"),
+             "led_modes_0_to_15"),
             ("network", "communication_status", 1, "link_summary"),
             ("settings", "system_settings", 2, "display"),
         )

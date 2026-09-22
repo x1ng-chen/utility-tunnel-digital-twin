@@ -1,0 +1,6 @@
+interface:
+  display_name: "KK_UI 扩展"
+  short_description: "严格评估并实现可复用、可裁剪的 KK_UI 核心扩展"
+  default_prompt: "使用 $kk-ui-extend 评估现有能力是否确实不足，并在获批后扩展 KK_UI。"
+policy:
+  allow_implicit_invocation: true

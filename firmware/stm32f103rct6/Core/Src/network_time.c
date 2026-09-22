@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#define NETWORK_TIME_BEIJING_OFFSET_SECONDS (8ULL * 3600ULL)
+
 typedef struct {
   const char *at;
   const char *end;
@@ -128,7 +130,8 @@ void NetworkTime_ToSnapshot(const UiClock *clock, uint32_t now_ms,
   if (snapshot == 0) return;
   (void)memset(snapshot, 0, sizeof(*snapshot));
   if ((clock == 0) || !clock->synchronized) return;
-  seconds = clock->epoch_seconds + ((uint64_t)((uint32_t)(now_ms - clock->synchronized_ms)) / 1000ULL);
+  seconds = clock->epoch_seconds + NETWORK_TIME_BEIJING_OFFSET_SECONDS +
+            ((uint64_t)((uint32_t)(now_ms - clock->synchronized_ms)) / 1000ULL);
   day_seconds = (uint32_t)(seconds % 86400ULL);
   snapshot->synchronized = 1U;
   snapshot->hour = (uint8_t)(day_seconds / 3600U);

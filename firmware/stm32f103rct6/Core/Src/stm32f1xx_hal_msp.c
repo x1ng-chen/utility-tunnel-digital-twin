@@ -45,9 +45,6 @@ _Static_assert(NODE_A_ADC_CLOCK_HZ <= 12000000UL,
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-#ifdef NODE_B_FIRMWARE
-static DMA_HandleTypeDef hdma_adc1;
-#endif
 
 /* USER CODE END PV */
 
@@ -141,22 +138,6 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 #endif
 
-#ifdef NODE_B_FIRMWARE
-    __HAL_RCC_DMA1_CLK_ENABLE();
-    hdma_adc1.Instance = DMA1_Channel1;
-    hdma_adc1.Init.Direction = DMA_PERIPH_TO_MEMORY;
-    hdma_adc1.Init.PeriphInc = DMA_PINC_DISABLE;
-    hdma_adc1.Init.MemInc = DMA_MINC_ENABLE;
-    hdma_adc1.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-    hdma_adc1.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
-    hdma_adc1.Init.Mode = DMA_CIRCULAR;
-    hdma_adc1.Init.Priority = DMA_PRIORITY_LOW;
-    if (HAL_DMA_Init(&hdma_adc1) != HAL_OK) Error_Handler();
-    __HAL_LINKDMA(hadc, DMA_Handle, hdma_adc1);
-    HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 1, 0);
-    HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-#endif
-
     /* USER CODE BEGIN ADC1_MspInit 1 */
 
     /* USER CODE END ADC1_MspInit 1 */
@@ -186,8 +167,6 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* hadc)
     HAL_GPIO_DeInit(GPIOC, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
 #elif defined(NODE_B_FIRMWARE)
     HAL_GPIO_DeInit(GPIOC, GPIO_PIN_0 | GPIO_PIN_1);
-    HAL_NVIC_DisableIRQ(DMA1_Channel1_IRQn);
-    (void)HAL_DMA_DeInit(hadc->DMA_Handle);
 #else
     HAL_GPIO_DeInit(GPIOC, GPIO_PIN_0);
 #endif
@@ -295,7 +274,9 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
     HAL_NVIC_SetPriority(USART2_IRQn, 1, 0);
 #endif
     HAL_NVIC_EnableIRQ(USART2_IRQn);
+    return;
   }
+
 }
 
 void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
@@ -312,7 +293,9 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
     __HAL_RCC_USART2_CLK_DISABLE();
     HAL_GPIO_DeInit(GPIOA, GPIO_PIN_2 | GPIO_PIN_3);
     HAL_NVIC_DisableIRQ(USART2_IRQn);
+    return;
   }
+
 }
 
 /* USER CODE BEGIN 1 */

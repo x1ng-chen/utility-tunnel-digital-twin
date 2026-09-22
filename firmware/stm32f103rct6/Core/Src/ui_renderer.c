@@ -51,6 +51,16 @@ typedef struct {
 } UiRendererContext;
 
 static UiRendererContext renderer;
+
+static const char *const kLedModeNames[] = {
+  "OFF", "WHITE", "GREEN", "YELLOW", "RED", "BLUE", "2 METEOR", "RED ALT",
+  "FIRE", "ENERGY", "POLICE", "AURORA", "LASER", "LIGHTNING", "STARS", "CONVERGE",
+};
+
+static const char *led_mode_name(uint8_t mode)
+{
+  return kLedModeNames[(mode < 16U) ? mode : 0U];
+}
 static uint8_t popcount8(uint32_t value);
 
 static uint8_t page_row_count(UiPage page)
@@ -214,6 +224,21 @@ int16_t UiRenderer_InterpolatePixels(int16_t from, int16_t to, uint32_t start_ms
   if ((duration_ms == 0U) || (elapsed >= duration_ms)) return to;
   return (int16_t)KK_UI_MotionLerpQ12(from, to,
                                       KK_UI_MotionEaseQ12(elapsed, duration_ms));
+}
+
+/* Page slides need an even visual velocity.  The selection easing curve is
+ * intentionally front-loaded, but on the physical ST7735 that made a page
+ * transition cover most of its distance before the second rendered frame and
+ * therefore look like an instantaneous cut. */
+static int16_t page_slide_offset(uint32_t start_ms, uint32_t duration_ms,
+                                 uint32_t now_ms)
+{
+  uint32_t elapsed;
+  if ((int32_t)(now_ms - start_ms) < 0) return LCD_WIDTH;
+  elapsed = now_ms - start_ms;
+  if ((duration_ms == 0U) || (elapsed >= duration_ms)) return 0;
+  return (int16_t)(LCD_WIDTH -
+      (int32_t)(((uint64_t)LCD_WIDTH * elapsed) / duration_ms));
 }
 
 static const HmiZhGlyph *find_zh_glyph(uint16_t codepoint)
@@ -896,9 +921,6 @@ static void draw_light_row(int16_t offset, uint8_t row, uint8_t selected,
                            const UiState *state, const UiSnapshot *snapshot)
 {
   char label[24];
-  static const char *const led_modes[] = {
-    "OFF", "WHITE", "GREEN", "YELLOW", "RED", "BLUE", "BREATHE", "FLASH",
-  };
   static const char *const buzzer_actions[] = {"TEST", "MUTE", "RESTORE"};
   static const int16_t y[] = {34, 60, 86};
   const uint8_t disabled = controls_disabled(state);
@@ -909,10 +931,10 @@ static void draw_light_row(int16_t offset, uint8_t row, uint8_t selected,
     ST7735_FillRect(offset + 2, y[row], 3, 24, selection_bar_color(state));
   }
   if (row == 0U) {
-    const uint8_t mode = ((uint8_t)state->led_mode_option < 8U) ? (uint8_t)state->led_mode_option : 0U;
-    (void)snprintf(label, sizeof(label), "MODE %s", led_modes[mode]);
+    const uint8_t mode = ((uint8_t)state->led_mode_option < 16U) ? (uint8_t)state->led_mode_option : 0U;
+    (void)snprintf(label, sizeof(label), "MODE %s", led_mode_name(mode));
     ST7735_DrawString(offset + 12, y[row] + 1, label, color, fill);
-    (void)snprintf(label, sizeof(label), "NOW %u  0..7",
+    (void)snprintf(label, sizeof(label), "NOW %u  0..15",
                    (unsigned int)snapshot->actuators.led_mode);
     ST7735_DrawString(offset + 12, y[row] + 11, label, color, fill);
   } else if (row == 1U) {
@@ -1097,11 +1119,73 @@ static void draw_command_overlay(const UiState *state)
   }
 }
 
+static void draw_option_overlay(const UiState *state)
+{
+  static const char *const buzzer_actions[] = {"TEST", "MUTE", "RESTORE"};
+  const char *title = "SELECT";
+  const char *value_text = "";
+  char value[20];
+  int16_t value_x;
+
+  if (state->page == UI_FANS) {
+    const uint8_t fan = (state->selected_row == 0U) ? 0U : 1U;
+    title = (fan == 0U) ? "FAN 1 SPEED" : "FAN 2 SPEED";
+    (void)snprintf(value, sizeof(value), "%u%%", (unsigned int)state->fan_duty_option[fan]);
+    value_text = value;
+  } else if (state->page == UI_LIGHT_SOUND && state->selected_row == 0U) {
+    const uint8_t mode = ((uint8_t)state->led_mode_option < 16U) ?
+        (uint8_t)state->led_mode_option : 0U;
+    title = "LED EFFECT";
+    value_text = led_mode_name(mode);
+  } else if (state->page == UI_LIGHT_SOUND && state->selected_row == 1U) {
+    title = "LED BRIGHT";
+    (void)snprintf(value, sizeof(value), "%u%%",
+                   (unsigned int)state->led_brightness_option);
+    value_text = value;
+  } else if (state->page == UI_LIGHT_SOUND && state->selected_row == 2U) {
+    const uint8_t action = ((uint8_t)state->buzzer_option < 3U) ?
+        (uint8_t)state->buzzer_option : 0U;
+    title = "BUZZER";
+    value_text = buzzer_actions[action];
+  }
+
+  ST7735_FillRect(5, 22, 118, 94, UI_COLOR_BORDER);
+  ST7735_FillRect(7, 24, 114, 90, UI_COLOR_BACKGROUND);
+  draw_text((int16_t)((LCD_WIDTH - text_width(title)) / 2), 29,
+            title, LCD_WHITE, UI_COLOR_BACKGROUND);
+  ST7735_FillRect(12, 41, 104, 2, LCD_WHITE);
+  ST7735_FillRect(17, 49, 78, 31, LCD_WHITE);
+  value_x = (int16_t)(17 + (78 - (int16_t)(strlen(value_text) * 8U)) / 2);
+  if (value_x < 19) value_x = 19;
+  ST7735_DrawString(value_x, 61, value_text, LCD_BLACK, LCD_WHITE);
+  ST7735_DrawString(104, 50, "^", LCD_WHITE, UI_COLOR_BACKGROUND);
+  ST7735_DrawString(104, 69, "v", LCD_WHITE, UI_COLOR_BACKGROUND);
+  ST7735_DrawString(14, 94, "< BACK", UI_COLOR_MUTED, UI_COLOR_BACKGROUND);
+  ST7735_DrawString(82, 94, "OK >", UI_COLOR_ACCENT, UI_COLOR_BACKGROUND);
+}
+
+static void draw_active_overlay(const UiState *state)
+{
+  if (state->option_editing) draw_option_overlay(state);
+  else draw_command_overlay(state);
+}
+
+static uint8_t command_feedback_visible(const UiState *state)
+{
+  const UiAction action = (UiAction)state->pending_action;
+  const uint8_t critical = (action == UI_ACTION_FANS_BOTH_START) ||
+                           (action == UI_ACTION_FANS_ALL_STOP) ||
+                           (action == UI_ACTION_BUZZER_MUTE);
+  if ((state->command_phase == UI_CMD_REJECTED) ||
+      (state->command_phase == UI_CMD_TIMEOUT)) return 1U;
+  return critical && ((state->command_phase == UI_CMD_SENDING) ||
+                      (state->command_phase == UI_CMD_ACCEPTED));
+}
+
 static uint8_t overlay_visible(const UiState *state)
 {
-  return (state->dialog == UI_DIALOG_CONFIRM) || (state->command_phase == UI_CMD_SENDING) ||
-         (state->command_phase == UI_CMD_ACCEPTED) || (state->command_phase == UI_CMD_REJECTED) ||
-         (state->command_phase == UI_CMD_TIMEOUT);
+  return state->option_editing || (state->dialog == UI_DIALOG_CONFIRM) ||
+         command_feedback_visible(state);
 }
 
 static void redraw_header_delta(const UiSnapshot *snapshot, uint8_t redraw_time, uint8_t redraw_mqtt)
@@ -1353,7 +1437,7 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
     draw_header(snapshot);
     draw_page(state, snapshot, 0);
     draw_footer(state);
-    if (overlay_visible(state)) draw_command_overlay(state);
+    if (overlay_visible(state)) draw_active_overlay(state);
     if (ST7735_FrameFailed()) {
       renderer.stats = stats_before;
       ++renderer.stats.failed_frames;
@@ -1378,7 +1462,7 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
     draw_header(snapshot);
     draw_page(state, snapshot, 0);
     draw_footer(state);
-    if (overlay_visible(state)) draw_command_overlay(state);
+    if (overlay_visible(state)) draw_active_overlay(state);
     if (ST7735_FrameFailed()) {
       renderer.stats = stats_before;
       ++renderer.stats.failed_frames;
@@ -1403,7 +1487,9 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
     renderer.previous_page = renderer.state.page;
     renderer.previous_row = renderer.state.selected_row;
     renderer.animation_start_ms = state->animation_start_ms;
-    renderer.animation_duration_ms = UI_RENDERER_PAGE_MS;
+    renderer.animation_duration_ms = state->animation_end_ms - state->animation_start_ms;
+    if (renderer.animation_duration_ms == 0U)
+      renderer.animation_duration_ms = UI_RENDERER_PAGE_MS;
     start_cadence(now_ms);
     frame_needed = 1U;
   } else if (state->selected_row != renderer.state.selected_row) {
@@ -1413,7 +1499,9 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
     renderer.selection_from_y = renderer.selection_drawn_y;
     renderer.selection_to_y = row_y(state->page, state->selected_row, state->selected_row);
     renderer.animation_start_ms = state->animation_start_ms;
-    renderer.animation_duration_ms = UI_RENDERER_SELECTION_MS;
+    renderer.animation_duration_ms = state->animation_end_ms - state->animation_start_ms;
+    if (renderer.animation_duration_ms == 0U)
+      renderer.animation_duration_ms = UI_RENDERER_SELECTION_MS;
     start_cadence(now_ms);
     frame_needed = 1U;
   } else if ((renderer.page_animation || renderer.selection_animation) &&
@@ -1426,9 +1514,12 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
   header_time = time_changed(snapshot, &renderer.snapshot);
   header_mqtt = snapshot->connectivity.mqtt != renderer.snapshot.connectivity.mqtt;
   overlay_delta = (state->dialog != renderer.state.dialog) ||
-                  (state->command_phase != renderer.state.command_phase) ||
-                  (state->pending_action != renderer.state.pending_action) ||
-                  (state->pending_value != renderer.state.pending_value);
+                  (state->option_editing != renderer.state.option_editing) ||
+                  (command_feedback_visible(state) != command_feedback_visible(&renderer.state)) ||
+                  ((command_feedback_visible(state) || command_feedback_visible(&renderer.state)) &&
+                   ((state->command_phase != renderer.state.command_phase) ||
+                    (state->pending_action != renderer.state.pending_action) ||
+                    (state->pending_value != renderer.state.pending_value)));
   footer_delta = (state->page != renderer.state.page) ||
                  (state->control.mqtt_online != renderer.state.control.mqtt_online) ||
                  (state->control.safety_locked != renderer.state.control.safety_locked);
@@ -1454,8 +1545,9 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
   }
 
   if (state->page != renderer.state.page || renderer.page_animation) {
-    const int16_t offset = UiRenderer_InterpolatePixels(128, 0, renderer.animation_start_ms,
-                                                        renderer.animation_duration_ms, now_ms);
+    const int16_t offset = page_slide_offset(renderer.animation_start_ms,
+                                             renderer.animation_duration_ms,
+                                             now_ms);
     invalidate((UiDirtyRect){0, UI_PAGE_TOP, LCD_WIDTH, UI_FOOTER_TOP - UI_PAGE_TOP});
     draw_page_frame(state, snapshot, offset);
     page_content_current = 1U;
@@ -1542,14 +1634,14 @@ uint8_t UiRenderer_RenderFrame(const UiState *state, const UiSnapshot *snapshot,
   }
   if (overlay_delta) {
     if (overlay_visible(state)) {
-      invalidate((UiDirtyRect){8, 39, 112, 54});
-      draw_command_overlay(state);
+      invalidate((UiDirtyRect){5, 22, 118, 94});
+      draw_active_overlay(state);
     } else {
       invalidate((UiDirtyRect){0, UI_PAGE_TOP, LCD_WIDTH, UI_FOOTER_TOP - UI_PAGE_TOP});
       draw_page_frame(state, snapshot, 0);
     }
   } else if (overlay_visible(state)) {
-    draw_command_overlay(state);
+    draw_active_overlay(state);
   }
 
   if (ST7735_FrameFailed()) {

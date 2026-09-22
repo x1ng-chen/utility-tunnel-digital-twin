@@ -225,10 +225,6 @@ void EXTI9_5_IRQHandler(void)
 }
 
 #ifdef NODE_B_FIRMWARE
-void DMA1_Channel1_IRQHandler(void)
-{
-  Joystick_DmaIrqHandler();
-}
 void DMA1_Channel3_IRQHandler(void)
 {
   St7735Bus_DmaIrqHandler();

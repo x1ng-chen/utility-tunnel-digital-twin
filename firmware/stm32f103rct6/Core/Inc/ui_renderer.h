@@ -7,8 +7,8 @@
 #include "ui_model.h"
 #include "ui_state.h"
 
-#define UI_RENDERER_SELECTION_MS 140U
-#define UI_RENDERER_PAGE_MS 180U
+#define UI_RENDERER_SELECTION_MS UI_SELECTION_ANIMATION_MS
+#define UI_RENDERER_PAGE_MS UI_PAGE_ANIMATION_MS
 
 typedef struct {
   uint32_t rendered_frames;

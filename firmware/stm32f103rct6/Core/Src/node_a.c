@@ -16,6 +16,12 @@
 
 #define NODE_ID                         "node-a"
 #define TELEMETRY_INTERVAL_MS           2000U
+/* Safety cadence.  Gas sampling used to live inside the telemetry block, so its
+ * cadence was hostage to the slow SHT30/INA226 transfers there; with a stalled
+ * INA226 a methane alarm could lag reality by tens of seconds.  Gas ADC reads
+ * are hardware conversions (microseconds each), so they run on their own fast
+ * tick and the alarm path never waits for telemetry again. */
+#define GAS_SAMPLE_INTERVAL_MS          200U
 /* Telemetry link budget.
  *
  * A whole telemetry cycle measures 2870 bytes (the vector host test re-derives
@@ -103,7 +109,7 @@ _Static_assert(UART_TX_CAPACITY >=
 #define FAN2_PWM_Pin                       GPIO_PIN_9
 #define FAN2_PWM_GPIO_Port                 GPIOB
 #define FAN_PWM_TIMER_PERIOD        NODE_A_FAN_TIMER_PERIOD
-#define WS2812_PIXEL_COUNT                 9U
+#define WS2812_PIXEL_COUNT                18U
 #define WS2812_TEST_BRIGHTNESS             32U
 #define SMOKE_SAMPLE_INTERVAL_MS            50U
 #define SMOKE_STABLE_SAMPLE_COUNT            4U
@@ -195,7 +201,22 @@ static uint8_t gas_alarm;
 static uint8_t gas_ventilation_active;
 static uint8_t gas_ventilation_cooling;
 static uint32_t gas_ventilation_clear_started_at;
+static uint16_t oxygen_raw;
+static uint32_t oxygen_microvolts;
+static uint8_t oxygen_online;
+static uint16_t methane_raw;
+static uint32_t methane_microvolts;
+static uint8_t methane_online;
+static uint16_t co_raw;
+static uint32_t co_microvolts;
+static uint8_t co_online;
+static GasAdcFilter oxygen_filter;
+static GasAdcFilter methane_filter;
+static GasAdcFilter co_filter;
+static uint32_t last_gas = HAL_MAX_DELAY;
 static uint8_t ws2812_encoded[WS2812_PIXEL_COUNT * 18U];
+typedef struct { uint8_t red; uint8_t green; uint8_t blue; } Ws2812Pixel;
+static Ws2812Pixel ws2812_pixels[WS2812_PIXEL_COUNT];
 static char node_test_line[NODE_TEST_LINE_SIZE];
 static uint16_t node_test_length;
 /* Secondary screen.  The sensor fields are filled by the telemetry block, the
@@ -261,6 +282,7 @@ static void GasAlarm_Update(uint16_t oxygen_raw, uint8_t oxygen_online,
                             uint16_t methane_raw, uint8_t methane_online,
                             uint16_t co_raw, uint8_t co_online);
 static void GasVentilation_Update(uint32_t now);
+static void GasSafety_Service(uint32_t now);
 static uint8_t Sht30_Read(const SoftI2cBus *bus, uint8_t address, Sht30Reading *reading);
 static uint8_t Ina226_Read(const SoftI2cBus *bus, Ina226State *state,
                            Ina226Reading *reading);
@@ -334,12 +356,17 @@ static uint8_t Telemetry_EnqueueBoth(void *context, const char *frame,
 
 static void Command_Poll(void);
 static void UartTx_DrainBoth(uint32_t now_ms);
+static void Led_Render(uint32_t now);
+static void Led_Service(uint32_t now);
 static void Communication_Service(void);
 
 static void Communication_Service(void)
 {
+  const uint32_t now = HAL_GetTick();
   Command_Poll();
-  UartTx_DrainBoth(HAL_GetTick());
+  UartTx_DrainBoth(now);
+  Led_Service(now);
+  GasSafety_Service(now);
 }
 
 static void DelayWithCommunication(uint32_t delay_ms)
@@ -364,7 +391,6 @@ static void NodeTest_ReportClock(void);
 static void Safety_Snapshot(NodeASafetyState *safety);
 static void CommitActuators(const NodeACommand *command, uint32_t now,
                             const NodeAActuatorState *before);
-static void Led_Render(uint32_t now);
 static void Buzzer_Silence(void);
 static void Buzzer_Start(uint32_t duration_ms);
 static void Relay_Disable(void);
@@ -373,7 +399,7 @@ static void Smoke_Poll(uint32_t now);
 static void Flame_Poll(uint32_t now);
 static void Level_Poll(uint32_t now);
 static void MX_WS2812_SPI_Init(void);
-static void Ws2812_Show(uint8_t red, uint8_t green, uint8_t blue);
+static void Ws2812_ShowPixels(void);
 static uint32_t Fan1Tach_ReadRpm(uint32_t now);
 static uint32_t Fan2Tach_ReadRpm(uint32_t now);
 static void MX_FAN1_PWM_Init(void);
@@ -1149,7 +1175,7 @@ static void Ws2812_SendEncoded(uint16_t length)
   (void)SPI2->SR;
 }
 
-static void Ws2812_Show(uint8_t red, uint8_t green, uint8_t blue)
+static void Ws2812_ShowPixels(void)
 {
   uint8_t *output = ws2812_encoded;
   uint8_t pending = 0U;
@@ -1158,47 +1184,202 @@ static void Ws2812_Show(uint8_t red, uint8_t green, uint8_t blue)
 
   for (pixel = 0U; pixel < WS2812_PIXEL_COUNT; ++pixel)
   {
-    output = Ws2812_EncodeByte(green, output, &pending, &pending_bits); /* WS2812B serial order is GRB. */
-    output = Ws2812_EncodeByte(red, output, &pending, &pending_bits);
-    output = Ws2812_EncodeByte(blue, output, &pending, &pending_bits);
+    output = Ws2812_EncodeByte(ws2812_pixels[pixel].green, output, &pending, &pending_bits);
+    output = Ws2812_EncodeByte(ws2812_pixels[pixel].red, output, &pending, &pending_bits);
+    output = Ws2812_EncodeByte(ws2812_pixels[pixel].blue, output, &pending, &pending_bits);
   }
   Ws2812_SendEncoded((uint16_t)(output - ws2812_encoded));
   HAL_Delay(1U); /* Low reset interval exceeds the WS2812B latch requirement. */
 }
 
-static uint8_t Led_BreathLevel(uint32_t now)
+static uint8_t Led_Scale(uint8_t value, uint8_t brightness)
 {
-  const uint32_t phase = now % 3000U;
-  if (phase < 1500U) return (uint8_t)((phase * 255U) / 1500U);
-  return (uint8_t)(((3000U - phase) * 255U) / 1500U);
+  return (uint8_t)(((uint16_t)value * brightness + 127U) / 255U);
 }
 
-static void Led_ColorForMode(uint8_t mode, uint8_t brightness_percent,
-                             uint32_t now, uint8_t *red, uint8_t *green,
-                             uint8_t *blue)
+static void Led_SetPixel(uint8_t index, uint8_t red, uint8_t green,
+                         uint8_t blue, uint8_t brightness)
 {
-  const uint8_t scale =
-      (uint8_t)(((uint32_t)brightness_percent * 255U) / 100U);
-  uint8_t level = scale;
+  if (index >= WS2812_PIXEL_COUNT) return;
+  ws2812_pixels[index].red = Led_Scale(red, brightness);
+  ws2812_pixels[index].green = Led_Scale(green, brightness);
+  ws2812_pixels[index].blue = Led_Scale(blue, brightness);
+}
 
-  if (mode == NODE_A_LED_BREATHE)
-    level = (uint8_t)(((uint32_t)Led_BreathLevel(now) * scale) / 255U);
-  else if (mode == NODE_A_LED_FLASH)
-    level = ((now / 500U) & 1U) ? scale : 0U;
+static void Led_Clear(void)
+{
+  memset(ws2812_pixels, 0, sizeof(ws2812_pixels));
+}
 
-  *red = 0U;
-  *green = 0U;
-  *blue = 0U;
-  switch (mode)
+static uint8_t Led_Triangle(uint8_t phase)
+{
+  return (phase < 128U) ? (uint8_t)(phase * 2U)
+                        : (uint8_t)((255U - phase) * 2U);
+}
+
+static void Led_RenderUserMode(uint8_t mode, uint8_t brightness_percent,
+                               uint32_t now)
+{
+  const uint8_t brightness =
+      (uint8_t)(((uint16_t)brightness_percent * 255U) / 100U);
+  const uint8_t step = (uint8_t)(now / LED_ANIM_INTERVAL_MS);
+  uint8_t pixel;
+  Led_Clear();
+
+  for (pixel = 0U; pixel < WS2812_PIXEL_COUNT; ++pixel)
   {
-    case NODE_A_LED_WHITE:   *red = *green = *blue = level; break;
-    case NODE_A_LED_GREEN:   *green = level; break;
-    case NODE_A_LED_YELLOW:  *red = level; *green = level / 2U; break;
-    case NODE_A_LED_RED:     *red = level; break;
-    case NODE_A_LED_BLUE:    *blue = level; break;
-    case NODE_A_LED_BREATHE: *red = *green = *blue = level; break; /* white breath */
-    case NODE_A_LED_FLASH:   *red = *green = *blue = level; break; /* white flash */
-    default: break; /* off */
+    const uint8_t wave = Led_Triangle((uint8_t)(step * 5U + pixel * 11U));
+    const uint8_t distance = (uint8_t)((pixel + WS2812_PIXEL_COUNT -
+        (step % WS2812_PIXEL_COUNT)) % WS2812_PIXEL_COUNT);
+    switch (mode)
+    {
+      case NODE_A_LED_WHITE:
+        /* Soft architectural white: warmer at the ends, cooler at the centre. */
+        Led_SetPixel(pixel, 255U, (uint8_t)(190U + wave / 5U),
+                     (uint8_t)(120U + wave / 3U), brightness);
+        break;
+      case NODE_A_LED_GREEN:
+        Led_SetPixel(pixel, 0U, (uint8_t)(32U + wave * 3U / 4U),
+                     (uint8_t)(wave / 10U), brightness);
+        break;
+      case NODE_A_LED_YELLOW:
+        Led_SetPixel(pixel, 255U, (uint8_t)(70U + wave / 2U), 0U, brightness);
+        break;
+      case NODE_A_LED_RED:
+        /* A command-selected red mode is deliberately steady across every
+         * pixel, making it useful for both normal lighting and wiring tests. */
+        Led_SetPixel(pixel, 255U, 0U, 0U, brightness);
+        break;
+      case NODE_A_LED_BLUE:
+        /* Cyan-blue comet, followed by a dim blue afterglow. */
+        if (distance < 6U)
+          Led_SetPixel(pixel, 0U, (uint8_t)(150U - distance * 22U),
+                       (uint8_t)(255U - distance * 32U), brightness);
+        else
+          Led_SetPixel(pixel, 0U, 0U, 8U, brightness);
+        break;
+      case NODE_A_LED_BREATHE:
+      {
+        const uint8_t head_a = (uint8_t)(step % WS2812_PIXEL_COUNT);
+        const uint8_t head_b = (uint8_t)((WS2812_PIXEL_COUNT - 1U) - head_a);
+        const uint8_t tail_a = (uint8_t)((pixel + WS2812_PIXEL_COUNT - head_a) %
+                                         WS2812_PIXEL_COUNT);
+        const uint8_t tail_b = (uint8_t)((head_b + WS2812_PIXEL_COUNT - pixel) %
+                                         WS2812_PIXEL_COUNT);
+        uint8_t red = 0U;
+        uint8_t green = 0U;
+        uint8_t blue = 10U;
+        /* Two counter-rotating cyberpunk comets: ice-blue and magenta, each
+         * with a six-pixel fading tail over a deep-blue background. */
+        if (tail_a < 6U)
+        {
+          green = (uint8_t)(220U - tail_a * 38U);
+          blue = (uint8_t)(255U - tail_a * 35U);
+        }
+        if (tail_b < 6U)
+        {
+          const uint8_t level = (uint8_t)(255U - tail_b * 38U);
+          red = level;
+          if (blue < level) blue = level;
+        }
+        Led_SetPixel(pixel, red, green, blue, brightness);
+        break;
+      }
+      case NODE_A_LED_FLASH:
+        if ((((pixel < (WS2812_PIXEL_COUNT / 2U)) ? 0U : 1U) ^
+             ((step / 5U) & 1U)) != 0U)
+          Led_SetPixel(pixel, 255U, 0U, 0U, brightness);
+        break;
+      case NODE_A_LED_FIRE:
+      {
+        const uint8_t flicker = (uint8_t)((pixel * 73U + step * 29U +
+            ((pixel + step) * (pixel + 11U))) & 0x7FU);
+        Led_SetPixel(pixel, 255U, (uint8_t)(35U + flicker),
+                     (flicker > 112U) ? 12U : 0U, brightness);
+        break;
+      }
+      case NODE_A_LED_ENERGY:
+      {
+        const uint8_t centre_distance = (pixel < 12U) ?
+            (uint8_t)(11U - pixel) : (uint8_t)(pixel - 12U);
+        const uint8_t pulse = (uint8_t)((step / 2U) % 12U);
+        const uint8_t gap = (centre_distance > pulse) ?
+            (uint8_t)(centre_distance - pulse) : (uint8_t)(pulse - centre_distance);
+        if (gap < 3U)
+          Led_SetPixel(pixel, 0U, (uint8_t)(240U - gap * 75U),
+                       (uint8_t)(255U - gap * 45U), brightness);
+        else
+          Led_SetPixel(pixel, 0U, 0U, 10U, brightness);
+        break;
+      }
+      case NODE_A_LED_POLICE:
+      {
+        const uint8_t left = (pixel < 12U) ? 1U : 0U;
+        const uint8_t phase = (uint8_t)((step / 2U) & 3U);
+        if (((phase < 2U) && (left != 0U)) || ((phase >= 2U) && (left == 0U)))
+          Led_SetPixel(pixel, 255U, 0U, 0U, brightness);
+        else
+          Led_SetPixel(pixel, 0U, 35U, 255U, brightness);
+        break;
+      }
+      case NODE_A_LED_AURORA:
+      {
+        const uint8_t slow = Led_Triangle((uint8_t)(step * 3U + pixel * 9U));
+        const uint8_t cross = Led_Triangle((uint8_t)(step * 2U - pixel * 13U));
+        Led_SetPixel(pixel, (uint8_t)(20U + cross / 3U),
+                     (uint8_t)(45U + slow * 2U / 3U),
+                     (uint8_t)(90U + cross / 2U), brightness);
+        break;
+      }
+      case NODE_A_LED_LASER:
+      {
+        const uint8_t path = (uint8_t)(step % 46U);
+        const uint8_t head = (path < 24U) ? path : (uint8_t)(46U - path);
+        const uint8_t gap = (pixel > head) ? (uint8_t)(pixel - head) :
+                                             (uint8_t)(head - pixel);
+        if (gap < 5U)
+          Led_SetPixel(pixel, (uint8_t)(255U - gap * 50U), 0U,
+                       (uint8_t)(55U - gap * 11U), brightness);
+        break;
+      }
+      case NODE_A_LED_LIGHTNING:
+      {
+        const uint8_t flash = (uint8_t)((step * 17U + pixel * 43U +
+            (step >> 2U) * (pixel + 7U)) & 0x3FU);
+        if (((step % 18U) < 3U) && (flash < 20U))
+          Led_SetPixel(pixel, 180U, 225U, 255U, brightness);
+        else
+          Led_SetPixel(pixel, 0U, 3U, 20U, brightness);
+        break;
+      }
+      case NODE_A_LED_STARS:
+      {
+        const uint8_t epoch = (uint8_t)(step / 6U);
+        const uint8_t star = (uint8_t)((pixel * 61U + epoch * 37U +
+            (pixel + 3U) * (epoch + 5U)) & 0xFFU);
+        if (star < 24U)
+          Led_SetPixel(pixel, 120U, 175U, 255U, brightness);
+        else if (star < 48U)
+          Led_SetPixel(pixel, 25U, 10U, 80U, brightness);
+        else
+          Led_SetPixel(pixel, 0U, 0U, 5U, brightness);
+        break;
+      }
+      case NODE_A_LED_CONVERGE:
+      {
+        const uint8_t phase = (uint8_t)((step / 2U) % 13U);
+        if (phase == 12U)
+          Led_SetPixel(pixel, 150U, 220U, 255U, brightness);
+        else if ((pixel == phase) || (pixel == (uint8_t)(23U - phase)))
+          Led_SetPixel(pixel, 20U, 255U, 255U, brightness);
+        else if ((pixel + 1U == phase) ||
+                 (pixel == (uint8_t)(24U - phase)))
+          Led_SetPixel(pixel, 0U, 35U, 90U, brightness);
+        break;
+      }
+      default:
+        break;
+    }
   }
 }
 
@@ -1206,23 +1387,40 @@ static void Led_ColorForMode(uint8_t mode, uint8_t brightness_percent,
  * yellow, and only a fully clear state renders the user-commanded mode. */
 static void Led_Render(uint32_t now)
 {
-  uint8_t red;
-  uint8_t green;
-  uint8_t blue;
+  uint8_t pixel;
+  const uint8_t step = (uint8_t)(now / LED_ANIM_INTERVAL_MS);
 
   if ((smoke_alarm != 0U) || (flame_alarm != 0U) || (gas_alarm != 0U))
   {
-    Ws2812_Show(WS2812_TEST_BRIGHTNESS, 0U, 0U);
-    return;
+    Led_Clear();
+    /* Two counter-moving red beacons keep an alarm unmistakable. */
+    Led_SetPixel((uint8_t)(step % WS2812_PIXEL_COUNT), 255U, 0U, 0U,
+                 WS2812_TEST_BRIGHTNESS);
+    Led_SetPixel((uint8_t)((WS2812_PIXEL_COUNT - 1U) -
+                 (step % WS2812_PIXEL_COUNT)), 255U, 0U, 0U,
+                 WS2812_TEST_BRIGHTNESS);
+    for (pixel = 0U; pixel < WS2812_PIXEL_COUNT; pixel += 3U)
+      Led_SetPixel(pixel, 48U, 0U, 0U, WS2812_TEST_BRIGHTNESS);
   }
-  if (gas_warning != 0U)
+  else if (gas_warning != 0U)
   {
-    Ws2812_Show(WS2812_TEST_BRIGHTNESS, WS2812_TEST_BRIGHTNESS / 2U, 0U);
-    return;
+    Led_Clear();
+    for (pixel = 0U; pixel < WS2812_PIXEL_COUNT; ++pixel)
+      if (((pixel + step / 2U) % 6U) < 3U)
+        Led_SetPixel(pixel, 255U, 70U, 0U, WS2812_TEST_BRIGHTNESS);
   }
-  Led_ColorForMode(g_actuator.led_mode, g_actuator.led_brightness_percent, now,
-                   &red, &green, &blue);
-  Ws2812_Show(red, green, blue);
+  else
+    Led_RenderUserMode(g_actuator.led_mode,
+                       g_actuator.led_brightness_percent, now);
+  Ws2812_ShowPixels();
+}
+
+static void Led_Service(uint32_t now)
+{
+  static uint32_t last_animation_at = HAL_MAX_DELAY;
+  if ((now - last_animation_at) < LED_ANIM_INTERVAL_MS) return;
+  last_animation_at = now;
+  Led_Render(now);
 }
 
 static uint8_t Command_IsForThisController(const char *topic)
@@ -1644,6 +1842,33 @@ static void Status_CaptureGas(uint16_t oxygen_raw, uint8_t oxygen_online,
   status_sensors.co_alarm = co_alarm;
 }
 
+/* Runs from both the top-level loop and every cooperative software-I2C wait.
+ * All state is owned here so a slow or failed sensor transaction cannot defer
+ * methane protection until the telemetry transaction eventually returns. */
+static void GasSafety_Service(uint32_t now)
+{
+  if ((uint32_t)(now - last_gas) < GAS_SAMPLE_INTERVAL_MS) return;
+  last_gas = now;
+  oxygen_online = GasAdc_ReadRaw(NODE_A_OXYGEN_ADC_CHANNEL, &oxygen_raw);
+  if (oxygen_online != 0U)
+    oxygen_raw = GasAdcFilter_Update(&oxygen_filter, oxygen_raw);
+  oxygen_microvolts = NODE_A_ADC_RAW_TO_UV(oxygen_raw);
+  methane_online = GasAdc_ReadRaw(NODE_A_METHANE_ADC_CHANNEL, &methane_raw);
+  if (methane_online != 0U)
+    methane_raw = GasAdcFilter_Update(&methane_filter, methane_raw);
+  methane_microvolts = NODE_A_ADC_RAW_TO_UV(methane_raw);
+  co_online = GasAdc_ReadRaw(NODE_A_CO_ADC_CHANNEL, &co_raw);
+  if (co_online != 0U)
+    co_raw = GasAdcFilter_Update(&co_filter, co_raw);
+  co_microvolts = NODE_A_ADC_RAW_TO_UV(co_raw);
+  if (methane_filter.count >= 3U)
+    GasAlarm_Update(oxygen_raw, oxygen_online, methane_raw, methane_online,
+                    co_raw, co_online);
+  GasVentilation_Update(now);
+  Status_CaptureGas(oxygen_raw, oxygen_online, methane_raw, methane_online,
+                    co_raw, co_online);
+}
+
 static void Status_CaptureFanPower(const Ina226Reading *power, uint8_t *online,
                                    uint32_t *millivolts, int32_t *milliamps)
 {
@@ -1790,28 +2015,33 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *uart)
   (void)HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U);
 }
 
+/* ORE/FE/NE leave the HAL reception disarmed with a half-built line.  Drop the
+ * partial line and re-arm byte reception so the ESP link recovers without a
+ * reboot; without this one framing error can silence downlink commands and
+ * time sync permanently.  A completed-but-unread time line (esp_time_pending)
+ * is left untouched: only in-flight accumulation state is reset. */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *uart)
+{
+  if ((uart == NULL) || (uart->Instance != USART2)) return;
+  (void)HAL_UART_AbortReceive(uart);
+  __disable_irq();
+  esp_rx_length = 0U;
+  esp_rx_discarding = 0U;
+  esp_time_discarding = 0U;
+  esp_time_mode = 0U;
+  __enable_irq();
+  (void)HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U);
+}
+
 int main(void)
 {
   Sht30Reading readings[3] = {0};
-  uint16_t oxygen_raw = 0U;
-  uint32_t oxygen_microvolts = 0UL;
-  uint8_t oxygen_online = 0U;
-  uint16_t methane_raw = 0U;
-  uint32_t methane_microvolts = 0UL;
-  uint8_t methane_online = 0U;
-  uint16_t co_raw = 0U;
-  uint32_t co_microvolts = 0UL;
-  uint8_t co_online = 0U;
-  GasAdcFilter oxygen_filter = {0};
-  GasAdcFilter methane_filter = {0};
-  GasAdcFilter co_filter = {0};
   Ina226Reading fan_power = {0};
   Ina226Reading fan2_power = {0};
   uint32_t fan_rpm = 0U;
   uint32_t fan2_rpm = 0U;
   uint32_t last_telemetry = HAL_MAX_DELAY;
   uint32_t last_led = HAL_MAX_DELAY;
-  uint32_t last_led_anim = HAL_MAX_DELAY;
 
   HAL_Init(); SystemClock_Config(); MX_GPIO_Init(); MX_FAN1_PWM_Init(); MX_WS2812_SPI_Init();
   fan1_tach_last_sample_at = HAL_GetTick();
@@ -1873,10 +2103,17 @@ int main(void)
         ((now - relay_started_at) >= relay_duration_ms))
       Relay_Disable();
     /* Smoke, flame and level are already sampled by now, so this repaint is
-     * early enough for them.  Only the gas block on a telemetry iteration has
-     * a fresher safety sample than this one, and it repaints again below. */
+     * early enough for them.  The gas block below samples methane on its own
+     * fast tick and repaints again whenever it moves the alarm state. */
     telemetry_due = (uint8_t)((test_telemetry_burst != 0U) ||
                               ((now - last_telemetry) >= TELEMETRY_INTERVAL_MS));
+    /* Gas sampling and the safety evaluation run on their own fast tick, fully
+     * decoupled from the telemetry block: a worst-case INA226 or SHT30 transfer
+     * inside telemetry can no longer delay a methane transition, and the filter
+     * primes in ~0.6 s instead of three telemetry cycles.  GasVentilation_Update()
+     * is idempotent on an unchanged gas state, so the call here only acts on a
+     * real transition. */
+    GasSafety_Service(now);
     /* Repaint independently of telemetry.  A worst-case sensor acquisition is
      * longer than TELEMETRY_INTERVAL_MS, so gating this tick on sampling state
      * can starve the panel forever and hide both time and environment data. */
@@ -1887,39 +2124,9 @@ int main(void)
       (void)Sht30_Read(&i2c1_bus, SHT30_ADDRESS_44, &readings[0]);
       (void)Sht30_Read(&i2c1_bus, SHT30_ADDRESS_45, &readings[1]);
       (void)Sht30_Read(&i2c2_bus, SHT30_ADDRESS_44, &readings[2]);
-      oxygen_online = GasAdc_ReadRaw(NODE_A_OXYGEN_ADC_CHANNEL, &oxygen_raw);
-      if (oxygen_online != 0U) oxygen_raw = GasAdcFilter_Update(&oxygen_filter, oxygen_raw);
-      oxygen_microvolts = NODE_A_ADC_RAW_TO_UV(oxygen_raw);
-      methane_online = GasAdc_ReadRaw(NODE_A_METHANE_ADC_CHANNEL, &methane_raw);
-      if (methane_online != 0U) methane_raw = GasAdcFilter_Update(&methane_filter, methane_raw);
-      methane_microvolts = NODE_A_ADC_RAW_TO_UV(methane_raw);
-      co_online = GasAdc_ReadRaw(NODE_A_CO_ADC_CHANNEL, &co_raw);
-      if (co_online != 0U) co_raw = GasAdcFilter_Update(&co_filter, co_raw);
-      co_microvolts = NODE_A_ADC_RAW_TO_UV(co_raw);
-      /* Only the operational methane channel gates the safety evaluation.
-       * Oxygen and CO are telemetry-only: NODE_A_OPERATIONAL_GAS_ALARM
-       * discards their states, and their filters never prime while their ADC
-       * reads stay offline.  Requiring them here would let an uncalibrated
-       * rail suppress the methane alarm and its ventilation indefinitely.
-       * GasAlarm_Update already zeroes a channel's state while that channel
-       * reports offline, so the un-primed rails still report truthful
-       * telemetry. */
-      if (methane_filter.count >= 3U)
-        GasAlarm_Update(oxygen_raw, oxygen_online, methane_raw, methane_online,
-                        co_raw, co_online);
-      /* Re-evaluate the gas safety state on this iteration's sample, not the
-       * previous one, and hand the panel its page before either INA226 read.
-       * A single worst-case INA226 transfer is budgeted at thousands of
-       * milliseconds (NODE_A_INA226_WORST_CASE_MS), so an alarm that waited for
-       * the telemetry block to finish would take the screen over and open the
-       * ventilation far too late.  GasVentilation_Update() is idempotent on an
-       * unchanged gas state, so running it twice here only acts on a real
-       * transition.  The fan power and tach fields still belong to the previous
-       * telemetry block: they are captured after the reads below, and the
-       * alarm page reports the relay and not the fan meters. */
-      GasVentilation_Update(now);
-      Status_Tick(now);
-    NodeASensorBank_Tick(&sensor_bank, now);
+      /* Gas values come from the fast gas block above; telemetry only carries
+       * them onward.  The INA226 transfers below are what can stall this block
+       * for seconds, so nothing safety-critical remains on their path. */
       (void)Ina226_Read(&i2c1_bus, &ina226_fan1_state, &fan_power);
       (void)Ina226_Read(&i2c2_bus, &ina226_fan2_state, &fan2_power);
       /* Sensor acquisition is deliberately slow on the software I2C buses.
@@ -1933,8 +2140,6 @@ int main(void)
       /* Hand the freshly sampled values to the status screen; the display tick
        * copies them atomically, so it never triggers a second sensor read. */
       Status_CaptureEnvironment(&readings[0]);
-      Status_CaptureGas(oxygen_raw, oxygen_online, methane_raw, methane_online,
-                        co_raw, co_online);
       Status_CaptureFanPower(&fan_power, &status_sensors.fan1_power_online,
                              &status_sensors.fan1_millivolts,
                              &status_sensors.fan1_milliamps);
@@ -1970,11 +2175,7 @@ int main(void)
     {
       HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin); last_led = now;
     }
-    if ((now - last_led_anim) >= LED_ANIM_INTERVAL_MS)
-    {
-      last_led_anim = now;
-      Led_Render(now);
-    }
+    Led_Service(now);
   }
 }
 
@@ -2028,27 +2229,33 @@ static void GasAlarm_Update(uint16_t oxygen_raw, uint8_t oxygen_online,
   const uint8_t previous_warning = gas_warning;
   const uint8_t previous_alarm = gas_alarm;
 
-  oxygen_warning = (oxygen_online != 0U) ?
+  oxygen_warning = ((oxygen_online != 0U) &&
+                    (NODE_A_OXYGEN_SAFETY_COMMISSIONED != 0U)) ?
       NODE_A_LOW_ALARM_STATE(oxygen_warning, oxygen_raw,
                              NODE_A_OXYGEN_WARNING_ON_RAW,
                              NODE_A_OXYGEN_WARNING_OFF_RAW) : 0U;
-  oxygen_alarm = (oxygen_online != 0U) ?
+  oxygen_alarm = ((oxygen_online != 0U) &&
+                  (NODE_A_OXYGEN_SAFETY_COMMISSIONED != 0U)) ?
       NODE_A_LOW_ALARM_STATE(oxygen_alarm, oxygen_raw,
                              NODE_A_OXYGEN_ALARM_ON_RAW,
                              NODE_A_OXYGEN_ALARM_OFF_RAW) : 0U;
-  methane_warning = (methane_online != 0U) ?
+  methane_warning = ((methane_online != 0U) &&
+                     (NODE_A_METHANE_SAFETY_COMMISSIONED != 0U)) ?
       NODE_A_HIGH_ALARM_STATE(methane_warning, methane_raw,
                               NODE_A_METHANE_WARNING_ON_RAW,
                               NODE_A_METHANE_WARNING_OFF_RAW) : 0U;
-  methane_alarm = (methane_online != 0U) ?
+  methane_alarm = ((methane_online != 0U) &&
+                   (NODE_A_METHANE_SAFETY_COMMISSIONED != 0U)) ?
       NODE_A_HIGH_ALARM_STATE(methane_alarm, methane_raw,
                               NODE_A_METHANE_ALARM_ON_RAW,
                               NODE_A_METHANE_ALARM_OFF_RAW) : 0U;
-  co_warning = (co_online != 0U) ?
+  co_warning = ((co_online != 0U) &&
+                (NODE_A_CO_SAFETY_COMMISSIONED != 0U)) ?
       NODE_A_HIGH_ALARM_STATE(co_warning, co_raw,
                               NODE_A_CO_WARNING_ON_RAW,
                               NODE_A_CO_WARNING_OFF_RAW) : 0U;
-  co_alarm = (co_online != 0U) ?
+  co_alarm = ((co_online != 0U) &&
+              (NODE_A_CO_SAFETY_COMMISSIONED != 0U)) ?
       NODE_A_HIGH_ALARM_STATE(co_alarm, co_raw,
                               NODE_A_CO_ALARM_ON_RAW,
                               NODE_A_CO_ALARM_OFF_RAW) : 0U;

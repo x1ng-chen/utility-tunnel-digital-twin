@@ -1,0 +1,6 @@
+interface:
+  display_name: "KK_OLED 字模"
+  short_description: "为 KK_OLED 收集字符并生成、集成压缩字模"
+  default_prompt: "使用 $kk-oled-font 收集当前界面字符，并通过 LEDFont 在线 API 生成和集成压缩字模。"
+policy:
+  allow_implicit_invocation: true

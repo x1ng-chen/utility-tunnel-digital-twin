@@ -474,7 +474,7 @@ Result validateSnapshot(const ScreenSnapshot& value) {
       return Result::OutOfRange;
     }
   }
-  if (value.actuators.led_mode > 7U ||
+  if (value.actuators.led_mode > 15U ||
       !validTelemetryPercent(value.actuators.led_brightness_percent)) {
     return Result::OutOfRange;
   }

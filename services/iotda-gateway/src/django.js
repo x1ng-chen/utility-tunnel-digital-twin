@@ -97,12 +97,16 @@ export function createDjangoForwarder({
   timeoutMs = 5000,
   retryDelayMs = 2000,
   maxRetryDelayMs = 60000,
+  maxItemRetries = 8,
   queueMax = 43200,
   queueDbPath = ':memory:',
   log = console,
 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required.');
   if (!apiKey && (!email || !password)) throw new Error('apiKey or email and password are required.');
+  if (!Number.isInteger(maxItemRetries) || maxItemRetries < 0 || maxItemRetries > 1000) {
+    throw new RangeError('maxItemRetries must be an integer from 0 to 1000.');
+  }
 
   const outbox = new Outbox(queueDbPath, queueMax);
   const state = {
@@ -113,6 +117,7 @@ export function createDjangoForwarder({
     closePending: false,
     currentItemId: null,
     retryDelay: retryDelayMs,
+    retryAttempts: new Map(),
   };
   const counters = {
     delivered: 0,
@@ -175,9 +180,22 @@ export function createDjangoForwarder({
     const item = outbox.peek();
     if (!item) return;
     outbox.deadLetter(item.id, reason);
+    state.retryAttempts.delete(item.id);
     counters.dropped += 1;
     counters.deadLetters += 1;
     log.error(`Django batch moved to persistent dead letter (${reason}): ${JSON.stringify(item.batch.readings.map((reading) => `${reading.assetCode}/${reading.metricKey}`))}`);
+  }
+
+  function retryOrDeadLetter(item, reason) {
+    const attempts = (state.retryAttempts.get(item.id) || 0) + 1;
+    if (attempts > maxItemRetries) {
+      dropHead(`retry budget exhausted after ${attempts} failures: ${reason}`);
+      resetBackoff();
+      return true;
+    }
+    state.retryAttempts.set(item.id, attempts);
+    scheduleRetry();
+    return false;
   }
 
   async function flush() {
@@ -194,7 +212,7 @@ export function createDjangoForwarder({
           response = await postTelemetry(item.batch);
         } catch (error) {
           log.error(`Django request failed, will retry: ${error instanceof Error ? error.message : error}`);
-          scheduleRetry();
+          if (retryOrDeadLetter(item, error instanceof Error ? error.message : String(error))) continue;
           break;
         }
 
@@ -207,18 +225,19 @@ export function createDjangoForwarder({
             response = await postTelemetry(item.batch);
           } catch (error) {
             log.error(`Django re-login failed, will retry: ${error instanceof Error ? error.message : error}`);
-            scheduleRetry();
+            if (retryOrDeadLetter(item, error instanceof Error ? error.message : String(error))) continue;
             break;
           }
           if (response.status === 401) {
-            log.error('Django rejected the fresh ingest token, will retry later.');
-            scheduleRetry();
+            log.error('Django rejected the fresh ingest token.');
+            if (retryOrDeadLetter(item, 'fresh ingest token rejected')) continue;
             break;
           }
         }
 
         if (response.ok) {
           outbox.delete(item.id);
+          state.retryAttempts.delete(item.id);
           resetBackoff();
           counters.delivered += item.batch.readings.length;
           const body = await response.json().catch(() => ({}));
@@ -242,13 +261,13 @@ export function createDjangoForwarder({
           // A database concurrency conflict is safe to retry because the
           // exact queued batch retains its original eventIds.
           log.warn(`Django reported a transient conflict, will replay the same batch: ${JSON.stringify(details).slice(0, 300)}`);
-          scheduleRetry();
+          if (retryOrDeadLetter(item, `transient conflict ${JSON.stringify(details).slice(0, 300)}`)) continue;
           break;
         }
 
         if (response.status === 429 || response.status >= 500) {
           log.warn(`Django returned status ${response.status}, will retry.`);
-          scheduleRetry();
+          if (retryOrDeadLetter(item, `status ${response.status}`)) continue;
           break;
         }
 

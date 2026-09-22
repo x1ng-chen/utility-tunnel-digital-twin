@@ -10,7 +10,7 @@ import { useOperationsStore } from '../stores/operations';
 import { api } from '../services/api';
 import { newTwinAlert } from '../utils/newTwinAlert';
 import { selectSignalWindow } from '../utils/dashboardSignal';
-import { activeTwinAlerts, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelDelivery, twinStateLabel, type TwinModelBindingReport, type TwinModelReadinessResponse, type TwinVisualState } from '../services/twin3d';
+import { activeTwinAlerts, alertIndicatesLeak, leakCapableAsset, leakPipeLabel, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelDelivery, twinStateLabel, type TwinModelBindingReport, type TwinModelReadinessResponse, type TwinVisualState } from '../services/twin3d';
 
 const store = useOperationsStore();
 const route = useRoute();
@@ -21,6 +21,8 @@ const selectedCode = ref(store.assets.some((asset) => asset.code === requestedCo
 const scene = ref<InstanceType<typeof TwinScene>>();
 const autoLocate = ref(true);
 const autoLocateMessage = ref('');
+const simulatedLeakCode = ref<string | null>(null);
+const leakTargetCode = ref('GAS-01');
 function pauseAutoLocate(event?: Event) {
   if (!autoLocate.value) return;
   // The fullscreen auto-locate switch lives inside the stage, so its own clicks
@@ -62,6 +64,11 @@ const filterOptions: Array<{ value: 'all' | TwinVisualState; label: string }> = 
   { value: 'all', label: '全部' }, { value: 'alarm', label: '告警' }, { value: 'warning', label: '关注' }, { value: 'normal', label: '正常' }, { value: 'unknown', label: '待核验' },
 ];
 const selectedAsset = computed(() => store.assets.find((asset) => asset.code === selectedCode.value) || null);
+const leakCandidates = computed(() => store.assets.filter(leakCapableAsset));
+const liveLeakAlert = computed(() => store.alerts.find((alert) => !['resolved', 'closed'].includes(alert.status) && Boolean(alert.assetCode) && alertIndicatesLeak(alert)) || null);
+const effectiveLeakCode = computed(() => simulatedLeakCode.value || liveLeakAlert.value?.assetCode || null);
+const effectiveLeakAsset = computed(() => store.assets.find((asset) => asset.code === effectiveLeakCode.value) || null);
+const effectiveLeakLabel = computed(() => effectiveLeakAsset.value ? leakPipeLabel(effectiveLeakAsset.value) : '当前没有泄漏管段');
 const selectedAlerts = computed(() => selectedAsset.value ? activeTwinAlerts(selectedAsset.value.code, store.alerts) : []);
 const primaryAlert = computed(() => selectedAsset.value ? primaryTwinAlert(selectedAsset.value.code, store.alerts) : null);
 const selectedOrders = computed(() => selectedAsset.value ? store.workOrders.filter((order) => order.assetCode === selectedAsset.value?.code) : []);
@@ -131,6 +138,19 @@ function selectPreset(zone: string) {
   if (asset) select(asset.code);
 }
 function retryModel() { scene.value?.reloadModel(); }
+function startLeakSimulation() {
+  const target = leakCandidates.value.find((asset) => asset.code === leakTargetCode.value) || leakCandidates.value[0];
+  if (!target) return;
+  leakTargetCode.value = target.code;
+  simulatedLeakCode.value = target.code;
+  if (selectedCode.value === target.code) scene.value?.focusAsset(target.code);
+  else selectedCode.value = target.code;
+  autoLocateMessage.value = `模拟泄漏：已标注 ${leakPipeLabel(target)}`;
+}
+function stopLeakSimulation() {
+  simulatedLeakCode.value = null;
+  autoLocateMessage.value = liveLeakAlert.value ? '模拟已停止，继续显示真实泄漏告警。' : '泄漏模拟已停止。';
+}
 function receiveModelReport(report: TwinModelBindingReport) { modelReport.value = report; }
 async function refreshModelReadiness() {
   const requestToken = ++modelRequestToken;
@@ -267,7 +287,14 @@ onBeforeUnmount(() => {
       <article ref="stage" :class="['twin-stage-panel', { 'twin-fullscreen-active': fullscreenActive }]" @pointerdown.capture="pauseAutoLocate" @wheel.capture.passive="pauseAutoLocate" @keydown.capture="pauseAutoLocate" @pointermove="onStagePointerMove" @pointerdown="onStagePointerDown" @pointerup="onStagePointerUp" @pointerleave="onStagePointerLeave">
         <nav class="twin-preset-hud" aria-label="三维视角预设"><span><Camera />视角预设</span><button v-for="preset in ['总览','电力舱','燃气舱','水浸点']" :key="preset" @click="selectPreset(preset)">{{ preset }}</button></nav>
         <aside class="twin-risk-hud" aria-label="风险设备列表"><strong>风险设备 · {{ riskAssets.length }} 台</strong><button v-for="asset in riskAssets" :key="asset.id" type="button" :aria-pressed="selectedCode === asset.code" :title="asset.name" @click="select(asset.code)"><i :class="resolveTwinVisualState(asset, store.alerts)" /><span>{{ asset.code }}</span><small>{{ asset.name }}</small></button><p v-if="!riskAssets.length">当前无风险设备</p></aside>
-        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" :model-url="activeModelUrl" @select="select" @model-report="receiveModelReport" />
+        <div class="twin-leak-simulator" :class="{ active: Boolean(effectiveLeakCode) }" role="group" aria-label="管道泄漏模拟">
+          <strong>泄漏模拟</strong>
+          <select v-model="leakTargetCode" aria-label="选择模拟泄漏测点"><option v-for="asset in leakCandidates" :key="asset.code" :value="asset.code">{{ asset.code }} · {{ leakPipeLabel(asset) }}</option></select>
+          <button type="button" @click="startLeakSimulation">启动模拟</button>
+          <button type="button" :disabled="!simulatedLeakCode" @click="stopLeakSimulation">停止</button>
+          <span v-if="effectiveLeakCode"><i />{{ simulatedLeakCode ? '模拟' : '实时' }} · {{ effectiveLeakLabel }}</span>
+        </div>
+        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" :model-url="activeModelUrl" :leak-asset-code="effectiveLeakCode" @select="select" @model-report="receiveModelReport" />
         <div v-if="selectedAsset" class="twin-focus-status" aria-live="polite"><span :class="resolveTwinVisualState(selectedAsset, store.alerts)"><i />{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span><b :title="selectedAsset.name">{{ selectedAssetName }}</b><small>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</small><div v-if="riskAssets.length" class="twin-risk-patrol"><em>{{ riskPatrolLabel }}</em><button type="button" aria-label="巡检上一异常设备" @click="inspectRisk(-1)">← 上一异常</button><button type="button" aria-label="巡检下一异常设备" @click="inspectRisk(1)">下一异常 →</button></div></div>
         <nav class="twin-quick-switch" aria-label="场景内设备切换" @pointerenter="onQuickSwitchPointerMove" @pointerdown.capture="onQuickSwitchPointerDown" @pointermove.capture="onQuickSwitchPointerMove" @pointerup.capture="onQuickSwitchPointerEnd" @pointercancel.capture="onQuickSwitchPointerEnd" @mousedown.stop>
           <div class="twin-quick-switch-tools"><div class="twin-quick-switch-heading"><span>设备快速切换 · {{ visibleAssets.length }}/{{ store.assets.length }}</span><b>{{ selectedAssetName || '请选择设备' }}</b></div><div class="twin-switch-filters" role="group" aria-label="按运行状态筛选设备"><button v-for="filter in filterOptions" :key="filter.value" :class="{ selected: stateFilter === filter.value }" type="button" @pointerdown.stop @click.stop="stateFilter = filter.value">{{ filter.label }}</button></div></div>
@@ -289,6 +316,7 @@ onBeforeUnmount(() => {
           <section :class="['twin-model-contract', { ready: modelDeliveryReady, blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><span>模型交付检查</span><b>{{ modelDeliveryLabel }}</b><p>{{ modelDeliveryCount }} / {{ modelDeliveryTotal }} 个设备已具备标准节点名称</p></section>
           <details class="twin-model-binding-list"><summary>查看实体模型映射</summary><p v-if="modelReport.isComplete">模型中的设备节点已全部绑定，可进行状态高亮与点击定位。</p><p v-else>待补齐：{{ modelReport.missingCodes.join('、') }}</p><div><span v-for="code in modelReport.boundCodes" :key="code">{{ code }}</span></div></details>
           <p v-if="navigationContext" class="twin-navigation-context" role="status">{{ navigationContext }}</p>
+          <section v-if="effectiveLeakAsset" class="twin-leak-summary"><span>{{ simulatedLeakCode ? '模拟泄漏' : '实时泄漏告警' }}</span><b>{{ effectiveLeakLabel }}</b><p>关联测点 {{ effectiveLeakAsset.code }} · 三维管段正在红色脉冲标注</p></section>
           <div class="twin-inspector-grid"><div><span>所在区域</span><b>{{ selectedAsset.zone }}</b></div><div><span>实体模型</span><b>{{ selectedAsset.mesh || '待绑定' }}</b></div><div><span>最新上报</span><b>{{ formatTime(selectedAsset.lastSeenAt) }}</b></div><div><span>当前遥测</span><b>{{ selectedTelemetry ? `${selectedTelemetry.value} ${selectedTelemetry.unit}` : '暂无数据' }}</b></div></div>
           <section class="twin-detail-section">
             <span class="eyebrow">实时数据</span>
@@ -318,6 +346,15 @@ onBeforeUnmount(() => {
 .twin-auto-locate label { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; font-size: 13px; }
 .twin-auto-locate input { width: 16px; height: 16px; min-height: 0; padding: 0; }
 .twin-auto-locate span { color: var(--ops-muted); font-size: 12px; }
+.twin-leak-simulator { position:absolute; z-index:7; top:74px; right:16px; width:238px; display:grid; grid-template-columns:1fr 1fr; gap:7px; padding:10px; border:1px solid var(--ops-line); background:#09111dec; }
+.twin-leak-simulator.active { border-color:#ff536f; box-shadow:0 0 22px #ff315333; }
+.twin-leak-simulator strong,.twin-leak-simulator select,.twin-leak-simulator span { grid-column:1/-1; }
+.twin-leak-simulator strong { color:#ff7890; font:700 11px "Cascadia Mono",monospace; letter-spacing:.12em; }
+.twin-leak-simulator select,.twin-leak-simulator button { min-height:30px; border:1px solid var(--ops-line); background:#111f31; color:var(--ops-text); font-size:11px; }
+.twin-leak-simulator button { cursor:pointer; }.twin-leak-simulator button:disabled { opacity:.4; cursor:not-allowed; }
+.twin-leak-simulator span { display:flex; align-items:center; gap:7px; color:#ff9bad; font-size:11px; }.twin-leak-simulator span i { width:7px; height:7px; border-radius:50%; background:#ff3153; box-shadow:0 0 10px #ff3153; animation:leak-pulse 1s infinite; }
+.twin-leak-summary { border:1px solid #ff536f66; background:#35111d; padding:12px; }.twin-leak-summary span { color:#ff7890; font-size:11px; }.twin-leak-summary b { display:block; margin-top:5px; color:#fff; }.twin-leak-summary p { margin:5px 0 0; color:#ffb3c0; font-size:12px; }
+@keyframes leak-pulse { 50% { opacity:.35; transform:scale(.65); } }
 .twin-stage-panel::before{position:absolute;z-index:2;top:0;right:0;left:0;height:62px;border-bottom:1px solid #29445f99;background:linear-gradient(180deg,#0a192beb,#091727c4);content:'';pointer-events:none;backdrop-filter:blur(10px)}.twin-preset-hud{position:absolute;top:12px;left:50%;z-index:7;display:flex;align-items:center;overflow:hidden;border:1px solid #3d5d7c;background:#091727f2;box-shadow:0 10px 26px #0005;transform:translateX(-50%)}.twin-preset-hud span,.twin-preset-hud button{display:flex;align-items:center;justify-content:center;height:38px;padding:0 14px;border:0;border-right:1px solid var(--ops-line);background:transparent;color:var(--ops-muted);font:11px "Cascadia Mono",monospace;line-height:1;white-space:nowrap}.twin-preset-hud span{min-width:112px;gap:8px;color:var(--ops-signal);font-family:inherit;font-weight:800}.twin-preset-hud button{min-width:60px;cursor:pointer}.twin-preset-hud button:last-child{border-right:0}.twin-preset-hud svg{width:15px;flex:0 0 auto}.twin-preset-hud button:hover,.twin-preset-hud button:focus-visible{color:#fff;background:var(--ops-raised);outline:0;box-shadow:inset 0 -2px var(--ops-signal)}.twin-risk-hud{position:absolute;left:16px;top:74px;z-index:6;width:210px;border:1px solid var(--ops-line);background:#09111de8}.twin-stage-panel:not(.twin-fullscreen-active) .twin-focus-status{top:74px}.twin-risk-hud>strong{display:block;padding:10px 12px;border-bottom:1px solid var(--ops-line);color:var(--ops-danger);font:10px "Cascadia Mono",monospace;letter-spacing:.12em}.twin-risk-hud button{width:100%;display:grid;grid-template-columns:8px 55px 1fr;gap:8px;align-items:center;padding:9px 11px;border:0;border-bottom:1px solid var(--ops-line-soft);background:transparent;color:var(--ops-text);text-align:left}.twin-risk-hud button:hover{background:var(--ops-raised)}.twin-risk-hud i{width:7px;height:7px;background:var(--ops-warn)}.twin-risk-hud i.alarm{background:var(--ops-danger)}.twin-risk-hud span{font:10px "Cascadia Mono",monospace}.twin-risk-hud small{overflow:hidden;color:var(--ops-muted);text-overflow:ellipsis;white-space:nowrap}.twin-risk-hud p{padding:10px;margin:0;color:var(--ops-muted);font-size:11px}.twin-title-actions button,.twin-gis-link{display:inline-flex!important;align-items:center;justify-content:center;gap:7px}.twin-title-actions svg,.twin-gis-link svg,.twin-search svg{width:16px}.twin-search{display:flex!important;align-items:center;gap:8px;padding-left:10px}
 .twin-risk-hud { max-height: 230px; overflow-y: auto; scrollbar-width: thin; }
 .twin-stage-panel { container-type: inline-size; display: flex; flex-direction: column; }

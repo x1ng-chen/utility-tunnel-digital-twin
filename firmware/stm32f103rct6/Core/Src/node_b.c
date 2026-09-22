@@ -10,13 +10,19 @@
 #include "uart_tx_queue.h"
 #include "node_b_sensor_bank.h"
 #include "sensor_telemetry.h"
+#include "link_lease.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define NODE_ID "node-b"
 #define ESP_HEARTBEAT_INTERVAL_MS 2000U
 #define TELEMETRY_INTERVAL_MS 2000U
+/* ESP-02 emits LINK heartbeats every two seconds.  Allow seven missed frames
+ * so brief UART congestion cannot flap the status display or disable menu
+ * controls; a real outage still makes both fail closed after 15 seconds. */
+#define LINK_OFFLINE_TIMEOUT_MS 15000U
 /* Bytes moved per UART per UI-loop iteration.  The loop must keep parsing the
  * ESP snapshot and polling the joystick at the 60 FPS cadence, so the transmit
  * work of one iteration is bounded in bytes (and therefore in milliseconds)
@@ -24,6 +30,10 @@
 #define NODE_B_UART_TX_DRAIN_BYTES 48U
 #define LED_INTERVAL_MS 500U
 #define ESP_RX_LINE_SIZE SCREEN_SNAPSHOT_LINE_SIZE
+/* Completed ESP lines wait in a ring instead of one shared slot.  The ESP can
+ * emit a snapshot, a LINK frame and a time sync back to back; with the old
+ * single-line buffer every line but the last was silently lost. */
+#define ESP_RX_QUEUE_CAPACITY 4U
 #define UI_TEST_LINE_SIZE 48U
 #define DISPLAY_TEST_DIRTY_COUNT 1000U
 #define DISPLAY_TEST_COLOR_COUNT 3U
@@ -39,9 +49,14 @@ typedef struct
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 static uint8_t esp_rx_character;
-static volatile char esp_rx_line[ESP_RX_LINE_SIZE];
+static volatile char esp_rx_lines[ESP_RX_QUEUE_CAPACITY][ESP_RX_LINE_SIZE];
+static volatile uint16_t esp_rx_lengths[ESP_RX_QUEUE_CAPACITY];
 static volatile uint16_t esp_rx_length;
-static volatile uint8_t esp_rx_line_ready;
+static volatile uint8_t esp_rx_head;
+static volatile uint8_t esp_rx_tail;
+static volatile uint8_t esp_rx_count;
+static volatile uint8_t esp_rx_discarding;
+static volatile uint32_t esp_rx_dropped_lines;
 static UiState ui_state;
 static UiSnapshot ui_snapshot;
 static ScreenSnapshotContext snapshot_context;
@@ -58,6 +73,18 @@ static uint8_t display_test_active;
 static UartTxQueue esp_tx_queue;
 static UartTxQueue debug_tx_queue;
 static NodeBSensorBank sensor_bank;
+static uint32_t last_gateway_online_ms;
+/* A LINK frame reporting MQTT down is only an instantaneous ESP sample.  Do
+ * not let one short reconnect make the UI and command availability flap.
+ * Positive evidence (LINK up, snapshot, peer frame or acknowledgement) renews
+ * this lease; only expiry in the main loop declares MQTT offline. */
+static uint32_t last_mqtt_online_ms;
+/* Diagnostic source for the most recent positive MQTT evidence:
+ * 1=snapshot, 2=LINK heartbeat, 3=command acknowledgement, 4=peer reading,
+ * 5=UART UI test.  The transition logger is debug-UART-only. */
+static uint8_t mqtt_evidence_source;
+static uint8_t mqtt_last_reported_status = 0xFFU;
+static uint32_t last_node_a_online_ms;
 static SensorTelemetryCursor telemetry_cursor;
 ADC_HandleTypeDef hadc1;
 
@@ -90,6 +117,25 @@ static void Tx_DrainBoth(uint32_t now_ms)
   (void)UartTx_Drain(&debug_tx_queue, &huart1, NODE_B_UART_TX_DRAIN_BYTES, now_ms);
 }
 
+static void ReportMqttStateTransition(uint32_t now_ms)
+{
+  char message[64];
+  const uint8_t status = ui_snapshot.connectivity.mqtt;
+  const char *label;
+  int length;
+  if (status == mqtt_last_reported_status) return;
+  label = (status == (uint8_t)UI_LINK_ONLINE) ? "online" :
+          ((status == (uint8_t)UI_LINK_OFFLINE) ? "offline" : "unknown");
+  length = snprintf(message, sizeof(message),
+                    "#MQTTSTATE|%s|age=%lu|source=%u\r\n", label,
+                    (unsigned long)(now_ms - last_mqtt_online_ms),
+                    (unsigned int)mqtt_evidence_source);
+  if ((length > 0) && (length < (int)sizeof(message))) {
+    (void)UartTx_Enqueue(&debug_tx_queue, message, (uint16_t)length);
+  }
+  mqtt_last_reported_status = status;
+}
+
 static uint32_t NextBootId(void)
 {
   uint16_t persisted;
@@ -109,20 +155,101 @@ static uint32_t NextBootId(void)
   return MenuCommand_NextBootId((uint16_t)(persisted - 1U), uid_mix);
 }
 
+/* Minimal JSON field readers for the peer frame.  Only the requested key's
+ * value is walked, so field order and whitespace no longer matter the way they
+ * did for the fixed-order sscanf this replaces. */
+static uint8_t Json_FindValue(const char *json, const char *key, const char **value)
+{
+  const size_t key_length = strlen(key);
+  const char *cursor = json;
+
+  while ((cursor = strchr(cursor, '"')) != NULL)
+  {
+    if ((strncmp(cursor + 1, key, key_length) == 0) &&
+        (cursor[key_length + 1U] == '"'))
+    {
+      cursor += key_length + 2U;
+      while ((*cursor == ' ') || (*cursor == '\t')) ++cursor;
+      if (*cursor != ':') return 0U;
+      ++cursor;
+      while ((*cursor == ' ') || (*cursor == '\t')) ++cursor;
+      *value = cursor;
+      return 1U;
+    }
+    ++cursor;
+  }
+  return 0U;
+}
+
+static uint8_t Json_CopyString(const char *value, char *out, uint16_t out_size)
+{
+  uint16_t written = 0U;
+
+  if (*value != '"') return 0U;
+  ++value;
+  while (*value != '"')
+  {
+    char character = *value;
+    if (character == '\0') return 0U;
+    ++value;
+    if (character == '\\')
+    {
+      character = *value;
+      if (character == '\0') return 0U;
+      ++value;
+    }
+    if (written < (out_size - 1U)) out[written++] = character;
+  }
+  out[written] = '\0';
+  return 1U;
+}
+
+static uint8_t Json_ParseLong(const char *value, long *out)
+{
+  char *end = NULL;
+  long parsed;
+
+  if ((*value != '-') && ((*value < '0') || (*value > '9'))) return 0U;
+  parsed = strtol(value, &end, 10);
+  if (end == value) return 0U;
+  *out = parsed;
+  return 1U;
+}
+
 static uint8_t DecodePeerReading(const char *line, PeerReading *peer)
 {
   const char *payload = strchr(line, '|');
-  int online;
-  int temperature;
-  unsigned int humidity;
+  const char *value;
+  char schema[24];
+  char source[16];
+  long online;
+  long temperature;
+  long humidity;
 
   if (payload == NULL) return 0U;
   payload = strchr(payload + 1, '|');
-  if ((payload == NULL) || (strstr(payload, "\"schema\":\"ut.node-b.peer.v1\"") == NULL)) return 0U;
-  if (sscanf(payload, "|{\"schema\":\"ut.node-b.peer.v1\",\"source\":\"node-a\",\"online\":%d,\"temperatureCentiC\":%d,\"humidityCentiRH\":%u}",
-             &online, &temperature, &humidity) != 3) return 0U;
-  if ((temperature < -4500) || (temperature > 13000) || (humidity > 10000U)) return 0U;
-  peer->online = online ? 1U : 0U;
+  if (payload == NULL) return 0U;
+  ++payload;
+  if (!Json_FindValue(payload, "schema", &value) ||
+      !Json_CopyString(value, schema, (uint16_t)sizeof(schema)) ||
+      (strcmp(schema, "ut.node-b.peer.v1") != 0))
+    return 0U;
+  if (!Json_FindValue(payload, "source", &value) ||
+      !Json_CopyString(value, source, (uint16_t)sizeof(source)) ||
+      (strcmp(source, "node-a") != 0))
+    return 0U;
+  if (!Json_FindValue(payload, "online", &value) ||
+      !Json_ParseLong(value, &online) ||
+      !Json_FindValue(payload, "temperatureCentiC", &value) ||
+      !Json_ParseLong(value, &temperature) ||
+      !Json_FindValue(payload, "humidityCentiRH", &value) ||
+      !Json_ParseLong(value, &humidity))
+    return 0U;
+  if ((online != 0L) && (online != 1L)) return 0U;
+  if ((temperature < -4500L) || (temperature > 13000L) ||
+      (humidity < 0L) || (humidity > 10000L))
+    return 0U;
+  peer->online = (online != 0L) ? 1U : 0U;
   peer->temperature_centi_c = (int16_t)temperature;
   peer->humidity_centi_rh = (uint16_t)humidity;
   return 1U;
@@ -148,18 +275,26 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
   uint16_t length;
   uint32_t now_ms;
 
-  if (esp_rx_line_ready == 0U) return;
-  __disable_irq();
-  length = esp_rx_length;
-  if (length >= sizeof(line)) length = sizeof(line) - 1U;
-  (void)memcpy(line, (const void *)esp_rx_line, length);
-  line[length] = '\0';
-  esp_rx_line_ready = 0U;
-  esp_rx_length = 0U;
-  __enable_irq();
-
-  if (length > 0U)
+  /* Drain every completed line, not just one per call: a burst that queued
+   * several frames must not take several loop iterations to parse. */
+  for (;;)
   {
+    __disable_irq();
+    if (esp_rx_count == 0U)
+    {
+      __enable_irq();
+      return;
+    }
+    length = esp_rx_lengths[esp_rx_head];
+    if (length >= sizeof(line)) length = sizeof(line) - 1U;
+    (void)memcpy(line, (const void *)esp_rx_lines[esp_rx_head], length);
+    esp_rx_head = (uint8_t)((esp_rx_head + 1U) % ESP_RX_QUEUE_CAPACITY);
+    --esp_rx_count;
+    __enable_irq();
+    line[length] = '\0';
+
+    if (length == 0U) continue;
+    {
     now_ms = HAL_GetTick();
     /* The echo is a diagnostic, not an input to the UI: it is queued behind a
      * bounded budget so a slow console can never delay the parse and render
@@ -170,6 +305,17 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
     (void)UartTx_Enqueue(&debug_tx_queue, "\r\n", 2U);
     if (ScreenSnapshot_Apply(&snapshot_context, line, length, now_ms, &ui_snapshot))
     {
+      /* A valid Node A snapshot has crossed Node A -> MQTT broker -> ESP-02,
+       * so it is also direct positive evidence for every displayed link.
+       * Count it as a heartbeat instead of requiring a separate LINK frame. */
+      last_gateway_online_ms = now_ms;
+      last_mqtt_online_ms = now_ms;
+      mqtt_evidence_source = 1U;
+      last_node_a_online_ms = now_ms;
+      ui_snapshot.connectivity.node_a = (uint8_t)UI_LINK_ONLINE;
+      ui_snapshot.connectivity.gateway = (uint8_t)UI_LINK_ONLINE;
+      ui_snapshot.connectivity.mqtt = (uint8_t)UI_LINK_ONLINE;
+      ui_snapshot.connectivity.iotda = (uint8_t)UI_LINK_ONLINE;
       ++*received_count;
       UiState_SetControlAvailability(&ui_state, (uint8_t)(ui_snapshot.connectivity.mqtt == UI_LINK_ONLINE),
                                      ui_state.control.safety_locked);
@@ -178,14 +324,53 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
     {
       /* The parser accepts compact and whitespace-bearing JSON. */
     }
+    else if (strncmp(line, "LINK|", 5U) == 0)
+    {
+      unsigned int wifi_up;
+      unsigned int mqtt_up;
+      unsigned int node_a_up = 0U;
+      const int fields = sscanf(line, "LINK|%u|%u|%u", &wifi_up, &mqtt_up,
+                                &node_a_up);
+      if (fields >= 2 && wifi_up <= 1U && mqtt_up <= 1U &&
+          (fields < 3 || node_a_up <= 1U)) {
+        /* Like MQTT, Wi-Fi can momentarily report down while the ESP roams or
+         * renews its hotspot association.  A down sample does not revoke the
+         * displayed lease; only a full timeout without positive evidence does. */
+        if (wifi_up) {
+          last_gateway_online_ms = now_ms;
+          ui_snapshot.connectivity.gateway = (uint8_t)UI_LINK_ONLINE;
+        }
+        if (mqtt_up) {
+          last_mqtt_online_ms = now_ms;
+          mqtt_evidence_source = 2U;
+          ui_snapshot.connectivity.mqtt = (uint8_t)UI_LINK_ONLINE;
+          ui_snapshot.connectivity.iotda = (uint8_t)UI_LINK_ONLINE;
+        }
+        if (fields == 3 && node_a_up) {
+          last_node_a_online_ms = now_ms;
+          ui_snapshot.connectivity.node_a = (uint8_t)UI_LINK_ONLINE;
+        }
+        ui_snapshot.connectivity.updated_ms = now_ms;
+      }
+    }
+    else if (strcmp(line, "NODEA|1") == 0)
+    {
+      last_node_a_online_ms = now_ms;
+      ui_snapshot.connectivity.node_a = (uint8_t)UI_LINK_ONLINE;
+      ui_snapshot.connectivity.updated_ms = now_ms;
+    }
     else
     {
       MenuCommandAck acknowledgement;
       if (MenuCommand_ParseAck(line, length, &acknowledgement) &&
           MenuCommand_AcceptAck(&command_context, &acknowledgement))
       {
+        last_mqtt_online_ms = now_ms;
+        mqtt_evidence_source = 3U;
+        ui_snapshot.connectivity.mqtt = (uint8_t)UI_LINK_ONLINE;
+        ui_snapshot.connectivity.iotda = (uint8_t)UI_LINK_ONLINE;
         (void)UiState_HandleAcknowledgement(&ui_state, acknowledgement.command_id,
-                                            acknowledgement.accepted);
+                                            acknowledgement.accepted, now_ms);
       }
       if ((strncmp(line, "MQTT|", 5U) == 0) && DecodePeerReading(line, peer))
       {
@@ -197,15 +382,13 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
         ui_snapshot.humidity_centi_rh.sampled_ms = now_ms;
         ui_snapshot.humidity_centi_rh.quality = UI_QUALITY_VALID;
         ui_snapshot.connectivity.node_a = peer->online ? (uint8_t)UI_LINK_ONLINE : (uint8_t)UI_LINK_OFFLINE;
+        if (peer->online) last_node_a_online_ms = now_ms;
+        last_mqtt_online_ms = now_ms;
+        mqtt_evidence_source = 4U;
         ScreenSnapshot_SetMqttAvailability(&ui_snapshot, 1U, now_ms);
         UiState_SetControlAvailability(&ui_state, 1U, ui_state.control.safety_locked);
       }
-      else if ((strcmp(line, "MQTT|UP") == 0) || (strcmp(line, "MQTT|DOWN") == 0))
-      {
-        const uint8_t online = (strcmp(line, "MQTT|UP") == 0) ? 1U : 0U;
-        ScreenSnapshot_SetMqttAvailability(&ui_snapshot, online, now_ms);
-        UiState_SetControlAvailability(&ui_state, online, ui_state.control.safety_locked);
-      }
+    }
     }
   }
 }
@@ -329,12 +512,16 @@ static void UiTest_HandleLine(void)
     (void)UiState_CommandDispatched(&ui_state, command_id);
   } else if (sscanf(ui_test_line, "#UITEST ACK %39s %15s", command_id, acknowledgement) == 2) {
     if (strcmp(acknowledgement, "ACCEPT") == 0) {
-      (void)UiState_HandleAcknowledgement(&ui_state, command_id, 1U);
+      (void)UiState_HandleAcknowledgement(&ui_state, command_id, 1U, HAL_GetTick());
     } else if (strcmp(acknowledgement, "REJECT") == 0) {
-      (void)UiState_HandleAcknowledgement(&ui_state, command_id, 0U);
+      (void)UiState_HandleAcknowledgement(&ui_state, command_id, 0U, HAL_GetTick());
     }
   } else if (sscanf(ui_test_line, "#UITEST MQTT %u", &enabled) == 1) {
     ui_snapshot.connectivity.mqtt = enabled ? (uint8_t)UI_LINK_ONLINE : (uint8_t)UI_LINK_OFFLINE;
+    if (enabled) {
+      last_mqtt_online_ms = HAL_GetTick();
+      mqtt_evidence_source = 5U;
+    }
     UiState_SetControlAvailability(&ui_state, enabled ? 1U : 0U, ui_state.control.safety_locked);
   } else if (sscanf(ui_test_line, "#UITEST SAFETY %u", &enabled) == 1) {
     UiState_SetControlAvailability(&ui_state, ui_state.control.mqtt_online, enabled ? 1U : 0U);
@@ -387,32 +574,75 @@ static void HandleUiEffect(UiEffect effect, uint32_t now_ms)
   if ((epoch_ms == 0ULL) || !MenuCommand_Begin(&command_context, (UiAction)effect.action,
                                                 effect.value, epoch_ms, line,
                                                 sizeof(line), &length)) {
-    (void)UiState_CommandSendFailed(&ui_state);
+    (void)UiState_CommandSendFailed(&ui_state, now_ms);
     return;
   }
   if (!UartTx_EnqueuePriority(&esp_tx_queue, line, (uint16_t)length)) {
     command_context.pending = 0U;
-    (void)UiState_CommandSendFailed(&ui_state);
+    (void)UiState_CommandSendFailed(&ui_state, now_ms);
     return;
   }
   if (!UiState_CommandDispatched(&ui_state, command_context.active_command_id)) {
     command_context.pending = 0U;
-    (void)UiState_CommandSendFailed(&ui_state);
+    (void)UiState_CommandSendFailed(&ui_state, now_ms);
   }
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *uart)
 {
-  if (uart->Instance != USART2) return;
-  if (esp_rx_character == '\n')
+  if (uart->Instance == USART2)
   {
-    if ((esp_rx_line_ready == 0U) && (esp_rx_length > 0U)) esp_rx_line_ready = 1U;
+    if (esp_rx_character == '\n')
+    {
+      if (esp_rx_discarding != 0U)
+      {
+        /* Oversized or queue-overflow line: drop through its terminator. */
+        ++esp_rx_dropped_lines;
+        esp_rx_discarding = 0U;
+      }
+      else if (esp_rx_length > 0U)
+      {
+        if (esp_rx_count < ESP_RX_QUEUE_CAPACITY)
+        {
+          esp_rx_lengths[esp_rx_tail] = esp_rx_length;
+          esp_rx_tail = (uint8_t)((esp_rx_tail + 1U) % ESP_RX_QUEUE_CAPACITY);
+          ++esp_rx_count;
+        }
+        else
+          ++esp_rx_dropped_lines;
+      }
+      esp_rx_length = 0U;
+    }
+    else if (esp_rx_character != '\r')
+    {
+      if (esp_rx_discarding == 0U)
+      {
+        if (esp_rx_count >= ESP_RX_QUEUE_CAPACITY)
+          esp_rx_discarding = 1U;
+        else if (esp_rx_length < (ESP_RX_LINE_SIZE - 1U))
+          esp_rx_lines[esp_rx_tail][esp_rx_length++] = (char)esp_rx_character;
+        else
+        {
+          esp_rx_length = 0U;
+          esp_rx_discarding = 1U;
+        }
+      }
+    }
+    (void)HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U);
   }
-  else if ((esp_rx_character != '\r') && (esp_rx_line_ready == 0U) &&
-           (esp_rx_length < (ESP_RX_LINE_SIZE - 1U)))
-  {
-    esp_rx_line[esp_rx_length++] = (char)esp_rx_character;
-  }
+}
+
+/* ORE/FE/NE leave the HAL reception disarmed with a half-built line.  Drop the
+ * partial line and re-arm byte reception so the ESP link recovers without a
+ * reboot.  USART1 is polled by PollUiTest() and must not be re-armed here. */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *uart)
+{
+  if ((uart == NULL) || (uart->Instance != USART2)) return;
+  (void)HAL_UART_AbortReceive(uart);
+  __disable_irq();
+  esp_rx_length = 0U;
+  esp_rx_discarding = 0U;
+  __enable_irq();
   (void)HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U);
 }
 
@@ -435,27 +665,33 @@ int main(void)
   MenuCommand_Init(&command_context, NextBootId());
   UartTx_Init(&esp_tx_queue);
   UartTx_Init(&debug_tx_queue);
-  Joystick_Init();
   if (HAL_UART_Receive_IT(&huart2, &esp_rx_character, 1U) != HAL_OK) Error_Handler();
   ST7735_Init();
   UiRenderer_Init();
   (void)UiRenderer_RenderFrame(&ui_state, &ui_snapshot, HAL_GetTick());
   MX_ADC1_Init();
   if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) Error_Handler();
+  Joystick_Init(&hadc1);
   NodeBSensorBank_Init(&sensor_bank, &hadc1);
   SensorTelemetry_Init(&telemetry_cursor, 1U);
   Tx_EnqueueLine("#NODE node-b boot\r\n", 19U);
 
   static uint32_t last_telemetry = HAL_MAX_DELAY;
+  static uint32_t last_sensor_sample = HAL_MAX_DELAY;
   for (;;)
   {
     const uint32_t now = HAL_GetTick();
-    NodeBSensorBank_Tick(&sensor_bank, now);
     UiInputEvent event;
     event = Joystick_Poll(now);
     if (event != UI_EVT_NONE) {
       const UiEffect effect = UiState_Handle(&ui_state, event, now);
       HandleUiEffect(effect, now);
+    }
+    /* Sample one bank item every 20 ms. Continuous ADC polling here used to
+     * starve joystick input and display transfers. */
+    if ((uint32_t)(now - last_sensor_sample) >= 20U) {
+      NodeBSensorBank_Tick(&sensor_bank, now);
+      last_sensor_sample = now;
     }
     PollUiTest();
     PollEsp(&received_count, &peer);
@@ -464,6 +700,17 @@ int main(void)
      * snapshot parse or the render above. */
     Tx_DrainBoth(now);
     ScreenSnapshot_Tick(&snapshot_context, now, &ui_snapshot);
+    if (LinkLease_Expired(now, last_gateway_online_ms, LINK_OFFLINE_TIMEOUT_MS)) {
+      ui_snapshot.connectivity.gateway = (uint8_t)UI_LINK_OFFLINE;
+    }
+    if (LinkLease_Expired(now, last_mqtt_online_ms, LINK_OFFLINE_TIMEOUT_MS)) {
+      ui_snapshot.connectivity.mqtt = (uint8_t)UI_LINK_OFFLINE;
+      ui_snapshot.connectivity.iotda = (uint8_t)UI_LINK_OFFLINE;
+    }
+    if (LinkLease_Expired(now, last_node_a_online_ms, LINK_OFFLINE_TIMEOUT_MS)) {
+      ui_snapshot.connectivity.node_a = (uint8_t)UI_LINK_OFFLINE;
+    }
+    ReportMqttStateTransition(now);
     NetworkTime_ToSnapshot(&ui_clock, now, &ui_snapshot.clock);
     UiState_SetControlAvailability(&ui_state, (uint8_t)(ui_snapshot.connectivity.mqtt == UI_LINK_ONLINE),
                                    ui_state.control.safety_locked);

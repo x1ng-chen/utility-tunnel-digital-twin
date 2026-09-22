@@ -7,4 +7,5 @@
 #define WIFI_PASSWORD "replace-me"
 #define MQTT_USERNAME ""
 #define MQTT_PASSWORD ""
+#define DISCOVERY_HMAC_KEY "replace-with-the-same-random-key-as-the-gateway"
 

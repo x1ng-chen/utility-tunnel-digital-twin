@@ -228,7 +228,7 @@ static uint8_t parse_model(const char *line, size_t length, uint32_t received_ms
       !character(&cursor, ',') || !fan(&cursor, &snapshot->fans[1], generated) ||
       !character(&cursor, ']') || !character(&cursor, ',') || !named_key(&cursor, "actuators") ||
       !character(&cursor, '[') || !boolean_value(&cursor, &relay) ||
-      !character(&cursor, ',') || !unsigned_value(&cursor, &led_mode) || led_mode > UI_LED_FLASH ||
+      !character(&cursor, ',') || !unsigned_value(&cursor, &led_mode) || led_mode > UI_LED_CONVERGE ||
       !character(&cursor, ',') || !unsigned_value(&cursor, &brightness) || brightness > 100U ||
       !character(&cursor, ',') || !boolean_value(&cursor, &buzzer) ||
       !character(&cursor, ',') || !boolean_value(&cursor, &muted) ||
@@ -446,7 +446,7 @@ void ScreenSnapshot_Tick(const ScreenSnapshotContext *context, uint32_t now_ms,
     for (index = 0U; index < 2U; ++index) {
       if (snapshot->fans[index].quality == UI_QUALITY_VALID) snapshot->fans[index].quality = UI_QUALITY_STALE;
     }
-    snapshot->connectivity.mqtt = (uint8_t)UI_LINK_UNKNOWN;
+    snapshot->connectivity.node_a = (uint8_t)UI_LINK_OFFLINE;
     snapshot->connectivity.updated_ms = now_ms;
   }
   /* Expire individual readings to missing after the freshness window */

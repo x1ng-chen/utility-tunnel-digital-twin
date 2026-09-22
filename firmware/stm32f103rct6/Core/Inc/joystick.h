@@ -3,19 +3,17 @@
 
 #include <stdint.h>
 
+#include "stm32f1xx_hal.h"
 #include "ui_state.h"
 
 /* Configure Node B's PC0/PC1 ADC inputs and PC4 active-low switch. */
-void Joystick_Init(void);
+void Joystick_Init(ADC_HandleTypeDef *hadc);
 
 /* Capture 16 released-stick samples as the ADC center. */
 void Joystick_Calibrate(void);
 
 /* Sample hardware at the five-millisecond acquisition cadence. */
 UiInputEvent Joystick_Poll(uint32_t now_ms);
-
-/* Route DMA1 Channel1 interrupts to ADC1's circular scan transfer. */
-void Joystick_DmaIrqHandler(void);
 
 /* Feed a raw sample to the production decoder. Kept separate from ADC/GPIO
  * acquisition so deterministic tests and diagnostic adapters use the same

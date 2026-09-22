@@ -32,6 +32,7 @@ CORE_CM3 = DRIVERS / "CMSIS/Include/core_cm3.h"
 SYSTEM_SRC = CORE / "Src/system_stm32f1xx.c"
 NODE_A_SRC = CORE / "Src/node_a.c"
 MSP_SRC = CORE / "Src/stm32f1xx_hal_msp.c"
+NODE_B_BUS_SRC = CORE / "Src/st7735_bus_node_b.c"
 
 
 def read(path):
@@ -40,6 +41,7 @@ def read(path):
 
 NODE_A = read(NODE_A_SRC)
 MSP = read(MSP_SRC)
+NODE_B_BUS = read(NODE_B_BUS_SRC)
 MAIN_H = read(CORE / "Inc/main.h")
 SYSTEM = read(SYSTEM_SRC)
 CONTRACT = read(CORE / "Inc/node_a_clock_contract.h")
@@ -528,7 +530,7 @@ def check_ws2812():
                      CONTRACT, re.MULTILINE), "the zero symbol must stay derived"
     assert "NODE_A_WS2812_PATTERN(NODE_A_WS2812_ZERO_HIGH_BITS)" in CONTRACT
     assert "NODE_A_WS2812_PATTERN(NODE_A_WS2812_ONE_HIGH_BITS)" in CONTRACT
-    for name, expected in (("NODE_A_WS2812_ZERO_PATTERN", 0x20),
+    for name, expected in (("NODE_A_WS2812_ZERO_PATTERN", 0x30),
                            ("NODE_A_WS2812_ONE_PATTERN", 0x3C)):
         high_bits = value(name.replace("_PATTERN", "_HIGH_BITS"))
         assert ((0xFF >> (8 - bits)) & (0xFF << (bits - high_bits))) == expected, name
@@ -561,7 +563,9 @@ def check_i2c_bounds():
     """Prove the software-I2C transfers are bounded in time and in step count."""
     delay_ms = value("NODE_A_SOFT_I2C_DELAY_MS")
     assert delay_ms == 1
-    assert "static void I2c_Delay(void) { HAL_Delay(NODE_A_SOFT_I2C_DELAY_MS); }" in NODE_A
+    i2c_delay = function(NODE_A, "I2c_Delay")
+    assert "Communication_Service();" in i2c_delay
+    assert "HAL_Delay(NODE_A_SOFT_I2C_DELAY_MS);" in i2c_delay
 
     # Fixed delay counts per primitive, derived from the parsed bodies: the bit
     # loop runs eight times and the tail adds the acknowledge or stop edges.
@@ -618,7 +622,7 @@ def check_i2c_bounds():
     assert worst_ms == value("NODE_A_SHT30_WORST_CASE_MS") == 401, worst_ms
     timeout = value("NODE_A_SHT30_TIMEOUT_MS")
     assert timeout > worst_ms, (timeout, worst_ms)
-    assert "HAL_Delay(NODE_A_SHT30_MEASUREMENT_DELAY_MS)" in sht30
+    assert "DelayWithCommunication(NODE_A_SHT30_MEASUREMENT_DELAY_MS)" in sht30
     assert "I2c_Stop(bus); return 0U;" in sht30, "every abort path must release the bus"
 
     for name in ("I2c_ReadRegister16", "I2c_WriteRegister16"):
@@ -659,9 +663,11 @@ def check_i2c_bounds():
         f"unexpected line reader in the I2C drivers: {sorted(readers)}")
     # Delays that the budgets do not model would silently extend the transfers.
     delays = sorted(set(re.findall(r"HAL_Delay\(([^)]+)\)", strip_c_noise(region))))
-    assert delays == ["3U", "INA226_SAMPLE_SETTLE_MS",
-                      "NODE_A_SHT30_MEASUREMENT_DELAY_MS",
-                      "NODE_A_SOFT_I2C_DELAY_MS"], delays
+    assert delays == ["3U", "NODE_A_SOFT_I2C_DELAY_MS"], delays
+    serviced_delays = sorted(set(re.findall(
+        r"DelayWithCommunication\(([^)]+)\)", strip_c_noise(region))))
+    assert serviced_delays == ["INA226_SAMPLE_SETTLE_MS",
+                               "NODE_A_SHT30_MEASUREMENT_DELAY_MS"], serviced_delays
 
     # Everything else on the bus is a fixed-count loop over eight bit slots.
     for name in ("I2c_WriteByte", "I2c_ReadByte"):
@@ -723,12 +729,14 @@ def check_i2c_bounds():
                    + configure.count("I2c_WriteRegister16") * per_write
                    + sample_count * samples.count("I2c_ReadRegister16") * per_read)
 
-    # Settles are derived from the HAL_Delay call sites: the fixed ones in
-    # Configure plus the per-sample settle that the loop repeats, each carrying
-    # the HAL's own overhead tick.
+    # Settles are derived from both raw and communication-serviced delay call
+    # sites: the fixed ones in Configure plus the per-sample settle that the
+    # loop repeats, each carrying the HAL's own overhead tick.
     def delay_calls(body):
         return [value(match.group(1).strip())
-                for match in re.finditer(r"HAL_Delay\(([^)]+)\)", body)]
+                for match in re.finditer(
+                    r"(?:HAL_Delay|DelayWithCommunication)\(([^)]+)\)",
+                    body)]
 
     sample_settle = value("INA226_SAMPLE_SETTLE_MS")
     configure_calls = delay_calls(configure)
@@ -784,7 +792,7 @@ def check_actuator_timing():
         "SMOKE_SAMPLE_INTERVAL_MS": 50, "SMOKE_STABLE_SAMPLE_COUNT": 4,
         "FLAME_SAMPLE_INTERVAL_MS": 50, "FLAME_ALARM_HOLD_MS": 12000,
         "LEVEL_SAMPLE_INTERVAL_MS": 50, "LEVEL_STABLE_SAMPLE_COUNT": 4,
-        "WS2812_PIXEL_COUNT": 9,
+        "WS2812_PIXEL_COUNT": 18,
     }
     for name, wanted in expected.items():
         assert value(name) == wanted, (name, value(name))
@@ -916,10 +924,11 @@ def check_interrupts():
     assert esp and esp.group(1) == "NODE_A_ESP_IRQ_PRIORITY" and esp.group(2) == "0"
     assert "HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);" in NODE_A
     assert "HAL_NVIC_EnableIRQ(USART2_IRQn);" in MSP
-    # Node B keeps its own ADC DMA priority; it must stay inside its own guard.
-    assert "HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 1, 0);" in MSP
-    node_b_guard = MSP[MSP.index("#ifdef NODE_B_FIRMWARE"):]
-    assert "HAL_NVIC_SetPriority(DMA1_Channel1_IRQn" in node_b_guard
+    # Node B keeps its own display DMA priority inside its own adapter: SPI1 TX
+    # is DMA1_Channel3 on STM32F103 (the display contract test pins the same
+    # vector).  The old DMA1_Channel1 expectation predated that assignment.
+    assert "HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 2U, 0U);" in NODE_B_BUS
+    assert "HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);" in NODE_B_BUS
 
     esp_prio = value("NODE_A_ESP_IRQ_PRIORITY")
     tach_prio = value("NODE_A_TACH_IRQ_PRIORITY")

@@ -179,6 +179,29 @@ static int check_display_glyph_coverage(void)
   return 0;
 }
 
+static int check_home_carousel_contract(void)
+{
+  UiState state;
+  UiSnapshot snapshot;
+
+  UiState_Init(&state);
+  (void)memset(&snapshot, 0, sizeof(snapshot));
+  reset_display_recording();
+  UiRenderer_Init();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 0U) == 1U);
+  CHECK(string_was_drawn("KK"));
+  CHECK(string_was_drawn("01/07"));
+
+  state.selected_row = 1U;
+  state.animation_start_ms = 10U;
+  state.animation_end_ms = 150U;
+  reset_display_recording();
+  CHECK(UiRenderer_RenderFrame(&state, &snapshot, 80U) == 1U);
+  CHECK(string_was_drawn("01/07"));
+  CHECK(string_was_drawn("02/07"));
+  return 0;
+}
+
 static int has_full_screen_rect(void)
 {
   uint16_t index;
@@ -214,7 +237,7 @@ static int check_layout_contract(void)
     {UI_MONITOR, "monitor", "classified_monitoring", 4U, "environment"},
     {UI_ALERTS, "alerts", "alarm_center", 1U, "active_alarms"},
     {UI_FANS, "fans", "fan_control", 4U, "fan_1_start_stop_30_60_100"},
-    {UI_LIGHT_SOUND, "light_sound", "led_and_buzzer", 3U, "led_modes_off_white_green_yellow_red_blue_breathe_flash"},
+    {UI_LIGHT_SOUND, "light_sound", "led_and_buzzer", 3U, "led_modes_0_to_15"},
     {UI_NETWORK, "network", "communication_status", 1U, "link_summary"},
     {UI_SETTINGS, "settings", "system_settings", 2U, "display"},
   };
@@ -618,9 +641,11 @@ static int check_interpolation_contract(void)
 {
   CHECK(UiRenderer_InterpolatePixels(34, 54, 100U, 140U, 99U) == 34);
   CHECK(UiRenderer_InterpolatePixels(34, 54, 100U, 140U, 100U) == 34);
-  CHECK(UiRenderer_InterpolatePixels(34, 54, 100U, 140U, 170U) == 44);
+  /* KK_UI cubic-bezier easing advances quickly, then settles without
+   * overshoot.  At half time the Q12 progress is 3302/4096. */
+  CHECK(UiRenderer_InterpolatePixels(34, 54, 100U, 140U, 170U) == 50);
   CHECK(UiRenderer_InterpolatePixels(34, 54, 100U, 140U, 240U) == 54);
-  CHECK(UiRenderer_InterpolatePixels(128, 0, 500U, 180U, 590U) == 64);
+  CHECK(UiRenderer_InterpolatePixels(128, 0, 500U, 180U, 590U) == 25);
   CHECK(UiRenderer_InterpolatePixels(128, 0, 500U, 180U, 680U) == 0);
   CHECK(UiRenderer_InterpolatePixels(10, 30, UINT32_MAX - 20U, 40U, 19U) == 30);
   return 0;
@@ -671,10 +696,10 @@ static int check_dirty_and_cadence_contract(void)
   reset_display_recording();
   CHECK(UiRenderer_RenderFrame(&state, &snapshot, 200U) == 1U);
   UiRenderer_GetStats(&stats);
-  CHECK(stats.last_dirty_rectangles == 2U);
+  CHECK(stats.last_dirty_rectangles == 1U);
   CHECK(stats.last_selection_y == 34);
   CHECK(!has_full_screen_rect());
-  CHECK(!has_page_viewport_rect());
+  CHECK(has_page_viewport_rect());
   frames = stats.rendered_frames;
 
   CHECK(UiRenderer_RenderFrame(&state, &snapshot, 215U) == 0U);
@@ -739,7 +764,7 @@ static int check_page_animation_and_header_delta(void)
 
   state.page = UI_HOME;
   state.animation_start_ms = 200U;
-  state.animation_end_ms = 380U;
+  state.animation_end_ms = 440U;
   reset_display_recording();
   CHECK(UiRenderer_RenderFrame(&state, &snapshot, 200U) == 1U);
   CHECK(string_was_drawn("UP/DN  OK>"));
@@ -834,6 +859,7 @@ int main(void)
 {
   if (check_layout_contract() != 0) return 1;
   if (check_display_glyph_coverage() != 0) return 1;
+  if (check_home_carousel_contract() != 0) return 1;
   if (check_page_name_resolution() != 0) return 1;
   if (check_interpolation_contract() != 0) return 1;
   if (check_dirty_and_cadence_contract() != 0) return 1;

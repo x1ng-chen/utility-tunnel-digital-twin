@@ -1,0 +1,6 @@
+interface:
+  display_name: "KK_UI 移植"
+  short_description: "将 KK_UI 接入 KK_OLED 工程并适配输入、刷新与屏幕布局"
+  default_prompt: "使用 $kk-ui-port 将 KK_UI 安全移植到当前嵌入式工程并完成分层验证。"
+policy:
+  allow_implicit_invocation: true

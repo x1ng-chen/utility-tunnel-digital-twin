@@ -867,7 +867,7 @@ void test_uart_line_limit_and_output_buffer_are_exact() {
   largest.fans[0].quality = Quality::Invalid;
   largest.fans[1].quality = Quality::Invalid;
   largest.actuators.relay_on = false;
-  largest.actuators.led_mode = 7U;
+  largest.actuators.led_mode = 15U;
   largest.actuators.led_brightness_percent = 100U;
   largest.actuators.buzzer_on = false;
   largest.actuators.buzzer_muted = false;

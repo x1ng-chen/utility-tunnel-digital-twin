@@ -1,7 +1,8 @@
 import { createSocket as createDgramSocket } from 'node:dgram';
 import { networkInterfaces } from 'node:os';
+import { createHmac } from 'node:crypto';
 
-const PROTOCOL = 'UT-MQTT-DISCOVERY/1';
+const PROTOCOL = 'UT-MQTT-DISCOVERY/2';
 const DEFAULT_SERVICE_NAME = 'utility-tunnel';
 
 function ipv4ToInteger(address) {
@@ -16,14 +17,19 @@ function integerToIpv4(value) {
   return [24, 16, 8, 0].map((shift) => (value >>> shift) & 0xff).join('.');
 }
 
-export function buildDiscoveryPacket({ mqttPort, serviceName = DEFAULT_SERVICE_NAME }) {
+export function buildDiscoveryPacket({ mqttPort, serviceName = DEFAULT_SERVICE_NAME, hmacKey }) {
   if (!Number.isInteger(mqttPort) || mqttPort < 1 || mqttPort > 65535) {
     throw new RangeError('mqttPort must be an integer from 1 to 65535');
   }
   if (!serviceName || serviceName.includes('|')) {
     throw new Error('serviceName must be non-empty and cannot contain "|"');
   }
-  return Buffer.from(`${PROTOCOL}|${serviceName}|${mqttPort}`, 'utf8');
+  if (typeof hmacKey !== 'string' || hmacKey.length < 16) {
+    throw new Error('hmacKey must contain at least 16 characters');
+  }
+  const signedPrefix = `${PROTOCOL}|${serviceName}|${mqttPort}|`;
+  const signature = createHmac('sha256', hmacKey).update(signedPrefix, 'utf8').digest('hex');
+  return Buffer.from(`${signedPrefix}${signature}`, 'utf8');
 }
 
 export function directedBroadcastAddresses(interfaces = networkInterfaces()) {
@@ -48,6 +54,8 @@ export function startDiscoveryBroadcaster({
   discoveryPort = 4210,
   intervalMs = 3000,
   serviceName = DEFAULT_SERVICE_NAME,
+  hmacKey,
+  unicastTargets = [],
   interfacesProvider = networkInterfaces,
   createSocket = () => createDgramSocket('udp4'),
   setIntervalFn = setInterval,
@@ -64,7 +72,8 @@ export function startDiscoveryBroadcaster({
     throw new RangeError('intervalMs must be an integer of at least 250');
   }
 
-  const packet = buildDiscoveryPacket({ mqttPort, serviceName });
+  const packet = buildDiscoveryPacket({ mqttPort, serviceName, hmacKey });
+  for (const address of unicastTargets) ipv4ToInteger(address);
   if (!Number.isInteger(retryDelayMs) || retryDelayMs < 250 || retryDelayMs > 60000) {
     throw new RangeError('retryDelayMs must be an integer from 250 to 60000');
   }
@@ -77,7 +86,13 @@ export function startDiscoveryBroadcaster({
   const broadcastNow = () => {
     if (closed || !socket) return;
     const activeSocket = socket;
-    const addresses = directedBroadcastAddresses(interfacesProvider());
+    /* Some phone hotspots do not forward client broadcasts even though
+     * client-to-client unicast works.  Send the same authenticated packet to
+     * explicitly configured ESP addresses as a fallback. */
+    const addresses = new Set([
+      ...directedBroadcastAddresses(interfacesProvider()),
+      ...unicastTargets,
+    ]);
     for (const address of addresses) {
       activeSocket.send(packet, discoveryPort, address, (error) => {
         if (error) logger.warn(`MQTT discovery broadcast to ${address} failed: ${error.message}`);

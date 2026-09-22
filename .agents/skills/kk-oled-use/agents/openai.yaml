@@ -1,0 +1,6 @@
+interface:
+  display_name: "KK_OLED 使用"
+  short_description: "使用 KK_OLED 实现界面、动画和可靠刷新"
+  default_prompt: "使用 $kk-oled-use 在当前工程中实现 KK_OLED 界面，并正确处理绘图和刷新状态。"
+policy:
+  allow_implicit_invocation: true

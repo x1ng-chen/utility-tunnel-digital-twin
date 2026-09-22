@@ -52,6 +52,37 @@ export function primaryTwinAlert(assetCode: string, alerts: Alert[]) {
   return activeTwinAlerts(assetCode, alerts)[0] ?? null;
 }
 
+const leakPattern = /泄漏|渗漏|水浸|积水|甲烷|燃气|可燃气/i;
+
+export function alertIndicatesLeak(alert: Alert) {
+  return leakPattern.test(`${alert.category} ${alert.title} ${alert.detail}`);
+}
+
+export function leakCapableAsset(asset: Asset) {
+  return leakPattern.test(`${asset.code} ${asset.name} ${asset.type} ${asset.capabilities.join(' ')}`)
+    || asset.code.startsWith('LEVEL-L')
+    || asset.code === 'GAS-01'
+    || asset.code === 'SEEP-W01';
+}
+
+export function leakPipeNodeNames(asset: Asset) {
+  const code = asset.code.replaceAll('-', '_');
+  const mesh = asset.mesh?.trim();
+  return [
+    `PIPE_${code}`,
+    `PIPE_SEGMENT_${code}`,
+    mesh ? `${mesh}_PIPE` : '',
+    mesh ? mesh.replace(/_PROBE$/i, '_PIPE') : '',
+  ].filter(Boolean);
+}
+
+export function leakPipeLabel(asset: Asset) {
+  if (asset.code === 'GAS-01') return '燃气主管监测段';
+  if (asset.code === 'SEEP-W01') return '排水管渗漏监测段';
+  if (asset.code.startsWith('LEVEL-L')) return asset.name.replace(/^液位\d+\s*·\s*/, '管段 · ');
+  return `${asset.zone} · ${asset.name}关联管段`;
+}
+
 export function resolveTwinVisualState(asset: Asset, alerts: Alert[]): TwinVisualState {
   if (asset.status === 'alarm' || activeTwinAlerts(asset.code, alerts).length) return 'alarm';
   if (asset.status === 'warning') return 'warning';

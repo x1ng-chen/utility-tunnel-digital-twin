@@ -49,7 +49,7 @@ _Static_assert(NODE_A_WS2812_SPI_HZ == 4500000UL,
                "WS2812 SPI must stay at 4.5 MHz on PCLK1 / 8");
 _Static_assert(NODE_A_WS2812_BITS_PER_DATA_BIT == 6U,
                "WS2812 encoding must use six SPI bits per data bit");
-_Static_assert(NODE_A_WS2812_ZERO_PATTERN == 0x20U &&
+_Static_assert(NODE_A_WS2812_ZERO_PATTERN == 0x30U &&
                NODE_A_WS2812_ONE_PATTERN == 0x3CU,
                "WS2812 waveform patterns must preserve pulse widths");
 _Static_assert(NODE_A_WS2812_CELL_NS >= 650ULL &&
@@ -115,8 +115,14 @@ _Static_assert(NODE_A_LOW_ALARM_STATE(1U, 40U, 36U, 40U) == 0U,
                "low alarm must clear at the off threshold");
 _Static_assert(NODE_A_OPERATIONAL_GAS_ALARM(1U, 0U, 1U) == 0U,
                "uncalibrated oxygen and CO channels must not drive actuators");
-_Static_assert(NODE_A_OPERATIONAL_GAS_ALARM(0U, 1U, 0U) == 1U,
-               "the bench-verified methane channel must still drive the alarm");
+_Static_assert(NODE_A_METHANE_SAFETY_COMMISSIONED == 0U,
+               "MQ4-01 safety must stay disabled for the LED-and-ESP bench setup");
+_Static_assert(NODE_A_OXYGEN_SAFETY_COMMISSIONED == 0U,
+               "oxygen alarms must stay disabled before calibration");
+_Static_assert(NODE_A_CO_SAFETY_COMMISSIONED == 0U,
+               "CO alarms must stay disabled before calibration");
+_Static_assert(NODE_A_OPERATIONAL_GAS_ALARM(0U, 1U, 0U) == 0U,
+               "an uncommissioned methane input must not force the safety path");
 _Static_assert(NODE_A_GAS_VENTILATION_HOLD_MS == 30000U,
                "gas ventilation must continue for 30 seconds after clear");
 _Static_assert(NODE_A_GAS_VENTILATION_SHOULD_RUN(1U, 0U, 0U) == 1U,

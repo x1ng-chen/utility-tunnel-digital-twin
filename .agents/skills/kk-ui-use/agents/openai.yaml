@@ -1,0 +1,6 @@
+interface:
+  display_name: "KK_UI 使用"
+  short_description: "使用现有 KK_UI 能力构建菜单、页面、事件和提示"
+  default_prompt: "使用 $kk-ui-use 在当前工程中实现所需菜单与页面，并保持核心边界。"
+policy:
+  allow_implicit_invocation: true

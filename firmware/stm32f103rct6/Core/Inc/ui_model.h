@@ -52,6 +52,14 @@ typedef enum {
   UI_LED_BLUE,
   UI_LED_BREATHE,
   UI_LED_FLASH,
+  UI_LED_FIRE,
+  UI_LED_ENERGY,
+  UI_LED_POLICE,
+  UI_LED_AURORA,
+  UI_LED_LASER,
+  UI_LED_LIGHTNING,
+  UI_LED_STARS,
+  UI_LED_CONVERGE,
 } UiLedMode;
 
 typedef enum {

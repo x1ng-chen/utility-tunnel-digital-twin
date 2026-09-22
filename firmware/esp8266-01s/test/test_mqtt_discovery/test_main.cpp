@@ -5,11 +5,13 @@
 #include "mqtt_discovery.h"
 
 void test_accepts_valid_packet_and_uses_sender_address() {
-  const char packet[] = "UT-MQTT-DISCOVERY/1|utility-tunnel|1884";
+  const char packet[] = "UT-MQTT-DISCOVERY/2|utility-tunnel|1884|0ecd20b0b1069e60760f442846cbdfd028600e21a6f442b385c9de05636671ff";
   const uint8_t sender[] = {10, 249, 215, 113};
   BrokerEndpoint endpoint{};
 
-  TEST_ASSERT_TRUE(parseDiscoveryPacket(packet, std::strlen(packet), sender, &endpoint));
+  const char key[] = "bench-discovery-key";
+  TEST_ASSERT_TRUE(parseDiscoveryPacket(packet, std::strlen(packet), sender,
+                                        key, std::strlen(key), &endpoint));
   TEST_ASSERT_EQUAL_UINT8_ARRAY(sender, endpoint.address, 4);
   TEST_ASSERT_EQUAL_UINT16(1884, endpoint.port);
 }
@@ -17,13 +19,15 @@ void test_accepts_valid_packet_and_uses_sender_address() {
 void test_rejects_wrong_service_version_and_invalid_port() {
   const uint8_t sender[] = {10, 0, 0, 2};
   BrokerEndpoint endpoint{};
-  const char wrongService[] = "UT-MQTT-DISCOVERY/1|other-service|1884";
-  const char wrongVersion[] = "UT-MQTT-DISCOVERY/2|utility-tunnel|1884";
-  const char invalidPort[] = "UT-MQTT-DISCOVERY/1|utility-tunnel|70000";
+  const char wrongService[] = "UT-MQTT-DISCOVERY/2|other-service|1884|0ecd20b0b1069e60760f442846cbdfd028600e21a6f442b385c9de05636671ff";
+  const char wrongVersion[] = "UT-MQTT-DISCOVERY/1|utility-tunnel|1884";
+  const char invalidPort[] = "UT-MQTT-DISCOVERY/2|utility-tunnel|70000|0ecd20b0b1069e60760f442846cbdfd028600e21a6f442b385c9de05636671ff";
+  const char key[] = "bench-discovery-key";
 
-  TEST_ASSERT_FALSE(parseDiscoveryPacket(wrongService, std::strlen(wrongService), sender, &endpoint));
-  TEST_ASSERT_FALSE(parseDiscoveryPacket(wrongVersion, std::strlen(wrongVersion), sender, &endpoint));
-  TEST_ASSERT_FALSE(parseDiscoveryPacket(invalidPort, std::strlen(invalidPort), sender, &endpoint));
+  TEST_ASSERT_FALSE(parseDiscoveryPacket(wrongService, std::strlen(wrongService), sender, key, std::strlen(key), &endpoint));
+  TEST_ASSERT_FALSE(parseDiscoveryPacket(wrongVersion, std::strlen(wrongVersion), sender, key, std::strlen(key), &endpoint));
+  TEST_ASSERT_FALSE(parseDiscoveryPacket(invalidPort, std::strlen(invalidPort), sender, key, std::strlen(key), &endpoint));
+  TEST_ASSERT_FALSE(parseDiscoveryPacket(wrongService, std::strlen(wrongService), sender, "", 0U, &endpoint));
 }
 
 void test_validates_persisted_endpoint_with_crc() {

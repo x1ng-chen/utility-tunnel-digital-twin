@@ -61,6 +61,14 @@ typedef enum {
   NODE_A_LED_BLUE,
   NODE_A_LED_BREATHE,
   NODE_A_LED_FLASH,
+  NODE_A_LED_FIRE,
+  NODE_A_LED_ENERGY,
+  NODE_A_LED_POLICE,
+  NODE_A_LED_AURORA,
+  NODE_A_LED_LASER,
+  NODE_A_LED_LIGHTNING,
+  NODE_A_LED_STARS,
+  NODE_A_LED_CONVERGE,
 } NodeALedMode;
 
 /* The active local safety model.  Only the methane channel drives automatic
