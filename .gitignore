@@ -30,6 +30,7 @@ dist/
 !firmware/stm32f103rct6/.vscode/tasks.json
 .DS_Store
 Thumbs.db
+hardware/carrier32/*.kicad_prl
 
 # Blender automatic recovery files and local scratch scenes
 *.blend1
