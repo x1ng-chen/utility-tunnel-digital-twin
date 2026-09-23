@@ -98,9 +98,15 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
 
     __HAL_RCC_GPIOC_CLK_ENABLE();
     /**ADC1 GPIO Configuration
-    PC0     ------> ADC1_IN10
+    PC1     ------> ADC1_IN11 (Node A AO-02 oxygen trial)
+    PC2     ------> ADC1_IN12 (Node A MQ methane analog output)
+    PC0     ------> ADC1_IN10 (legacy bench image)
     */
+#ifdef NODE_A_FIRMWARE
+    GPIO_InitStruct.Pin = GPIO_PIN_1 | GPIO_PIN_2;
+#else
     GPIO_InitStruct.Pin = GPIO_PIN_0;
+#endif
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
@@ -128,10 +134,12 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* hadc)
     /* Peripheral clock disable */
     __HAL_RCC_ADC1_CLK_DISABLE();
 
-    /**ADC1 GPIO Configuration
-    PC0     ------> ADC1_IN10
-    */
+    /**ADC1 GPIO Configuration */
+#ifdef NODE_A_FIRMWARE
+    HAL_GPIO_DeInit(GPIOC, GPIO_PIN_1 | GPIO_PIN_2);
+#else
     HAL_GPIO_DeInit(GPIOC, GPIO_PIN_0);
+#endif
 
     /* USER CODE BEGIN ADC1_MspDeInit 1 */
 

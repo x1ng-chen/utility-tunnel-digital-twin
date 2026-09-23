@@ -1,9 +1,11 @@
 import io
+import csv
 import json
 import struct
 import tempfile
 from datetime import datetime, timedelta
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -17,7 +19,7 @@ from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 from config.settings import parse_origins
-from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder
+from .models import Alert, Asset, AuditLog, ControllerCommandConfirmation, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder
 
 
 class OperationsApiTests(TestCase):
@@ -33,6 +35,56 @@ class OperationsApiTests(TestCase):
 
     def auth(self, user):
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {Token.objects.get_or_create(user=user)[0].key}')
+
+    def controller_confirmation(self, action, duty_percent=None):
+        payload = {'action': action}
+        if duty_percent is not None:
+            payload['dutyPercent'] = duty_percent
+        response = self.client.post('/api/controllers/CTRL-01/commands/confirmations/', payload, format='json')
+        self.assertEqual(response.status_code, 201)
+        return response.json()['confirmationToken']
+
+    def test_alert_history_filters_by_device_and_time(self):
+        other = Asset.objects.create(code='OTHER', name='其他设备', zone='UT-ZA', asset_type='测点')
+        Alert.objects.create(code='OTHER-ALERT', asset=other, severity='warning', category='设备', title='其他事件', detail='', opened_at='2026-08-26T00:00:00Z')
+        self.auth(self.operator)
+        result = self.client.get('/api/alerts/', {'assetCode': self.asset.code, 'openedFrom': '2026-08-25T00:00:00Z', 'openedTo': '2026-08-27T00:00:00Z'})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual([item['code'] for item in result.json()['items']], ['ALM-1'])
+        self.assertEqual(result.json()['total'], 1)
+        self.assertEqual(self.client.get('/api/alerts/', {'assetCode': 'missing'}).json()['total'], 0)
+        self.assertEqual(self.client.get('/api/alerts/', {'assetCode': self.asset.code, 'openedFrom': '2026-08-27T00:00:00Z'}).json()['total'], 0)
+
+    def test_alert_history_device_set_is_filtered_before_pagination(self):
+        other = Asset.objects.create(code='OTHER', name='其他设备', zone='UT-ZA', asset_type='测点')
+        Alert.objects.bulk_create([
+            Alert(code=f'UNRELATED-{index}', asset=other, severity='warning', category='设备', title='其他事件', detail='', opened_at=timezone.now())
+            for index in range(105)
+        ])
+        self.auth(self.operator)
+        result = self.client.get('/api/alerts/', {'assetCodes': f'{self.asset.code},UNKNOWN', 'pageSize': 100})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()['total'], 1)
+        self.assertEqual(result.json()['items'][0]['code'], 'ALM-1')
+        for value in ['', 'FAN-01,', ',FAN-01', ','.join(['X'] * 101)]:
+            self.assertEqual(self.client.get('/api/alerts/', {'assetCodes': value}).status_code, 400)
+
+    def test_alerts_paginate_beyond_one_hundred_without_overlap(self):
+        page_asset = Asset.objects.create(code='PAGE-ASSET', name='分页资产', zone='UT-ZA', asset_type='测点')
+        Alert.objects.bulk_create([
+            Alert(code=f'PAGE-{index}', asset=page_asset, severity='warning', category='设备', title='分页', detail='', opened_at=timezone.now())
+            for index in range(101)
+        ])
+        self.auth(self.operator)
+        page1 = self.client.get('/api/alerts/', {'assetCode': page_asset.code, 'page': 1, 'pageSize': 100}).json()
+        page2 = self.client.get('/api/alerts/', {'assetCode': page_asset.code, 'page': 2, 'pageSize': 100}).json()
+        ids1 = [item['id'] for item in page1['items']]
+        ids2 = [item['id'] for item in page2['items']]
+        self.assertEqual(page1['total'], 101)
+        self.assertEqual(len(ids1), 100)
+        self.assertEqual(len(ids2), 1)
+        self.assertEqual(ids1, sorted(ids1, reverse=True))
+        self.assertFalse(set(ids1) & set(ids2))
 
     def test_health_is_public(self):
         response = self.client.get('/api/health/')
@@ -83,6 +135,130 @@ class OperationsApiTests(TestCase):
         response = self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'demo-password'}, format='json')
         self.assertEqual(response.status_code, 200)
         self.assertIn('accessToken', response.json())
+
+    @patch('operations.views.publish_controller_command')
+    def test_operator_can_send_audited_controller_led_command(self, publish_command):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        publish_command.return_value = {
+            'schema': 'ut.command.ack.v1', 'cmdId': 'platform-command', 'status': 'accepted', 'reason': 'led_blue',
+        }
+        self.auth(self.operator)
+
+        token = self.controller_confirmation('led_blue')
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_blue', 'confirmationToken': token}, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['delivery'], 'acknowledged')
+        command = publish_command.call_args.args[0]
+        self.assertEqual(command['schema'], 'ut.command.v1')
+        self.assertEqual(command['action'], 'led_blue')
+        self.assertEqual(command['ttlMs'], 10000)
+        self.assertTrue(command['cmdId'].startswith('platform-'))
+        self.assertTrue(AuditLog.objects.filter(action='controller.command.sent', resource_id='CTRL-01').exists())
+
+    @patch('operations.views.publish_controller_command')
+    def test_operator_can_start_the_fan_with_the_bounded_relay_command(self, publish_command):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        publish_command.return_value = {
+            'schema': 'ut.command.ack.v1', 'cmdId': 'platform-command', 'status': 'accepted', 'reason': 'relay_active',
+        }
+        self.auth(self.operator)
+
+        token = self.controller_confirmation('relay_on')
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'relay_on', 'confirmationToken': token}, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        command = publish_command.call_args.args[0]
+        self.assertEqual(command['action'], 'relay_on')
+        self.assertEqual(command['ttlMs'], 10000)
+
+    @patch('operations.views.publish_controller_command')
+    def test_operator_can_set_validated_fan_pwm(self, publish_command):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        publish_command.return_value = {
+            'schema': 'ut.command.ack.v1', 'cmdId': 'platform-command', 'status': 'accepted', 'reason': 'fan_pwm_set',
+        }
+        self.auth(self.operator)
+
+        token = self.controller_confirmation('fan_pwm', 60)
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'fan_pwm', 'dutyPercent': 60, 'confirmationToken': token}, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        command = publish_command.call_args.args[0]
+        self.assertEqual(command['action'], 'fan_pwm')
+        self.assertEqual(command['dutyPercent'], 60)
+
+    @patch('operations.views.publish_controller_command')
+    def test_operator_can_set_validated_second_fan_pwm(self, publish_command):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        publish_command.return_value = {
+            'schema': 'ut.command.ack.v1', 'cmdId': 'platform-command', 'status': 'accepted', 'reason': 'fan2_pwm_set',
+        }
+        self.auth(self.operator)
+
+        token = self.controller_confirmation('fan2_pwm', 30)
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'fan2_pwm', 'dutyPercent': 30, 'confirmationToken': token}, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        command = publish_command.call_args.args[0]
+        self.assertEqual(command['action'], 'fan2_pwm')
+        self.assertEqual(command['dutyPercent'], 30)
+
+    def test_fan_pwm_rejects_out_of_range_duty(self):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        self.auth(self.operator)
+
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'fan_pwm', 'dutyPercent': 101}, format='json')
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_second_fan_pwm_rejects_missing_duty(self):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        self.auth(self.operator)
+
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'fan2_pwm'}, format='json')
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_controller_command_rejects_missing_replayed_and_mismatched_confirmation(self):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        self.auth(self.operator)
+        missing = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_blue'}, format='json')
+        self.assertEqual(missing.status_code, 409)
+        self.assertEqual(missing.json()['error'], 'confirmation_required')
+
+        token = self.controller_confirmation('led_blue')
+        mismatched = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_green', 'confirmationToken': token}, format='json')
+        self.assertEqual(mismatched.status_code, 409)
+        with patch('operations.views.publish_controller_command', return_value=None):
+            accepted = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_blue', 'confirmationToken': token}, format='json')
+        self.assertEqual(accepted.status_code, 201)
+        replayed = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_blue', 'confirmationToken': token}, format='json')
+        self.assertEqual(replayed.status_code, 409)
+
+    def test_controller_confirmation_is_bound_to_operator_and_expiry(self):
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        self.auth(self.operator)
+        other_user_token = self.controller_confirmation('relay_off')
+        self.auth(self.admin)
+        other_user = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'relay_off', 'confirmationToken': other_user_token}, format='json')
+        self.assertEqual(other_user.status_code, 409)
+
+        self.auth(self.operator)
+        expired_token = self.controller_confirmation('relay_off')
+        ControllerCommandConfirmation.objects.filter(user=self.operator, action='relay_off', consumed_at__isnull=True).update(expires_at=timezone.now() - timedelta(seconds=1))
+        expired = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'relay_off', 'confirmationToken': expired_token}, format='json')
+        self.assertEqual(expired.status_code, 409)
+
+    def test_viewer_cannot_send_controller_command(self):
+        viewer = User.objects.create_user(username='viewer@example.com', email='viewer@example.com', password='demo-password')
+        Profile.objects.create(user=viewer, display_name='查看者', role=Profile.Role.VIEWER)
+        Asset.objects.create(code='CTRL-01', name='主控', zone='CTRL', asset_type='控制器')
+        self.auth(viewer)
+
+        response = self.client.post('/api/controllers/CTRL-01/commands/', {'action': 'led_blue'}, format='json')
+
+        self.assertEqual(response.status_code, 403)
 
     @override_settings(API_TOKEN_TTL_SECONDS=900, API_TOKEN_RENEWAL_WINDOW_SECONDS=60)
     def test_login_rotates_a_token_that_is_about_to_expire(self):
@@ -313,6 +489,59 @@ class OperationsApiTests(TestCase):
             self.assertEqual(self.client.post('/api/auth/login/', {'email': self.operator.email, 'password': 'wrong-password'}, format='json').status_code, 401)
         finally:
             cache.clear()
+
+    def test_telemetry_export_contains_full_history_and_immutable_snapshot(self):
+        Telemetry.objects.bulk_create([
+            Telemetry(asset=self.asset, event_id=f'csv-{i}', metric_key='temperature',
+                      metric='=unsafe', value=i, unit='°C', quality='good', recorded_at=timezone.now())
+            for i in range(125)
+        ])
+        self.auth(self.operator)
+        response = self.client.post('/api/report-exports/', {'report': 'telemetry'}, format='json', HTTP_IDEMPOTENCY_KEY='history-csv-1')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['rowCount'], 125)
+        path = f"/api/report-exports/{response.json()['id']}/download/"
+        download = self.client.get(path)
+        self.assertEqual(download.status_code, 200)
+        rows = list(csv.DictReader(io.StringIO(download.content.decode('utf-8-sig'))))
+        self.assertEqual(len(rows), 125)
+        self.assertEqual(rows[0]['asset__code'], self.asset.code)
+        self.assertEqual(rows[0]['metric'], "'=unsafe")
+        self.assertIn('ingested_at', rows[0])
+        other_asset = Asset.objects.create(code='CSV-OTHER', name='导出隔离设备', zone='UT-ZA', asset_type='测试')
+        Telemetry.objects.create(asset=other_asset, event_id='csv-other', metric_key='temperature', metric='环境温度', value=99, unit='°C', quality='good', recorded_at=timezone.now())
+        filtered = self.client.post('/api/report-exports/', {
+            'report': 'telemetry',
+            'filters': {'assetCode': self.asset.code, 'metricKey': 'temperature', 'quality': 'good'},
+        }, format='json', HTTP_IDEMPOTENCY_KEY='history-csv-filtered-1')
+        self.assertEqual(filtered.status_code, 201)
+        self.assertEqual(filtered.json()['filters'], {'assetCode': self.asset.code, 'metricKey': 'temperature', 'quality': 'good'})
+        self.assertEqual(filtered.json()['rowCount'], 125)
+        filtered_download = self.client.get(f"/api/report-exports/{filtered.json()['id']}/download/")
+        filtered_rows = list(csv.DictReader(io.StringIO(filtered_download.content.decode('utf-8-sig'))))
+        self.assertEqual({row['asset__code'] for row in filtered_rows}, {self.asset.code})
+        repeated_filtered = self.client.post('/api/report-exports/', {
+            'report': 'telemetry',
+            'filters': {'quality': 'good', 'metricKey': 'temperature', 'assetCode': self.asset.code},
+        }, format='json', HTTP_IDEMPOTENCY_KEY='history-csv-filtered-1')
+        self.assertEqual(repeated_filtered.status_code, 200)
+        self.assertEqual(repeated_filtered.json()['id'], filtered.json()['id'])
+        self.assertEqual(self.client.post('/api/report-exports/', {
+            'report': 'telemetry', 'filters': {'assetCode': other_asset.code},
+        }, format='json', HTTP_IDEMPOTENCY_KEY='history-csv-filtered-1').status_code, 409)
+        self.assertEqual(self.client.post('/api/report-exports/', {
+            'report': 'telemetry', 'filters': {'unknown': 'value'},
+        }, format='json').status_code, 400)
+        Telemetry.objects.all().delete()
+        self.assertEqual(self.client.get(path).content, download.content)
+        repeated = self.client.post('/api/report-exports/', {'report': 'telemetry'}, format='json', HTTP_IDEMPOTENCY_KEY='history-csv-1')
+        self.assertEqual(repeated.json()['id'], response.json()['id'])
+        outsider = User.objects.create_user(username='outsider')
+        Profile.objects.create(user=outsider, display_name='查看者', role=Profile.Role.VIEWER)
+        self.auth(outsider)
+        self.assertEqual(self.client.get(path).status_code, 403)
+        self.client.credentials()
+        self.assertIn(self.client.post('/api/report-exports/', {'report': 'telemetry'}, format='json').status_code, [401, 403])
 
     def test_read_api_contract_and_report_export(self):
         threshold = Threshold.objects.create(key='temperature', label='温度', warning=28, alarm=32, unit='°C')
@@ -878,7 +1107,21 @@ class OperationsApiTests(TestCase):
         self.auth(self.operator)
         self.assertEqual(self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.COMPLETED}, format='json').status_code, 403)
         self.auth(self.admin)
-        self.assertEqual(self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.COMPLETED}, format='json').status_code, 200)
+        response = self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.COMPLETED, 'note': '复核通过，设备反馈恢复正常。'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['timeline'][0]['note'], '复核通过，设备反馈恢复正常。')
+
+    def test_work_order_review_requires_note_and_exposes_timeline(self):
+        order = WorkOrder.objects.create(code='WO-TIMELINE', asset=self.asset, title='处置留痕', status=WorkOrder.Status.IN_PROGRESS, created_by=self.operator)
+        self.auth(self.operator)
+        missing = self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.PENDING_REVIEW}, format='json')
+        self.assertEqual(missing.status_code, 400)
+        response = self.client.post(f'/api/work-orders/{order.pk}/transition/', {'to': WorkOrder.Status.PENDING_REVIEW, 'note': '已复位控制器并连续观察十分钟。'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        event = response.json()['timeline'][0]
+        self.assertEqual(event['fromStatus'], WorkOrder.Status.IN_PROGRESS)
+        self.assertEqual(event['toStatus'], WorkOrder.Status.PENDING_REVIEW)
+        self.assertEqual(event['actorName'], self.operator.email)
 
     def test_work_order_transition_rejects_stale_version(self):
         order = WorkOrder.objects.create(code='WO-VERSION', asset=self.asset, title='版本校验', status=WorkOrder.Status.OPEN, created_by=self.operator)
@@ -950,6 +1193,15 @@ class OperationsApiTests(TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertFalse(ReportExport.objects.filter(report_type='daily').exists())
 
+    def test_report_export_concurrent_key_cannot_return_another_report_type(self):
+        self.auth(self.operator)
+        conflicting = SimpleNamespace(requested_by_id=self.operator.pk, report_type='assets')
+        with patch('operations.views.ReportExport.objects.filter') as lookup, patch('operations.views._build_report_csv', side_effect=IntegrityError('concurrent key')):
+            lookup.return_value.first.side_effect = [None, conflicting]
+            response = self.client.post('/api/report-exports/', {'report': 'telemetry'}, format='json', HTTP_IDEMPOTENCY_KEY='racing-report')
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(ReportExport.objects.count(), 0)
+
     def test_report_export_is_idempotent(self):
         self.auth(self.operator)
         first = self.client.post('/api/report-exports/', {'report': 'daily'}, format='json', HTTP_IDEMPOTENCY_KEY='report-export-001')
@@ -988,13 +1240,14 @@ class OperationsApiTests(TestCase):
     def test_seed_demo_assigns_distinct_twin_positions(self):
         call_command('seed_demo', stdout=io.StringIO())
         self.assertTrue(User.objects.get(username='admin').check_password('123'))
-        positions = list(Asset.objects.values_list('code', 'position'))
-        self.assertEqual(len(positions), 13)
-        self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 13)
+        self.assertEqual(Asset.objects.count(), 19)
+        positions = list(Asset.objects.exclude(code__startswith='LEVEL-L').values_list('code', 'position'))
+        self.assertEqual(len(positions), 14)
+        self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 14)
         water = Asset.objects.get(hardware_code='H-04')
         self.assertEqual(water.integration_status, Asset.IntegrationStatus.CALIBRATION_REQUIRED)
         self.assertEqual(float(water.latitude), 31.230505)
-        self.assertEqual(Asset.objects.filter(latitude__isnull=False, longitude__isnull=False).count(), 13)
+        self.assertEqual(Asset.objects.filter(latitude__isnull=False, longitude__isnull=False).count(), 14)
 
     def test_e2e_cleanup_removes_legacy_and_timestamped_twin_test_assets(self):
         Asset.objects.create(code='ENV-E2E', name='旧版回归资产', zone='UT-ZA', asset_type='测试')
@@ -1181,4 +1434,4 @@ class OperationsApiTests(TestCase):
         self.assertIsNone(order.completed_at)
         self.assertIsNone(order.reviewed_by)
         self.assertEqual(order.version, 1)
-        self.assertEqual(HardwareBinding.objects.filter(status=HardwareBinding.Status.RESERVED).count(), 13)
+        self.assertEqual(HardwareBinding.objects.filter(status=HardwareBinding.Status.RESERVED).count(), 19)

@@ -7,5 +7,6 @@ import './assets/experience.css';
 import './assets/twin-links.css';
 import './assets/priority-upgrades.css';
 import './assets/tactical.css';
+import './assets/command-center.css';
 
 createApp(App).use(createPinia()).use(router).mount('#app');

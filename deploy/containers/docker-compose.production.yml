@@ -15,6 +15,7 @@ services:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set-in-secret-store}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?set-public-api-host}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set-public-web-origin}
+      WEBSOCKET_ALLOWED_ORIGINS: ${WEBSOCKET_ALLOWED_ORIGINS:-}
       DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:?set-public-web-origin}
       DATABASE_URL: ${DATABASE_URL:?set-rds-tls-connection-string}
       DJANGO_CACHE_BACKEND: ${DJANGO_CACHE_BACKEND:?set-shared-cache-backend}
@@ -22,6 +23,10 @@ services:
       DJANGO_SECURE_SSL_REDIRECT: "true"
       DJANGO_ENABLE_HSTS: "true"
       DJANGO_TRUST_PROXY_SSL: "true"
+      # Nginx constructs the secure-scheme header on the loopback-only hop;
+      # do not let an arbitrary forwarded client address affect API throttles.
+      DJANGO_TRUST_PROXY_HEADERS: "false"
+      CONNECTIVITY_MONITOR_TOKEN: ${CONNECTIVITY_MONITOR_TOKEN:?set-monitor-token-in-secret-store}
       APP_VERSION: ${APP_VERSION:-0.6.0}
       APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
       DEVICE_OFFLINE_GRACE_MULTIPLIER: ${DEVICE_OFFLINE_GRACE_MULTIPLIER:-3}
@@ -59,9 +64,12 @@ services:
       DJANGO_SECURE_SSL_REDIRECT: "true"
       DJANGO_ENABLE_HSTS: "true"
       DJANGO_TRUST_PROXY_SSL: "true"
+      CONNECTIVITY_MONITOR_TOKEN: ${CONNECTIVITY_MONITOR_TOKEN:?set-monitor-token-in-secret-store}
+      CONNECTIVITY_MONITOR_URL: http://api:8000/api/internal/connectivity/reconcile/
+      CONNECTIVITY_RECONCILE_INTERVAL_SECONDS: ${CONNECTIVITY_RECONCILE_INTERVAL_SECONDS:-15}
       DEVICE_OFFLINE_GRACE_MULTIPLIER: ${DEVICE_OFFLINE_GRACE_MULTIPLIER:-3}
       DEVICE_OFFLINE_MIN_GRACE_SECONDS: ${DEVICE_OFFLINE_MIN_GRACE_SECONDS:-15}
-    command: ["sh", "-c", "while true; do python manage.py reconcile_connectivity; sleep $${CONNECTIVITY_RECONCILE_INTERVAL_SECONDS:-15}; done"]
+    command: ["python", "manage.py", "run_connectivity_monitor"]
     healthcheck:
       disable: true
     deploy:

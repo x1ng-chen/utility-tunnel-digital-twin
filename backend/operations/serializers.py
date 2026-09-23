@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder
+from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder, WorkOrderEvent
 
 
 class AssetSerializer(serializers.ModelSerializer):
@@ -305,6 +305,23 @@ class AlertSerializer(serializers.ModelSerializer):
         return obj.acknowledged_by.get_full_name() or obj.acknowledged_by.email if obj.acknowledged_by else None
 
 
+class WorkOrderEventSerializer(serializers.ModelSerializer):
+    eventType = serializers.CharField(source='event_type', read_only=True)
+    fromStatus = serializers.CharField(source='from_status', read_only=True)
+    toStatus = serializers.CharField(source='to_status', read_only=True)
+    actorName = serializers.SerializerMethodField()
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+
+    class Meta:
+        model = WorkOrderEvent
+        fields = ['id', 'eventType', 'fromStatus', 'toStatus', 'note', 'actorName', 'createdAt']
+
+    def get_actorName(self, obj):
+        if not obj.actor:
+            return '系统'
+        return obj.actor.get_full_name() or obj.actor.email or obj.actor.username
+
+
 class WorkOrderSerializer(serializers.ModelSerializer):
     sourceAlertId = serializers.IntegerField(source='source_alert_id', allow_null=True, read_only=True)
     assetCode = serializers.CharField(source='asset.code', read_only=True)
@@ -315,10 +332,11 @@ class WorkOrderSerializer(serializers.ModelSerializer):
     completedAt = serializers.DateTimeField(source='completed_at', allow_null=True, read_only=True)
     slaStatus = serializers.SerializerMethodField()
     remainingMinutes = serializers.SerializerMethodField()
+    timeline = WorkOrderEventSerializer(source='events', many=True, read_only=True)
 
     class Meta:
         model = WorkOrder
-        fields = ['id', 'code', 'sourceAlertId', 'assetCode', 'title', 'description', 'priority', 'status', 'assigneeName', 'dueAt', 'completedAt', 'slaStatus', 'remainingMinutes', 'createdAt', 'updatedAt', 'version']
+        fields = ['id', 'code', 'sourceAlertId', 'assetCode', 'title', 'description', 'priority', 'status', 'assigneeName', 'dueAt', 'completedAt', 'slaStatus', 'remainingMinutes', 'createdAt', 'updatedAt', 'version', 'timeline']
 
     def get_assigneeName(self, obj):
         return obj.assignee.get_full_name() or obj.assignee.email if obj.assignee else None
@@ -436,10 +454,11 @@ class ReportExportSerializer(serializers.ModelSerializer):
     completedAt = serializers.DateTimeField(source='completed_at', read_only=True)
     contentSha256 = serializers.CharField(source='content_sha256', read_only=True)
     rowCount = serializers.IntegerField(source='row_count', read_only=True)
+    filters = serializers.JSONField(read_only=True)
 
     class Meta:
         model = ReportExport
-        fields = ['id', 'reportType', 'status', 'fileName', 'contentSha256', 'rowCount', 'createdAt', 'completedAt']
+        fields = ['id', 'reportType', 'status', 'fileName', 'filters', 'contentSha256', 'rowCount', 'createdAt', 'completedAt']
 
 
 class AdminUserSerializer(serializers.ModelSerializer):

@@ -1,0 +1,14 @@
+{
+  "sourceCommit": "07911b211550043ab5f91190e038368f4b07c058",
+  "postGenerationCorrection": "用户已确认DCP-3620为80x40x50mm水泵，DC24V气泵另计一台；下列用途未知项为生成时历史，现由pump-reference-2026-09-10.md取代。几何未按实物更新。",
+  "authorization": "按计划数量做",
+  "source": "V3.6计划书数量，双节点以GitHub最新硬件记录覆盖旧版单主控",
+  "stage": "从零装配设计候选，不是制造定版",
+  "latestRequirements": "环境传感器沿环形独立分散布设；包含水泵与气泵；不可重叠缺失。气泵依据项目历史气路记录增加一台，型号待核验，不能与DCP-3620直接等同。",
+  "layoutAssumption": "保留环形形式；为35个主传感测点采用1.68m×1.10m展示包络，实际加工尺寸待确认",
+  "sensorCounts": {"SHT30":5,"MQ4":5,"MQ7":5,"ME2O2":5,"MQ2":5,"FLAME":5,"FSIR02":5},
+  "equipmentCounts": {"STM32":2,"ESP8266":2,"TFT":1,"FAN120":2,"LEAK":2,"FLOAT":1,"DOOR_CONTACT":1,"HEATER":1,"BUZZER":1,"LED_STRIP":1,"INA219":1,"RELAY":1,"POWER_SET":1,"INTERFACE":2,"TRAY":1,"SIMULATOR":1,"PUMP24":1,"AIR_PUMP":1,"K210":1,"VOICE":1,"ADC_CONDITIONING":1,"I2C_MUX":1,"MQ_DRIVER":15,"FAN_INTERFACE":2},
+  "unresolved": ["DCP-3620×1仅登记，不臆造实体外形/接线", "K210摄像头及SU-03T1附件待实物核验", "ADC通道/电路、探头螺纹孔径、风机孔距、泵口尺寸及线束长度未冻结"],
+  "rules": ["所有型号未测外形均为近似设计表达", "5个液位探头分别测不同管段", "环境传感器暴露于管廊空气，不塞进水管", "计划硬件不等于已接入或验收", "24V水路为未投运设计，禁止据模型通电通水", "旧模型保留，不推送不替换网页V07"],
+  "evidence": ["hero","front","back","left","right","top","station","water","controls","fresh_import"]
+}

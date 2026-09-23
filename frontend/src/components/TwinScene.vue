@@ -5,9 +5,10 @@ import { Box3, BoxGeometry, Color, DirectionalLight, Fog, Group, HemisphereLight
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Alert, Asset } from '../types';
+import { cameraFitDistance } from '../utils/cameraFit';
 import { modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
 
-const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string }>();
+const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string; modelEnabled?: boolean }>();
 const emit = defineEmits<{ select: [code: string]; modelReport: [report: TwinModelBindingReport] }>();
 const host = ref<HTMLDivElement>();
 const modelState = ref<'loading' | 'loaded' | 'fallback'>('loading');
@@ -20,11 +21,17 @@ let camera: PerspectiveCamera | undefined;
 let renderer: WebGLRenderer | undefined;
 let controls: OrbitControls | undefined;
 let frame = 0;
+let lastRenderedAt = 0;
 let resizeObserver: ResizeObserver | undefined;
 const raycaster = new Raycaster();
 const pointer = new Vector2();
 const assetObjects = new Map<string, Object3D>();
-const animatedObjects = new Map<string, Object3D>();
+// Cache the materials that need a live emissive pulse while the model is
+// bound. Traversing a full Blender scene for every asset on every animation
+// frame is prohibitively expensive on integrated GPUs and can starve normal
+// UI navigation. The scene graph is static between model reloads, so cache
+// the small material lists once and update only those materials per frame.
+const animatedMaterials = new Map<string, MeshStandardMaterial[]>();
 const modelBoundCodes = new Set<string>();
 const materialBaselines = new WeakMap<MeshStandardMaterial, { color: Color; emissive: Color }>();
 let modelRoot: Object3D | undefined;
@@ -34,11 +41,27 @@ let modelLoadToken = 0;
 let modelLoadTimeout = 0;
 let sceneRadius = 18;
 let pendingPanGesture: { pointerId: number; startX: number; startY: number; target: Vector3 } | undefined;
+let pendingSelectionGesture: { pointerId: number; startX: number; startY: number; code: string } | undefined;
 
 const colors: Record<TwinVisualState, number> = { normal: 0x4ee7c3, warning: 0xffbb62, alarm: 0xff536f, unknown: 0x6d87aa };
 
+function isFiniteVector(vector: Vector3) {
+  return Number.isFinite(vector.x) && Number.isFinite(vector.y) && Number.isFinite(vector.z);
+}
+
+function boundingSphere(root: Object3D) {
+  const bounds = new Box3().setFromObject(root);
+  if (bounds.isEmpty() || !isFiniteVector(bounds.min) || !isFiniteVector(bounds.max)) return null;
+  const sphere = bounds.getBoundingSphere(new Sphere());
+  return isFiniteVector(sphere.center) && Number.isFinite(sphere.radius) && sphere.radius > 0 ? sphere : null;
+}
+
 function publishCameraDistance() {
   if (!host.value || !camera || !controls) return;
+  // Never leak a corrupt camera coordinate into the DOM contract used by the
+  // control layer or browser checks. resetView() repairs this state before the
+  // next rendered frame, but the attribute must remain meaningful meanwhile.
+  if (!isFiniteVector(camera.position) || !isFiniteVector(controls.target)) return;
   host.value.dataset.cameraDistance = camera.position.distanceTo(controls.target).toFixed(4);
   host.value.dataset.cameraPosition = camera.position.toArray().map((value) => value.toFixed(4)).join(',');
   host.value.dataset.cameraTarget = controls.target.toArray().map((value) => value.toFixed(4)).join(',');
@@ -97,23 +120,64 @@ function addFallbackAsset(asset: Asset) {
   group.position.set((Number(asset.position.x) / 100 - .5) * 27, .45, (Number(asset.position.y) / 100 - .5) * 14);
   fallbackAssetRoot.add(group);
   assetObjects.set(asset.code, group);
-  animatedObjects.set(asset.code, group);
+  animatedMaterials.set(asset.code, [box.material, beacon.material]);
+}
+
+function normalizedModelNodeName(value: unknown) {
+  return typeof value === 'string' ? value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+}
+
+/**
+ * GLTFLoader may de-duplicate or sanitize Object3D.name while retaining the
+ * original Blender node name in userData.name. Resolve both representations,
+ * then use a punctuation-insensitive alias as a final compatibility bridge.
+ * This keeps legacy exports usable without weakening the formal mesh contract.
+ */
+function findModelNode(root: Object3D, asset: Asset) {
+  const candidates = modelNodeNames(asset);
+  for (const candidate of candidates) {
+    const exact = root.getObjectByName(candidate);
+    if (exact) return exact;
+  }
+
+  let originalNameMatch: Object3D | undefined;
+  const normalizedCandidates = new Set(candidates.map(normalizedModelNodeName).filter(Boolean));
+  let normalizedMatch: Object3D | undefined;
+  root.traverse((object) => {
+    if (originalNameMatch) return;
+    const originalName = object.userData?.name;
+    if (typeof originalName === 'string' && candidates.includes(originalName)) {
+      originalNameMatch = object;
+      return;
+    }
+    if (!normalizedMatch && (
+      normalizedCandidates.has(normalizedModelNodeName(object.name))
+      || normalizedCandidates.has(normalizedModelNodeName(originalName))
+    )) normalizedMatch = object;
+  });
+  return originalNameMatch || normalizedMatch;
 }
 
 function bindModelAssets(root: Object3D) {
   const boundCodes: string[] = [];
   props.assets.forEach((asset) => {
     if (modelBoundCodes.has(asset.code)) { boundCodes.push(asset.code); return; }
-    const node = modelNodeNames(asset).map((name) => root.getObjectByName(name)).find(Boolean);
-    if (!node) { addFallbackAsset(asset); return; }
+    const node = findModelNode(root, asset);
+    if (!node) {
+      addFallbackAsset(asset);
+      return;
+    }
     node.userData.assetCode = asset.code;
+    const materials: MeshStandardMaterial[] = [];
     node.traverse((child) => {
       child.userData.assetCode = asset.code;
       if (!(child instanceof Mesh)) return;
       child.material = Array.isArray(child.material) ? child.material.map((material) => material.clone()) : child.material.clone();
+      const childMaterials = Array.isArray(child.material) ? child.material : [child.material];
+      childMaterials.forEach((material) => { if (material instanceof MeshStandardMaterial) materials.push(material); });
     });
     assetObjects.set(asset.code, node);
-    animatedObjects.set(asset.code, node);
+    animatedMaterials.set(asset.code, materials);
     modelBoundCodes.add(asset.code);
     boundCodes.push(asset.code);
   });
@@ -153,7 +217,7 @@ function clearLoadedModel() {
   fallbackAssetRoot = undefined;
   modelBoundCodes.clear();
   assetObjects.clear();
-  animatedObjects.clear();
+  animatedMaterials.clear();
 }
 
 function visualIntensity(state: TwinVisualState, selected: boolean, critical: boolean, now = 0) {
@@ -190,9 +254,10 @@ function focusAsset(code: string | null) {
   if (!code || !camera || !controls) return;
   const object = assetObjects.get(code);
   if (!object) return;
-  const bounds = new Box3().setFromObject(object);
-  const target = bounds.isEmpty() ? object.getWorldPosition(new Vector3()) : bounds.getCenter(new Vector3());
-  const measuredRadius = bounds.isEmpty() ? sceneRadius * .025 : bounds.getBoundingSphere(new Sphere()).radius;
+  const sphere = boundingSphere(object);
+  const objectPosition = object.getWorldPosition(new Vector3());
+  const target = sphere?.center ?? (isFiniteVector(objectPosition) ? objectPosition : controls.target.clone());
+  const measuredRadius = sphere?.radius ?? sceneRadius * .025;
   // Some Blender exports place an equipment marker on a parent node that also
   // owns adjacent meshes.  Do not let that oversized parent bound turn an
   // equipment focus action into another whole-model view.
@@ -210,16 +275,16 @@ function focusAsset(code: string | null) {
 function resetView() {
   if (!camera || !controls) return;
   const root = modelRoot || fallbackSceneRoot;
-  const bounds = root ? new Box3().setFromObject(root) : null;
-  if (bounds && !bounds.isEmpty()) {
-    const sphere = bounds.getBoundingSphere(new Sphere());
+  const sphere = root ? boundingSphere(root) : null;
+  if (sphere) {
     sceneRadius = Math.max(sphere.radius, .2);
-    const distance = Math.max(sceneRadius * 2.25, .8);
+    const distance = cameraFitDistance(sceneRadius, camera.fov, camera.aspect);
     controls.target.copy(sphere.center);
     camera.position.copy(sphere.center.clone().add(new Vector3(1, .68, 1).normalize().multiplyScalar(distance)));
     controls.minDistance = Math.max(.002, sceneRadius * .0008);
-    controls.maxDistance = Math.max(20, sceneRadius * 12);
+    controls.maxDistance = Math.max(20, sceneRadius * 12, distance * 2);
     camera.near = Math.max(.005, sceneRadius / 500);
+    camera.far = Math.max(200, controls.maxDistance + sceneRadius * 2);
   } else {
     sceneRadius = 18;
     camera.position.set(18, 13, 22);
@@ -274,10 +339,23 @@ function onCanvasPointerDown(event: PointerEvent) {
   raycaster.setFromCamera(pointer, camera);
   const hit = raycaster.intersectObjects([...assetObjects.values()], true)[0];
   const code = hit?.object.userData.assetCode as string | undefined;
-  if (code) emit('select', code);
+  // Picking used to occur on pointerdown. In rotation mode that meant merely
+  // starting a drag could select a nearby device and reset the camera target.
+  // Keep the candidate and commit it only if pointerup is a short click.
+  if (code) pendingSelectionGesture = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    code,
+  };
 }
 
 function onCanvasPointerUp(event: PointerEvent) {
+  const selection = pendingSelectionGesture;
+  if (selection?.pointerId === event.pointerId) {
+    pendingSelectionGesture = undefined;
+    if (Math.hypot(event.clientX - selection.startX, event.clientY - selection.startY) < 6) emit('select', selection.code);
+  }
   const gesture = pendingPanGesture;
   if (!gesture || gesture.pointerId !== event.pointerId) return;
   pendingPanGesture = undefined;
@@ -306,23 +384,28 @@ function onCanvasPointerUp(event: PointerEvent) {
   publishCameraDistance();
 }
 
-function cancelCanvasPan() { pendingPanGesture = undefined; }
+function cancelCanvasPan() {
+  pendingPanGesture = undefined;
+  pendingSelectionGesture = undefined;
+}
 
-function animate() {
+function animate(timestamp = 0) {
   frame = window.requestAnimationFrame(animate);
+  // Software WebGL, low-core industrial terminals and users who request less
+  // motion should not spend the entire main-thread budget repainting a static
+  // model. 30 FPS keeps camera gestures responsive while leaving enough time
+  // for surrounding navigation and business controls.
+  const minimumFrameInterval = performanceMode.value === 'reduced' ? 1000 / 30 : 0;
+  if (minimumFrameInterval && timestamp - lastRenderedAt < minimumFrameInterval) return;
+  lastRenderedAt = timestamp;
   const now = performance.now() / 1000;
   props.assets.forEach((asset) => {
-    const object = animatedObjects.get(asset.code);
-    if (!object) return;
+    const materials = animatedMaterials.get(asset.code);
+    if (!materials?.length) return;
     const state = resolveTwinVisualState(asset, props.alerts);
     const critical = primaryTwinAlert(asset.code, props.alerts)?.severity === 'critical';
-    object.traverse((child) => {
-      if (!(child instanceof Mesh)) return;
-      const materials = Array.isArray(child.material) ? child.material : [child.material];
-      materials.forEach((material) => {
-        if (material instanceof MeshStandardMaterial) material.emissiveIntensity = visualIntensity(state, props.selectedCode === asset.code, critical, now);
-      });
-    });
+    const intensity = visualIntensity(state, props.selectedCode === asset.code, critical, now);
+    materials.forEach((material) => { material.emissiveIntensity = intensity; });
   });
   controls?.update();
   if (renderer && scene && camera) renderer.render(scene, camera);
@@ -335,6 +418,16 @@ function loadModel() {
   modelState.value = 'loading';
   modelMessage.value = '正在加载实体三维模型…';
   window.clearTimeout(modelLoadTimeout);
+  if (props.modelEnabled === false) {
+    makeFallbackScene();
+    publishModelReport('fallback');
+    modelState.value = 'fallback';
+    modelMessage.value = '当前启用模型文件不可用，已保护性切换到预览场景';
+    applyVisualState();
+    resetView();
+    if (props.selectedCode) focusAsset(props.selectedCode);
+    return;
+  }
   modelLoadTimeout = window.setTimeout(() => {
     if (loadToken !== modelLoadToken) return;
     modelLoadToken += 1;
@@ -344,6 +437,10 @@ function loadModel() {
     modelMessage.value = '实体模型加载超时，已切换到安全预览，可重新检测';
     applyVisualState();
     resetView();
+    // The GLTF success/error paths restore focus after a late model ready; the
+    // timeout fallback must do the same so a new-alarm auto-locate that arrived
+    // while the model was still loading is not silently dropped.
+    if (props.selectedCode) focusAsset(props.selectedCode);
   }, 25_000);
   new GLTFLoader().load(props.modelUrl || twinModelUrl, (gltf) => {
     if (loadToken !== modelLoadToken || !scene) return;
@@ -393,12 +490,15 @@ onMounted(() => {
   scene.background = new Color(0x081628);
   scene.fog = new Fog(0x081628, 22, 55);
   camera = new PerspectiveCamera(48, 1, .1, 200);
-  const navigatorWithMemory = navigator as Navigator & { deviceMemory?: number };
-  performanceMode.value = window.matchMedia('(prefers-reduced-motion: reduce)').matches || (navigatorWithMemory.deviceMemory ?? 8) <= 4 ? 'reduced' : 'full';
+  const navigatorCapabilities = navigator as Navigator & { deviceMemory?: number };
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const limitedMemory = (navigatorCapabilities.deviceMemory ?? 8) <= 4;
+  const limitedCpu = (navigator.hardwareConcurrency || 8) <= 4;
+  performanceMode.value = prefersReducedMotion || limitedMemory || limitedCpu ? 'reduced' : 'full';
   renderer = new WebGLRenderer({ antialias: performanceMode.value === 'full', alpha: false, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, performanceMode.value === 'reduced' ? 1.25 : 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, performanceMode.value === 'reduced' ? 1 : 2));
   renderer.outputColorSpace = SRGBColorSpace;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = performanceMode.value === 'full';
   host.value.append(renderer.domElement);
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableRotate = true;
@@ -450,7 +550,9 @@ watch(() => props.selectedCode, (next, previous) => {
   applyVisualState();
   if (next && next !== previous) focusAsset(next);
 });
-watch(() => props.modelUrl, (next, previous) => { if (next && next !== previous) reloadModel(); });
+watch(() => [props.modelUrl, props.modelEnabled], (next, previous) => {
+  if (next[0] !== previous[0] || next[1] !== previous[1]) reloadModel();
+});
 onBeforeUnmount(() => {
   modelLoadToken += 1;
   window.clearTimeout(modelLoadTimeout);
@@ -465,7 +567,7 @@ onBeforeUnmount(() => {
   clearLoadedModel();
   renderer?.dispose();
   assetObjects.clear();
-  animatedObjects.clear();
+  animatedMaterials.clear();
   modelBoundCodes.clear();
 });
 
@@ -488,7 +590,13 @@ defineExpose({ resetView, focusAsset, zoomBy, setNavigationMode, reloadModel, mo
     <div ref="host" class="twin-canvas" aria-label="综合管廊三维数字孪生场景" role="application" />
     <div class="twin-model-state"><i :class="modelState" /><span>{{ modelMessage }}</span><em v-if="performanceMode === 'reduced'">流畅模式</em></div>
     <div v-if="modelState === 'loading'" class="twin-model-progress" role="progressbar" aria-label="三维模型加载进度" :aria-valuenow="modelProgress" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${Math.max(modelProgress, 6)}%` }" /></div>
-    <div class="twin-camera-controls" role="group" aria-label="三维自由视角控制"><button type="button" aria-label="放大三维模型" title="放大" @click="zoomBy(.62)"><ZoomIn /></button><button type="button" aria-label="缩小三维模型" title="缩小" @click="zoomBy(1.55)"><ZoomOut /></button><button type="button" :class="{ active: navigationMode === 'pan' }" aria-label="启用自由平移" title="左键自由平移" @click="setNavigationMode('pan')"><Hand /></button><button type="button" :class="{ active: navigationMode === 'orbit' }" aria-label="启用自由旋转" title="左键自由旋转" @click="setNavigationMode('orbit')"><Orbit /></button><button type="button" aria-label="显示完整三维模型" title="显示全景" @click="resetView"><Home /></button></div>
+    <div class="twin-camera-controls" role="group" aria-label="三维自由视角控制">
+      <button type="button" aria-label="放大三维模型" title="放大" @click="zoomBy(.62)"><ZoomIn /></button>
+      <button type="button" aria-label="缩小三维模型" title="缩小" @click="zoomBy(1.55)"><ZoomOut /></button>
+      <button type="button" :class="{ active: navigationMode === 'pan' }" :aria-pressed="navigationMode === 'pan'" aria-label="启用自由平移" title="左键自由平移" @click="setNavigationMode('pan')"><Hand /></button>
+      <button type="button" :class="{ active: navigationMode === 'orbit' }" :aria-pressed="navigationMode === 'orbit'" aria-label="启用自由旋转" title="左键自由旋转" @click="setNavigationMode('orbit')"><Orbit /></button>
+      <button type="button" aria-label="显示完整三维模型" title="显示全景" @click="resetView"><Home /></button>
+    </div>
     <div class="twin-scene-tip">{{ navigationMode === 'pan' ? '左键自由平移 · 右键旋转' : '左键旋转 · 右键自由平移' }} · 滚轮指向缩放 · 方向键平移</div>
   </div>
 </template>

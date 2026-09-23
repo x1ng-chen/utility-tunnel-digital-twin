@@ -5,6 +5,11 @@ import type { Role } from './types';
 
 const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition;
+    if (to.path !== from.path) return { left: 0, top: 0 };
+    return false;
+  },
   routes: [
     { path: '/', redirect: '/dashboard' },
     { path: '/login', component: LoginView, meta: { guest: true } },
@@ -19,6 +24,7 @@ const router = createRouter({
     { path: '/telemetry', component: () => import('./views/TelemetryView.vue') },
     { path: '/settings', component: () => import('./views/SettingsView.vue') },
     { path: '/audit', component: () => import('./views/AuditView.vue') },
+    { path: '/:pathMatch(.*)*', component: () => import('./views/NotFoundView.vue') },
   ],
 });
 

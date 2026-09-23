@@ -1,0 +1,91 @@
+{
+  "version": "V10-CANDIDATE",
+  "date": "2026-09-08",
+  "files": [
+    {
+      "path": "model/utility-tunnel-annular-v10-candidate.blend",
+      "bytes": 2618010,
+      "sha256": "8351e47aec6d48147619ddc3ed075ddd75a1100b4ed6a38c6f171fa405763b4f"
+    },
+    {
+      "path": "model/utility-tunnel-annular-v10-candidate.glb",
+      "bytes": 7718832,
+      "sha256": "23e645dbb5f780a2083fe4e73702c10bec8611b6d08de251b5d85aee11282cc3"
+    },
+    {
+      "path": "model/asset-map-v10-candidate.json",
+      "bytes": 4357,
+      "sha256": "d962db3df49dcbb19984dd4288b0bf4728e98bb89587f77de483087ec8407e08"
+    },
+    {
+      "path": "model/v10-floor-audit.json",
+      "bytes": 27805,
+      "sha256": "c0a9cfa1f84599f5f4b33062cb1f31eb39b09bc67ecd5b7df13a4547ab5d5a1f"
+    },
+    {
+      "path": "model/v10-export-validation.json",
+      "bytes": 1759,
+      "sha256": "b0bb99d08586dcb80392aca474a670b0aab90e2592ca1ba6a37d79c25f466540"
+    },
+    {
+      "path": "model/quality-report-v10-candidate.md",
+      "bytes": 4574,
+      "sha256": "8b48fde901352d93ab15602227f9bb2cf1740731012c113d3146094e19d2bf8e"
+    },
+    {
+      "path": "model/previews/v10-overview.png",
+      "bytes": 1935029,
+      "sha256": "a27036fdfa913a2738fb4f9fbb6c51064e5d2beec45e850718b2359579cc7858"
+    },
+    {
+      "path": "model/previews/v10-front.png",
+      "bytes": 1334184,
+      "sha256": "3ceb50a0429aace742bd57f720a17256bc3e87df52e4067f2521d09d781d0b8a"
+    },
+    {
+      "path": "model/previews/v10-side.png",
+      "bytes": 1707686,
+      "sha256": "06fd4c50fe41193aa60f799bfa61f85c75ccecc57b9aa31840fd1c932959ccd1"
+    },
+    {
+      "path": "model/previews/v10-water.png",
+      "bytes": 2081225,
+      "sha256": "275fbf99404299bc84c3098e6047c58538c020eab87b7304221e6a100dda1bba"
+    },
+    {
+      "path": "model/previews/v10-drain.png",
+      "bytes": 2234056,
+      "sha256": "8035350acf36d25e01da926bec42e41f760ccde63d20cfc46d1d33dc32d01e56"
+    },
+    {
+      "path": "model/previews/v10-floor.png",
+      "bytes": 1672766,
+      "sha256": "3c6fcd8347f75b74ced27b2699b0c6301cee27684cee50fb11df4f8ef0a83072"
+    },
+    {
+      "path": "model/previews/v10-bottom.png",
+      "bytes": 1316501,
+      "sha256": "8ddcde1ae4fd5617a57bd9daca23bce6044669beb9910f46274d66547d18ba13"
+    },
+    {
+      "path": "tools/model_floor_audit.py",
+      "bytes": 3884,
+      "sha256": "4e89e3807cc5c6a1378ddaececca32a815937d71a42af6a864071b731e05f2e4"
+    },
+    {
+      "path": "tools/repair_model_v10.py",
+      "bytes": 14793,
+      "sha256": "92563064eef700879bea38973e5259416fbf2ade88a573b9705b1a0f5b56c489"
+    },
+    {
+      "path": "tools/verify_model_v10.py",
+      "bytes": 5724,
+      "sha256": "1cc5398334ec5ddbf76e2f04938ddc962e0f5c454fd092473d7068eabaa91be1"
+    },
+    {
+      "path": "tools/check-model-v10.mjs",
+      "bytes": 2777,
+      "sha256": "f9ad31d396d12c539ae0561475c60feeccb9760922d48543593cb053cc5b6a90"
+    }
+  ]
+}

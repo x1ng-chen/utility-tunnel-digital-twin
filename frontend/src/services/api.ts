@@ -1,5 +1,7 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 
+export type ControllerAction = 'led_red' | 'led_green' | 'led_blue' | 'led_off' | 'relay_on' | 'relay_off' | 'fan_pwm' | 'fan2_pwm';
+
 const localStorageRef = typeof window !== 'undefined' ? window.localStorage : null;
 const sessionStorageRef = typeof window !== 'undefined' ? window.sessionStorage : null;
 const fallbackBaseUrl = typeof window !== 'undefined' && window.location.protocol === 'https:'
@@ -88,6 +90,8 @@ export const api = {
   reviewRegistrationRequest: (id: number, payload: { status: 'approved' | 'rejected'; reviewNote?: string }) => client.patch(`/admin/registration-requests/${id}/`, payload),
   reissueRegistrationSetupToken: (id: number) => client.post(`/admin/registration-requests/${id}/setup-token/`),
   dashboard: () => client.get('/dashboard/'),
+  controllerCommandConfirmation: (action: ControllerAction, dutyPercent?: number) => client.post('/controllers/CTRL-01/commands/confirmations/', { action, ...(dutyPercent == null ? {} : { dutyPercent }) }),
+  controllerCommand: (action: ControllerAction, confirmationToken: string, dutyPercent?: number) => client.post('/controllers/CTRL-01/commands/', { action, confirmationToken, ...(dutyPercent == null ? {} : { dutyPercent }) }),
   twinModelReadiness: () => client.get('/twin/model-readiness/'),
   twinModels: (params?: Record<string, string | number>) => client.get('/twin/models/', { params }),
   uploadTwinModel: (payload: FormData) => client.post('/twin/models/', payload, { timeout: 60000 }),
@@ -108,14 +112,14 @@ export const api = {
   createAlertWorkOrder: (id: number) => client.post(`/alerts/${id}/work-order/`),
   workOrders: (params?: Record<string, string | number>) => client.get('/work-orders/', { params }),
   createWorkOrder: (payload: Record<string, unknown>, idempotencyKey?: string) => client.post('/work-orders/', payload, { headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined }),
-  transitionWorkOrder: (id: number, to: string, version?: number) => client.post(`/work-orders/${id}/transition/`, { to, ...(version == null ? {} : { version }) }),
+  transitionWorkOrder: (id: number, to: string, version?: number, note = '') => client.post(`/work-orders/${id}/transition/`, { to, note, ...(version == null ? {} : { version }) }),
   telemetry: (params?: Record<string, string | number>) => client.get('/telemetry/', { params }),
   telemetrySummary: (params?: Record<string, string | number>) => client.get('/telemetry/summary/', { params }),
   ingestTelemetry: (readings: Record<string, unknown>[]) => client.post('/telemetry/', { readings }),
   thresholds: () => client.get('/thresholds/'),
   updateThreshold: (key: string, payload: Record<string, unknown>) => client.put(`/thresholds/${key}/`, payload),
   audit: (params?: Record<string, string | number>) => client.get('/audit/', { params }),
-  report: (report: string, idempotencyKey?: string) => client.post('/report-exports/', { report }, { headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined }),
+  report: (report: string, filters?: Record<string, string>, idempotencyKey?: string) => client.post('/report-exports/', { report, ...(filters && Object.keys(filters).length ? { filters } : {}) }, { headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined }),
   downloadReport: (id: number) => client.get(`/report-exports/${id}/download/`, { responseType: 'blob' }),
 };
 

@@ -5,9 +5,9 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import AppShell from '../components/AppShell.vue';
 import { escapeMapText, hasValidLocation, integrationLabels, locationSourceLabels } from '../services/gis';
-import { primaryTwinAlert } from '../services/twin3d';
+import { primaryTwinAlert, resolveTwinVisualState, twinStateLabel } from '../services/twin3d';
 import { useOperationsStore } from '../stores/operations';
-import type { Asset, HardwareConnectivity, IntegrationStatus, SpatialFeature, SpatialLayerType } from '../types';
+import type { Asset, HardwareConnectivity, IntegrationStatus, SpatialFeature, SpatialLayerType, SpatialSource } from '../types';
 import '../assets/gis.css';
 import '../assets/operational-layout-polish.css';
 
@@ -28,6 +28,7 @@ let featureLayers: L.LayerGroup | null = null;
 
 const spatialLayerLabels: Record<SpatialLayerType, string> = { tunnel_segment: '管廊区段', chamber: '舱室', manhole: '井口', inspection_route: '巡检路线', risk_zone: '风险区域', installation_point: '安装点' };
 const connectivityLabels: Record<HardwareConnectivity, string> = { online: '设备在线', offline: '心跳超时', awaiting_data: '等待首条数据', inactive: '接口未启用', error: '接入异常' };
+const spatialSourceLabels: Record<SpatialSource, string> = { surveyed: '现场测绘', cad_import: '图纸整理', configured: '人工登记' };
 
 const zones = computed(() => [...new Set(store.assets.map((asset) => asset.zone))].sort());
 const filteredAssets = computed(() => {
@@ -57,7 +58,7 @@ const navigationContext = computed(() => {
 function markerIcon(asset: Asset) {
   return L.divIcon({
     className: 'gis-marker-shell',
-    html: `<div class="gis-marker ${asset.status} integration-${asset.integrationStatus}"><i></i><span>${escapeMapText(asset.hardwareCode ?? asset.code)}</span></div>`,
+    html: `<div class="gis-marker ${resolveTwinVisualState(asset, store.alerts)}"><i></i><span>${escapeMapText(asset.hardwareCode ?? asset.code)}</span></div>`,
     iconSize: [58, 42],
     iconAnchor: [29, 34],
   });
@@ -89,7 +90,7 @@ function renderSpatialFeatures() {
     L.geoJSON(feature.geometry as never, {
       style: featureStyle(feature),
       pointToLayer: (_, latlng) => L.circleMarker(latlng, { ...featureStyle(feature), radius: 7, fillOpacity: .85 }),
-      onEachFeature: (_, layer) => layer.bindTooltip(`${feature.name} · ${spatialLayerLabels[feature.layerType]}`, { sticky: true }),
+      onEachFeature: (_, layer) => layer.bindTooltip(`${escapeMapText(feature.name)} · ${escapeMapText(spatialLayerLabels[feature.layerType])}`, { sticky: true }),
     }).addTo(featureLayers);
   }
 }
@@ -121,6 +122,7 @@ watch(filteredAssets, () => {
   if (!filteredAssets.value.some((asset) => asset.code === selectedCode.value)) selectedCode.value = filteredAssets.value[0]?.code ?? '';
   renderMarkers();
 });
+watch(() => store.alerts, () => renderMarkers(false), { deep: true });
 
 watch(() => route.query.asset, (code) => {
   if (typeof code !== 'string') return;
@@ -170,7 +172,7 @@ onBeforeUnmount(() => {
     <section class="gis-workspace">
       <div class="gis-map-panel">
         <div ref="mapElement" class="gis-map" aria-label="开发板模块 GIS 地图" />
-        <div class="gis-legend"><span><i class="verified" />已验证</span><span><i class="connected" />固件已接入</span><span><i class="pending" />待验证</span><span><i class="spatial" />审核空间图层</span></div>
+        <div class="gis-legend"><span><i class="alarm" />告警</span><span><i class="connected" />关注</span><span><i class="verified" />正常</span><span><i class="pending" />待核验</span><span><i class="spatial" />审核空间图层</span></div>
       </div>
 
       <aside v-if="selectedAsset" class="gis-inspector" aria-live="polite">
@@ -188,14 +190,23 @@ onBeforeUnmount(() => {
 
     <section class="gis-module-list" aria-label="全部实物模块">
       <button v-for="asset in filteredAssets" :key="asset.id" :class="{ active: selectedAsset?.code === asset.code }" @click="selectAsset(asset)">
-        <i :class="asset.status" /><span><small>{{ asset.hardwareCode }} · {{ asset.zone }}</small><strong>{{ asset.name }}</strong><em>{{ integrationLabels[asset.integrationStatus] }}</em></span>
+        <i :class="resolveTwinVisualState(asset, store.alerts)" /><span><small>{{ asset.hardwareCode }} · {{ asset.zone }}</small><strong>{{ asset.name }}</strong><em>{{ twinStateLabel(resolveTwinVisualState(asset, store.alerts)) }} · {{ integrationLabels[asset.integrationStatus] }}</em></span>
       </button>
     </section>
 
     <section class="spatial-feature-list" aria-label="已发布 GIS 空间对象">
       <header><span class="eyebrow">已发布空间图层</span><h2>已审核空间对象</h2><p>仅显示已发布的 WGS84 GeoJSON；草稿与退役对象不会进入运维地图。</p></header>
-      <div v-if="visibleSpatialFeatures.length" class="spatial-feature-grid"><article v-for="feature in visibleSpatialFeatures" :key="feature.id"><span>{{ spatialLayerLabels[feature.layerType] }}</span><strong>{{ feature.name }}</strong><small>{{ feature.code }} · {{ feature.source }} · 精度 {{ feature.accuracyM ?? '未登记' }} m</small></article></div>
+      <div v-if="visibleSpatialFeatures.length" class="spatial-feature-grid"><article v-for="feature in visibleSpatialFeatures" :key="feature.id"><span>{{ spatialLayerLabels[feature.layerType] }}</span><strong>{{ feature.name }}</strong><small>{{ feature.code }} · {{ spatialSourceLabels[feature.source] }} · {{ feature.accuracyM == null ? '精度未登记' : `精度 ${feature.accuracyM} 米` }}</small></article></div>
       <div v-else class="empty-state">当前没有已审核发布的空间对象。管理员可通过 GIS 数据管理接口导入真实 GeoJSON 后发布。</div>
     </section>
   </AppShell>
 </template>
+
+<style>
+.gis-marker.alarm i {
+  border-color: #ffd0d7;
+  background: #ff4d61;
+  box-shadow: 0 0 0 8px #ff4d6124, 0 0 25px #ff4d61;
+}
+.gis-module-list button > i.alarm, .gis-legend i.alarm { background: #ff4d61; }
+</style>

@@ -53,7 +53,7 @@ export function primaryTwinAlert(assetCode: string, alerts: Alert[]) {
 }
 
 export function resolveTwinVisualState(asset: Asset, alerts: Alert[]): TwinVisualState {
-  if (activeTwinAlerts(asset.code, alerts).length) return 'alarm';
+  if (asset.status === 'alarm' || activeTwinAlerts(asset.code, alerts).length) return 'alarm';
   if (asset.status === 'warning') return 'warning';
   if (asset.status === 'normal') return 'normal';
   return 'unknown';

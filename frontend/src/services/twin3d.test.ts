@@ -5,6 +5,10 @@ import type { Alert, Asset } from '../types';
 const asset = { id: 1, code: 'ENV-01', mesh: 'MESH_ENV_01', status: 'normal' } as Asset;
 
 describe('3D twin binding rules', () => {
+  it('preserves an asset alarm before its event record arrives', () => {
+    expect(resolveTwinVisualState({ ...asset, status: 'alarm' }, [])).toBe('alarm');
+    expect(resolveTwinVisualState(asset, [{ assetCode: asset.code, status: 'resolved' } as Alert])).toBe('normal');
+  });
   it('treats an active alert as an alarm even when the asset is otherwise normal', () => {
     expect(resolveTwinVisualState(asset, [{ assetCode: 'ENV-01', status: 'open' } as Alert])).toBe('alarm');
   });

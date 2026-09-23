@@ -10,19 +10,39 @@ const store = useOperationsStore();
 const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
-const search = ref('');
+const search = ref(typeof route.query.asset === 'string' ? route.query.asset : '');
 const actionError = ref('');
 const busyId = ref<number | null>(null);
 const canWrite = computed(() => !store.offline && (auth.user?.role === 'administrator' || auth.user?.role === 'operator'));
 const canComplete = computed(() => auth.user?.role === 'administrator');
 const visible = computed(() => store.workOrders.filter((item) => `${item.code} ${item.title} ${item.assetCode}`.toLowerCase().includes(search.value.trim().toLowerCase())));
 const focusedCode = computed(() => typeof route.query.focus === 'string' ? route.query.focus : '');
-const navigationHint = computed(() => focusedCode.value && route.query.source === 'alert' ? `已打开告警 ${String(route.query.alert || '')} 生成的处置工单` : '');
+const navigationHint = computed(() => {
+  if (focusedCode.value && route.query.source === 'alert') return `已打开告警 ${String(route.query.alert || '')} 生成的处置工单`;
+  if (typeof route.query.asset === 'string' && route.query.source === 'asset') return `正在查看设备 ${route.query.asset} 的维护与处置记录`;
+  return '';
+});
+const ordersForStatus = (status: string) => visible.value.filter((item) => item.status === status);
 const nextStatus: Partial<Record<WorkOrder['status'], WorkOrder['status']>> = { open: 'assigned', assigned: 'in_progress', in_progress: 'pending_review', pending_review: 'completed' };
 const transitionLabel: Partial<Record<WorkOrder['status'], string>> = { open: '接单并分派', assigned: '开始现场处理', in_progress: '提交复核', pending_review: '复核并完成' };
 const form = reactive({ assetCode: '', title: '', description: '', priority: 'normal' as WorkOrder['priority'] });
 const formOpen = ref(false);
 const creating = ref(false);
+const noteOrderId = ref<number | null>(null);
+const transitionNote = ref('');
+
+const workflowStages = [
+  { status: 'open', label: '待分派', description: '登记任务、确认责任人' },
+  { status: 'assigned', label: '已分派', description: '负责人接收任务' },
+  { status: 'in_progress', label: '处理中', description: '执行现场检查与维修' },
+  { status: 'pending_review', label: '待复核', description: '提交结果、等待验收' },
+  { status: 'completed', label: '已完成', description: '管理员复核、关闭工单' },
+] as const;
+
+function canAdvance(order: WorkOrder) {
+  const target = nextStatus[order.status];
+  return canWrite.value && Boolean(target) && (target !== 'completed' || canComplete.value);
+}
 
 function openTwin(order: WorkOrder) { void router.push({ path: '/twin-3d', query: { asset: order.assetCode, source: 'work-order', order: order.code } }); }
 function openGis(order: WorkOrder) { void router.push({ path: '/gis', query: { asset: order.assetCode, source: 'work-order', order: order.code } }); }
@@ -41,13 +61,33 @@ function slaLabel(order: WorkOrder) {
   return `时限正常 · 剩余 ${readable}`;
 }
 
-async function advance(order: WorkOrder) {
+function requestAdvance(order: WorkOrder) {
+  if (!canAdvance(order) || busyId.value !== null) return;
   const target = nextStatus[order.status];
   if (!target) return;
+  if (target === 'pending_review' || target === 'completed') {
+    noteOrderId.value = order.id;
+    transitionNote.value = '';
+    return;
+  }
+  void advance(order);
+}
+
+function cancelAdvance() {
+  noteOrderId.value = null;
+  transitionNote.value = '';
+}
+
+async function advance(order: WorkOrder) {
+  if (!canAdvance(order) || busyId.value !== null) return;
+  const target = nextStatus[order.status];
+  if (!target) return;
+  if (['pending_review', 'completed'].includes(target) && !transitionNote.value.trim()) return;
   actionError.value = '';
   busyId.value = order.id;
   try {
-    await store.transition(order, target);
+    await store.transition(order, target, transitionNote.value.trim());
+    cancelAdvance();
   } catch (cause) {
     actionError.value = cause instanceof Error ? cause.message : '工单流转失败，请稍后重试。';
   } finally {
@@ -55,7 +95,14 @@ async function advance(order: WorkOrder) {
   }
 }
 
+const statusText: Record<WorkOrder['status'], string> = { draft: '草稿', open: '待分派', assigned: '已分派', in_progress: '处理中', pending_review: '待复核', completed: '已完成', cancelled: '已取消' };
+function eventTitle(event: NonNullable<WorkOrder['timeline']>[number]) {
+  if (event.eventType === 'created') return '创建工单';
+  return `${event.fromStatus ? statusText[event.fromStatus] : '初始状态'} → ${event.toStatus ? statusText[event.toStatus] : '状态更新'}`;
+}
+
 async function createOrder() {
+  if (!canWrite.value || creating.value) return;
   actionError.value = '';
   creating.value = true;
   try {
@@ -79,7 +126,10 @@ async function createOrder() {
     </section>
     <p v-if="actionError" class="inline-message error-message" role="alert">{{ actionError }}</p>
     <p v-if="navigationHint" class="inline-message success-message work-order-navigation" role="status">{{ navigationHint }}，已为你定位到对应卡片。</p>
-    <section class="workflow-guide" aria-label="工单处理流程"><div><b>1</b><span>待分派<small>确认责任人</small></span></div><i>→</i><div><b>2</b><span>处理中<small>执行现场任务</small></span></div><i>→</i><div><b>3</b><span>待复核<small>核对处理结果</small></span></div><i>→</i><div><b>4</b><span>已完成<small>关闭处置链路</small></span></div></section>
+    <section class="workflow-guide workflow-stages" aria-label="工单处理流程">
+      <div v-for="(stage, index) in workflowStages" :key="stage.status"><b>{{ index + 1 }}</b><span>{{ stage.label }}<small>{{ stage.description }}</small></span></div>
+    </section>
+    <p class="workflow-explanation">工单记录谁负责、做了什么、结果是否通过验收。完成当前阶段的实际工作后再推进状态，处置过程会保留在处理记录中。</p>
     <section v-if="formOpen" class="create-order-panel" aria-label="新建工单">
       <div class="settings-head"><span>新建运维工单</span><small>创建后进入“待分派”状态并写入审计日志</small></div>
       <form class="order-form" @submit.prevent="createOrder">
@@ -94,8 +144,17 @@ async function createOrder() {
     <p v-else-if="!canWrite" class="inline-message">查看者无权新建或流转工单。</p>
     <section class="kanban">
       <article v-for="status in ['open','assigned','in_progress','pending_review','completed']" :key="status" class="kanban-column">
-        <header><span>{{ status === 'open' ? '待分派' : status === 'assigned' ? '已分派' : status === 'in_progress' ? '处理中' : status === 'pending_review' ? '待复核' : '已完成' }}</span><b>{{ visible.filter((item) => item.status === status).length }}</b></header>
-        <div v-for="order in visible.filter((item) => item.status === status)" :key="order.id" :class="['order-card', { focused: order.code === focusedCode }]" :data-testid="`work-order-${order.code}`"><span :class="['badge', order.priority]">{{ order.priority === 'urgent' ? '紧急' : order.priority === 'high' ? '高' : order.priority === 'low' ? '低' : '普通' }}</span><b>{{ order.code }}</b><h3>{{ order.title }}</h3><small>{{ order.assetCode }} · {{ order.assigneeName || '待分配' }}</small><small :class="['due-time', `sla-${order.slaStatus || 'not_set'}`]">{{ slaLabel(order) }}</small><small v-if="order.dueAt" class="due-deadline">截止 {{ new Date(order.dueAt).toLocaleString('zh-CN') }}</small><div class="order-card-links" aria-label="查看工单关联信息"><button type="button" @click="openTwin(order)">三维定位</button><button type="button" @click="openGis(order)">地图定位</button><button v-if="order.sourceAlertId" type="button" @click="openSourceAlert(order)">源告警</button></div><button v-if="nextStatus[order.status] && (nextStatus[order.status] !== 'completed' || canComplete)" class="order-transition" :disabled="busyId === order.id" @click="advance(order)">{{ busyId === order.id ? '处理中…' : transitionLabel[order.status] }}</button></div>
+        <header><span>{{ status === 'open' ? '待分派' : status === 'assigned' ? '已分派' : status === 'in_progress' ? '处理中' : status === 'pending_review' ? '待复核' : '已完成' }}</span><b>{{ ordersForStatus(status).length }}</b></header>
+        <p v-if="!ordersForStatus(status).length" class="kanban-empty">当前阶段暂无工单</p>
+        <div v-for="order in ordersForStatus(status)" :key="order.id" :class="['order-card', { focused: order.code === focusedCode }]" :data-testid="`work-order-${order.code}`">
+          <span :class="['badge', order.priority]">{{ order.priority === 'urgent' ? '紧急' : order.priority === 'high' ? '高' : order.priority === 'low' ? '低' : '普通' }}</span>
+          <b>{{ order.code }}</b><h3>{{ order.title }}</h3><small>{{ order.assetCode }} · {{ order.assigneeName || '待分配' }}</small>
+          <small :class="['due-time', `sla-${order.slaStatus || 'not_set'}`]">{{ slaLabel(order) }}</small><small v-if="order.dueAt" class="due-deadline">截止 {{ new Date(order.dueAt).toLocaleString('zh-CN') }}</small>
+          <div class="order-card-links" aria-label="查看工单关联信息"><button type="button" @click="openTwin(order)">三维定位</button><button type="button" @click="openGis(order)">地图定位</button><button v-if="order.sourceAlertId" type="button" @click="openSourceAlert(order)">源告警</button></div>
+          <details v-if="order.timeline?.length" class="order-timeline"><summary>处理记录（{{ order.timeline.length }}）</summary><ol><li v-for="event in order.timeline" :key="event.id"><div><b>{{ eventTitle(event) }}</b><time>{{ new Date(event.createdAt).toLocaleString('zh-CN') }}</time></div><p v-if="event.note">{{ event.note }}</p><small>{{ event.actorName }}</small></li></ol></details>
+          <div v-if="noteOrderId === order.id" class="transition-note"><label :for="`transition-note-${order.id}`">{{ order.status === 'pending_review' ? '复核意见' : '处理结果' }}</label><textarea :id="`transition-note-${order.id}`" v-model="transitionNote" maxlength="1000" rows="3" :placeholder="order.status === 'pending_review' ? '填写复核结论、验收结果或补充说明' : '填写已完成事项、现场结果和待复核内容'" autofocus></textarea><div><button type="button" class="ghost-button" @click="cancelAdvance">取消</button><button type="button" class="primary-button" :disabled="busyId === order.id || !transitionNote.trim()" @click="advance(order)">{{ busyId === order.id ? '提交中…' : '确认提交' }}</button></div></div>
+          <button v-else-if="canAdvance(order)" class="order-transition" :disabled="busyId !== null" @click="requestAdvance(order)">{{ busyId === order.id ? '处理中…' : transitionLabel[order.status] }}</button>
+        </div>
       </article>
     </section>
   </AppShell>
@@ -103,4 +162,6 @@ async function createOrder() {
 
 <style scoped>
 .order-card-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:11px}.order-card-links button{min-width:0;margin:0;padding:7px 4px;border-color:#2d4a69;background:#0d2036;color:#9db5d2;white-space:nowrap}.order-card-links button:hover,.order-card-links button:focus-visible{border-color:#5b86c2;background:#18385d;color:#fff;outline:0}.order-card .order-transition{margin-top:7px;border-color:#4b69bd;background:#223b73;color:#dce5ff}
+.order-timeline{margin-top:10px;border-top:1px solid #253d58;padding-top:8px;color:#adc2dc}.order-timeline summary{cursor:pointer;font-size:12px;list-style:none}.order-timeline summary::-webkit-details-marker{display:none}.order-timeline summary::after{content:'＋';float:right;color:#6d92c2}.order-timeline[open] summary::after{content:'－'}.order-timeline ol{display:grid;gap:9px;margin:9px 0 0;padding:0;list-style:none}.order-timeline li{position:relative;padding-left:12px;border-left:2px solid #345a86}.order-timeline li div{display:flex;justify-content:space-between;gap:8px}.order-timeline li b{font-size:11px;color:#dce9f8}.order-timeline time,.order-timeline small{font-size:10px;color:#7892ae}.order-timeline p{margin:4px 0;font-size:11px;line-height:1.55;color:#aebfd3;white-space:pre-wrap}.transition-note{display:grid;gap:7px;margin-top:10px;padding:10px;border:1px solid #40628c;background:#0a1a2c}.transition-note label{font-size:12px;color:#dce9f8}.transition-note textarea{width:100%;box-sizing:border-box;resize:vertical;border:1px solid #355372;background:#081522;color:#e8f2ff;padding:9px;font:inherit}.transition-note>div{display:flex;justify-content:flex-end;gap:7px}.transition-note button{margin:0;padding:7px 10px}
+.kanban-empty{display:grid;min-height:112px;margin:0;place-items:center;border:1px dashed #31445b;color:#647b96;font-size:10px;text-align:center}
 </style>

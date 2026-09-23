@@ -2,7 +2,7 @@
 :root { --pointer-x: 50vw; --pointer-y: 38vh; --fx-blue: #6d91ff; --fx-mint: #53f0cb; }
 
 body { background: #050d1a; }
-body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(460px circle at var(--pointer-x) var(--pointer-y), #4c7dff18, transparent 68%); transition: background .18s ease-out; }
+body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(460px circle at var(--pointer-x) var(--pointer-y), #4c7dff18, transparent 68%); }
 .app-shell, .login-screen { position: relative; z-index: 1; }
 .app-shell { background: radial-gradient(900px 650px at 78% -8%, #315ca334, transparent 65%), radial-gradient(650px 600px at 12% 92%, #6d52d222, transparent 65%), linear-gradient(135deg, #07111f, #09182d 48%, #0a1830); }
 
@@ -17,6 +17,18 @@ body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-event
 .page-content > :nth-child(2) { animation-delay: .05s; }
 .page-content > :nth-child(3) { animation-delay: .1s; }
 .page-content > :nth-child(4) { animation-delay: .15s; }
+
+/* Route changes use a short GPU-composited scene wipe. The navigation remains
+   readable while the operational content resolves underneath it. */
+.route-enter-active { transition: opacity .28s cubic-bezier(.16, 1, .3, 1); }
+.route-leave-active { transition: opacity .12s linear; }
+.route-enter-active .main-panel { animation: route-light-sweep .3s cubic-bezier(.16, 1, .3, 1) both; }
+.route-enter-from { opacity: 0; }
+.route-leave-to { opacity: 0; }
+.route-enter-from .page-content { transform: translate3d(0, 18px, 0); }
+html[data-route-direction='previous'] .route-enter-from .page-content { transform: translate3d(0, -14px, 0) scale(.996); }
+.route-enter-active .page-content { transition: transform .3s cubic-bezier(.16, 1, .3, 1); }
+.route-enter-to .page-content { transform: translate3d(0, 0, 0); }
 
 /* Buttons receive a contained energy ripple without changing their semantic behaviour. */
 body.fx-enabled button, body.fx-enabled .primary-button, body.fx-enabled .login-submit, body.fx-enabled .login-switch { position: relative; overflow: hidden; isolation: isolate; }
@@ -68,7 +80,7 @@ body[data-pointer-mode='interactive'] .experience-cursor .cursor-ring { width: 3
 .operation-notice strong { display:block; margin: 1px 0 4px; color: #d7fff5; font-size: 11px; letter-spacing: .04em; }
 .operation-notice p { margin: 0; overflow: hidden; color: #b2cad6; font-size: 11px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .notice-progress { position: absolute; right: 14px; bottom: 6px; left: 14px; height: 2px; overflow: hidden; border-radius: 4px; background: #8affdd22; }
-.notice-progress::after { content: ''; display: block; width: 100%; height: 100%; transform-origin: left; background: linear-gradient(90deg, #49e7c3, #88a4ff); animation: notice-countdown 2s linear forwards; }
+.notice-progress::after { content: ''; display: block; width: 100%; height: 100%; transform-origin: left; background: linear-gradient(90deg, #49e7c3, #88a4ff); animation: notice-countdown 3s linear forwards; }
 .warning .notice-progress::after { background: linear-gradient(90deg, #ffc06e, #ef8e73); }
 .notice-enter-active { transition: opacity .28s ease, transform .36s cubic-bezier(.16, 1, .3, 1); }
 .notice-leave-active { transition: opacity .22s ease, transform .22s ease; }
@@ -86,16 +98,19 @@ body[data-pointer-mode='interactive'] .experience-cursor .cursor-ring { width: 3
 .login-card:hover { transform: translateY(-5px); box-shadow: 0 36px 86px #020a1c75, 0 0 50px #7994ff19; }
 .login-grid { animation: login-grid-drift 17s linear infinite; }
 
-.experience-cursor { position: fixed; left: 0; top: 0; z-index: 100; pointer-events: none; opacity: 0; transition: opacity .18s ease; will-change: transform; }
+.experience-cursor { position: fixed; left: 0; top: 0; z-index: 2147483647; pointer-events: none; opacity: 0; transition: opacity .18s ease; will-change: transform; }
 .experience-cursor.active { opacity: 1; }
-.cursor-ring, .cursor-dot, .cursor-trail { position: absolute; left: 0; top: 0; display: block; border-radius: 50%; pointer-events: none; }
+.cursor-ring, .cursor-dot, .cursor-trail, .cursor-aura { position: absolute; left: 0; top: 0; display: block; border-radius: 50%; pointer-events: none; }
+.cursor-aura { width: 96px; height: 96px; transform: translate(-50%, -50%); background: radial-gradient(circle, #75edda16 0 13%, #6f91ff0d 32%, transparent 70%); mix-blend-mode: screen; }
 .cursor-ring { width: 25px; height: 25px; border: 1px solid #a8bdffcc; background: #7193ff08; transform: translate(-50%, -50%); transition: width .22s ease, height .22s ease, border-color .22s ease, background .22s ease; box-shadow: 0 0 18px #6f91ff3b; }
 .cursor-dot { width: 5px; height: 5px; background: #e9f5ff; transform: translate(-50%, -50%); box-shadow: 0 0 12px #72dfff; }
 .cursor-trail { width: 12px; height: 12px; background: radial-gradient(circle, #7df3d5a0, #7595ff18 65%, transparent 70%); transform-origin: center; }
 .experience-cursor.pressed .cursor-ring { width: 17px; height: 17px; border-color: #fff; background: #8ca5ff33; }
+body.fx-lite .cursor-trail:nth-child(n+3), body.fx-lite .cursor-aura, body.fx-lite .backdrop-sweep { display: none; }
+body.fx-lite .backdrop-grid { animation-duration: 52s; opacity: .07; }
 
-@media (hover: hover) and (pointer: fine) {
-  body.fx-enabled button, body.fx-enabled a, body.fx-enabled select, body.fx-enabled [role='button'] { cursor: none; }
+@media (min-width: 721px) and (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  body.fx-enabled, body.fx-enabled * { cursor: none !important; }
 }
 
 @keyframes page-reveal { from { opacity: 1; transform: translateY(8px) scale(.996); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -117,6 +132,7 @@ body[data-pointer-mode='interactive'] .experience-cursor .cursor-ring { width: 3
 @keyframes headline-glow { 50% { text-shadow: 0 0 48px #8195ff92; } }
 @keyframes signal-breathe { to { filter: brightness(1.28); transform: scaleY(.88); } }
 @keyframes login-grid-drift { to { background-position: 68px 68px, 68px 68px; } }
+@keyframes route-light-sweep { from { clip-path: inset(0 8% 0 0); } to { clip-path: inset(0 0 0 0); } }
 
 @media (max-width: 720px), (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
   .experience-backdrop, .experience-cursor { display: none; }

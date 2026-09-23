@@ -1,18 +1,95 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useAuthStore } from './auth';
-import { reconcileRecords, summarizeTelemetry, useOperationsStore } from './operations';
+import { reconcileRecords, summarizeTelemetry, upsertRealtimeRecord, useOperationsStore } from './operations';
+import * as realtimeService from '../services/realtime';
 import { api } from '../services/api';
 
 describe('operations store', () => {
   beforeEach(() => setActivePinia(createPinia()));
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it('upserts a live delta without dropping unrelated records or replacing identity', () => {
+    const retained = { id: 1, status: 'open' };
+    const unrelated = { id: 2, status: 'open' };
+    const current = [retained, unrelated];
+    const updated = upsertRealtimeRecord(current, { id: 1, status: 'resolved' });
+    expect(updated).toBe(current);
+    expect(updated[0]).toBe(retained);
+    expect(updated[1]).toBe(unrelated);
+    expect(retained.status).toBe('resolved');
+    const inserted = upsertRealtimeRecord(updated, { id: 3, status: 'open' });
+    expect(inserted.map(item => item.id)).toEqual([3, 1, 2]);
+    expect(inserted[1]).toBe(retained);
+    expect(inserted[2]).toBe(unrelated);
+    expect(upsertRealtimeRecord(inserted, { id: 4, status: 'open' }, 3).map(item => item.id)).toEqual([4, 3, 1]);
+  });
+
+  it('reapplies a push received during a stale REST live snapshot', async () => {
+    const auth = useAuthStore();
+    await auth.login('', '', 'viewer', 'demo');
+    const store = useOperationsStore();
+    store.source = 'api';
+    vi.stubGlobal('window', { sessionStorage: { getItem: () => 'unit-test-token' } });
+    let options!: realtimeService.RealtimeClientOptions;
+    vi.spyOn(realtimeService, 'createRealtimeClient').mockImplementation((value) => {
+      options = value;
+      return { connect: vi.fn(), disconnect: vi.fn(), getState: () => 'idle', getLastSeq: () => 0 };
+    });
+    store.startRealtime();
+    const old = { ...store.alerts[0]! };
+    const other = { ...store.alerts[1]! };
+    let resolveAlerts!: (value: never) => void;
+    vi.spyOn(api, 'dashboard').mockResolvedValue({ data: store.dashboard } as never);
+    vi.spyOn(api, 'assets').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'alerts').mockImplementation(() => new Promise(resolve => { resolveAlerts = resolve; }));
+    vi.spyOn(api, 'workOrders').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'telemetry').mockResolvedValue({ data: { items: [] } } as never);
+    const pending = store.refreshLive();
+    await options.onEvent!({ epoch: 'test', seq: 1, type: 'alert', entityId: old.id, version: '2', updatedAt: null, payload: { ...old, status: 'resolved' } });
+    resolveAlerts({ data: { items: [old, other] } } as never);
+    await pending;
+    expect(store.alerts.find(item => item.id === old.id)?.status).toBe('resolved');
+    expect(store.alerts.some(item => item.id === other.id)).toBe(true);
+    store.stopRealtime();
+  });
+
+  it('treats repeated identical notices as new feedback events', () => {
+    const store = useOperationsStore();
+    store.notice = '阈值已保存';
+    const first = store.noticeRevision;
+    store.notice = '阈值已保存';
+    expect(store.notice).toBe('阈值已保存');
+    expect(store.noticeRevision).toBe(first + 1);
+    store.notice = '';
+    expect(store.notice).toBe('');
+  });
 
   it('starts with the connected demo model', () => {
     const store = useOperationsStore();
-    expect(store.assets).toHaveLength(12);
+    expect(store.assets).toHaveLength(19);
     expect(store.openAlerts).toBe(2);
     expect(store.activeOrders).toBe(2);
+  });
+
+  it('keeps five pipe stations unconnected and independent of the seep sensor', () => {
+    const store = useOperationsStore();
+    const levels = store.assets.filter(a => a.code.startsWith('LEVEL-L'));
+    expect(levels).toHaveLength(5);
+    expect(new Set(levels.map(a => a.mesh)).size).toBe(5);
+    expect(new Set(levels.map(a => `${a.position.x},${a.position.y}`)).size).toBe(5);
+    for (const asset of levels) {
+      expect(asset.status).toBe('unknown');
+      expect(asset.integrationStatus).toBe('pending_verification');
+      expect(asset.lastSeenAt).toBeNull();
+      expect(asset.locationSource).toBe('unassigned');
+      expect(store.telemetry.some(t => t.assetCode === asset.code)).toBe(false);
+      const binding = store.hardwareBindings.find(b => b.assetCode === asset.code)!;
+      expect(binding.status).toBe('reserved');
+      expect(binding.lastHeartbeatAt).toBeNull();
+    }
+    expect(store.assets.some(a => a.code === 'BT-01')).toBe(false);
+    expect(store.assets.some(a => a.code === 'NET-01')).toBe(true);
   });
 
   it('preserves record identity while applying live polling updates', () => {
@@ -157,6 +234,34 @@ describe('operations store', () => {
     expect(store.telemetrySummary.sampleCount).toBe(1);
     expect(store.telemetrySummary.qualityCounts.suspect).toBe(1);
     expect(store.telemetry).toHaveLength(24);
+  });
+
+  it('paginates history without truncating the summary to the current page', async () => {
+    const store = useOperationsStore();
+    const sample = store.telemetry[0]!;
+    store.telemetry = Array.from({ length: 125 }, (_, index) => ({ ...sample, id: index + 1 }));
+    await store.loadTelemetryInsights({}, 2);
+    expect(store.telemetryInsights).toHaveLength(25);
+    expect(store.telemetryInsightsTotal).toBe(125);
+    expect(store.telemetrySummary.sampleCount).toBe(125);
+    await expect(store.loadTelemetryInsights({}, 0)).rejects.toThrow('页码无效');
+  });
+
+  it('does not let a stale history response overwrite a newer query', async () => {
+    const store = useOperationsStore();
+    store.source = 'api';
+    const sample = store.telemetry[0]!;
+    let resolveOld!: (value: never) => void;
+    vi.spyOn(api, 'telemetry').mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }))
+      .mockResolvedValueOnce({ data: { items: [{ ...sample, id: 999 }], total: 1 } } as never);
+    vi.spyOn(api, 'telemetrySummary').mockResolvedValue({ data: summarizeTelemetry([sample]) } as never);
+    const old = store.loadTelemetryInsights({ assetCode: 'old' });
+    await store.loadTelemetryInsights({ assetCode: 'new' });
+    resolveOld({ data: { items: [sample], total: 20 } } as never);
+    expect(await old).toBe(false);
+    expect(store.telemetryInsights[0]!.id).toBe(999);
+    expect(store.telemetryInsightsTotal).toBe(1);
+    expect(store.telemetryInsightsLoading).toBe(false);
   });
 
   it('returns an explicit empty summary for a telemetry query with no samples', () => {

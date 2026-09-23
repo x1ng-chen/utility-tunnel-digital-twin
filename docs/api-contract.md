@@ -64,6 +64,8 @@
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
 | `GET` | `/dashboard/` | 登录 | 资产、健康度、告警、工单和最新遥测汇总；在线数按硬件绑定期望上报间隔和最近心跳判定，`workOrderSla` 提供已超时和 4 小时内到期工单数 |
+| `POST` | `/controllers/CTRL-01/commands/confirmations/` | 管理员/运维员 | 在操作员的二次确认后，为精确的 `{ action, dutyPercent? }` 签发一次性确认凭据。凭据只绑定当前用户、`CTRL-01` 和参数，默认 120 秒到期；令牌明文仅在本响应中返回，服务端仅保存哈希并记录审计。 |
+| `POST` | `/controllers/CTRL-01/commands/` | 管理员/运维员 | 请求 `{ action, dutyPercent?, confirmationToken }`。仅允许审查过的灯带、继电器和双风机 PWM 动作；必须提交未使用且未过期的同用户确认凭据。服务端生成唯一 `cmdId`，以 QoS 1 发布至本地 MQTT，最多等待 3 秒匹配 `cmd_ack`，并记录审计。确认凭据在 MQTT 调用前即消耗，超时/失败不自动重发，防止不确定状态重复驱动实体。 |
 | `GET` | `/assets/` | 登录 | `search`、`status`、`zone`、`integrationStatus`、`hardwareCode`、`hasLocation=true\|false`、`isActive=true\|false`、`page`、`pageSize`；管理员可用 `isActive=all` 查询全部生命周期；返回硬件接入信息、WGS84 坐标、坐标来源和版本 |
 | `POST` | `/assets/` | 管理员 | 新建资产主数据；校验编码、硬件编号、能力去重、二维孪生坐标和成对 WGS84 坐标，成功后写入审计 |
 | `PATCH` | `/assets/{id}/` | 管理员 | 更新资产主数据，必须提交当前 `version`；并发过期返回 `409`，停用存在活动告警或工单的资产返回 `409` |
@@ -77,9 +79,9 @@
 | `GET` | `/alerts/` | 登录 | `status`、`severity`、`openedFrom`、`openedTo`、`page`、`pageSize` |
 | `POST` | `/alerts/{id}/acknowledge/` | 管理员/运维员 | 确认待处理告警 |
 | `POST` | `/alerts/{id}/work-order/` | 管理员/运维员 | 从告警创建关联工单；严重告警默认 4 小时、其他告警默认 24 小时处置时限 |
-| `GET` | `/work-orders/` | 登录 | `status`、`search`、`updatedFrom`、`updatedTo`、`page`、`pageSize` |
+| `GET` | `/work-orders/` | 登录 | `status`、`search`、`updatedFrom`、`updatedTo`、`page`、`pageSize`；每条工单包含按时间倒序的中文化 `timeline` 处理记录 |
 | `POST` | `/work-orders/` | 管理员/运维员 | 新建 `{ assetCode, title, description?, priority? }`；可提供 `Idempotency-Key` 防止重试重复建单。后端按优先级写入处置时限：低 72 小时、普通 48 小时、高 24 小时、紧急 4 小时 |
-| `POST` | `/work-orders/{id}/transition/` | 管理员/运维员 | 流转 `{ to, version? }`；提供 `version` 时启用乐观锁，完成工单必须管理员复核 |
+| `POST` | `/work-orders/{id}/transition/` | 管理员/运维员 | 流转 `{ to, version?, note? }`；提交复核与管理员完成复核时 `note` 必填（最多 1000 字），每次变更写入不可随工单更新覆盖的处理时间线；提供 `version` 时启用乐观锁 |
 | `GET` | `/telemetry/` | 登录 | `assetCode`、`metricKey`、`quality`、`recordedFrom`、`recordedTo`、`page`、`pageSize`；按业务采集时间倒序返回 |
 | `GET` | `/telemetry/summary/` | 登录 | 复用遥测筛选条件，返回样本数、最小值、最大值、平均值、时间范围、质量分布和最新样本 |
 | `POST` | `/telemetry/` | 管理员/运维员/采集密钥 | 批量写入 1–100 条可信遥测；按 `eventId` 幂等，刷新通信心跳并驱动阈值告警和资产状态联动；`X-Ingest-Key` 仅在此端点启用 |
@@ -87,8 +89,8 @@
 | `PUT` | `/thresholds/{key}/` | 管理员 | 更新 `{ warning, alarm, version }`，使用乐观锁 |
 | `GET` | `/audit/` | 登录 | `action`、`search`（动作、资源类型/编号或操作者邮箱）、`occurredFrom`、`occurredTo`、`page`、`pageSize` |
 | `GET` | `/report-exports/` | 登录 | 导出操作记录 |
-| `POST` | `/report-exports/` | 登录 | 创建 `{ report: alerts\|workOrders\|assets\|daily }`；可提供 `Idempotency-Key` 防止重复登记 |
-| `GET` | `/report-exports/{id}/download/` | 创建者/管理员 | 返回创建时固化的 UTF-8 CSV 不可变快照；响应含 SHA-256，执行公式注入防护且不受前端分页限制 |
+| `POST` | `/report-exports/` | 登录 | 创建 `{ report: alerts\|workOrders\|assets\|daily\|telemetry, filters? }`；`filters` 仅允许遥测的 `assetCode`、`metricKey`、`quality`、`recordedFrom`、`recordedTo`，按与历史查询相同的规则校验并写入快照；可提供 `Idempotency-Key` 防止重复登记，重复键必须携带相同报告和筛选参数 |
+| `GET` | `/report-exports/{id}/download/` | 创建者/管理员 | 返回创建时固化的 UTF-8 CSV 不可变快照；响应含 SHA-256，执行公式注入防护且不受前端分页限制。遥测筛选快照会保留创建时的筛选条件与结果，不随之后数据变化 |
 | `GET` | `/twin/model-readiness/` | 登录 | 查询设备节点映射和当前三维版本的交付状态 |
 | `GET` | `/twin/models/` | 登录 | 查询三维模型版本、节点/网格统计和设备映射结果 |
 | `POST` | `/twin/models/` | 管理员 | 上传 GLB；校验容器、场景节点、网格引用、重复名称和设备覆盖 |

@@ -18,17 +18,44 @@ client.on('message', (topic, rawPayload) => {
 
   try {
     const telemetry = JSON.parse(rawPayload.toString('utf8'));
-    if (telemetry.schema !== 'ut.node-a.sht30.v1' || !Array.isArray(telemetry.sht30)) return;
+    let online;
+    let temperatureCentiC;
+    let humidityCentiRH;
 
-    const reading = telemetry.sht30.find((item) => item.slot === 1);
-    if (!reading || !Number.isInteger(reading.temperatureCentiC) || !Number.isInteger(reading.humidityCentiRH)) return;
+    if (telemetry.schema === 'ut.telemetry.v1' && Array.isArray(telemetry.readings)) {
+      const temperature = telemetry.readings.find(
+        (item) => item.assetCode === 'ENV-01' && item.metric === 'temperature',
+      );
+      const humidity = telemetry.readings.find(
+        (item) => item.assetCode === 'ENV-01' && item.metric === 'humidity',
+      );
+      if (!temperature || !humidity ||
+          !Number.isFinite(temperature.value) || !Number.isFinite(humidity.value)) return;
+
+      online = temperature.quality === 'good' && humidity.quality === 'good';
+      temperatureCentiC = Math.round(temperature.value * 100);
+      humidityCentiRH = Math.round(humidity.value * 100);
+    } else if (telemetry.schema === 'ut.node-a.sht30.v1' && Array.isArray(telemetry.sht30)) {
+      const reading = telemetry.sht30.find((item) => item.slot === 1);
+      if (!reading || !Number.isInteger(reading.temperatureCentiC) ||
+          !Number.isInteger(reading.humidityCentiRH)) return;
+
+      online = Boolean(reading.online);
+      temperatureCentiC = reading.temperatureCentiC;
+      humidityCentiRH = reading.humidityCentiRH;
+    } else {
+      return;
+    }
+
+    if (temperatureCentiC < -4500 || temperatureCentiC > 13000 ||
+        humidityCentiRH < 0 || humidityCentiRH > 10000) return;
 
     const peerPayload = JSON.stringify({
       schema: 'ut.node-b.peer.v1',
       source: 'node-a',
-      online: reading.online ? 1 : 0,
-      temperatureCentiC: reading.temperatureCentiC,
-      humidityCentiRH: reading.humidityCentiRH,
+      online: online ? 1 : 0,
+      temperatureCentiC,
+      humidityCentiRH,
     });
     client.publish(targetTopic, peerPayload, { qos: 1 }, (error) => {
       if (error) console.error('Node A relay publish failed:', error.message);

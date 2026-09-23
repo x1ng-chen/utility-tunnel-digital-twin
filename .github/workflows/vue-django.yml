@@ -13,6 +13,8 @@ on:
       - 'docs/software-quality-gates.md'
       - 'deploy/postgres/**'
       - 'deploy/containers/**'
+      - 'deploy/start-local.ps1'
+      - 'deploy/LOCAL-START.md'
       - 'services/iotda-gateway/**'
       - 'tools/**'
       - 'model/**'
@@ -30,6 +32,8 @@ on:
       - 'docs/software-quality-gates.md'
       - 'deploy/postgres/**'
       - 'deploy/containers/**'
+      - 'deploy/start-local.ps1'
+      - 'deploy/LOCAL-START.md'
       - 'services/iotda-gateway/**'
       - 'tools/**'
       - 'model/**'
@@ -39,11 +43,31 @@ permissions:
   contents: read
 
 jobs:
+  model-release-contract:
+    name: Candidate binary and runtime contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          lfs: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+      - name: Fetch the candidate package from LFS (fail closed)
+        run: git lfs pull --include="model/utility-tunnel-annular-v09-candidate.*,model/previews/v09-*.png" --exclude=""
+      - run: node --test tools/glb-contract.test.mjs tools/model-gate.test.mjs
+      - run: node tools/check-twin-model-artifacts.mjs --require-candidate
+      - run: node tools/model-package.mjs
   repository-safety:
     name: Repository safety scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Keep CI deterministic when optional candidate-model LFS objects are
+          # unavailable; the model gate validates the V07 runtime and reports
+          # an explicit V08 candidate deferral instead of failing checkout.
+          lfs: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
@@ -162,6 +186,9 @@ jobs:
           assert acknowledged.status_code == 200, acknowledged.content;
           linked = client.post(f'/api/alerts/{alert.pk}/work-order/', format='json', HTTP_HOST='localhost');
           assert linked.status_code in {200, 201}, linked.content"
+      - name: Verify runtime model publication permissions
+        shell: bash
+        run: DATABASE_URL="$CI_RUNTIME_URL" python manage.py verify_runtime_model_permissions
       - name: Verify schema and destructive writes are denied
         shell: bash
         run: |

@@ -1,0 +1,138 @@
+{
+  "status": "AWAITING_SECTION_REVIEW",
+  "changedMeshes": [
+    "GEO-V09-L01-SERVICE-BOSS",
+    "GEO-V09-L02-SERVICE-BOSS",
+    "GEO-V09-L03-SERVICE-BOSS",
+    "GEO-V09-L04-SERVICE-BOSS",
+    "GEO-V09-L05-SERVICE-BOSS",
+    "GEO-V09-WATER-DISCHARGE",
+    "GEO-V09-WATER-RETURN",
+    "GEO-V09-WATER-SUCTION",
+    "GEO-V14-FSIR02_L01_PIPE_CLAMP",
+    "GEO-V14-FSIR02_L02_PIPE_CLAMP",
+    "GEO-V14-FSIR02_L03_PIPE_CLAMP",
+    "GEO-V14-FSIR02_L04_PIPE_CLAMP",
+    "GEO-V14-FSIR02_L05_PIPE_CLAMP"
+  ],
+  "stations": [
+    {
+      "station": "L01",
+      "axis": [
+        0.01899999938905239,
+        -0.24899998307228088,
+        0.24300000071525574
+      ],
+      "probeCenter": [
+        0.01899999938905239,
+        -0.25999999046325684,
+        0.24300000071525574
+      ],
+      "drainValveLumen": "UNVERIFIED",
+      "opticWallIntersections": [],
+      "opticConnectedToHousing": true,
+      "freshOpticConnectedToHousing": true
+    },
+    {
+      "station": "L02",
+      "axis": [
+        0.4399999976158142,
+        -0.15400001406669617,
+        0.2070000022649765
+      ],
+      "probeCenter": [
+        0.4399999976158142,
+        -0.16500000655651093,
+        0.2070000022649765
+      ],
+      "drainValveLumen": "not applicable",
+      "opticWallIntersections": [],
+      "opticConnectedToHousing": true,
+      "freshOpticConnectedToHousing": true
+    },
+    {
+      "station": "L03",
+      "axis": [
+        0.5059999823570251,
+        -0.14399999380111694,
+        0.20499999821186066
+      ],
+      "probeCenter": [
+        0.5059999823570251,
+        -0.1550000011920929,
+        0.20499999821186066
+      ],
+      "drainValveLumen": "not applicable",
+      "opticWallIntersections": [],
+      "opticConnectedToHousing": true,
+      "freshOpticConnectedToHousing": true
+    },
+    {
+      "station": "L04",
+      "axis": [
+        0.6399999856948853,
+        -0.14399999380111694,
+        0.2770000100135803
+      ],
+      "probeCenter": [
+        0.6399999856948853,
+        -0.1550000011920929,
+        0.2770000100135803
+      ],
+      "drainValveLumen": "not applicable",
+      "opticWallIntersections": [],
+      "opticConnectedToHousing": true,
+      "freshOpticConnectedToHousing": true
+    },
+    {
+      "station": "L05",
+      "axis": [
+        0.11299999058246613,
+        -0.20100000500679016,
+        0.38199999928474426
+      ],
+      "probeCenter": [
+        0.11299999058246613,
+        -0.21199999749660492,
+        0.38199999928474426
+      ],
+      "drainValveLumen": "not applicable",
+      "opticWallIntersections": [],
+      "opticConnectedToHousing": true,
+      "freshOpticConnectedToHousing": true
+    }
+  ],
+  "floor": {
+    "method": "triangle clipping against actual floor-top triangular prisms",
+    "floorTop": 0.19589924812316895,
+    "tolerance": 1e-05,
+    "topTriangles": 152,
+    "checkedMeshes": 526,
+    "exceptions": {
+      "MESH_RING_FLOOR": "Reference slab itself",
+      "MESH_BASE_01": "Designed foundation below the reference slab",
+      "GEO_UT_RING_RENDER_GROUND": "Presentation ground below foundation"
+    },
+    "findings": [],
+    "status": "PASS"
+  },
+  "freshFloor": {
+    "method": "triangle clipping against actual floor-top triangular prisms",
+    "floorTop": 0.19589924812316895,
+    "tolerance": 1e-05,
+    "topTriangles": 152,
+    "checkedMeshes": 526,
+    "exceptions": {
+      "MESH_RING_FLOOR": "Reference slab itself",
+      "MESH_BASE_01": "Designed foundation below the reference slab",
+      "GEO_UT_RING_RENDER_GROUND": "Presentation ground below foundation"
+    },
+    "findings": [],
+    "status": "PASS"
+  },
+  "limitations": [
+    "L01 valve lumen unresolved",
+    "Watertightness and bore continuity need checking; Boolean completion alone is not proof",
+    "All dimensions inherited and not approved for fabrication"
+  ]
+}

@@ -13,6 +13,23 @@ if DJANGO_ENV not in {'development', 'test', 'production'}:
 IS_PRODUCTION = DJANGO_ENV == 'production'
 APP_VERSION = os.getenv('APP_VERSION', '0.6.0')
 APP_COMMIT_SHA = os.getenv('APP_COMMIT_SHA', 'local')
+MQTT_COMMAND_BROKER_HOST = os.getenv('MQTT_COMMAND_BROKER_HOST', '127.0.0.1').strip()
+if not MQTT_COMMAND_BROKER_HOST:
+    raise ValueError('MQTT_COMMAND_BROKER_HOST must not be empty.')
+try:
+    MQTT_COMMAND_BROKER_PORT = int(os.getenv('MQTT_COMMAND_BROKER_PORT', '1884'))
+    MQTT_COMMAND_ACK_TIMEOUT_SECONDS = float(os.getenv('MQTT_COMMAND_ACK_TIMEOUT_SECONDS', '3'))
+    CONTROLLER_COMMAND_CONFIRMATION_TTL_SECONDS = int(os.getenv('CONTROLLER_COMMAND_CONFIRMATION_TTL_SECONDS', '120'))
+except ValueError as exc:
+    raise ValueError('MQTT command broker settings must be numeric.') from exc
+if not 1 <= MQTT_COMMAND_BROKER_PORT <= 65535:
+    raise ValueError('MQTT_COMMAND_BROKER_PORT must be between 1 and 65535.')
+if not 0.5 <= MQTT_COMMAND_ACK_TIMEOUT_SECONDS <= 10:
+    raise ValueError('MQTT_COMMAND_ACK_TIMEOUT_SECONDS must be between 0.5 and 10.')
+if not 15 <= CONTROLLER_COMMAND_CONFIRMATION_TTL_SECONDS <= 600:
+    raise ValueError('CONTROLLER_COMMAND_CONFIRMATION_TTL_SECONDS must be between 15 and 600.')
+MQTT_COMMAND_USERNAME = os.getenv('MQTT_COMMAND_USERNAME', '')
+MQTT_COMMAND_PASSWORD = os.getenv('MQTT_COMMAND_PASSWORD', '')
 # Fail closed for deployments that do not explicitly provide a debug flag.
 # Local development can opt in through backend/.env.example.
 DEBUG = DJANGO_ENV != 'production' and os.getenv('DJANGO_DEBUG', 'false').lower() in {'1', 'true', 'yes'}
@@ -29,6 +46,8 @@ if IS_PRODUCTION and '*' in ALLOWED_HOSTS:
     raise RuntimeError('DJANGO_ALLOWED_HOSTS must not contain a wildcard in production.')
 
 INSTALLED_APPS = [
+    # Override Django's WSGI-only runserver for both local and isolated E2E.
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -144,6 +163,14 @@ if IS_PRODUCTION and not raw_cors_origins:
 CORS_ALLOWED_ORIGINS = parse_origins(raw_cors_origins, 'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173', 'CORS_ALLOWED_ORIGINS')
 if IS_PRODUCTION and any(not origin.lower().startswith('https://') for origin in CORS_ALLOWED_ORIGINS):
     raise RuntimeError('Production CORS_ALLOWED_ORIGINS must use HTTPS origins.')
+# WebSocket handshakes carry an Origin header but cannot set CORS response
+# headers, so the live feed reuses the same governed origin allow-list by
+# default and can be tightened independently when a deployment separates the
+# realtime host from the REST host.
+raw_ws_origins = os.getenv('WEBSOCKET_ALLOWED_ORIGINS', '').strip()
+WEBSOCKET_ALLOWED_ORIGINS = parse_origins(raw_ws_origins, ','.join(CORS_ALLOWED_ORIGINS), 'WEBSOCKET_ALLOWED_ORIGINS')
+if IS_PRODUCTION and any(not origin.lower().startswith('https://') for origin in WEBSOCKET_ALLOWED_ORIGINS):
+    raise RuntimeError('Production WEBSOCKET_ALLOWED_ORIGINS must use HTTPS origins.')
 raw_csrf_origins = os.getenv('DJANGO_CSRF_TRUSTED_ORIGINS', '').strip()
 if IS_PRODUCTION and not raw_csrf_origins:
     raise RuntimeError('DJANGO_CSRF_TRUSTED_ORIGINS is required in production.')
@@ -164,6 +191,18 @@ if INGEST_API_KEY and len(INGEST_API_KEY) < 32:
     raise ValueError('DJANGO_INGEST_API_KEY must contain at least 32 characters when configured.')
 if not INGEST_PRINCIPAL_USERNAME:
     raise ValueError('DJANGO_INGEST_PRINCIPAL_USERNAME must not be empty.')
+CONNECTIVITY_MONITOR_TOKEN = os.getenv('CONNECTIVITY_MONITOR_TOKEN', '').strip()
+CONNECTIVITY_MONITOR_URL = os.getenv('CONNECTIVITY_MONITOR_URL', 'http://api:8000/api/internal/connectivity/reconcile/').strip()
+try:
+    CONNECTIVITY_RECONCILE_INTERVAL_SECONDS = int(os.getenv('CONNECTIVITY_RECONCILE_INTERVAL_SECONDS', '15'))
+except ValueError as exc:
+    raise ValueError('CONNECTIVITY_RECONCILE_INTERVAL_SECONDS must be an integer.') from exc
+if IS_PRODUCTION and len(CONNECTIVITY_MONITOR_TOKEN) < 32:
+    raise RuntimeError('CONNECTIVITY_MONITOR_TOKEN must contain at least 32 characters in production.')
+if not CONNECTIVITY_MONITOR_URL.startswith(('http://', 'https://')):
+    raise ValueError('CONNECTIVITY_MONITOR_URL must be an HTTP(S) URL.')
+if not 5 <= CONNECTIVITY_RECONCILE_INTERVAL_SECONDS <= 3600:
+    raise ValueError('CONNECTIVITY_RECONCILE_INTERVAL_SECONDS must be between 5 and 3600.')
 REGISTRATION_SETUP_TTL_SECONDS = int(os.getenv('REGISTRATION_SETUP_TTL_SECONDS', '86400'))
 if REGISTRATION_SETUP_TTL_SECONDS <= 0:
     raise ValueError('REGISTRATION_SETUP_TTL_SECONDS must be greater than zero.')
@@ -184,6 +223,7 @@ REST_FRAMEWORK = {
         'registration': os.getenv('REGISTRATION_RATE_LIMIT', '5/hour'),
         'password_setup': os.getenv('PASSWORD_SETUP_RATE_LIMIT', '10/min'),
         'login_burst': os.getenv('LOGIN_BURST_RATE_LIMIT', '60/min'),
+        'controller_command': os.getenv('CONTROLLER_COMMAND_RATE_LIMIT', '20/min'),
         'password_change': os.getenv('PASSWORD_CHANGE_RATE_LIMIT', '5/hour'),
     },
 }
@@ -213,6 +253,10 @@ if IS_PRODUCTION and (not CACHE_BACKEND or CACHE_BACKEND.endswith('LocMemCache')
 if not CACHE_LOCATION:
     raise ValueError('DJANGO_CACHE_LOCATION must not be empty.')
 CACHES = {'default': {'BACKEND': CACHE_BACKEND, 'LOCATION': CACHE_LOCATION}}
+# In-process channel layer for the live feed. Publishing and consuming must run
+# in one process; production would swap this for a shared layer (Redis) only if
+# multi-worker realtime fan-out is required.
+CHANNEL_LAYERS = {'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}}
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if os.getenv('DJANGO_TRUST_PROXY_SSL', 'false').lower() in {'1', 'true', 'yes'} else None
 LOGGING = {
     'version': 1,

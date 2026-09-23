@@ -1,6 +1,8 @@
--- Run once *after Django migrations and seed_demo* in the managed PostgreSQL
--- console as the project database owner. The application runtime account is
--- intentionally separate from the migration/release identity.
+-- Run once after Django migrations in the managed PostgreSQL console as the
+-- project database owner. Production must not run seed_demo; create the first
+-- administrator through the controlled production-account process instead.
+-- The application runtime account is intentionally separate from the
+-- migration/release identity.
 -- Replace the bracketed values outside of source control. Do not paste a real
 -- password into this file or commit it after editing.
 --
@@ -43,6 +45,7 @@ GRANT SELECT, INSERT, DELETE ON authtoken_token TO ut_runtime;
 
 -- Operational reads and the exact columns written by the Django API routes.
 GRANT SELECT ON operations_asset, operations_alert, operations_workorder,
+  operations_workorderevent,
   operations_telemetry, operations_threshold, operations_auditlog,
   operations_reportexport, operations_registrationrequest,
   operations_spatialfeature, operations_hardwarebinding,
@@ -64,11 +67,13 @@ GRANT UPDATE (severity, status, detail, last_observed_value,
 GRANT INSERT (asset_id, event_id, metric_key, metric, value, unit, quality,
   recorded_at, ingested_at) ON operations_telemetry TO ut_runtime;
 GRANT INSERT ON operations_workorder TO ut_runtime;
+GRANT INSERT (work_order_id, event_type, from_status, to_status, note, actor_id, created_at)
+  ON operations_workorderevent TO ut_runtime;
 GRANT UPDATE (status, assignee_id, completed_at, reviewed_by_id, version, updated_at)
   ON operations_workorder TO ut_runtime;
 GRANT UPDATE (warning, alarm, version, updated_at) ON operations_threshold TO ut_runtime;
 GRANT INSERT ON operations_auditlog TO ut_runtime;
-GRANT INSERT (report_type, status, file_name, idempotency_key, content,
+GRANT INSERT (report_type, status, file_name, idempotency_key, filters, content,
   content_sha256, row_count, requested_by_id, created_at, completed_at)
   ON operations_reportexport TO ut_runtime;
 GRANT INSERT (account, display_name, requested_role, setup_token_hash,
@@ -90,17 +95,21 @@ GRANT INSERT (asset_id, protocol, device_identifier, endpoint,
 GRANT UPDATE (asset_id, protocol, device_identifier, endpoint,
   expected_interval_seconds, status, last_heartbeat_at, version, updated_at)
   ON operations_hardwarebinding TO ut_runtime;
-GRANT INSERT (version, model_file, original_name, sha256, size_bytes, notes,
-  status, uploaded_by_id, activated_by_id, activated_at, created_at)
+GRANT INSERT (version, model_file, original_name, sha256, size_bytes,
+  node_count, mesh_count, named_node_count, node_names,
+  node_inventory_available, duplicate_node_names, missing_asset_codes,
+  is_compatible, notes, status, uploaded_by_id, activated_by_id, activated_at,
+  created_at)
   ON operations_twinmodelrelease TO ut_runtime;
-GRANT UPDATE (status, activated_by_id, activated_at)
+GRANT UPDATE (status, missing_asset_codes, is_compatible, activated_by_id,
+  activated_at)
   ON operations_twinmodelrelease TO ut_runtime;
 
 -- BigAutoField-backed inserts need sequence usage, but the API must not be
 -- able to alter sequence ownership or create new schema objects.
 GRANT USAGE, SELECT ON SEQUENCE operations_profile_id_seq,
   operations_asset_id_seq, operations_alert_id_seq, operations_telemetry_id_seq,
-  operations_workorder_id_seq, operations_auditlog_id_seq,
+  operations_workorder_id_seq, operations_workorderevent_id_seq, operations_auditlog_id_seq,
   operations_reportexport_id_seq, operations_registrationrequest_id_seq,
   operations_spatialfeature_id_seq, operations_hardwarebinding_id_seq,
   operations_twinmodelrelease_id_seq

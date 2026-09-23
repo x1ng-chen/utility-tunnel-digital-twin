@@ -7,7 +7,7 @@ import io
 import json
 from math import isfinite
 import re
-from secrets import token_urlsafe
+from secrets import compare_digest, token_urlsafe
 import struct
 from uuid import uuid4
 from django.conf import settings
@@ -28,13 +28,15 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .authentication import BearerTokenAuthentication, IngestApiKeyAuthentication
-from .connectivity import count_online_assets, mark_assets_connected
-from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder
+from .command_dispatch import CommandDispatchError, publish_controller_command
+from .connectivity import count_online_assets, mark_assets_connected, reconcile_connectivity
+from .models import Alert, Asset, AuditLog, ControllerCommandConfirmation, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder, WorkOrderEvent
 from .permissions import AuthenticatedRead, TelemetryPermission
+from .realtime import publish_alert, publish_alert_by_id, publish_asset, publish_telemetry, publish_work_order
 from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, HardwareBindingMutationSerializer, HardwareBindingSerializer, RegistrationRequestSerializer, ReportExportSerializer, SpatialFeatureMutationSerializer, SpatialFeatureSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, TwinModelReleaseSerializer, WorkOrderSerializer, hardware_connectivity
 from .services import actor_name, audit
 from .telemetry_rules import evaluate_threshold
-from .throttling import LoginBurstRateThrottle, LoginRateThrottle, PasswordChangeRateThrottle, PasswordSetupRateThrottle, RegistrationRateThrottle
+from .throttling import ControllerCommandRateThrottle, LoginBurstRateThrottle, LoginRateThrottle, PasswordChangeRateThrottle, PasswordSetupRateThrottle, RegistrationRateThrottle
 
 
 def request_id(request) -> str:
@@ -108,6 +110,24 @@ def is_admin(request) -> bool:
     return role(request) == Profile.Role.ADMINISTRATOR
 
 
+CONTROLLER_ACTIONS = {'led_red', 'led_green', 'led_blue', 'led_off', 'relay_on', 'relay_off', 'fan_pwm', 'fan2_pwm'}
+
+
+def controller_command_payload(request):
+    """Validate the action shape identically for confirmation and dispatch."""
+    payload = object_payload(request)
+    action = payload.get('action') if payload else None
+    if action not in CONTROLLER_ACTIONS:
+        return None, None, error_response('invalid_request', 'Only approved controller actions are available.', 400)
+    duty_percent = payload.get('dutyPercent') if payload else None
+    if action in {'fan_pwm', 'fan2_pwm'}:
+        if isinstance(duty_percent, bool) or not isinstance(duty_percent, int) or not 0 <= duty_percent <= 100:
+            return None, None, error_response('invalid_request', 'PWM dutyPercent must be an integer from 0 to 100.', 400)
+    elif duty_percent is not None:
+        return None, None, error_response('invalid_request', 'dutyPercent is only allowed for PWM actions.', 400)
+    return action, duty_percent, None
+
+
 def work_order_code() -> str:
     """Generate a collision-resistant human-readable work-order code."""
     return f'WO-{timezone.now():%y%m%d}-{uuid4().hex[:6].upper()}'
@@ -163,11 +183,12 @@ def telemetry_matches(reading, payload) -> bool:
     )
 
 
-def filtered_telemetry(request):
+def filtered_telemetry_params(params):
+    """Apply the one governed telemetry filter contract to any input mapping."""
     queryset = Telemetry.objects.select_related('asset')
-    asset_code = request.query_params.get('assetCode', '').strip()
-    metric_key = request.query_params.get('metricKey', '').strip()
-    quality = request.query_params.get('quality', '').strip()
+    asset_code = str(params.get('assetCode', '')).strip()
+    metric_key = str(params.get('metricKey', '')).strip()
+    quality = str(params.get('quality', '')).strip()
     if asset_code:
         if not re.fullmatch(r'[A-Z0-9][A-Z0-9_-]{1,39}', asset_code):
             return None, error_response('invalid_request', 'assetCode is not valid.', 400)
@@ -180,10 +201,19 @@ def filtered_telemetry(request):
         if quality not in Telemetry.Quality.values:
             return None, error_response('invalid_request', 'quality is not valid.', 400)
         queryset = queryset.filter(quality=quality)
-    recorded_from, error = datetime_filter(request, 'recordedFrom')
+    def parse_time(key):
+        value = str(params.get(key, '')).strip()
+        if not value:
+            return None, None
+        parsed = parse_datetime(value)
+        if parsed is None:
+            return None, error_response('invalid_request', f'{key} must be a valid ISO-8601 datetime.', 400)
+        return timezone.make_aware(parsed, timezone.get_current_timezone()) if timezone.is_naive(parsed) else parsed, None
+
+    recorded_from, error = parse_time('recordedFrom')
     if error:
         return None, error
-    recorded_to, error = datetime_filter(request, 'recordedTo')
+    recorded_to, error = parse_time('recordedTo')
     if error:
         return None, error
     if recorded_from and recorded_to and recorded_from > recorded_to:
@@ -193,6 +223,34 @@ def filtered_telemetry(request):
     if recorded_to:
         queryset = queryset.filter(recorded_at__lte=recorded_to)
     return queryset, None
+
+
+def filtered_telemetry(request):
+    return filtered_telemetry_params(request.query_params)
+
+
+TELEMETRY_EXPORT_FILTER_KEYS = {'assetCode', 'metricKey', 'quality', 'recordedFrom', 'recordedTo'}
+
+
+def telemetry_export_filters(payload):
+    """Normalize and validate an optional immutable CSV snapshot filter."""
+    raw_filters = payload.get('filters', {})
+    if raw_filters is None:
+        raw_filters = {}
+    if not isinstance(raw_filters, Mapping) or any(key not in TELEMETRY_EXPORT_FILTER_KEYS for key in raw_filters):
+        return None, error_response('invalid_request', 'Telemetry export filters are invalid.', 400)
+    normalized = {}
+    for key in TELEMETRY_EXPORT_FILTER_KEYS:
+        value = raw_filters.get(key)
+        if value is None or value == '':
+            continue
+        if not isinstance(value, str):
+            return None, error_response('invalid_request', 'Telemetry export filters must be strings.', 400)
+        normalized_value = value.strip()
+        if normalized_value:
+            normalized[key] = normalized_value
+    _, error = filtered_telemetry_params(normalized)
+    return (None, error) if error else (normalized, None)
 
 
 def _geometry_points(geometry):
@@ -656,6 +714,102 @@ class AdminUserDetailView(APIView):
         return Response(AdminUserSerializer(user).data)
 
 
+class ControllerCommandConfirmationView(APIView):
+    """Issue a short-lived one-shot approval after an operator confirms intent."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ControllerCommandRateThrottle]
+
+    def post(self, request, asset_code):
+        if not can_write(request):
+            return error_response('forbidden', 'Operator permission is required to control equipment.', 403)
+        if asset_code != 'CTRL-01' or not Asset.objects.filter(code=asset_code, is_active=True).exists():
+            return error_response('not_found', 'This controller is not configured for platform commands.', 404)
+        action, duty_percent, error = controller_command_payload(request)
+        if error:
+            return error
+
+        now = timezone.now()
+        # The audit trail retains issuance/dispatch evidence; expired token
+        # hashes carry no operational value and must not grow indefinitely.
+        ControllerCommandConfirmation.objects.filter(expires_at__lt=now).delete()
+        token = token_urlsafe(32)
+        confirmation = ControllerCommandConfirmation.objects.create(
+            token_hash=sha256(token.encode('utf-8')).hexdigest(), user=request.user,
+            asset_code=asset_code, action=action, duty_percent=duty_percent,
+            expires_at=now + timedelta(seconds=settings.CONTROLLER_COMMAND_CONFIRMATION_TTL_SECONDS),
+        )
+        audit(request.user, 'controller.command.confirmation_issued', 'asset', asset_code, {
+            'confirmationId': confirmation.pk, 'action': action, 'dutyPercent': duty_percent,
+            'expiresAt': confirmation.expires_at.isoformat(),
+        }, request_id(request))
+        return Response({'confirmationToken': token, 'expiresAt': confirmation.expires_at}, status=201)
+
+
+class ControllerCommandView(APIView):
+    """Publish a reviewed action only after a fresh one-shot approval."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ControllerCommandRateThrottle]
+
+    def post(self, request, asset_code):
+        if not can_write(request):
+            return error_response('forbidden', 'Operator permission is required to control equipment.', 403)
+        if asset_code != 'CTRL-01':
+            return error_response('not_found', 'This controller is not configured for platform commands.', 404)
+        payload = object_payload(request)
+        action, duty_percent, error = controller_command_payload(request)
+        if error:
+            return error
+        if not Asset.objects.filter(code=asset_code, is_active=True).exists():
+            return error_response('not_found', 'The controller asset is not active.', 404)
+
+        confirmation_token = payload.get('confirmationToken') if payload else None
+        if not isinstance(confirmation_token, str) or not 32 <= len(confirmation_token) <= 200:
+            return error_response('confirmation_required', 'A fresh operator confirmation is required before dispatch.', 409)
+        now = timezone.now()
+        with transaction.atomic():
+            confirmation = ControllerCommandConfirmation.objects.select_for_update().filter(
+                token_hash=sha256(confirmation_token.encode('utf-8')).hexdigest(), user=request.user,
+                asset_code=asset_code, action=action, duty_percent=duty_percent,
+            ).first()
+            if not confirmation or confirmation.consumed_at or confirmation.expires_at <= now:
+                return error_response('confirmation_required', 'The command confirmation is invalid, used, or expired. Confirm again.', 409)
+            # Consume before external I/O. A timeout is an uncertain delivery
+            # result, so reusing the approval could duplicate a physical action.
+            confirmation.consumed_at = now
+            confirmation.save(update_fields=['consumed_at'])
+
+        command = {
+            'schema': 'ut.command.v1',
+            'cmdId': f'platform-{uuid4().hex[:16]}',
+            'action': action,
+            'ttlMs': 10000,
+        }
+        if action in {'fan_pwm', 'fan2_pwm'}:
+            command['dutyPercent'] = duty_percent
+        try:
+            acknowledgement = publish_controller_command(command)
+        except CommandDispatchError as exc:
+            audit(request.user, 'controller.command.failed', 'asset', asset_code, {
+                'cmdId': command['cmdId'], 'action': action, 'dutyPercent': duty_percent,
+                'confirmationId': confirmation.pk, 'reason': str(exc),
+            }, request_id(request))
+            return error_response('command_unavailable', 'The local controller command broker is unavailable.', 503)
+
+        outcome = acknowledgement.get('status') if acknowledgement else 'ack_timeout'
+        audit(request.user, 'controller.command.sent', 'asset', asset_code, {
+            'cmdId': command['cmdId'], 'action': action, 'dutyPercent': duty_percent, 'outcome': outcome,
+            'ackReason': acknowledgement.get('reason') if acknowledgement else '', 'confirmationId': confirmation.pk,
+        }, request_id(request))
+        return Response({
+            'cmdId': command['cmdId'],
+            'action': action,
+            'delivery': 'acknowledged' if acknowledgement else 'published',
+            'ack': acknowledgement,
+        }, status=201)
+
+
 class DashboardView(APIView):
     permission_classes = [AuthenticatedRead]
 
@@ -894,7 +1048,11 @@ class TwinModelReleaseActivateView(APIView):
         if not is_admin(request):
             return error_response('forbidden', '仅管理员可以切换三维模型版本。', 403)
         with transaction.atomic():
-            release = TwinModelRelease.objects.select_for_update().select_related('uploaded_by', 'activated_by').filter(pk=pk).first()
+            # `activated_by` is nullable, so `select_related` builds an outer
+            # join. PostgreSQL rejects a plain FOR UPDATE over that nullable
+            # join side. Lock only the release row; the user relation is read
+            # for serialization and must not participate in the lock.
+            release = TwinModelRelease.objects.select_for_update(of=('self',)).select_related('uploaded_by', 'activated_by').filter(pk=pk).first()
             if not release:
                 return error_response('not_found', '模型版本不存在。', 404)
             if release.status == TwinModelRelease.Status.ACTIVE:
@@ -996,6 +1154,7 @@ class AssetListView(APIView):
                 audit(request.user, 'asset.created', 'asset', asset.pk, {'code': asset.code, 'hardwareCode': asset.hardware_code}, request_id(request))
         except IntegrityError:
             return error_response('conflict', 'Asset code or hardware code already exists.', 409)
+        publish_asset(asset)
         return Response(AssetSerializer(asset).data, status=201)
 
 
@@ -1041,6 +1200,7 @@ class AssetDetailView(APIView):
                 audit(request.user, 'asset.updated', 'asset', asset.pk, {'code': asset.code, 'fields': changed_fields, 'version': asset.version}, request_id(request))
         except IntegrityError:
             return error_response('conflict', 'Asset code or hardware code already exists.', 409)
+        publish_asset(asset)
         return Response(AssetSerializer(asset).data)
 
 
@@ -1227,6 +1387,13 @@ class AlertListView(APIView):
 
     def get(self, request):
         queryset = Alert.objects.select_related('asset', 'acknowledged_by')
+        if request.query_params.get('assetCode'):
+            queryset = queryset.filter(asset__code=request.query_params['assetCode'])
+        if 'assetCodes' in request.query_params:
+            asset_codes = request.query_params['assetCodes'].split(',')
+            if not 1 <= len(asset_codes) <= 100 or any(not code.strip() or len(code) > 80 for code in asset_codes):
+                return error_response('invalid_request', 'assetCodes requires 1 to 100 non-empty device codes.', 400)
+            queryset = queryset.filter(asset__code__in=[code.strip() for code in asset_codes])
         if request.query_params.get('status'):
             alert_status = request.query_params['status']
             if alert_status not in Alert.Status.values:
@@ -1274,6 +1441,7 @@ class AlertAcknowledgeView(APIView):
             alert.acknowledged_by = request.user
             alert.save(update_fields=['status', 'acknowledged_at', 'acknowledged_by'])
             audit(request.user, 'alert.acknowledged', 'alert', alert.pk, {'code': alert.code}, request_id(request))
+        publish_alert(alert)
         return Response(AlertSerializer(alert).data)
 
 
@@ -1295,6 +1463,7 @@ class AlertWorkOrderView(APIView):
                     return error_response('invalid_state', 'Alert is not eligible for a work order.', 409)
                 priority = WorkOrder.Priority.URGENT if alert.severity == Alert.Severity.CRITICAL else WorkOrder.Priority.HIGH
                 order = WorkOrder.objects.create(code=work_order_code(), source_alert=alert, asset=alert.asset, title=f'处置 {alert.code}：{alert.title}', priority=priority, created_by=request.user, due_at=work_order_due_at(priority))
+                WorkOrderEvent.objects.create(work_order=order, event_type=WorkOrderEvent.EventType.CREATED, to_status=order.status, note='由告警自动转为处置工单', actor=request.user)
                 audit(request.user, 'work_order.created_from_alert', 'work_order', order.pk, {'alertCode': alert.code, 'priority': priority, 'dueAt': order.due_at.isoformat()}, request_id(request))
         except IntegrityError:
             # A concurrent request may create the same linked order first.
@@ -1302,6 +1471,7 @@ class AlertWorkOrderView(APIView):
             if existing:
                 return Response(WorkOrderSerializer(existing).data)
             return error_response('conflict', 'A linked work order already exists.', 409)
+        publish_work_order(order)
         return Response(WorkOrderSerializer(order).data, status=201)
 
 
@@ -1309,7 +1479,7 @@ class WorkOrderListView(APIView):
     permission_classes = [AuthenticatedRead]
 
     def get(self, request):
-        queryset = WorkOrder.objects.select_related('asset', 'source_alert', 'assignee')
+        queryset = WorkOrder.objects.select_related('asset', 'source_alert', 'assignee').prefetch_related('events__actor')
         if request.query_params.get('status'):
             work_order_status = request.query_params['status']
             if work_order_status not in WorkOrder.Status.values:
@@ -1380,6 +1550,7 @@ class WorkOrderListView(APIView):
         try:
             with transaction.atomic():
                 order = WorkOrder.objects.create(code=work_order_code(), asset=asset, title=title, description=description_value.strip(), priority=priority, created_by=request.user, due_at=work_order_due_at(priority), idempotency_key=request_key)
+                WorkOrderEvent.objects.create(work_order=order, event_type=WorkOrderEvent.EventType.CREATED, to_status=order.status, note='手动创建运维工单', actor=request.user)
                 audit(request.user, 'work_order.created_manual', 'work_order', order.pk, {'assetCode': asset.code, 'priority': priority, 'dueAt': order.due_at.isoformat()}, request_id(request))
         except IntegrityError:
             # A simultaneous retry may win the unique idempotency constraint.
@@ -1388,6 +1559,7 @@ class WorkOrderListView(APIView):
                 if existing and existing.created_by_id == request.user.pk:
                     return Response(WorkOrderSerializer(existing).data, status=200)
             return error_response('conflict', 'Work order could not be created because a unique value already exists.', 409)
+        publish_work_order(order)
         response = Response(WorkOrderSerializer(order).data, status=201)
         if request_key:
             response['Idempotency-Key'] = request_key
@@ -1417,6 +1589,12 @@ class WorkOrderTransitionView(APIView):
         target = payload.get('to')
         if not isinstance(target, str):
             return error_response('invalid_request', 'to must be a work order status string.', 400)
+        note_value = payload.get('note', '')
+        if not isinstance(note_value, str):
+            return error_response('invalid_request', 'note must be a string.', 400)
+        note = note_value.strip()
+        if len(note) > 1000:
+            return error_response('invalid_request', 'note must not exceed 1000 characters.', 400)
         requested_version = payload.get('version')
         if requested_version is not None:
             try:
@@ -1425,6 +1603,8 @@ class WorkOrderTransitionView(APIView):
                 return error_response('invalid_request', 'version must be a number.', 400)
             if requested_version < 1:
                 return error_response('invalid_request', 'version must be a positive number.', 400)
+        resolved_alert = None
+        normalized_asset = None
         with transaction.atomic():
             order = WorkOrder.objects.select_for_update(of=('self',)).select_related('source_alert', 'asset').filter(pk=pk).first()
             if not order:
@@ -1435,6 +1615,8 @@ class WorkOrderTransitionView(APIView):
                 return error_response('invalid_transition', 'Invalid work order transition.', 409)
             if target == WorkOrder.Status.COMPLETED and role(request) != Profile.Role.ADMINISTRATOR:
                 return error_response('forbidden', 'Administrator review permission is required.', 403)
+            if target in {WorkOrder.Status.PENDING_REVIEW, WorkOrder.Status.COMPLETED} and not note:
+                return error_response('validation_error', '提交复核或完成复核时必须填写处理说明。', 400)
             previous = order.status
             order.status = target
             if target == WorkOrder.Status.ASSIGNED:
@@ -1446,15 +1628,53 @@ class WorkOrderTransitionView(APIView):
                     order.source_alert.status = Alert.Status.RESOLVED
                     order.source_alert.resolved_at = timezone.now()
                     order.source_alert.save(update_fields=['status', 'resolved_at'])
+                    resolved_alert = order.source_alert
                     if not Alert.objects.filter(asset=order.asset, status__in=[Alert.Status.OPEN, Alert.Status.ACKNOWLEDGED]).exclude(pk=order.source_alert_id).exists():
                         order.asset.status = Asset.Status.NORMAL
                         order.asset.save(update_fields=['status', 'updated_at'])
+                        normalized_asset = order.asset
             order.version += 1
             # Keep the runtime database role least-privileged: transition writes
             # only the lifecycle fields instead of every model column.
             order.save(update_fields=['status', 'assignee', 'completed_at', 'reviewed_by', 'version', 'updated_at'])
-            audit(request.user, 'work_order.transitioned', 'work_order', order.pk, {'from': previous, 'to': target}, request_id(request))
+            WorkOrderEvent.objects.create(work_order=order, event_type=WorkOrderEvent.EventType.TRANSITION, from_status=previous, to_status=target, note=note, actor=request.user)
+            audit(request.user, 'work_order.transitioned', 'work_order', order.pk, {'from': previous, 'to': target, 'hasNote': bool(note)}, request_id(request))
+        publish_work_order(order)
+        if resolved_alert:
+            publish_alert(resolved_alert)
+        if normalized_asset:
+            publish_asset(normalized_asset)
         return Response(WorkOrderSerializer(order).data)
+
+
+class InternalConnectivityReconcileView(APIView):
+    """Run heartbeat reconciliation in the API process that owns live clients.
+
+    The monitor is a separate container so it must not mutate connectivity
+    state locally and then publish into its own in-memory channel layer.  It
+    invokes this endpoint over the Docker-only API network; the public Nginx
+    route explicitly rejects it.  A dedicated high-entropy token keeps the
+    endpoint unavailable to ordinary users even if network policy is later
+    changed incorrectly.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        expected = settings.CONNECTIVITY_MONITOR_TOKEN
+        supplied = request.headers.get('X-Connectivity-Monitor-Token', '')
+        if not expected:
+            return error_response('service_unavailable', 'Connectivity monitor is not configured.', 503)
+        if not supplied or not compare_digest(supplied, expected):
+            return error_response('forbidden', 'Connectivity monitor authentication failed.', 403)
+        result = reconcile_connectivity()
+        return Response({
+            'online': result.online,
+            'offline': result.offline,
+            'alertsCreated': result.alerts_created,
+            'alertsResolved': result.alerts_resolved,
+        })
 
 
 class TelemetryListView(APIView):
@@ -1491,7 +1711,6 @@ class TelemetryListView(APIView):
                 invalid_assets = sorted(code for code in asset_codes if code not in assets or not assets[code].is_active)
                 if invalid_assets:
                     return error_response('validation_error', 'Telemetry references missing or inactive assets.', 400, {'assetCode': invalid_assets})
-                mark_assets_connected(assets.values(), request.user, request_id(request))
                 metric_keys = {item['metricKey'] for item in validated}
                 thresholds = Threshold.objects.filter(key__in=metric_keys).in_bulk(field_name='key')
                 unit_errors = sorted({item['metricKey'] for item in validated if item['metricKey'] in thresholds and item['unit'] != thresholds[item['metricKey']].unit})
@@ -1509,7 +1728,16 @@ class TelemetryListView(APIView):
                             {'eventId': item['eventId']},
                         )
 
+                # Only a fully validated, idempotent batch is allowed to renew
+                # heartbeat state or resolve a communication alert.  Returning
+                # an input error from inside ``atomic`` otherwise commits
+                # earlier writes, which would make an invalid payload look like
+                # a truthful device recovery.
+                connectivity_changes = mark_assets_connected(assets.values(), request.user, request_id(request))
                 stored = []
+                created_readings = []
+                changed_alert_ids = set(connectivity_changes.changed_alert_ids)
+                changed_asset_ids = set(connectivity_changes.changed_asset_ids)
                 created_count = 0
                 duplicate_count = 0
                 rule_counts = {}
@@ -1530,18 +1758,42 @@ class TelemetryListView(APIView):
                         quality=item['quality'],
                         recorded_at=item['recordedAt'],
                     )
+                    before_asset = (asset.status, asset.last_seen_at)
                     if asset.last_seen_at is None or item['recordedAt'] > asset.last_seen_at:
                         asset.last_seen_at = item['recordedAt']
                         asset.save(update_fields=['last_seen_at', 'updated_at'])
                     threshold = thresholds.get(item['metricKey'])
-                    action = evaluate_threshold(reading, threshold, request.user, request_id(request)).action if threshold else 'no_rule'
+                    result = evaluate_threshold(reading, threshold, request.user, request_id(request)) if threshold else None
+                    action = result.action if result else 'no_rule'
+                    if result and result.alert_id and result.action in {'created', 'escalated', 'deescalated', 'resolved'}:
+                        changed_alert_ids.add(result.alert_id)
+                    if (asset.status, asset.last_seen_at) != before_asset:
+                        changed_asset_ids.add(asset.pk)
                     rule_counts[action] = rule_counts.get(action, 0) + 1
                     stored.append(reading)
+                    created_readings.append(reading)
                     created_count += 1
                 if created_count:
                     audit(request.user, 'telemetry.batch_ingested', 'telemetry_batch', '', {'created': created_count, 'duplicates': duplicate_count, 'rules': rule_counts}, request_id(request))
         except IntegrityError:
             return error_response('conflict', 'Telemetry ingestion conflicted with a concurrent request. Retry the same eventId values.', 409)
+        # Fan out only after the *outer* transaction committed so live
+        # subscribers never observe a change that later rolls back.  This also
+        # covers callers using the view inside an outer atomic block.
+        created_readings = tuple(created_readings)
+        changed_alert_ids = tuple(sorted(changed_alert_ids))
+        changed_asset_ids = tuple(sorted(changed_asset_ids))
+
+        def publish_committed_batch():
+            for reading in created_readings:
+                publish_telemetry(reading)
+            for alert_id in changed_alert_ids:
+                publish_alert_by_id(alert_id)
+            for asset in Asset.objects.filter(pk__in=changed_asset_ids).order_by('pk'):
+                publish_asset(asset)
+
+        if created_readings or changed_alert_ids or changed_asset_ids:
+            transaction.on_commit(publish_committed_batch)
         return Response({
             'items': TelemetrySerializer(stored, many=True).data,
             'created': created_count,
@@ -1672,25 +1924,32 @@ class ReportExportView(APIView):
         if not isinstance(report_value, str):
             return error_response('invalid_request', 'A valid report type is required.', 400)
         report_type = report_value.strip()
-        if report_type not in {'alerts', 'workOrders', 'assets', 'daily'}:
+        if report_type not in {'alerts', 'workOrders', 'assets', 'daily', 'telemetry'}:
             return error_response('invalid_request', 'A valid report type is required.', 400)
+        filters, filter_error = telemetry_export_filters(payload)
+        if filter_error:
+            return filter_error
+        if report_type != 'telemetry' and filters:
+            return error_response('invalid_request', 'Only telemetry exports support filters.', 400)
         if request_key:
             existing = ReportExport.objects.filter(idempotency_key=request_key).first()
             if existing:
                 if existing.requested_by_id != request.user.pk:
                     return error_response('conflict', 'Idempotency-Key is already used by another user.', 409)
-                if existing.report_type != report_type:
-                    return error_response('conflict', 'Idempotency-Key cannot be reused with a different report.', 409)
+                if existing.report_type != report_type or existing.filters != filters:
+                    return error_response('conflict', 'Idempotency-Key cannot be reused with different report parameters.', 409)
                 return Response(ReportExportSerializer(existing).data, status=200)
         try:
             with transaction.atomic():
                 if connection.vendor == 'postgresql':
                     with connection.cursor() as cursor:
                         cursor.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')
-                content, row_count = _build_report_csv(report_type)
+                content, row_count = _build_report_csv(report_type, filters)
+                export_scope = 'filtered' if filters else 'all'
                 record = ReportExport.objects.create(
                     report_type=report_type,
-                    file_name=f'utility-tunnel-{report_type}-{timezone.now():%Y%m%d%H%M%S}.csv',
+                    file_name=f'utility-tunnel-{report_type}-{export_scope}-{timezone.now():%Y%m%d%H%M%S}.csv',
+                    filters=filters,
                     content=content,
                     content_sha256=sha256(content).hexdigest(),
                     row_count=row_count,
@@ -1700,6 +1959,7 @@ class ReportExportView(APIView):
                 )
                 audit(request.user, 'report.export', 'report_export', record.pk, {
                     'report': report_type,
+                    'filters': filters,
                     'rowCount': row_count,
                     'contentSha256': record.content_sha256,
                 }, request_id(request))
@@ -1707,6 +1967,8 @@ class ReportExportView(APIView):
             if request_key:
                 existing = ReportExport.objects.filter(idempotency_key=request_key).first()
                 if existing and existing.requested_by_id == request.user.pk:
+                    if existing.report_type != report_type or existing.filters != filters:
+                        return error_response('conflict', 'Idempotency-Key cannot be reused with different report parameters.', 409)
                     return Response(ReportExportSerializer(existing).data, status=200)
             return error_response('conflict', 'Report export could not be created because a unique value already exists.', 409)
         response = Response(ReportExportSerializer(record).data, status=201)
@@ -1724,7 +1986,13 @@ def _csv_safe(value):
     return f"'{text}" if text.startswith(('=', '+', '-', '@', '\t', '\r')) else text
 
 
-def _report_rows(report_type):
+def _report_rows(report_type, filters=None):
+    if report_type == 'telemetry':
+        fields = ['id', 'event_id', 'asset__code', 'metric_key', 'metric', 'value', 'unit', 'quality', 'recorded_at', 'ingested_at']
+        queryset, error = filtered_telemetry_params(filters or {})
+        if error:  # Input was validated before the transaction; preserve a fail-closed guard.
+            raise ValueError('Telemetry export filters are invalid.')
+        return fields, queryset.order_by('-recorded_at', '-id').values_list(*fields).iterator(chunk_size=500)
     if report_type == 'assets':
         fields = ['code', 'name', 'zone', 'asset_type', 'status', 'hardware_code', 'integration_status', 'is_active', 'last_seen_at', 'updated_at']
         return fields, Asset.objects.order_by('code').values_list(*fields).iterator(chunk_size=500)
@@ -1739,11 +2007,11 @@ def _report_rows(report_type):
     return fields, iter([row])
 
 
-def _build_report_csv(report_type):
+def _build_report_csv(report_type, filters=None):
     output = io.StringIO(newline='')
     output.write('\ufeff')
     writer = csv.writer(output, lineterminator='\r\n')
-    headers, rows = _report_rows(report_type)
+    headers, rows = _report_rows(report_type, filters)
     writer.writerow(headers)
     row_count = 0
     for row in rows:

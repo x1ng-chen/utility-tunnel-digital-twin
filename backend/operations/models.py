@@ -25,6 +25,22 @@ class Profile(models.Model):
         return self.display_name or self.user.email or self.user.username
 
 
+class ControllerCommandConfirmation(models.Model):
+    """A short-lived, single-use approval bound to one controller command."""
+
+    token_hash = models.CharField(max_length=64, unique=True, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='controller_command_confirmations')
+    asset_code = models.CharField(max_length=40)
+    action = models.CharField(max_length=20)
+    duty_percent = models.PositiveSmallIntegerField(null=True, blank=True)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['expires_at'], name='controller_confirm_expires_idx')]
+
+
 class RegistrationRequest(models.Model):
     """A password-free account application. Approval creates a setup invite."""
 
@@ -224,6 +240,24 @@ class WorkOrder(models.Model):
         ]
 
 
+class WorkOrderEvent(models.Model):
+    class EventType(models.TextChoices):
+        CREATED = 'created', '已创建'
+        TRANSITION = 'transition', '状态变更'
+
+    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name='events')
+    event_type = models.CharField(max_length=20, choices=EventType.choices)
+    from_status = models.CharField(max_length=20, choices=WorkOrder.Status.choices, blank=True)
+    to_status = models.CharField(max_length=20, choices=WorkOrder.Status.choices, blank=True)
+    note = models.TextField(blank=True)
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='work_order_events')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['work_order', '-created_at'], name='wo_event_order_time_idx')]
+
+
 class Telemetry(models.Model):
     class Quality(models.TextChoices):
         GOOD = 'good', '良好'
@@ -404,6 +438,10 @@ class ReportExport(models.Model):
         FAILED = 'failed', '失败'
 
     report_type = models.CharField(max_length=40)
+    # The completed CSV is immutable, therefore the query that produced a
+    # filtered telemetry snapshot must be persisted beside it.  This keeps a
+    # downloaded file explainable after the live dataset changes.
+    filters = models.JSONField(default=dict, blank=True, editable=False)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.COMPLETED)
     file_name = models.CharField(max_length=180)
     idempotency_key = models.CharField(max_length=80, unique=True, null=True, blank=True, editable=False)
