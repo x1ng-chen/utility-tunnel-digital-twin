@@ -1,0 +1,61 @@
+{
+  "schema": "pcba-program-state-v1",
+  "project_id": "carrier32",
+  "updated_at": "2026-09-22T09:05:36.442380+00:00",
+  "stages": {
+    "product_definition": {
+      "status": "PASS",
+      "evidence": [
+        "docs/superpowers/specs/2026-09-22-dual-node-32-sensor-carrier-design.md"
+      ]
+    },
+    "sourcing": {
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    "circuit": {
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    "schematic_visual": {
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    "placement": {
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    "routing": {
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    "manufacturing_release": {
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    "assembly_placement": {
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    "order": {
+      "status": "BLOCKED",
+      "evidence": []
+    }
+  },
+  "artifacts": {},
+  "risks": [],
+  "approvals": {
+    "design_critical_substitution": "PENDING",
+    "assembly_placement": "PENDING",
+    "final_price": "PENDING",
+    "payment": "PENDING"
+  },
+  "approval_evidence": {
+    "design_critical_substitution": [],
+    "assembly_placement": [],
+    "final_price": [],
+    "payment": []
+  },
+  "manual_browser_edits_present": false,
+  "invalidation_log": []
+}

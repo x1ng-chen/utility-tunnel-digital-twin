@@ -23,9 +23,17 @@
 powershell -ExecutionPolicy Bypass -File hardware/carrier32/scripts/run_checks.ps1 -Preflight
 ```
 
-完整工程检查在后续任务补齐原理图、PCB和验证器后启用。
+目前已经建立受保护的 12 V 输入、两路独立 5 V 降压和两路 ESP 3.3 V
+电源原理图草稿，见 [电源审查记录](docs/power-review.md)。`scripts/check_power_nets.ps1`
+对电源网表执行 80 项引脚映射断言；当前 ERC 为 0 错误、10 个尚未接到后续接口的警告。
+导出的图面仍拥挤且标题栏未清理，因此尚未通过视觉审查。
+
+32 个传感器数量和 MCU 引脚分配已锁定在 `config/net-contract.csv`，
+不包含 DHT11。完整工程检查在原理图、PCB和制造包补齐后启用。
 
 ## 当前发布状态
 
-工程处于设计阶段。机械尺寸、模块引脚、电气额定值及样板负载测试未完成前，
+工程处于设计阶段。`config/design-inputs.csv` 中有 39 项制造关键实测输入尚未验证，
+其中包括控制板排针、各类传感器模块引脚顺序、输出电压和机箱尺寸。
+这些信息无法由软件或通用器件资料安全推断。机械尺寸、模块引脚、电气额定值及样板负载测试未完成前，
 不得把本目录的任何输出作为可投产制造包。

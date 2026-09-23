@@ -1,0 +1,19 @@
+load,quantity,rail,per_unit_current_a,per_unit_power_w,total_current_a,total_power_w,basis,status
+MQ-2,5,5V_MQ,,1,,5,project design ceiling,DESIGN_CEILING
+MQ-4,5,5V_MQ,,1,,5,project design ceiling,DESIGN_CEILING
+MQ-7,5,5V_MQ,,1,,5,project design ceiling,DESIGN_CEILING
+MQ total,15,5V_MQ,,,,15,5V_MQ design current 3 A at 5 V; converter rated 5 A,DERIVED
+WS2812,18,5V_LOGIC,0.06,0.3,1.08,5.4,60 mA full white per LED design ceiling,DESIGN_CEILING
+12V 4-wire fans,2,12V_PROTECTED,0.2,2.4,0.4,4.8,user verified 12 V 0.2 A per fan,CONFIRMED
+STM32F103RCT6 removable board,2,5V_LOGIC,,,,,measure actual dev-board draw including USB interaction,MEASUREMENT_GATE
+ST7735S display,2,5V_LOGIC,,,,,confirm module supply and backlight current from exact board,MEASUREMENT_GATE
+ESP-01S,2,3V3_ESP_A and 3V3_ESP_B,,,,,measure startup Wi-Fi TX peak and local LDO temperature,MEASUREMENT_GATE
+SHT30 module,4,3V3 MCU supply,,,,,confirm exact breakout-board supply and draw,MEASUREMENT_GATE
+Level sensor,5,5V_LOGIC,,,,,confirm FS-IR02 module supply and current,MEASUREMENT_GATE
+Oxygen sensor module,3,5V_LOGIC,,,,,confirm exact module supply current and analog range,MEASUREMENT_GATE
+Flame sensor module,5,5V_LOGIC,,,,,confirm exact module supply current and output level,MEASUREMENT_GATE
+INA226 module,2,3V3 MCU supply,,,,,confirm exact module supply and shunt rating,MEASUREMENT_GATE
+Relay module,1,5V_LOGIC,,,,,measure energized coil and driver current,MEASUREMENT_GATE
+Active buzzer,1,5V_LOGIC,,,,,measure operating current,MEASUREMENT_GATE
+Joystick module,1,3V3 MCU supply,,,,,confirm exact board current,MEASUREMENT_GATE
+Known electrical ceiling subtotal,,mixed,,,,25.2,15 W MQ + 5.4 W WS2812 + 4.8 W fans; do not sum current across rails,PARTIAL_ONLY

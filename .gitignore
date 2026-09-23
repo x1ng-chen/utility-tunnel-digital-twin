@@ -76,3 +76,4 @@ firmware/**/*.bin
 firmware/**/*.hex
 firmware/**/*.map
 firmware/**/compile_commands.json
+hardware/carrier32/build/

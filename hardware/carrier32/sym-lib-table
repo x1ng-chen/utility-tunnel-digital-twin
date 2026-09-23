@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "Carrier32") (type "KiCad") (uri "${KIPRJMOD}/lib/carrier32.kicad_sym") (options "") (descr "Carrier32 reviewed symbols"))
+)
