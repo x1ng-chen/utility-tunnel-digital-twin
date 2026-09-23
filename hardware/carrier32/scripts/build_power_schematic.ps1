@@ -140,6 +140,10 @@ Add-Symbol Device R_Small R7 '71.12,134.62' '1k RFF' 'Resistor_SMD:R_0603_1608Me
 # AP2112K-3.3 inherits its drawing/pins from AP2204K-1.5 in KiCad's standard
 # library, so import the fully defined parent electrical model and set the exact MPN.
 Add-Symbol Regulator_Linear 'AP2204K-1.5' U3 '127,71.12' 'AP2112K-3.3TRG1' 'Package_TO_SOT_SMD:SOT-23-5'
+& $tool sch edit symbol set-property $schematic U3 Datasheet 'https://www.diodes.com/datasheet/download/AP2112.pdf' --format json | Out-Null
+Assert-NativeSuccess 'set U3 AP2112 datasheet'
+& $tool sch edit symbol set-property $schematic U3 Description '600mA AP2112K-3.3 fixed-output LDO; 3.8V-6V input; SOT-23-5' --format json | Out-Null
+Assert-NativeSuccess 'set U3 AP2112 description'
 Add-Symbol Device C_Small C13 '114.3,76.2' '1u X7R' 'Capacitor_SMD:C_0603_1608Metric'
 Add-Symbol Device C_Small C14 '139.7,76.2' '1u X7R' 'Capacitor_SMD:C_0603_1608Metric'
 Add-Symbol Device C_Small C15 '147.32,76.2' '100u LOW-ESR' 'Capacitor_SMD:CP_Elec_6.3x5.8'
@@ -148,6 +152,10 @@ Add-Symbol Connector TestPoint TP1 '165.1,68.58' '3V3_ESP_A_TEST' 'TestPoint:Tes
 Add-Symbol Jumper SolderJumper_2_Open JP2 '154.94,76.2' 'ESP_A_LED_DISABLE' 'Jumper:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm'
 
 Add-Symbol Regulator_Linear 'AP2204K-1.5' U4 '127,114.3' 'AP2112K-3.3TRG1' 'Package_TO_SOT_SMD:SOT-23-5'
+& $tool sch edit symbol set-property $schematic U4 Datasheet 'https://www.diodes.com/datasheet/download/AP2112.pdf' --format json | Out-Null
+Assert-NativeSuccess 'set U4 AP2112 datasheet'
+& $tool sch edit symbol set-property $schematic U4 Description '600mA AP2112K-3.3 fixed-output LDO; 3.8V-6V input; SOT-23-5' --format json | Out-Null
+Assert-NativeSuccess 'set U4 AP2112 description'
 Add-Symbol Device C_Small C16 '114.3,119.38' '1u X7R' 'Capacitor_SMD:C_0603_1608Metric'
 Add-Symbol Device C_Small C17 '139.7,119.38' '1u X7R' 'Capacitor_SMD:C_0603_1608Metric'
 Add-Symbol Device C_Small C18 '147.32,119.38' '100u LOW-ESR' 'Capacitor_SMD:CP_Elec_6.3x5.8'

@@ -23,7 +23,9 @@
     },
     "placement": {
       "status": "BLOCKED",
-      "evidence": []
+      "evidence": [
+        ".pcba-workflow/layout-review.json"
+      ]
     },
     "routing": {
       "status": "BLOCKED",
@@ -45,6 +47,7 @@
   "artifacts": {
     "power_draft": "hardware/carrier32/carrier32.kicad_sch",
     "power_review": "hardware/carrier32/docs/power-review.md",
+    "pcb_draft": "hardware/carrier32/carrier32.kicad_pcb",
     "sensor_contract": "hardware/carrier32/config/net-contract.csv",
     "sensor_connector_contract": "hardware/carrier32/config/connector-contract.csv"
   },
@@ -54,6 +57,8 @@
     "Controller physical/socket or adapter architecture has not been selected",
     "power schematic visual audit is blocked by overlaps and stale title block",
     "buck, inductor, fuse holder and output capacitor footprints are intentionally unassigned",
+    "power-only PCB draft has 70 unconnected pads and 9 missing footprints; no routing, planes, or complete circuit placement",
+    "U3/U4 AP2112K values use KiCad's AP2204 inherited-pin base symbol; AP2112 metadata is corrected, but library identity needs normalization before release",
     "controller USB/carrier 5 V backfeed behavior is not measured"
   ],
   "approvals": {

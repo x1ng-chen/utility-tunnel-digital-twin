@@ -7814,7 +7814,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.diodes.com/assets/Datasheets/AP2204.pdf"
+		(property "Datasheet" "https://www.diodes.com/datasheet/download/AP2112.pdf"
 			(at 127 73.66 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7825,7 +7825,7 @@
 				)
 			)
 		)
-		(property "Description" "150mA low dropout linear regulator, wide input voltage range, 1.5V fixed positive output, SOT-23-5"
+		(property "Description" "600mA AP2112K-3.3 fixed-output LDO; 3.8V-6V input; SOT-23-5"
 			(at 127 71.12 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7903,7 +7903,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.diodes.com/assets/Datasheets/AP2204.pdf"
+		(property "Datasheet" "https://www.diodes.com/datasheet/download/AP2112.pdf"
 			(at 127 116.84 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7914,7 +7914,7 @@
 				)
 			)
 		)
-		(property "Description" "150mA low dropout linear regulator, wide input voltage range, 1.5V fixed positive output, SOT-23-5"
+		(property "Description" "600mA AP2112K-3.3 fixed-output LDO; 3.8V-6V input; SOT-23-5"
 			(at 127 114.3 0)
 			(show_name no)
 			(do_not_autoplace no)

@@ -1,0 +1,98 @@
+{
+  "schema": "pcb-layout-review-v1",
+  "status": "BLOCKED",
+  "board_revision": "power-only placement draft, 2026-09-23",
+  "board_sha256": "84C71735C9E9FC0760E0A15FD537F2851A965C6F8C13961F9E1DDD63C9904A8B",
+  "project_sha256": "C498CEEFE6DBF384207EBA2325D2C8714FD13331EFE036D806164DEF4714B1B6",
+  "variant_port": {
+    "donor_board_sha256": "",
+    "delta_manifest": "",
+    "mating_geometry": "NOT_APPLICABLE",
+    "same_scale_comparison": ""
+  },
+  "connector_stack": {
+    "status": "BLOCKED",
+    "exact_mpn": "",
+    "manufacturer_drawing": "",
+    "footprint_geometry": "BLOCKED",
+    "pad_support": "BLOCKED",
+    "sample_measured": false,
+    "mating_card_thickness_mm": null,
+    "insertion_depth_mm": null,
+    "retention": "BLOCKED",
+    "dimension_basis": "TBD"
+  },
+  "mechanical_assembly": {
+    "status": "BLOCKED",
+    "same_scale_render": "hardware/carrier32/build/board-power-placement.pdf (generated, ignored)",
+    "orthographic_dimension_view": "",
+    "overall_height_mm": null,
+    "overall_height_basis": "TBD",
+    "proxies": []
+  },
+  "stackup": [
+    "4 copper layers selected as a preliminary routing envelope; finished stackup is not specified"
+  ],
+  "placement": {
+    "logical": "BLOCKED",
+    "visual_mechanical": "BLOCKED"
+  },
+  "fanout": {
+    "dense_connector_power_ground": "BLOCKED"
+  },
+  "connectivity": {
+    "raw_disconnects": 70,
+    "signal_splits": 0,
+    "power_disconnects": null,
+    "power_disconnects_note": "70 total open pad connections in a power-only, unrouted draft; separate power/signal classification is not yet possible"
+  },
+  "drc": {
+    "real_errors": 0,
+    "missing_footprints": 9,
+    "report": "hardware/carrier32/build/board-current-drc.rpt (generated, ignored; 2026-09-23T12:17:21)",
+    "waivers": []
+  },
+  "layout_checks": {
+    "failures": 2,
+    "warnings": [
+      "Only the power-stage schematic has been transferred to the board; controller, sensor, display and actuator circuits are absent",
+      "U3/U4 use KiCad's AP2204 base symbol for the AP2112K inherited pin diagram; datasheet/description now identify AP2112, but library identity should be normalized before release"
+    ]
+  },
+  "critical_nets": [
+    "12V_IN",
+    "5V_LOGIC",
+    "5V_MQ",
+    "3V3_ESP_A",
+    "3V3_ESP_B",
+    "GND"
+  ],
+  "via_drill_histogram": {},
+  "manufacturing_findings": [
+    "No tracks, vias, planes, final drill or stackup are present; a fabrication package cannot be released"
+  ],
+  "silkscreen": {
+    "status": "BLOCKED",
+    "findings": [
+      "Only preliminary power footprints are placed; no complete assembly-side or polarity review"
+    ]
+  },
+  "renders": {
+    "top": "hardware/carrier32/build/board-power-placement.pdf (generated, ignored)",
+    "bottom": "",
+    "isometric": "",
+    "layers": []
+  },
+  "experiment_baseline": {
+    "frozen_input_sha256": "",
+    "best_safe_candidate_sha256": "84C71735C9E9FC0760E0A15FD537F2851A965C6F8C13961F9E1DDD63C9904A8B"
+  },
+  "unresolved": [
+    "Complete schematic for all 32 sensors and both controllers, displays, fans, relays and indicators",
+    "Resolve nine missing power footprints with exact part/package evidence",
+    "Correct U3/U4 symbol identity and verify manufacturer pin mapping",
+    "Place and route every circuit, verify return paths and thermal/current limits",
+    "Achieve zero unconnected pads and fresh clean DRC on one saved board revision",
+    "Perform visual/mechanical and fabrication-file checks before release"
+  ]
+}

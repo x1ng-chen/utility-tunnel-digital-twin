@@ -44,7 +44,7 @@
     "Power regions have overlapping values and labels; local wiring is insufficient for human tracing.",
     "Root sheet still has the API Series 500 template title and unrelated RADIAL connector note.",
     "kicad-tool has no hierarchical-sheet or title-block editor on this host; render-region also requires missing rsvg-convert.",
-    "No PCB exists; no electrical release or visual signoff is asserted."
+    "A power-only PCB placement draft now exists, but it does not change this schematic visual audit; no electrical release or visual signoff is asserted."
   ],
   "final_snapshot": "hardware/carrier32/build/power-review.png (draft only)"
 }
