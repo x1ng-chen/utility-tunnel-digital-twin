@@ -29,7 +29,10 @@ powershell -ExecutionPolicy Bypass -File hardware/carrier32/scripts/run_checks.p
 导出的图面仍拥挤且标题栏未清理，因此尚未通过视觉审查。
 
 32 个传感器数量和 MCU 引脚分配已锁定在 `config/net-contract.csv`，
-不包含 DHT11。完整工程检查在原理图、PCB和制造包补齐后启用。
+不包含 DHT11。载板端 32 个统一四针传感器接口及线束边界见
+[参考接口标准](docs/reference-interface-standard.md)和 `config/connector-contract.csv`；
+运行 `python hardware/carrier32/scripts/check_connector_contract.py hardware/carrier32/config/connector-contract.csv hardware/carrier32/config/net-contract.csv`
+可检查针位分配。完整工程检查在原理图、PCB和制造包补齐后启用。
 
 ## 当前发布状态
 
