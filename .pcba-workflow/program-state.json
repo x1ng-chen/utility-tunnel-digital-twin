@@ -1,7 +1,7 @@
 {
   "schema": "pcba-program-state-v1",
   "project_id": "carrier32",
-  "updated_at": "2026-09-22T09:05:36.442380+00:00",
+  "updated_at": "2026-09-23T01:10:11+00:00",
   "stages": {
     "product_definition": {
       "status": "PASS",
@@ -42,8 +42,17 @@
       "evidence": []
     }
   },
-  "artifacts": {},
-  "risks": [],
+  "artifacts": {
+    "power_draft": "hardware/carrier32/carrier32.kicad_sch",
+    "power_review": "hardware/carrier32/docs/power-review.md",
+    "sensor_contract": "hardware/carrier32/config/net-contract.csv"
+  },
+  "risks": [
+    "39 fabrication-critical design inputs remain unverified",
+    "power schematic visual audit is blocked by overlaps and stale title block",
+    "buck, inductor, fuse holder and output capacitor footprints are intentionally unassigned",
+    "controller USB/carrier 5 V backfeed behavior is not measured"
+  ],
   "approvals": {
     "design_critical_substitution": "PENDING",
     "assembly_placement": "PENDING",

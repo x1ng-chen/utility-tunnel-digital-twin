@@ -1,0 +1,50 @@
+{
+  "schema": "schematic-visual-audit-v1",
+  "status": "BLOCKED",
+  "source_type": "KiCad 10 native schematic generated through kicad-tool",
+  "adapter": "kicad-tool netlist and ERC; KiCad PDF export with Poppler PNG review",
+  "authoritative_sources": [
+    "hardware/carrier32/scripts/build_power_schematic.ps1",
+    "hardware/carrier32/carrier32.kicad_sch",
+    "hardware/carrier32/lib/carrier32.kicad_sym"
+  ],
+  "baseline_connectivity": "hardware/carrier32/build/power.net (generated, ignored)",
+  "final_connectivity": "unchanged; no visual edit accepted in this audit",
+  "connectivity_result": "BLOCKED",
+  "erc_or_lint": {
+    "before": "0 errors, 10 isolated-label warnings (unconnected future branches)",
+    "after": "0 errors, 10 isolated-label warnings"
+  },
+  "protected_artifacts_unchanged": true,
+  "sheets": [
+    {
+      "name": "carrier32 root power draft",
+      "full_page_render": "hardware/carrier32/build/power-review.png (generated, ignored)",
+      "status": "BLOCKED"
+    }
+  ],
+  "dense_crops": [
+    {
+      "region": "input protection and fan fuses",
+      "render": "hardware/carrier32/build/power-review.png (full-page inspection)",
+      "status": "BLOCKED"
+    },
+    {
+      "region": "logic buck and ESP-A LDO",
+      "render": "hardware/carrier32/build/power-review.png (full-page inspection)",
+      "status": "BLOCKED"
+    },
+    {
+      "region": "MQ buck and ESP-B LDO",
+      "render": "hardware/carrier32/build/power-review.png (full-page inspection)",
+      "status": "BLOCKED"
+    }
+  ],
+  "remaining_limitations": [
+    "Power regions have overlapping values and labels; local wiring is insufficient for human tracing.",
+    "Root sheet still has the API Series 500 template title and unrelated RADIAL connector note.",
+    "kicad-tool has no hierarchical-sheet or title-block editor on this host; render-region also requires missing rsvg-convert.",
+    "No PCB exists; no electrical release or visual signoff is asserted."
+  ],
+  "final_snapshot": "hardware/carrier32/build/power-review.png (draft only)"
+}
