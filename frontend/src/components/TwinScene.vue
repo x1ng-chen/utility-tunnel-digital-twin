@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Hand, Home, Orbit, ZoomIn, ZoomOut } from 'lucide-vue-next';
-import { Box3, BoxGeometry, Color, DirectionalLight, Fog, Group, HemisphereLight, MOUSE, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera, PointLight, Raycaster, Scene, Sphere, SphereGeometry, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from 'three';
+import { ACESFilmicToneMapping, Box3, BoxGeometry, Color, DirectionalLight, Fog, Group, HemisphereLight, MOUSE, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera, PointLight, Raycaster, Scene, Sphere, SphereGeometry, SRGBColorSpace, TorusGeometry, Vector2, Vector3, WebGLRenderer } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Alert, Asset } from '../types';
@@ -41,6 +41,25 @@ let modelLoadToken = 0;
 let modelLoadTimeout = 0;
 let sceneRadius = 18;
 let pendingPanGesture: { pointerId: number; startX: number; startY: number; target: Vector3 } | undefined;
+let cameraFlight: { start: number; from: Vector3; to: Vector3; targetFrom: Vector3; targetTo: Vector3 } | undefined;
+let selectionHalo: Mesh<TorusGeometry, MeshBasicMaterial> | undefined;
+let reducedMotion = false;
+
+function cancelCameraFlight() { cameraFlight = undefined; }
+
+function updateSelectionHalo() {
+  if (!selectionHalo) return;
+  const object = props.selectedCode ? assetObjects.get(props.selectedCode) : undefined;
+  selectionHalo.visible = Boolean(object);
+  if (!object) return;
+  const bounds = new Box3().setFromObject(object);
+  const center = bounds.isEmpty() ? object.getWorldPosition(new Vector3()) : bounds.getCenter(new Vector3());
+  const radius = bounds.isEmpty() ? sceneRadius * .02 : bounds.getBoundingSphere(new Sphere()).radius;
+  selectionHalo.position.copy(center);
+  selectionHalo.scale.setScalar(Math.max(Math.min(radius * 1.08, sceneRadius * .12), sceneRadius * .007));
+  const asset = props.assets.find(item => item.code === props.selectedCode);
+  selectionHalo.material.color.setHex(asset ? colors[resolveTwinVisualState(asset, props.alerts)] : colors.unknown);
+}
 
 const colors: Record<TwinVisualState, number> = { normal: 0x4ee7c3, warning: 0xffbb62, alarm: 0xff536f, unknown: 0x6d87aa };
 
@@ -177,6 +196,8 @@ function syncSceneAssets() {
 }
 
 function clearLoadedModel() {
+  cancelCameraFlight();
+  if (selectionHalo) selectionHalo.visible = false;
   window.clearTimeout(modelLoadTimeout);
   const disposableRoots = [modelRoot, fallbackSceneRoot, fallbackAssetRoot].filter(Boolean) as Object3D[];
   const disposedGeometries = new Set<object>();
@@ -232,6 +253,7 @@ function applyVisualState() {
     const alert = primaryTwinAlert(asset.code, props.alerts);
     if (object) colorObject(object, resolveTwinVisualState(asset, props.alerts), props.selectedCode === asset.code, alert?.severity === 'critical');
   });
+  updateSelectionHalo();
 }
 
 function focusAsset(code: string | null) {
@@ -246,9 +268,10 @@ function focusAsset(code: string | null) {
   // equipment focus action into another whole-model view.
   const objectRadius = Math.max(Math.min(measuredRadius, sceneRadius * .12), sceneRadius * .006, .002);
   const distance = Math.max(objectRadius * 3.25, sceneRadius * .018, .05);
-  controls.target.copy(target);
+  const destination = target.clone().add(new Vector3(1, .72, 1).normalize().multiplyScalar(distance));
+  cameraFlight = reducedMotion ? undefined : { start: performance.now(), from: camera.position.clone(), to: destination, targetFrom: controls.target.clone(), targetTo: target };
+  if (reducedMotion) { controls.target.copy(target); camera.position.copy(destination); }
   controls.minDistance = Math.max(.002, sceneRadius * .0008);
-  camera.position.copy(target.clone().add(new Vector3(1, .72, 1).normalize().multiplyScalar(distance)));
   camera.near = Math.max(.0002, distance / 800);
   camera.updateProjectionMatrix();
   controls.update();
@@ -256,6 +279,7 @@ function focusAsset(code: string | null) {
 }
 
 function resetView() {
+  cancelCameraFlight();
   if (!camera || !controls) return;
   const root = modelRoot || fallbackSceneRoot;
   const bounds = root ? new Box3().setFromObject(root) : null;
@@ -278,11 +302,17 @@ function resetView() {
     camera.near = .05;
   }
   camera.updateProjectionMatrix();
+  if (scene?.fog instanceof Fog) {
+    scene.fog.near = sceneRadius * 2.5;
+    scene.fog.far = sceneRadius * 9;
+  }
+  updateSelectionHalo();
   controls.update();
   publishCameraDistance();
 }
 
 function zoomBy(scale: number) {
+  cancelCameraFlight();
   if (!camera || !controls) return;
   const offset = camera.position.clone().sub(controls.target);
   const currentDistance = Math.max(offset.length(), .001);
@@ -305,6 +335,7 @@ function setNavigationMode(mode: 'pan' | 'orbit') {
 }
 
 function onCanvasPointerDown(event: PointerEvent) {
+  cancelCameraFlight();
   if (!renderer || !camera || !controls) return;
   if (event.button === 0 && navigationMode.value === 'pan') {
     pendingPanGesture = {
@@ -366,7 +397,18 @@ function animate(timestamp = 0) {
   const minimumFrameInterval = performanceMode.value === 'reduced' ? 1000 / 30 : 0;
   if (minimumFrameInterval && timestamp - lastRenderedAt < minimumFrameInterval) return;
   lastRenderedAt = timestamp;
-  const now = performance.now() / 1000;
+  const now = reducedMotion ? 0 : performance.now() / 1000;
+  if (cameraFlight && camera && controls) {
+    const progress = Math.min(1, (performance.now() - cameraFlight.start) / 900);
+    const eased = progress * progress * (3 - 2 * progress);
+    camera.position.lerpVectors(cameraFlight.from, cameraFlight.to, eased);
+    controls.target.lerpVectors(cameraFlight.targetFrom, cameraFlight.targetTo, eased);
+    if (progress === 1) cameraFlight = undefined;
+  }
+  if (selectionHalo?.visible && camera) {
+    selectionHalo.quaternion.copy(camera.quaternion);
+    selectionHalo.material.opacity = reducedMotion ? .65 : .55 + Math.sin(now * 2) * .15;
+  }
   props.assets.forEach((asset) => {
     const materials = animatedMaterials.get(asset.code);
     if (!materials?.length) return;
@@ -441,17 +483,20 @@ function reloadModel() {
 onMounted(() => {
   if (!host.value) return;
   scene = new Scene();
-  scene.background = new Color(0x081628);
-  scene.fog = new Fog(0x081628, 22, 55);
+  scene.background = new Color(0x060e18);
+  scene.fog = new Fog(0x060e18, 22, 55);
   camera = new PerspectiveCamera(48, 1, .1, 200);
   const navigatorCapabilities = navigator as Navigator & { deviceMemory?: number };
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  reducedMotion = prefersReducedMotion;
   const limitedMemory = (navigatorCapabilities.deviceMemory ?? 8) <= 4;
   const limitedCpu = (navigator.hardwareConcurrency || 8) <= 4;
   performanceMode.value = prefersReducedMotion || limitedMemory || limitedCpu ? 'reduced' : 'full';
   renderer = new WebGLRenderer({ antialias: performanceMode.value === 'full', alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, performanceMode.value === 'reduced' ? 1 : 2));
   renderer.outputColorSpace = SRGBColorSpace;
+  renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
   renderer.shadowMap.enabled = performanceMode.value === 'full';
   host.value.append(renderer.domElement);
   controls = new OrbitControls(camera, renderer.domElement);
@@ -473,11 +518,22 @@ onMounted(() => {
   setNavigationMode('pan');
   controls.listenToKeyEvents(window);
   controls.addEventListener('change', publishCameraDistance);
+  controls.addEventListener('start', cancelCameraFlight);
   resetView();
   scene.add(new HemisphereLight(0x8ba6ff, 0x071021, 2.1));
   const key = new DirectionalLight(0xb5d5ff, 2.5);
   key.position.set(10, 16, 10);
   scene.add(key);
+  const rim = new DirectionalLight(0x50d9da, 1.8);
+  rim.position.set(-12, 6, -10);
+  scene.add(rim);
+  const fill = new DirectionalLight(0x9a91e8, .7);
+  fill.position.set(0, 4, -16);
+  scene.add(fill);
+  selectionHalo = new Mesh(new TorusGeometry(1, .012, 6, 80), new MeshBasicMaterial({ color: colors.normal, transparent: true, opacity: .65, depthWrite: false }));
+  selectionHalo.visible = false;
+  selectionHalo.raycast = () => {};
+  scene.add(selectionHalo);
   renderer.domElement.addEventListener('pointerdown', onCanvasPointerDown);
   window.addEventListener('pointerup', onCanvasPointerUp);
   window.addEventListener('pointercancel', cancelCanvasPan);
@@ -516,6 +572,9 @@ onBeforeUnmount(() => {
   renderer?.domElement.removeEventListener('webglcontextlost', onContextLost);
   renderer?.domElement.removeEventListener('webglcontextrestored', onContextRestored);
   controls?.dispose();
+  selectionHalo?.geometry.dispose();
+  selectionHalo?.material.dispose();
+  selectionHalo = undefined;
   clearLoadedModel();
   renderer?.dispose();
   assetObjects.clear();
