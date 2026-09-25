@@ -228,7 +228,7 @@ flowchart TB
 - 单位：`degC`、`%RH`、`%LEL`、`ppm`、`%VOL`、`rpm`、`A` 等固定枚举。
 - QoS 1 消息：使用 `eventId` 或 `cmdId` 去重。
 
-详细 JSON 报文、I/O 分配和数据库设计以 [V3.6 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.6_液位监测与水路建模版.docx)、[可信遥测接入说明](docs/实时遥测接入说明.md)与对应代码为准；文档冲突时以已验证代码和最新实施记录为准。
+详细 JSON 报文、I/O 分配和数据库设计以 [V3.8 项目计划书](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/main/docs/综合管廊数字孪生运维实体样品项目计划书_V3.8_当前软硬件进度与收尾计划版.docx)、[可信遥测接入说明](docs/实时遥测接入说明.md)与对应代码为准；文档冲突时以已验证代码和最新实施记录为准。
 
 ## 项目结构
 
@@ -303,7 +303,7 @@ npm run dev
 克隆后建议阅读：
 
 1. [软件平台说明](docs/software-platform.md)
-2. [V3.6 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.6_液位监测与水路建模版.docx)
+2. [V3.8 项目计划书](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/main/docs/综合管廊数字孪生运维实体样品项目计划书_V3.8_当前软硬件进度与收尾计划版.docx)
 3. [STM32F103RCT6 台架固件说明](firmware/stm32f103rct6/README.md)
 4. 本 README 中的范围、安全要求和协作规范
 
@@ -415,4 +415,4 @@ chore(deploy): add mosquitto local configuration
 
 ---
 
-**文档基线：** V3.6 · **最后更新：** 2026-08-31 · **维护方：** 综合管廊数字孪生项目组
+**文档基线：** V3.8 · **最后更新：** 2026-09-26 · **维护方：** 综合管廊数字孪生项目组
