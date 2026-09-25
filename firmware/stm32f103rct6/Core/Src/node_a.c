@@ -156,7 +156,9 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
                           uint8_t level_is_detected, uint16_t oxygen_raw,
                           uint32_t oxygen_microvolts, uint8_t oxygen_online,
                           uint16_t methane_raw, uint32_t methane_microvolts,
-                          uint8_t methane_online, const Ina226Reading *fan1_power,
+                          uint8_t methane_online, uint16_t co_raw,
+                          uint32_t co_microvolts, uint8_t co_online,
+                          const Ina226Reading *fan1_power,
                           uint32_t fan1_rpm, const Ina226Reading *fan2_power,
                           uint32_t fan2_rpm);
 static void Command_Poll(void);
@@ -508,12 +510,15 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
                           uint16_t oxygen_raw,
                           uint32_t oxygen_microvolts, uint8_t oxygen_online,
                           uint16_t methane_raw, uint32_t methane_microvolts,
-                          uint8_t methane_online, const Ina226Reading *fan1_power,
+                          uint8_t methane_online, uint16_t co_raw,
+                          uint32_t co_microvolts, uint8_t co_online,
+                          const Ina226Reading *fan1_power,
                           uint32_t fan1_rpm, const Ina226Reading *fan2_power,
                           uint32_t fan2_rpm)
 {
   char message[896];
   char methane_message[384];
+  char co_message[320];
   char fan_message[768];
   char fan2_message[640];
   static uint32_t sequence = 0U;
@@ -522,6 +527,7 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
   const char *quality;
   const char *oxygen_quality;
   const char *methane_quality;
+  const char *co_quality;
   const char *fan_quality;
   const char *current_sign;
   const char *power_sign;
@@ -545,6 +551,7 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
    * readings explicitly suspect until a precision ADC/front end is fitted. */
   oxygen_quality = oxygen_online ? "suspect" : "missing";
   methane_quality = methane_online ? "suspect" : "missing";
+  co_quality = co_online ? "suspect" : "missing";
   fan_quality = ((fan1_power != NULL) && fan1_power->online) ?
                 (fan1_power->plausible ? "good" : "suspect") : "missing";
   current_abs = ((fan1_power != NULL) ? fan1_power->current_microamps : 0L);
@@ -590,6 +597,19 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
   {
     (void)HAL_UART_Transmit(&huart2, (uint8_t *)methane_message, (uint16_t)length, 1000U);
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)methane_message, (uint16_t)length, 1000U);
+  }
+  while (esp_rx_count != 0U) Command_Poll();
+  length = snprintf(co_message, sizeof(co_message),
+    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.raw\",\"value\":%u,\"unit\":\"adc\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"GAS-01\",\"metric\":\"co.voltage\",\"value\":%lu.%03lu,\"unit\":\"mV\",\"quality\":\"%s\"}]}\r\n",
+    (unsigned long)sequence, (unsigned int)co_raw, co_quality,
+    (unsigned long)(co_microvolts / 1000UL),
+    (unsigned long)(co_microvolts % 1000UL), co_quality);
+  if (length > 0 && length < (int)sizeof(co_message))
+  {
+    (void)HAL_UART_Transmit(&huart2, (uint8_t *)co_message, (uint16_t)length, 1000U);
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)co_message, (uint16_t)length, 1000U);
   }
   while (esp_rx_count != 0U) Command_Poll();
   length = snprintf(fan_message, sizeof(fan_message),
@@ -1162,6 +1182,9 @@ int main(void)
   uint16_t methane_raw = 0U;
   uint32_t methane_microvolts = 0UL;
   uint8_t methane_online = 0U;
+  uint16_t co_raw = 0U;
+  uint32_t co_microvolts = 0UL;
+  uint8_t co_online = 0U;
   Ina226Reading fan_power = {0};
   Ina226Reading fan2_power = {0};
   uint32_t fan_rpm = 0U;
@@ -1198,10 +1221,12 @@ int main(void)
       (void)Sht30_Read(&i2c1_bus, SHT30_ADDRESS_44, &readings[0]);
       (void)Sht30_Read(&i2c1_bus, SHT30_ADDRESS_45, &readings[1]);
       (void)Sht30_Read(&i2c2_bus, SHT30_ADDRESS_44, &readings[2]);
-      oxygen_online = GasAdc_ReadRaw(ADC_CHANNEL_11, &oxygen_raw);
+      oxygen_online = GasAdc_ReadRaw(ADC_CHANNEL_13, &oxygen_raw);
       oxygen_microvolts = ((uint32_t)oxygen_raw * ADC_REFERENCE_UV + 2047UL) / 4095UL;
       methane_online = GasAdc_ReadRaw(ADC_CHANNEL_12, &methane_raw);
       methane_microvolts = ((uint32_t)methane_raw * ADC_REFERENCE_UV + 2047UL) / 4095UL;
+      co_online = GasAdc_ReadRaw(ADC_CHANNEL_11, &co_raw);
+      co_microvolts = ((uint32_t)co_raw * ADC_REFERENCE_UV + 2047UL) / 4095UL;
       (void)Ina226_Read(&i2c1_bus, &fan_power);
       (void)Ina226_Read(&i2c2_bus, &fan2_power);
       /* Sensor acquisition is deliberately slow on the software I2C buses.
@@ -1214,7 +1239,8 @@ int main(void)
       }
       SendTelemetry(readings, smoke_alarm, flame_alarm, level_detected, oxygen_raw,
                     oxygen_microvolts, oxygen_online, methane_raw,
-                    methane_microvolts, methane_online, &fan_power, fan_rpm,
+                    methane_microvolts, methane_online, co_raw,
+                    co_microvolts, co_online, &fan_power, fan_rpm,
                     &fan2_power, fan2_rpm);
       last_telemetry = now;
     }
