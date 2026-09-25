@@ -51,6 +51,8 @@ add_executable(${CMAKE_PROJECT_NAME})
 
 if(FIRMWARE_VARIANT STREQUAL "node_a")
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE NODE_A_FIRMWARE=1)
+elseif(FIRMWARE_VARIANT STREQUAL "node_b")
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE NODE_B_FIRMWARE=1)
 endif()
 
 # Add STM32CubeMX generated sources
@@ -67,8 +69,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_menu.c"
 )
 
-# The display driver sends every pixel over software SPI. Keep the rest of
-# Debug easy to inspect, but optimize the two display-critical source files.
+# Node B uses SPI1 for the display; the bench image retains its legacy software
+# SPI path. Optimize the display-critical source files in either case.
 set_source_files_properties(
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/st7735.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ui_menu.c"

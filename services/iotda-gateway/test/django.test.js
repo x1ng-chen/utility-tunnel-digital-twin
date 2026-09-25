@@ -98,6 +98,23 @@ test('maps device units and display names onto the Django contract', () => {
   }
 });
 
+test('labels automatic ventilation state for platform telemetry', () => {
+  const telemetry = {
+    schema: 'ut.telemetry.v1',
+    readings: [
+      { assetCode: 'FAN-01', metric: 'control.autoVentilation', value: 1, unit: 'bool', quality: 'good' },
+      { assetCode: 'FAN-01', metric: 'control.cooldown', value: 0, unit: 'bool', quality: 'good' },
+    ],
+  };
+
+  const batch = toDjangoBatch(telemetry, { deviceId: 'CTRL-01', receivedAt: RECEIVED_AT });
+
+  assert.deepEqual(batch.readings.map(({ metricKey, metric }) => ({ metricKey, metric })), [
+    { metricKey: 'control.autoventilation', metric: '气体报警自动排风' },
+    { metricKey: 'control.cooldown', metric: '报警解除延时排风' },
+  ]);
+});
+
 test('uses the device timestamp when the message carries one', () => {
   const telemetry = { ...SAMPLE, ts: '2026-08-29T07:59:58Z' };
   const batch = toDjangoBatch(telemetry, { deviceId: 'CTRL-01', receivedAt: RECEIVED_AT });

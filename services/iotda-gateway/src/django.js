@@ -24,6 +24,8 @@ export const DJANGO_METRIC_LABELS = {
   'motor.current': '电机电流',
   power: '功率',
   'rotational.speed': '转速',
+  'control.autoventilation': '气体报警自动排风',
+  'control.cooldown': '报警解除延时排风',
 };
 
 const ASSET_CODE_PATTERN = /^[A-Z0-9][A-Z0-9_-]{1,39}$/;

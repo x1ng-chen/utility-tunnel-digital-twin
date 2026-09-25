@@ -1,8 +1,8 @@
 /**
  * @file    st7735.c
- * @brief   ST7735 IPS LCD 驱动实现（软件 SPI）
+ * @brief   ST7735 IPS LCD 驱动实现
  *
- * 软件 SPI：GPIO 翻转模拟 SCK/MOSI 时序，写命令/数据。
+ * Node B 使用 SPI1 硬件发送；bench 固件保留软件 SPI。
  * 颜色 RGB565（16 位，先高字节后低字节）。
  */
 #include "st7735.h"
@@ -11,12 +11,12 @@
 /* Direct BSRR writes replace HAL_GPIO_WritePin in the pixel hot path. */
 static inline __attribute__((always_inline)) void gpio_set(uint16_t pin)
 {
-    LCD_PORT->BSRR = pin;
+    LCD_CTRL_PORT->BSRR = pin;
 }
 
 static inline __attribute__((always_inline)) void gpio_reset(uint16_t pin)
 {
-    LCD_PORT->BSRR = (uint32_t)pin << 16U;
+    LCD_CTRL_PORT->BSRR = (uint32_t)pin << 16U;
 }
 
 /* ============ GPIO 初始化 ============ */
@@ -24,27 +24,58 @@ static void ST7735_GPIO_Init(void)
 {
     __HAL_RCC_GPIOB_CLK_ENABLE();
     GPIO_InitTypeDef gpio = {0};
-    gpio.Pin   = LCD_SCK_PIN | LCD_MOSI_PIN | LCD_DC_PIN | LCD_RES_PIN
-               | LCD_CS_PIN | LCD_BLK_PIN;
+    gpio.Pin   = LCD_DC_PIN | LCD_RES_PIN | LCD_CS_PIN | LCD_BLK_PIN;
     gpio.Mode  = GPIO_MODE_OUTPUT_PP;
     gpio.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(LCD_PORT, &gpio);
+    HAL_GPIO_Init(LCD_CTRL_PORT, &gpio);
+
+#ifdef NODE_B_FIRMWARE
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_SPI1_CLK_ENABLE();
+
+    gpio.Pin   = LCD_SCK_PIN | LCD_MOSI_PIN;
+    gpio.Mode  = GPIO_MODE_AF_PP;
+    gpio.Pull  = GPIO_NOPULL;
+    gpio.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(LCD_SPI_PORT, &gpio);
+
+    /* SPI1 mode 0, 8-bit, MSB first, software NSS, PCLK/4 (2 MHz at 8 MHz). */
+    __HAL_RCC_SPI1_FORCE_RESET();
+    __HAL_RCC_SPI1_RELEASE_RESET();
+    SPI1->CR1 = SPI_CR1_MSTR | SPI_CR1_BR_0 | SPI_CR1_SSM | SPI_CR1_SSI;
+    SPI1->CR2 = 0U;
+    SPI1->CR1 |= SPI_CR1_SPE;
+#else
+    gpio.Pin   = LCD_SCK_PIN | LCD_MOSI_PIN;
+    gpio.Mode  = GPIO_MODE_OUTPUT_PP;
+    gpio.Pull  = GPIO_NOPULL;
+    gpio.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(LCD_SPI_PORT, &gpio);
+#endif
 
     /* CS 拉低常使能，BLK 拉高背光亮 */
-    HAL_GPIO_WritePin(LCD_PORT, LCD_CS_PIN, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(LCD_PORT, LCD_BLK_PIN, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_CS_PIN, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_BLK_PIN, GPIO_PIN_SET);
 }
 
-/* ============ 软件 SPI ============ */
+/* ============ SPI 字节发送 ============ */
 static void spi_write_byte(uint8_t b)
 {
+#ifdef NODE_B_FIRMWARE
+    while ((SPI1->SR & SPI_SR_TXE) == 0U) {}
+    *(__IO uint8_t *)&SPI1->DR = b;
+    while ((SPI1->SR & SPI_SR_RXNE) == 0U) {}
+    (void)*(__IO uint8_t *)&SPI1->DR;
+    while ((SPI1->SR & SPI_SR_BSY) != 0U) {}
+#else
     for (int i = 0; i < 8; i++) {
-        gpio_reset(LCD_SCK_PIN);
-        if (b & 0x80U) gpio_set(LCD_MOSI_PIN);
-        else gpio_reset(LCD_MOSI_PIN);
+        LCD_SPI_PORT->BSRR = (uint32_t)LCD_SCK_PIN << 16U;
+        if (b & 0x80U) LCD_SPI_PORT->BSRR = LCD_MOSI_PIN;
+        else LCD_SPI_PORT->BSRR = (uint32_t)LCD_MOSI_PIN << 16U;
         b <<= 1;
-        gpio_set(LCD_SCK_PIN);
+        LCD_SPI_PORT->BSRR = LCD_SCK_PIN;
     }
+#endif
 }
 
 /* ============ 写命令 / 写数据 ============ */

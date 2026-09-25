@@ -209,7 +209,8 @@ static void MX_GPIO_Init(void)
   gpio.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &gpio);
 
-  gpio.Pin = TFT_SCL_Pin | TFT_SDA_Pin | TFT_RES_Pin | TFT_DC_Pin | TFT_CS_Pin | TFT_BLK_Pin;
+  /* PA5/PA7 are configured as SPI1 SCK/MOSI by ST7735_Init(). */
+  gpio.Pin = TFT_RES_Pin | TFT_DC_Pin | TFT_CS_Pin | TFT_BLK_Pin;
   gpio.Mode = GPIO_MODE_OUTPUT_PP;
   gpio.Pull = GPIO_NOPULL;
   gpio.Speed = GPIO_SPEED_FREQ_HIGH;

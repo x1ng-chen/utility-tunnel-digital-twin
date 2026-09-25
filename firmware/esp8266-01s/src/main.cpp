@@ -24,7 +24,8 @@ namespace {
 constexpr uint32_t kSerialBaud = 9600;
 constexpr uint32_t kReconnectIntervalMs = 5000;
 constexpr uint32_t kWiFiConnectTimeoutMs = 30000;
-constexpr size_t kMaxSerialFrame = 768;
+constexpr size_t kMaxSerialFrame = 1024;
+constexpr uint16_t kMqttBufferSize = 1280;
 constexpr uint8_t kPendingFrameCapacity = 8;
 constexpr uint8_t kLedPin = 2;
 constexpr uint16_t kDiscoveryPort = 4210;
@@ -246,7 +247,7 @@ void setup() {
   commandAckTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/cmd_ack";
   statusTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/status";
   mqtt.setCallback(onMqttMessage);
-  mqtt.setBufferSize(1024);
+  mqtt.setBufferSize(kMqttBufferSize);
   mqtt.setKeepAlive(30);
   EEPROM.begin(sizeof(StoredBrokerEndpoint));
   StoredBrokerEndpoint stored{};
