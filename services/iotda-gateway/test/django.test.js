@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDjangoForwarder, DJANGO_UNIT_MAP, toDjangoBatch } from '../src/django.js';
+import { createDjangoForwarder, DJANGO_METRIC_LABELS, DJANGO_UNIT_MAP, toDjangoBatch } from '../src/django.js';
 import { Outbox } from '../src/outbox.js';
 
 const RECEIVED_AT = new Date('2026-08-29T08:00:00Z');
@@ -96,6 +96,13 @@ test('maps device units and display names onto the Django contract', () => {
     assert.match(eventId, EVENT_ID_PATTERN);
     assert.ok(eventId.startsWith('gw:CTRL-01:'));
   }
+});
+
+test('maps gas channel evidence to readable platform labels', () => {
+  assert.equal(DJANGO_METRIC_LABELS['methane.raw'], '甲烷传感器 ADC');
+  assert.equal(DJANGO_METRIC_LABELS['methane.voltage'], '甲烷传感器电压');
+  assert.equal(DJANGO_METRIC_LABELS['co.raw'], '一氧化碳传感器 ADC');
+  assert.equal(DJANGO_METRIC_LABELS['co.voltage'], '一氧化碳传感器电压');
 });
 
 test('uses the device timestamp when the message carries one', () => {
