@@ -205,12 +205,17 @@ uint8_t MenuCommand_ParseAck(const char *line, size_t length, MenuCommandAck *ac
   return 1U;
 }
 
-uint8_t MenuCommand_AcceptAck(MenuCommandContext *context, const MenuCommandAck *ack)
+uint8_t MenuCommand_AcceptResult(MenuCommandContext *context, const char *command_id)
 {
-  if ((context == 0) || (ack == 0) || !context->pending ||
-      strcmp(context->active_command_id, ack->command_id) != 0) return 0U;
+  if ((context == 0) || (command_id == 0) || !context->pending ||
+      strcmp(context->active_command_id, command_id) != 0) return 0U;
   context->pending = 0U;
   return 1U;
+}
+
+uint8_t MenuCommand_AcceptAck(MenuCommandContext *context, const MenuCommandAck *ack)
+{
+  return (ack != 0) ? MenuCommand_AcceptResult(context, ack->command_id) : 0U;
 }
 
 void MenuCommandTx_Init(MenuCommandTxQueue *queue)

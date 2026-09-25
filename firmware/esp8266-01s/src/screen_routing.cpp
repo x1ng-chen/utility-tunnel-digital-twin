@@ -633,7 +633,10 @@ bool updateReading(ScreenSnapshot* snapshot, const char* asset,
       std::strcmp(metric, "power") == 0 && std::strcmp(unit, "W") == 0) {
     return inRange(value, -10000, 10000);
   }
-  if (std::strcmp(asset, "GAS-01") == 0 &&
+  if ((std::strcmp(asset, "GAS-01") == 0 ||
+       std::strncmp(asset, "O2-", 3) == 0 ||
+       std::strncmp(asset, "MQ4-", 4) == 0 ||
+       std::strncmp(asset, "CO-", 3) == 0) &&
       (std::strcmp(metric, "oxygen.warning") == 0 ||
        std::strcmp(metric, "oxygen.alarm") == 0 ||
        std::strcmp(metric, "methane.warning") == 0 ||
@@ -666,7 +669,7 @@ bool updateReading(ScreenSnapshot* snapshot, const char* asset,
   if (std::strcmp(asset, "CTRL-01") == 0 &&
       std::strcmp(metric, "led.mode") == 0 &&
       std::strcmp(unit, "enum") == 0) {
-    if (!inRange(value, 0, 7)) return false;
+    if (!inRange(value, 0, 15)) return false;
     snapshot->actuators.led_mode = static_cast<uint8_t>(value);
     return true;
   }
@@ -955,7 +958,16 @@ RouteResult updateTelemetry(TelemetryAccumulator* accumulator,
   candidate.last_received_at_ms = now_epoch_ms;
   candidate.initialized = true;
 
-  const Result build = BuildSnapshot(candidate.snapshot, output,
+  /* The UART snapshot has a fixed 768-byte ceiling. Keep all sensor readings
+   * in the accumulator, but rotate one item per emitted frame; Node B merges
+   * items by asset code across the frame sequence. */
+  ScreenSnapshot wire_snapshot = candidate.snapshot;
+  if (wire_snapshot.sensor_count > 1U) {
+    const size_t item_index = sequence % wire_snapshot.sensor_count;
+    wire_snapshot.sensors[0] = wire_snapshot.sensors[item_index];
+    wire_snapshot.sensor_count = 1U;
+  }
+  const Result build = BuildSnapshot(wire_snapshot, output,
                                      output_capacity, written);
   if (build != Result::Ok) return mapProtocolResult(build);
   *accumulator = candidate;
@@ -1088,7 +1100,25 @@ UartTxEnqueueResult EnqueueUartTxLine(UartTxQueue* queue,
   }
 
   const size_t tail = uartQueueIndex(*queue, queue->count);
-  assignUartFrame(&queue->frames[tail], kind, payload, length);
+  if (kind == UartTxFrameKind::Acknowledgement) {
+    // Finish an already-started frame, then deliver ACKs ahead of snapshots,
+    // clock and diagnostics. Preserve the order of ACKs already queued.
+    size_t insertion = queue->count != 0U &&
+                               queue->frames[queue->head].offset != 0U ? 1U : 0U;
+    while (insertion < queue->count &&
+           queue->frames[uartQueueIndex(*queue, insertion)].kind ==
+               UartTxFrameKind::Acknowledgement) {
+      ++insertion;
+    }
+    for (size_t index = queue->count; index > insertion; --index) {
+      queue->frames[uartQueueIndex(*queue, index)] =
+          queue->frames[uartQueueIndex(*queue, index - 1U)];
+    }
+    assignUartFrame(&queue->frames[uartQueueIndex(*queue, insertion)],
+                    kind, payload, length);
+  } else {
+    assignUartFrame(&queue->frames[tail], kind, payload, length);
+  }
   ++queue->count;
   return UartTxEnqueueResult::Queued;
 }
@@ -1330,11 +1360,43 @@ void InitMqttLinkStatusState(MqttLinkStatusState* state) {
   state->connected = false;
 }
 
+bool IsCtrl01BootLine(const char* line, size_t length) {
+  static constexpr char boot[] = "#NODE node-a boot";
+  return line != nullptr && length == sizeof(boot) - 1U &&
+         std::memcmp(line, boot, sizeof(boot) - 1U) == 0;
+}
+
 bool IsCtrl02StatusHeartbeat(const char* line, size_t length) {
   static constexpr char prefix[] =
       "{\"schema\":\"ut.node-b.status.v1\",\"nodeId\":\"node-b\",";
   return line != nullptr && length >= sizeof(prefix) - 1U &&
          std::memcmp(line, prefix, sizeof(prefix) - 1U) == 0;
+}
+
+bool ShouldResyncForCtrl02Heartbeat(NodeBHeartbeatState* state,
+                                   const char* line, size_t length) {
+  static constexpr char prefix[] =
+      "{\"schema\":\"ut.node-b.status.v1\",\"nodeId\":\"node-b\",\"seq\":";
+  static constexpr char suffix[] = ",\"display\":\"online\"}";
+  if (state == nullptr || line == nullptr ||
+      length < sizeof(prefix) - 1U + sizeof(suffix) ||
+      std::memcmp(line, prefix, sizeof(prefix) - 1U) != 0) return false;
+  size_t cursor = sizeof(prefix) - 1U;
+  uint32_t sequence = 0U;
+  const size_t start = cursor;
+  while (cursor < length && line[cursor] >= '0' && line[cursor] <= '9') {
+    const uint32_t digit = static_cast<uint32_t>(line[cursor] - '0');
+    if (sequence > (UINT32_MAX - digit) / 10U) return false;
+    sequence = sequence * 10U + digit;
+    ++cursor;
+  }
+  if (cursor == start || sequence == 0U ||
+      length - cursor != sizeof(suffix) - 1U ||
+      std::memcmp(line + cursor, suffix, sizeof(suffix) - 1U) != 0) return false;
+  const bool resync = !state->initialized || sequence < state->last_sequence;
+  state->initialized = true;
+  state->last_sequence = sequence;
+  return resync;
 }
 
 void RequestMqttLinkStatus(MqttLinkStatusState* state) {

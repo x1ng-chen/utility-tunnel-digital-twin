@@ -13,6 +13,8 @@ extern "C" {
 #define NODE_A_SENSOR_COUNT (NODE_A_I2C_SENSOR_COUNT + NODE_A_ANALOG_PIN_COUNT + NODE_A_DIGITAL_PIN_COUNT)
 
 typedef void (*NodeAServiceCallback)(void *context);
+typedef uint8_t (*NodeASht30Reader)(const NodeI2CSensorPin *cfg,
+                                  int16_t *temperature, uint16_t *humidity);
 
 typedef struct {
   SensorReading readings[NODE_A_SENSOR_COUNT];
@@ -25,6 +27,7 @@ typedef struct {
   void *service_ctx;
   uint8_t cursor;
   uint8_t calibrated[NODE_A_SENSOR_COUNT];
+  NodeASht30Reader sht30_reader;
 } NodeASensorBank;
 
 void NodeASensorBank_Init(NodeASensorBank *bank, ADC_HandleTypeDef *hadc,

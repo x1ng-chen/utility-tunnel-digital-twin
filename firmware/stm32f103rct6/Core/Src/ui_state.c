@@ -318,6 +318,17 @@ UiEffect UiState_Handle(UiState *state, UiInputEvent event, uint32_t now_ms)
   if (!command_send_allowed(state)) return effect(UI_EFFECT_DIRTY, 0U, 0U);
 
   if (selection_has_options(state)) {
+    /* Brightness is commonly used as a one-touch "turn the strip on at this
+     * level" action.  A short press therefore sends the value already shown;
+     * RIGHT still enters option editing, where UP/DOWN choose another level
+     * and PRESS confirms it.  This removes the ambiguous double-press path
+     * without changing the other option rows. */
+    if ((state->page == UI_LIGHT_SOUND) && (state->selected_row == 1U) &&
+        (event == UI_EVT_PRESS)) {
+      state->pending_action = (uint8_t)selected_action;
+      state->pending_value = selected_option_value(state);
+      return send_pending_command(state, now_ms);
+    }
     state->option_editing = 1U;
     state->option_original_value = editable_option_value(state);
     return effect(UI_EFFECT_DIRTY, 0U, 0U);

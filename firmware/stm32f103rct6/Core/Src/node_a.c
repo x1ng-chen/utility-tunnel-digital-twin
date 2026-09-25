@@ -14,6 +14,13 @@
 #include <stdio.h>
 #include <string.h>
 
+_Static_assert(NODE_A_STATUS_SHT_COUNT == NODE_A_I2C_SENSOR_COUNT,
+               "Node A display must cover every SHT30 slot");
+_Static_assert(NODE_A_STATUS_ANALOG_COUNT == NODE_A_ANALOG_PIN_COUNT,
+               "Node A display must cover every analog slot");
+_Static_assert(NODE_A_STATUS_DIGITAL_COUNT == NODE_A_DIGITAL_PIN_COUNT,
+               "Node A display must cover every digital slot");
+
 #define NODE_ID                         "node-a"
 #define TELEMETRY_INTERVAL_MS           2000U
 /* Safety cadence.  Gas sampling used to live inside the telemetry block, so its
@@ -89,8 +96,10 @@ _Static_assert(UART_TX_CAPACITY >=
 #define NODE_TEST_LINE_SIZE               384U
 #define BUZZER_Pin                         GPIO_PIN_0
 #define BUZZER_GPIO_Port                   GPIOB
-#define RELAY_Pin                          GPIO_PIN_1
-#define RELAY_GPIO_Port                    GPIOA
+#define FAN1_RELAY_Pin                     GPIO_PIN_1
+#define FAN1_RELAY_GPIO_Port               GPIOA
+#define FAN2_RELAY_Pin                     GPIO_PIN_15
+#define FAN2_RELAY_GPIO_Port               GPIOA
 #define SMOKE_Pin                          GPIO_PIN_12
 #define SMOKE_GPIO_Port                    GPIOB
 #define FLAME_Pin                          GPIO_PIN_14
@@ -159,12 +168,20 @@ static volatile uint32_t esp_rx_bytes;
 static volatile uint32_t esp_rx_completed_lines;
 static volatile uint32_t esp_rx_dropped_lines;
 static NodeACommandDedup command_dedup;
-static NodeAActuatorState g_actuator = { 100U, 100U, 0U, 0U, 0U,
+static NodeAActuatorState g_actuator = { 0U, 0U, 0U, 0U, 0U,
                                          NODE_A_LED_OFF, 100U };
 /* Both UARTs keep their own queue so a stalled debug console can never hold
  * back the ESP link, and neither can hold back the safety loop. */
 static UartTxQueue esp_tx_queue;
 static UartTxQueue debug_tx_queue;
+/* Keep the SHT30 deadline independent of blocking 9600-baud UART drains.
+ * Command and safety servicing continue while this flag is set. */
+static uint8_t sht30_defer_uart_tx;
+static uint8_t sht30_read_stage;
+static uint32_t sht4_read_ok;
+static uint32_t sht4_read_failed;
+static uint8_t sht4_last_failure_stage;
+static uint32_t sht4_last_failure_ms;
 static uint32_t tx_esp_enqueue_failures;
 static uint32_t tx_debug_enqueue_failures;
 static uint32_t ack_enqueue_failures;
@@ -285,7 +302,7 @@ static void GasVentilation_Update(uint32_t now);
 static void GasSafety_Service(uint32_t now);
 static uint8_t Sht30_Read(const SoftI2cBus *bus, uint8_t address, Sht30Reading *reading);
 static uint8_t Ina226_Read(const SoftI2cBus *bus, Ina226State *state,
-                           Ina226Reading *reading);
+                           uint8_t fan_powered, Ina226Reading *reading);
 static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected,
                           uint8_t flame_detected,
                           uint8_t level_is_detected, uint16_t oxygen_raw,
@@ -364,7 +381,7 @@ static void Communication_Service(void)
 {
   const uint32_t now = HAL_GetTick();
   Command_Poll();
-  UartTx_DrainBoth(now);
+  if (sht30_defer_uart_tx == 0U) UartTx_DrainBoth(now);
   Led_Service(now);
   GasSafety_Service(now);
 }
@@ -395,6 +412,7 @@ static void Buzzer_Silence(void);
 static void Buzzer_Start(uint32_t duration_ms);
 static void Relay_Disable(void);
 static void Relay_Enable(uint32_t duration_ms);
+static void Relay_ApplyOutputs(void);
 static void Smoke_Poll(uint32_t now);
 static void Flame_Poll(uint32_t now);
 static void Level_Poll(uint32_t now);
@@ -424,7 +442,8 @@ static uint32_t Fan1Tach_ReadRpm(uint32_t now)
   delta = pulses - fan1_tach_last_pulses;
   fan1_tach_last_pulses = pulses;
   fan1_tach_last_sample_at = now;
-  if ((elapsed_ms == 0U) || (g_actuator.relay_on == 0U)) return 0U;
+  if ((elapsed_ms == 0U) || (g_actuator.relay_on == 0U) ||
+      (g_actuator.fan1_pwm_percent == 0U)) return 0U;
   return (uint32_t)(((uint64_t)delta * 60000ULL) /
                     ((uint64_t)FAN_TACH_PULSES_PER_REVOLUTION * elapsed_ms));
 }
@@ -441,7 +460,8 @@ static uint32_t Fan2Tach_ReadRpm(uint32_t now)
   delta = pulses - fan2_tach_last_pulses;
   fan2_tach_last_pulses = pulses;
   fan2_tach_last_sample_at = now;
-  if ((elapsed_ms == 0U) || (g_actuator.relay_on == 0U)) return 0U;
+  if ((elapsed_ms == 0U) || (g_actuator.relay_on == 0U) ||
+      (g_actuator.fan2_pwm_percent == 0U)) return 0U;
   return (uint32_t)(((uint64_t)delta * 60000ULL) /
                     ((uint64_t)FAN_TACH_PULSES_PER_REVOLUTION * elapsed_ms));
 }
@@ -485,8 +505,8 @@ static void MX_FAN1_PWM_Init(void)
   TIM4->CCMR2 = TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3PE |
                 TIM_CCMR2_OC4M_1 | TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4PE;
   TIM4->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;
-  Fan1Pwm_SetPercent(100U);
-  Fan2Pwm_SetPercent(100U);
+  Fan1Pwm_SetPercent(0U);
+  Fan2Pwm_SetPercent(0U);
   TIM4->EGR = TIM_EGR_UG;
   TIM4->CR1 = TIM_CR1_ARPE | TIM_CR1_CEN;
 }
@@ -543,6 +563,18 @@ static void I2c_Recover(const SoftI2cBus *bus)
     I2c_Scl(bus, GPIO_PIN_SET); I2c_Delay();
   }
   I2c_Stop(bus);
+}
+static uint8_t I2c_BusReady(const SoftI2cBus *bus)
+{
+  I2c_Sda(bus, GPIO_PIN_SET);
+  I2c_Scl(bus, GPIO_PIN_SET);
+  I2c_Delay();
+  if (HAL_GPIO_ReadPin(bus->port, bus->scl_pin) == GPIO_PIN_RESET)
+    return 0U;
+  if (HAL_GPIO_ReadPin(bus->port, bus->sda_pin) == GPIO_PIN_RESET)
+    I2c_Recover(bus);
+  return (HAL_GPIO_ReadPin(bus->port, bus->scl_pin) == GPIO_PIN_SET &&
+          HAL_GPIO_ReadPin(bus->port, bus->sda_pin) == GPIO_PIN_SET) ? 1U : 0U;
 }
 static uint8_t I2c_WriteByte(const SoftI2cBus *bus, uint8_t value,
                              uint32_t deadline_ms)
@@ -662,18 +694,27 @@ static uint8_t Sht30_Read(const SoftI2cBus *bus, uint8_t address, Sht30Reading *
   const uint32_t deadline_ms = HAL_GetTick() + NODE_A_SHT30_TIMEOUT_MS;
 
   reading->online = 0U;
+  sht30_read_stage = 1U; /* bus ready */
+  if (I2c_BusReady(bus) == 0U) return 0U;
   I2c_Start(bus);
-  if (!I2c_WriteByte(bus, (uint8_t)(address << 1U), deadline_ms) ||
-      !I2c_WriteByte(bus, (uint8_t)(SHT30_COMMAND_HIGH_REPEATABLE >> 8U), deadline_ms) ||
+  sht30_read_stage = 2U; /* write address */
+  if (!I2c_WriteByte(bus, (uint8_t)(address << 1U), deadline_ms))
+  {
+    I2c_Stop(bus); return 0U;
+  }
+  sht30_read_stage = 3U; /* measurement command */
+  if (!I2c_WriteByte(bus, (uint8_t)(SHT30_COMMAND_HIGH_REPEATABLE >> 8U), deadline_ms) ||
       !I2c_WriteByte(bus, (uint8_t)SHT30_COMMAND_HIGH_REPEATABLE, deadline_ms))
   {
     I2c_Stop(bus); return 0U;
   }
   I2c_Stop(bus); DelayWithCommunication(NODE_A_SHT30_MEASUREMENT_DELAY_MS); I2c_Start(bus);
+  sht30_read_stage = 4U; /* read address */
   if (!I2c_WriteByte(bus, (uint8_t)((address << 1U) | 1U), deadline_ms))
   {
     I2c_Stop(bus); return 0U;
   }
+  sht30_read_stage = 5U; /* six response bytes or deadline */
   for (i = 0U; i < sizeof(response); ++i)
   {
     if (I2c_DeadlineReached(deadline_ms) != 0U) { I2c_Stop(bus); return 0U; }
@@ -681,14 +722,46 @@ static uint8_t Sht30_Read(const SoftI2cBus *bus, uint8_t address, Sht30Reading *
   }
   I2c_Stop(bus);
   if (I2c_DeadlineReached(deadline_ms) != 0U) return 0U;
+  sht30_read_stage = 6U; /* CRC */
   if (Sht30_Crc(response, 2U) != response[2] || Sht30_Crc(&response[3], 2U) != response[5]) return 0U;
   raw_temperature = (uint16_t)((response[0] << 8U) | response[1]);
   raw_humidity = (uint16_t)((response[3] << 8U) | response[4]);
   reading->temperature_centi_c = (int16_t)(((int32_t)17500 * raw_temperature) / 65535 - 4500);
   reading->humidity_centi_rh = (uint16_t)(((uint32_t)10000 * raw_humidity) / 65535U);
   reading->online = 1U;
+  sht30_read_stage = 0U;
   return 1U;
 }
+static uint8_t SensorBank_ReadSht30(const NodeI2CSensorPin *cfg,
+                                   int16_t *temperature, uint16_t *humidity)
+{
+  const SoftI2cBus bus = {cfg->scl_port, cfg->scl_pin, cfg->sda_pin};
+  Sht30Reading sample = {0};
+  uint8_t ok;
+  uint32_t started_at;
+  if (cfg->scl_port != cfg->sda_port) return 0U;
+  sht30_defer_uart_tx = 1U;
+  started_at = HAL_GetTick();
+  ok = Sht30_Read(&bus, cfg->i2c_address, &sample);
+  sht30_defer_uart_tx = 0U;
+  if (cfg->scl_pin == GPIO_PIN_10 && cfg->sda_pin == GPIO_PIN_11 &&
+      cfg->i2c_address == SHT30_ADDRESS_45)
+  {
+    if (ok != 0U) ++sht4_read_ok;
+    else
+    {
+      ++sht4_read_failed;
+      sht4_last_failure_stage = sht30_read_stage;
+      sht4_last_failure_ms = HAL_GetTick() - started_at;
+    }
+  }
+  if (ok == 0U) return 0U;
+  *temperature = sample.temperature_centi_c;
+  *humidity = sample.humidity_centi_rh;
+  return 1U;
+}
+
+
 static uint8_t Ina226_Configure(const SoftI2cBus *bus, Ina226State *state,
                                 Ina226Reading *reading, uint8_t reset_first,
                                 uint32_t deadline_ms)
@@ -756,7 +829,7 @@ static uint8_t Ina226_Configure(const SoftI2cBus *bus, Ina226State *state,
   {
     /* CURRENT and POWER depend on calibration, but BUS and SHUNT do not.
      * Try to restore the calibrated datapath for diagnostics; a module that
-     * refuses this write is still usable through the physical R100 shunt. */
+     * refuses this write is still usable through the physical R010 shunt. */
     if (I2c_WriteRegister16(bus, INA226_ADDRESS, INA226_REG_CALIBRATION,
                            INA226_CALIBRATION_VALUE, deadline_ms))
     {
@@ -811,7 +884,7 @@ static uint8_t Ina226_ReadSamples(const SoftI2cBus *bus,
 }
 
 static uint8_t Ina226_Read(const SoftI2cBus *bus, Ina226State *state,
-                           Ina226Reading *reading)
+                           uint8_t fan_powered, Ina226Reading *reading)
 {
   /* One deadline covers the whole transfer, so a slow but healthy module is
    * never cut mid-sequence while a stuck bus still cannot block the loop. */
@@ -820,6 +893,7 @@ static uint8_t Ina226_Read(const SoftI2cBus *bus, Ina226State *state,
   if ((bus == NULL) || (state == NULL) || (reading == NULL)) return 0U;
   memset(reading, 0, sizeof(*reading));
   reading->fault = INA226_FAULT_COMMUNICATION;
+  if (I2c_BusReady(bus) == 0U) return 0U;
   if (state->configured == 0U) I2c_Recover(bus);
   if (!Ina226_Configure(bus, state, reading, 0U, deadline_ms) ||
       !Ina226_ReadSamples(bus, reading, deadline_ms))
@@ -849,7 +923,7 @@ static uint8_t Ina226_Read(const SoftI2cBus *bus, Ina226State *state,
   }
 
   reading->bus_microvolts = NODE_A_INA226_BUS_RAW_TO_UV(reading->bus_raw);
-  if (g_actuator.relay_on != 0U)
+  if (fan_powered != 0U)
   {
     reading->current_microamps =
         NODE_A_INA226_SHUNT_RAW_TO_UA(reading->shunt_raw);
@@ -996,20 +1070,34 @@ static void Buzzer_Start(uint32_t duration_ms)
   g_actuator.buzzer_on = 1U;
 }
 
-/* The installed relay module is set to high-level trigger.  PA1 is held low
- * before it is configured as an output, so power-up, timeout and safe-state are off. */
+/* Both relay inputs are high-level trigger. The output latches are cleared
+ * before GPIO configuration; external pull-downs must hold PA1/PA15 low
+ * during reset, before firmware can take control of those pins. */
 static void Relay_Disable(void)
 {
-  HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(FAN1_RELAY_GPIO_Port,
+                    FAN1_RELAY_Pin | FAN2_RELAY_Pin, GPIO_PIN_RESET);
   g_actuator.relay_on = 0U;
+  Fan1Pwm_SetPercent(0U);
+  Fan2Pwm_SetPercent(0U);
+}
+
+static void Relay_ApplyOutputs(void)
+{
+  HAL_GPIO_WritePin(FAN1_RELAY_GPIO_Port, FAN1_RELAY_Pin,
+                    (g_actuator.relay_on != 0U &&
+                     g_actuator.fan1_pwm_percent != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(FAN2_RELAY_GPIO_Port, FAN2_RELAY_Pin,
+                    (g_actuator.relay_on != 0U &&
+                     g_actuator.fan2_pwm_percent != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 static void Relay_Enable(uint32_t duration_ms)
 {
-  HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_SET);
   relay_started_at = HAL_GetTick();
   relay_duration_ms = duration_ms;
   g_actuator.relay_on = 1U;
+  Relay_ApplyOutputs();
 }
 
 /* The MQ board comparator is powered from 5 V and its DO output is divided
@@ -1474,19 +1562,37 @@ static void CommitActuators(const NodeACommand *command, uint32_t now,
   Fan1Pwm_SetPercent(g_actuator.fan1_pwm_percent);
   Fan2Pwm_SetPercent(g_actuator.fan2_pwm_percent);
 
-  /* Timed actuators are only re-armed when the command changed their state, so
-   * a read-only `status` command can never reset an active relay/buzzer timer. */
+  /* A command TTL limits delivery, not how long a fan is allowed to run.
+   * Menu and Web fan commands remain active until stopped or safety changes
+   * them.  Re-apply both outputs even if the aggregate relay state stayed on:
+   * changing fan 2 while fan 1 runs must still switch channel 2. */
   if (g_actuator.relay_on != before->relay_on)
   {
     if (g_actuator.relay_on != 0U)
     {
       const uint32_t duration =
-          (command->action == NODE_A_ACTION_FANS_BOTH_START)
+          ((command->action == NODE_A_ACTION_FANS_BOTH_START) ||
+           (command->action == NODE_A_ACTION_FAN1_DUTY) ||
+           (command->action == NODE_A_ACTION_FAN2_DUTY) ||
+           (command->action == NODE_A_ACTION_FAN_PWM) ||
+           (command->action == NODE_A_ACTION_FAN2_PWM))
               ? 0xFFFFFFFFUL : (command->ttl_ms - elapsed_ms);
       Relay_Enable(duration);
     }
     else
       Relay_Disable();
+  }
+  else if ((g_actuator.fan1_pwm_percent != before->fan1_pwm_percent) ||
+           (g_actuator.fan2_pwm_percent != before->fan2_pwm_percent))
+  {
+    if (g_actuator.relay_on != 0U &&
+        ((command->action == NODE_A_ACTION_FAN1_DUTY) ||
+         (command->action == NODE_A_ACTION_FAN2_DUTY) ||
+         (command->action == NODE_A_ACTION_FAN_PWM) ||
+         (command->action == NODE_A_ACTION_FAN2_PWM)))
+      Relay_Enable(0xFFFFFFFFUL);
+    else
+      Relay_ApplyOutputs();
   }
   if (g_actuator.buzzer_on != before->buzzer_on)
   {
@@ -1697,6 +1803,88 @@ static void NodeTest_ReportClock(void)
     Tx_EnqueueLine(message, (uint16_t)length);
 }
 
+static void ReportI2cState(void)
+{
+  static uint32_t last_report;
+  static uint32_t last_sht4_count;
+  const uint32_t now = HAL_GetTick();
+  char line[160];
+  if (last_report != 0U && now - last_report < 10000U) return;
+  last_report = now;
+  const int n = snprintf(line, sizeof(line),
+    "#I2C odr=0x%04lX idr=0x%04lX crl=0x%08lX crh=0x%08lX sht=%u,%u,%u,%u\r\n",
+    (unsigned long)GPIOB->ODR, (unsigned long)GPIOB->IDR,
+    (unsigned long)GPIOB->CRL, (unsigned long)GPIOB->CRH,
+    sensor_bank.readings[0].online, sensor_bank.readings[1].online,
+    sensor_bank.readings[2].online, sensor_bank.readings[3].online);
+  if (n > 0 && n < (int)sizeof(line)) Tx_EnqueueLine(line, (uint16_t)n);
+  if (sht4_read_ok + sht4_read_failed != last_sht4_count)
+  {
+    last_sht4_count = sht4_read_ok + sht4_read_failed;
+    const int detail = snprintf(line, sizeof(line),
+      "#SHT4 ok=%lu fail=%lu stage=%u fail_ms=%lu\r\n",
+      (unsigned long)sht4_read_ok, (unsigned long)sht4_read_failed,
+      (unsigned int)sht4_last_failure_stage,
+      (unsigned long)sht4_last_failure_ms);
+    if (detail > 0 && detail < (int)sizeof(line))
+      Tx_EnqueueLine(line, (uint16_t)detail);
+  }
+}
+
+/* One passive bench probe on the first INA226-FAN1 communication fault.
+ * An ACK at 0x44 is expected from SHT-01; the INA226 should ACK at 0x40.
+ * Never scan while a fan relay is active, and never write a device register. */
+static void ReportIna1AddressProbe(const Ina226Reading *reading)
+{
+  static uint8_t reported;
+  uint16_t ack_mask = 0U;
+  uint16_t manufacturer_id = 0U;
+  uint16_t die_id = 0U;
+  uint8_t manufacturer_ok = 0U;
+  uint8_t die_ok = 0U;
+  uint8_t ready;
+  uint8_t address;
+  char line[160];
+  uint32_t deadline_ms;
+  int n;
+
+  if (reported != 0U || reading == NULL ||
+      reading->fault != INA226_FAULT_COMMUNICATION ||
+      g_actuator.relay_on != 0U) return;
+  reported = 1U;
+  ready = I2c_BusReady(&i2c1_bus);
+  deadline_ms = HAL_GetTick() + 1000U;
+  if (ready != 0U)
+  {
+    for (address = 0x40U; address <= 0x4FU; ++address)
+    {
+      uint8_t acknowledged;
+      if (I2c_DeadlineReached(deadline_ms) != 0U) break;
+      I2c_Start(&i2c1_bus);
+      acknowledged = I2c_WriteByte(&i2c1_bus, (uint8_t)(address << 1U),
+                                   deadline_ms);
+      I2c_Stop(&i2c1_bus);
+      if (acknowledged != 0U)
+        ack_mask |= (uint16_t)(1U << (address - 0x40U));
+    }
+    if ((ack_mask & 1U) != 0U && I2c_DeadlineReached(deadline_ms) == 0U)
+    {
+      manufacturer_ok = I2c_ReadRegister16(&i2c1_bus, 0x40U,
+                          INA226_REG_MANUFACTURER_ID, &manufacturer_id,
+                          deadline_ms);
+      die_ok = I2c_ReadRegister16(&i2c1_bus, 0x40U,
+                          INA226_REG_DIE_ID, &die_id, deadline_ms);
+    }
+  }
+  n = snprintf(line, sizeof(line),
+      "#INA1 fault=%u ready=%u ack40_4f=0x%04X midok=%u mid=0x%04X didok=%u did=0x%04X\r\n",
+      (unsigned int)reading->fault, (unsigned int)ready,
+      (unsigned int)ack_mask, (unsigned int)manufacturer_ok,
+      (unsigned int)manufacturer_id, (unsigned int)die_ok,
+      (unsigned int)die_id);
+  if (n > 0 && n < (int)sizeof(line)) Tx_EnqueueLine(line, (uint16_t)n);
+}
+
 static void NodeTest_ReportDisplay(void);
 
 static void NodeTest_HandleLine(void)
@@ -1709,8 +1897,8 @@ static void NodeTest_HandleLine(void)
   if (strcmp(node_test_line, "#NODETEST RESET") == 0)
   {
     NodeACommand_DedupInit(&command_dedup);
-    g_actuator.fan1_pwm_percent = 100U;
-    g_actuator.fan2_pwm_percent = 100U;
+    g_actuator.fan1_pwm_percent = 0U;
+    g_actuator.fan2_pwm_percent = 0U;
     g_actuator.relay_on = 0U;
     g_actuator.buzzer_on = 0U;
     g_actuator.buzzer_muted = 0U;
@@ -1797,9 +1985,9 @@ static void NodeTest_Poll(void)
 
 /* ============ Secondary status screen (SPI3 + DMA2) =========================
  * Read-only by construction: the screen renders one snapshot of Node A's own
- * state and has no path to a command, an actuator or an input device.  The slow
- * sensor fields are captured by the telemetry block; the safety and actuator
- * fields change every loop and are copied by the display tick. */
+ * state and has no path to a command, an actuator or an input device.  The
+ * display tick copies the sensor bank and fast safety/actuator state without
+ * initiating any additional sensor transaction. */
 
 static void EspTime_Poll(void)
 {
@@ -1815,13 +2003,6 @@ static void EspTime_Poll(void)
   line[length] = '\0';
   __enable_irq();
   (void)NetworkTime_Update(&esp_clock, line, length, HAL_GetTick());
-}
-
-static void Status_CaptureEnvironment(const Sht30Reading *environment)
-{
-  status_sensors.sht30_online = environment->online;
-  status_sensors.temperature_centi_c = environment->temperature_centi_c;
-  status_sensors.humidity_centi_rh = environment->humidity_centi_rh;
 }
 
 static void Status_CaptureGas(uint16_t oxygen_raw, uint8_t oxygen_online,
@@ -1890,6 +2071,8 @@ static void Status_Tick(uint32_t now)
 
   /* One atomic copy per frame: the renderer never sees a half-updated mix. */
   NodeAStatusSnapshot snapshot = status_sensors;
+  NodeAStatus_CaptureInventory(&snapshot, NodeASensorBank_Readings(&sensor_bank),
+                               NodeASensorBank_Count(&sensor_bank));
 
   /* The bench probe injects alarm *inputs*; it never fakes an actuator, so the
    * alarm page may report a simulated source while VENT still shows the real
@@ -2051,6 +2234,7 @@ int main(void)
   MX_ADC1_Init();
   if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) Error_Handler();
   NodeASensorBank_Init(&sensor_bank, &hadc1, SensorBank_ServiceCallback, NULL);
+  sensor_bank.sht30_reader = SensorBank_ReadSht30;
   UartTx_InitWithReserve(&esp_tx_queue, NODE_A_UART_ACK_RESERVE_BYTES);
   UartTx_InitWithReserve(&debug_tx_queue, NODE_A_UART_ACK_RESERVE_BYTES);
   MX_USART1_UART_Init(); MX_USART2_UART_Init();
@@ -2062,6 +2246,10 @@ int main(void)
   NodeAStatus_Init(&status_screen, HAL_GetTick());
   ST7735_Init();
   Tx_EnqueueLine("#NODE node-a boot\r\n", 19U);
+  {
+    static const char build[] = "#FW node-a sensorscreen-20260925\r\n";
+    Tx_EnqueueLine(build, (uint16_t)(sizeof(build) - 1U));
+  }
   for (;;)
   {
     uint32_t now;
@@ -2100,6 +2288,7 @@ int main(void)
         HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_SET);
     }
     if ((gas_ventilation_active == 0U) && (g_actuator.relay_on != 0U) &&
+        (relay_duration_ms != 0xFFFFFFFFUL) &&
         ((now - relay_started_at) >= relay_duration_ms))
       Relay_Disable();
     /* Smoke, flame and level are already sampled by now, so this repaint is
@@ -2121,14 +2310,23 @@ int main(void)
     NodeASensorBank_Tick(&sensor_bank, now);
     if (telemetry_due != 0U)
     {
-      (void)Sht30_Read(&i2c1_bus, SHT30_ADDRESS_44, &readings[0]);
-      (void)Sht30_Read(&i2c1_bus, SHT30_ADDRESS_45, &readings[1]);
-      (void)Sht30_Read(&i2c2_bus, SHT30_ADDRESS_44, &readings[2]);
+      /* The bank is the only SHT sampler; screen and telemetry share its cache. */
+      for (uint8_t i = 0U; i < 3U; ++i) {
+        readings[i].online = sensor_bank.readings[i].online;
+        readings[i].temperature_centi_c = sensor_bank.readings[i].temperature_centi_c;
+        readings[i].humidity_centi_rh = sensor_bank.readings[i].humidity_centi_rh;
+      }
+      ReportI2cState();
       /* Gas values come from the fast gas block above; telemetry only carries
        * them onward.  The INA226 transfers below are what can stall this block
        * for seconds, so nothing safety-critical remains on their path. */
-      (void)Ina226_Read(&i2c1_bus, &ina226_fan1_state, &fan_power);
-      (void)Ina226_Read(&i2c2_bus, &ina226_fan2_state, &fan2_power);
+      (void)Ina226_Read(&i2c1_bus, &ina226_fan1_state,
+                        (uint8_t)((g_actuator.relay_on != 0U) &&
+                                  (g_actuator.fan1_pwm_percent != 0U)), &fan_power);
+      ReportIna1AddressProbe(&fan_power);
+      (void)Ina226_Read(&i2c2_bus, &ina226_fan2_state,
+                        (uint8_t)((g_actuator.relay_on != 0U) &&
+                                  (g_actuator.fan2_pwm_percent != 0U)), &fan2_power);
       /* Sensor acquisition is deliberately slow on the software I2C buses.
        * Timestamp the pulse window after those reads so pulses accumulated
        * during acquisition are divided by the matching real elapsed time. */
@@ -2137,9 +2335,8 @@ int main(void)
         fan_rpm = Fan1Tach_ReadRpm(tach_now);
         fan2_rpm = Fan2Tach_ReadRpm(tach_now);
       }
-      /* Hand the freshly sampled values to the status screen; the display tick
-       * copies them atomically, so it never triggers a second sensor read. */
-      Status_CaptureEnvironment(&readings[0]);
+      /* Hand the freshly sampled power values to the status screen.  The
+       * 20-channel inventory is copied from the sensor bank by Status_Tick. */
       Status_CaptureFanPower(&fan_power, &status_sensors.fan1_power_online,
                              &status_sensors.fan1_millivolts,
                              &status_sensors.fan1_milliamps);
@@ -2317,6 +2514,7 @@ static void GasVentilation_Update(uint32_t now)
     if (g_actuator.fan1_pwm_percent != 100U) Fan1Pwm_SetPercent(100U);
     if (g_actuator.fan2_pwm_percent != 100U) Fan2Pwm_SetPercent(100U);
     if (g_actuator.relay_on == 0U) Relay_Enable(0xFFFFFFFFUL);
+    else Relay_ApplyOutputs();
   }
 }
 
@@ -2326,13 +2524,15 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE(); __HAL_RCC_GPIOB_CLK_ENABLE(); __HAL_RCC_GPIOC_CLK_ENABLE();
   HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(FAN1_RELAY_GPIO_Port,
+                    FAN1_RELAY_Pin | FAN2_RELAY_Pin, GPIO_PIN_RESET);
   gpio.Pin = LED_Pin; gpio.Mode = GPIO_MODE_OUTPUT_PP; gpio.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &gpio);
   gpio.Pin = BUZZER_Pin; gpio.Mode = GPIO_MODE_OUTPUT_PP; gpio.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(BUZZER_GPIO_Port, &gpio);
-  gpio.Pin = RELAY_Pin; gpio.Mode = GPIO_MODE_OUTPUT_PP; gpio.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(RELAY_GPIO_Port, &gpio);
+  gpio.Pin = FAN1_RELAY_Pin | FAN2_RELAY_Pin;
+  gpio.Mode = GPIO_MODE_OUTPUT_PP; gpio.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(FAN1_RELAY_GPIO_Port, &gpio);
   gpio.Pin = SMOKE_Pin; gpio.Mode = GPIO_MODE_INPUT; gpio.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(SMOKE_GPIO_Port, &gpio);
   gpio.Pin = FLAME_Pin; gpio.Mode = GPIO_MODE_INPUT; gpio.Pull = GPIO_PULLUP;

@@ -1,0 +1,19 @@
+{
+  "schema": "schematic-visual-audit-v1",
+  "status": "USER_REVIEW",
+  "source_type": "KiCad 10 native schematic",
+  "adapter": "kicad-tool query/edit; KiCad XML netlist and ERC",
+  "authoritative_sources": ["carrier32.kicad_sch"],
+  "baseline_connectivity": "KiCad XML export: 157 nets",
+  "final_connectivity": "KiCad XML export: 157 nets",
+  "connectivity_result": "PASS: exact net-name/reference/pin membership unchanged",
+  "erc_or_lint": {"before": "0 errors, 65 warnings", "after": "0 errors, 65 warnings"},
+  "protected_artifacts_unchanged": false,
+  "sheets": [{"name": "carrier32", "full_page_render": "build/demo/schematic-preview.png", "status": "USER_REVIEW"}],
+  "dense_crops": [{"region": "dual MCU and dual TFT companion view", "render": "build/demo/module-overview.png", "status": "PASS"}],
+  "remaining_limitations": [
+    "Native KiCad symbols remain compact connector symbols; the enlarged view is a companion diagram.",
+    "PCB was intentionally changed in the same task to attach four visual-only 3D models."
+  ],
+  "final_snapshot": "build/demo/module-overview.png"
+}

@@ -27,7 +27,7 @@
  * ESP snapshot and polling the joystick at the 60 FPS cadence, so the transmit
  * work of one iteration is bounded in bytes (and therefore in milliseconds)
  * rather than by how long the link takes to accept a frame. */
-#define NODE_B_UART_TX_DRAIN_BYTES 48U
+#define NODE_B_UART_TX_DRAIN_BYTES 8U
 #define LED_INTERVAL_MS 500U
 #define ESP_RX_LINE_SIZE SCREEN_SNAPSHOT_LINE_SIZE
 /* Completed ESP lines wait in a ring instead of one shared slot.  The ESP can
@@ -269,6 +269,18 @@ static void SendHeartbeat(void)
   }
 }
 
+static uint8_t HandleCommandResult(const char *command_id, uint8_t accepted,
+                                   uint32_t now_ms)
+{
+  if (!MenuCommand_AcceptResult(&command_context, command_id)) return 0U;
+  last_mqtt_online_ms = now_ms;
+  mqtt_evidence_source = 3U;
+  ui_snapshot.connectivity.mqtt = (uint8_t)UI_LINK_ONLINE;
+  ui_snapshot.connectivity.iotda = (uint8_t)UI_LINK_ONLINE;
+  (void)UiState_HandleAcknowledgement(&ui_state, command_id, accepted, now_ms);
+  return 1U;
+}
+
 static void PollEsp(uint32_t *received_count, PeerReading *peer)
 {
   char line[ESP_RX_LINE_SIZE];
@@ -319,6 +331,14 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
       ++*received_count;
       UiState_SetControlAvailability(&ui_state, (uint8_t)(ui_snapshot.connectivity.mqtt == UI_LINK_ONLINE),
                                      ui_state.control.safety_locked);
+      /* ESP-02 may deliver the next full snapshot even if a standalone ACK
+       * line was dropped under UART congestion.  lastCommand is the same
+       * authoritative Node A result, so use it to close the pending menu
+       * transaction instead of displaying a false timeout. */
+      if ((ui_snapshot.last_command.complete != 0U) &&
+          (ui_snapshot.last_command.command_id[0] != '\0'))
+        (void)HandleCommandResult(ui_snapshot.last_command.command_id,
+                                  ui_snapshot.last_command.accepted, now_ms);
     }
     else if (NetworkTime_Update(&ui_clock, line, length, now_ms))
     {
@@ -362,15 +382,10 @@ static void PollEsp(uint32_t *received_count, PeerReading *peer)
     else
     {
       MenuCommandAck acknowledgement;
-      if (MenuCommand_ParseAck(line, length, &acknowledgement) &&
-          MenuCommand_AcceptAck(&command_context, &acknowledgement))
+      if (MenuCommand_ParseAck(line, length, &acknowledgement))
       {
-        last_mqtt_online_ms = now_ms;
-        mqtt_evidence_source = 3U;
-        ui_snapshot.connectivity.mqtt = (uint8_t)UI_LINK_ONLINE;
-        ui_snapshot.connectivity.iotda = (uint8_t)UI_LINK_ONLINE;
-        (void)UiState_HandleAcknowledgement(&ui_state, acknowledgement.command_id,
-                                            acknowledgement.accepted, now_ms);
+        (void)HandleCommandResult(acknowledgement.command_id,
+                                  acknowledgement.accepted, now_ms);
       }
       if ((strncmp(line, "MQTT|", 5U) == 0) && DecodePeerReading(line, peer))
       {
@@ -577,7 +592,7 @@ static void HandleUiEffect(UiEffect effect, uint32_t now_ms)
     (void)UiState_CommandSendFailed(&ui_state, now_ms);
     return;
   }
-  if (!UartTx_EnqueuePriority(&esp_tx_queue, line, (uint16_t)length)) {
+  if (!UartTx_EnqueuePriorityNext(&esp_tx_queue, line, (uint16_t)length)) {
     command_context.pending = 0U;
     (void)UiState_CommandSendFailed(&ui_state, now_ms);
     return;

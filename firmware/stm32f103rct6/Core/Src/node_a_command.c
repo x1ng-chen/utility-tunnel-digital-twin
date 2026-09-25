@@ -447,6 +447,8 @@ NodeACommandResult NodeACommand_Apply(const NodeACommand *command,
       actual->buzzer_on = 0U;
       actual->buzzer_muted = 0U;
       actual->relay_on = 0U;
+      actual->fan1_pwm_percent = 0U;
+      actual->fan2_pwm_percent = 0U;
       actual->led_mode = NODE_A_LED_OFF;
       return Result(NODE_A_STATUS_ACCEPTED, kReasonSafeStateApplied, 0U);
 
@@ -464,10 +466,14 @@ NodeACommandResult NodeACommand_Apply(const NodeACommand *command,
       if (safety->gas_ventilation_active != 0U)
         return Result(NODE_A_STATUS_REJECTED, kReasonAutoVentActive, 0U);
       actual->relay_on = 0U;
+      actual->fan1_pwm_percent = 0U;
+      actual->fan2_pwm_percent = 0U;
       return Result(NODE_A_STATUS_ACCEPTED, kReasonRelayOff, 0U);
 
     case NODE_A_ACTION_RELAY_ON:
       actual->relay_on = 1U;
+      actual->fan1_pwm_percent = 100U;
+      actual->fan2_pwm_percent = 100U;
       return Result(NODE_A_STATUS_ACCEPTED, kReasonRelayActive, 1U);
 
     case NODE_A_ACTION_FAN_PWM:
@@ -568,6 +574,13 @@ NodeACommandResult NodeACommand_Apply(const NodeACommand *command,
       if ((command->has_value == 0U) || !IsBrightness(command->value))
         return Result(NODE_A_STATUS_REJECTED, kReasonInvalidValue, 0U);
       actual->led_brightness_percent = (uint8_t)command->value;
+      /* Brightness is exposed as a directly confirmable menu action.  Leaving
+       * the strip in OFF after accepting it produces a truthful parameter ACK
+       * but no visible result on a freshly booted Node A.  Select the neutral
+       * WHITE mode only for that OFF state; never overwrite an existing user
+       * effect when its brightness is adjusted. */
+      if (actual->led_mode == NODE_A_LED_OFF)
+        actual->led_mode = NODE_A_LED_WHITE;
       return Result(NODE_A_STATUS_ACCEPTED, kReasonLedBrightnessSet, command->value);
 
     case NODE_A_ACTION_BUZZER_TEST:

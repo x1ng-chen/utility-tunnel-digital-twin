@@ -263,19 +263,19 @@ static int check_rotation_visits_every_frame(void)
 static int check_emitted_vocabulary(void)
 {
   static const char *const required[] = {
-      "\"assetCode\":\"ENV-01\",\"metric\":\"temperature\"",
-      "\"assetCode\":\"ENV-01\",\"metric\":\"humidity\"",
-      "\"assetCode\":\"GAS-01\",\"metric\":\"smoke.alarm\"",
-      "\"assetCode\":\"GAS-01\",\"metric\":\"flame.alarm\"",
-      "\"assetCode\":\"GAS-01\",\"metric\":\"flame.rawLevel\"",
-      "\"assetCode\":\"LEVEL-L01\",\"metric\":\"level.detected\"",
-      "\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.raw\"",
-      "\"assetCode\":\"GAS-01\",\"metric\":\"oxygen.voltage\"",
-      "\"assetCode\":\"GAS-01\",\"metric\":\"methane.raw\"",
-      "\"assetCode\":\"GAS-01\",\"metric\":\"methane.voltage\"",
-      "\"assetCode\":\"GAS-01\",\"metric\":\"methane.alarm\"",
-      "\"assetCode\":\"GAS-01\",\"metric\":\"co.raw\"",
-      "\"assetCode\":\"GAS-01\",\"metric\":\"co.voltage\"",
+      "\"assetCode\":\"SHT-01\",\"metric\":\"temperature\"",
+      "\"assetCode\":\"SHT-01\",\"metric\":\"humidity\"",
+      "\"assetCode\":\"MQ2-01\",\"metric\":\"smoke.alarm\"",
+      "\"assetCode\":\"FLAME-01\",\"metric\":\"flame.alarm\"",
+      "\"assetCode\":\"FLAME-01\",\"metric\":\"flame.rawLevel\"",
+      "\"assetCode\":\"LEVEL-01\",\"metric\":\"level.detected\"",
+      "\"assetCode\":\"O2-01\",\"metric\":\"oxygen.raw\"",
+      "\"assetCode\":\"O2-01\",\"metric\":\"oxygen.voltage\"",
+      "\"assetCode\":\"MQ4-01\",\"metric\":\"methane.raw\"",
+      "\"assetCode\":\"MQ4-01\",\"metric\":\"methane.voltage\"",
+      "\"assetCode\":\"MQ4-01\",\"metric\":\"methane.alarm\"",
+      "\"assetCode\":\"CO-01\",\"metric\":\"co.raw\"",
+      "\"assetCode\":\"CO-01\",\"metric\":\"co.voltage\"",
       "\"assetCode\":\"FAN-01\",\"metric\":\"supply.voltage\"",
       "\"assetCode\":\"FAN-01\",\"metric\":\"motor.current\"",
       "\"assetCode\":\"FAN-01\",\"metric\":\"rotational.speed\"",
@@ -348,8 +348,95 @@ static int check_legacy_duty_reaches_the_wire(void)
   return 0;
 }
 
+static int check_each_fan_reports_its_own_relay(void)
+{
+  NodeATelemetrySnapshot snapshot;
+  char frames[NODE_A_TELEMETRY_FRAME_COUNT][NODE_A_TELEMETRY_FRAME_SIZE];
+  uint16_t lengths[NODE_A_TELEMETRY_FRAME_COUNT] = {0U};
+  uint32_t sequence = 0U;
+  uint8_t index;
+  uint8_t saw_fan1 = 0U;
+  uint8_t saw_fan2 = 0U;
+
+  build_snapshot(&snapshot);
+  snapshot.actuators.fan1_pwm_percent = 30U;
+  snapshot.actuators.fan2_pwm_percent = 0U;
+  NodeATelemetry_FormatAll(&sequence, &snapshot, frames, lengths);
+  for (index = 0U; index < NODE_A_TELEMETRY_FRAME_COUNT; ++index) {
+    if (strstr(frames[index], "\"assetCode\":\"FAN-01\"") != NULL) {
+      CHECK(strstr(frames[index], "\"relayActive\":1") != NULL);
+      saw_fan1 = 1U;
+    }
+    if (strstr(frames[index], "\"assetCode\":\"FAN-02\"") != NULL) {
+      CHECK(strstr(frames[index], "\"relayActive\":0") != NULL);
+      saw_fan2 = 1U;
+    }
+  }
+  CHECK(saw_fan1 != 0U && saw_fan2 != 0U);
+
+  snapshot.actuators.fan1_pwm_percent = 0U;
+  snapshot.actuators.fan2_pwm_percent = 60U;
+  NodeATelemetry_FormatAll(&sequence, &snapshot, frames, lengths);
+  for (index = 0U; index < NODE_A_TELEMETRY_FRAME_COUNT; ++index) {
+    if (strstr(frames[index], "\"assetCode\":\"FAN-01\"") != NULL)
+      CHECK(strstr(frames[index], "\"relayActive\":0") != NULL);
+    if (strstr(frames[index], "\"assetCode\":\"FAN-02\"") != NULL)
+      CHECK(strstr(frames[index], "\"relayActive\":1") != NULL);
+  }
+
+  snapshot.actuators.relay_on = 0U;
+  NodeATelemetry_FormatAll(&sequence, &snapshot, frames, lengths);
+  for (index = 0U; index < NODE_A_TELEMETRY_FRAME_COUNT; ++index) {
+    if (strstr(frames[index], "\"assetCode\":\"FAN-02\"") != NULL)
+      CHECK(strstr(frames[index], "\"relayActive\":0") != NULL);
+  }
+  return 0;
+}
+
 int main(void)
 {
+  {
+    NodeATelemetrySnapshot snapshot;
+    SensorReading sht[4] = {
+      {.asset_code="SHT-01", .kind=SENSOR_KIND_SHT30, .online=1, .quality=SENSOR_QUALITY_GOOD, .temperature_centi_c=2345, .humidity_centi_rh=5000},
+      {.asset_code="SHT-02", .kind=SENSOR_KIND_SHT30, .online=1, .quality=SENSOR_QUALITY_GOOD, .temperature_centi_c=-1234, .humidity_centi_rh=10000},
+      {.asset_code="SHT-03", .kind=SENSOR_KIND_SHT30, .online=0, .quality=SENSOR_QUALITY_MISSING},
+      {.asset_code="SHT-04", .kind=SENSOR_KIND_SHT30, .online=1, .quality=SENSOR_QUALITY_GOOD, .temperature_centi_c=12500, .humidity_centi_rh=9999}
+    };
+    char frames[NODE_A_TELEMETRY_FRAME_COUNT][NODE_A_TELEMETRY_FRAME_SIZE];
+    uint16_t lengths[NODE_A_TELEMETRY_FRAME_COUNT];
+    uint32_t sequence=UINT32_MAX-6U;
+    build_snapshot(&snapshot);
+    snapshot.sensors=sht;
+    snapshot.sensor_count=4;
+    snapshot.methane_raw=4095;
+    snapshot.co_raw=4095;
+    snapshot.methane_microvolts=3300000;
+    snapshot.co_microvolts=3300000;
+    NodeATelemetry_FormatAll(&sequence,&snapshot,frames,lengths);
+    CHECK(strstr(frames[0], "SHT-01") != NULL);
+    CHECK(strstr(frames[3], "SHT-02") != NULL);
+    CHECK(strstr(frames[3], "-12.34") != NULL);
+    CHECK(strstr(frames[4], "SHT-03") != NULL);
+    CHECK(strstr(frames[4], "\"quality\":\"missing\"") != NULL);
+    CHECK(strstr(frames[5], "SHT-04") != NULL);
+    CHECK(strstr(frames[5], "125.00") != NULL);
+    unsigned total=0;
+    for(unsigned i=0;i<NODE_A_TELEMETRY_FRAME_COUNT;i++) {
+      CHECK(lengths[i]>4 && lengths[i]<766);
+      CHECK(strcmp(frames[i]+lengths[i]-3, "}\r\n")==0);
+      if(i>=3) CHECK(strcmp(frames[i]+lengths[i]-4, "]}\r\n")==0);
+      total+=lengths[i];
+    }
+    CHECK(total<6U*1920U);
+    /* A disconnected fourth sensor must replace a previous good value. */
+    sht[3].online=0; sht[3].quality=SENSOR_QUALITY_MISSING;
+    NodeATelemetry_FormatAll(&sequence,&snapshot,frames,lengths);
+    CHECK(strstr(frames[5], "\"quality\":\"missing\"")!=NULL);
+  }
+#if defined(NODE_A_FAN_RELAY_FOCUSED_TEST)
+  (void)check_each_fan_reports_its_own_relay();
+#else
   (void)check_frames_match_committed_vectors();
   (void)check_one_sequence_per_frame();
   (void)check_frames_fit_the_transport();
@@ -358,6 +445,8 @@ int main(void)
   (void)check_emitted_vocabulary();
   (void)check_gas_status_reports_the_operational_alarm();
   (void)check_legacy_duty_reaches_the_wire();
+  (void)check_each_fan_reports_its_own_relay();
+#endif
 
   if (failures != 0) {
     (void)fprintf(stderr, "%d check(s) failed\n", failures);

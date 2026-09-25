@@ -59,6 +59,46 @@ uint8_t UartTx_EnqueuePriority(UartTxQueue *queue, const char *line,
   return enqueue_frame(queue, line, length, 1U);
 }
 
+uint8_t UartTx_EnqueuePriorityNext(UartTxQueue *queue, const char *line,
+                                   uint16_t length)
+{
+  uint16_t insert_at = 0U;
+  uint16_t index;
+  if ((queue == 0) || (line == 0) || (length == 0U)) return 0U;
+  if ((length > UART_TX_FRAME_LIMIT) ||
+      ((uint32_t)queue->used + (uint32_t)length > queue->capacity)) {
+    ++queue->dropped_frames;
+    queue->dropped_bytes += length;
+    ++queue->priority_dropped_frames;
+    queue->priority_dropped_bytes += length;
+    return 0U;
+  }
+  /* The head may already be halfway through a telemetry frame.  Always wait
+   * for its newline; inserting earlier would splice two JSON documents. */
+  for (index = 0U; index < queue->used; ++index) {
+    if (queue->bytes[(queue->head + index) % queue->capacity] == (uint8_t)'\n') {
+      insert_at = (uint16_t)(index + 1U);
+      break;
+    }
+  }
+  if (index == queue->used) insert_at = queue->used;
+  for (index = queue->used; index > insert_at; --index) {
+    queue->bytes[(queue->head + index + length - 1U) % queue->capacity] =
+        queue->bytes[(queue->head + index - 1U) % queue->capacity];
+  }
+  for (index = 0U; index < length; ++index) {
+    queue->bytes[(queue->head + insert_at + index) % queue->capacity] =
+        (uint8_t)line[index];
+  }
+  queue->tail = (uint16_t)((queue->tail + length) % queue->capacity);
+  queue->used = (uint16_t)(queue->used + length);
+  ++queue->frames;
+  ++queue->enqueued_frames;
+  if (queue->used > queue->peak_used) queue->peak_used = queue->used;
+  if (queue->frames > queue->peak_frames) queue->peak_frames = queue->frames;
+  return 1U;
+}
+
 HAL_StatusTypeDef UartTx_WriteByte(UART_HandleTypeDef *uart, uint8_t *byte)
 {
   if ((uart == 0) || (byte == 0)) return HAL_ERROR;

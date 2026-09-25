@@ -127,6 +127,14 @@ class Reader {
     return punctuation(':');
   }
 
+  bool peekKey(const char* expected) {
+    skipWhitespace();
+    const size_t size = std::strlen(expected);
+    return position_ + size + 2U <= length_ && input_[position_] == '"' &&
+           std::memcmp(input_ + position_ + 1U, expected, size) == 0 &&
+           input_[position_ + size + 1U] == '"';
+  }
+
   /* Reports the next significant byte without consuming it or failing the
    * reader.  Optional trailing fields have to be probed this way: comma()
    * treats a following '}' as a hard error, so calling it speculatively turns
@@ -552,7 +560,7 @@ Result validateCommand(const MenuCommand& value) {
       if (!validFanDuty(value.value)) return Result::OutOfRange;
       break;
     case CommandAction::LedMode:
-      if (value.value > 7U) return Result::OutOfRange;
+      if (value.value > 15U) return Result::OutOfRange;
       break;
     case CommandAction::LedBrightness:
       if (!validBrightness(value.value)) return Result::OutOfRange;
@@ -980,16 +988,22 @@ Result ParseSnapshot(const char* json, size_t length, uint64_t now_epoch_ms,
       !reader.endArray()) {
     return readerFailure(reader);
   }
-  while (reader.comma()) {
-    if (reader.key("items")) {
+  char next = '\0';
+  bool seen_items = false;
+  bool seen_alarm_label = false;
+  while (reader.peek(&next) && next == ',') {
+    if (!reader.comma()) return readerFailure(reader);
+    if (reader.peekKey("items")) {
+      if (seen_items || !reader.key("items")) return Result::MissingField;
+      seen_items = true;
       if (!reader.beginArray()) return readerFailure(reader);
       bool first = true;
-      while (!reader.endArray()) {
+      if (!reader.peek(&next)) return readerFailure(reader);
+      while (next != ']') {
         if (!first) {
           if (!reader.comma()) return readerFailure(reader);
         }
         first = false;
-        if (reader.endArray()) break;
         if (!reader.beginObject()) return readerFailure(reader);
         ScreenSensorReading item{};
         item.scale = 1;
@@ -1022,8 +1036,12 @@ Result ParseSnapshot(const char* json, size_t length, uint64_t now_epoch_ms,
         if (value.sensor_count < kScreenSensorCapacity) {
           value.sensors[value.sensor_count++] = item;
         }
+        if (!reader.peek(&next)) return readerFailure(reader);
       }
-    } else if (reader.key("alarmLabel")) {
+      if (!reader.endArray()) return readerFailure(reader);
+    } else if (reader.peekKey("alarmLabel")) {
+      if (seen_alarm_label || !reader.key("alarmLabel")) return Result::MissingField;
+      seen_alarm_label = true;
       if (!reader.readString(value.alarm_label, sizeof(value.alarm_label))) {
         return readerFailure(reader);
       }

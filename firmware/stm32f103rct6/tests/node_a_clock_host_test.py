@@ -460,7 +460,9 @@ def check_tach():
         assert f"delta = pulses - {last};" in body, (
             f"{name} must subtract in uint32 so the counter wrap stays correct")
         assert re.search(r"elapsed_ms = now - fan\d_tach_last_sample_at;", body)
-        assert "if ((elapsed_ms == 0U) || (g_actuator.relay_on == 0U)) return 0U;" in body
+        fan = "fan1" if name.startswith("Fan1") else "fan2"
+        assert "(g_actuator.relay_on == 0U)" in body
+        assert f"(g_actuator.{fan}_pwm_percent == 0U)" in body
         assert "((uint64_t)delta * 60000ULL)" in body, (
             f"{name} must widen to 64 bits before multiplying")
         assert "((uint64_t)FAN_TACH_PULSES_PER_REVOLUTION * elapsed_ms)" in body
@@ -566,6 +568,16 @@ def check_i2c_bounds():
     i2c_delay = function(NODE_A, "I2c_Delay")
     assert "Communication_Service();" in i2c_delay
     assert "HAL_Delay(NODE_A_SOFT_I2C_DELAY_MS);" in i2c_delay
+    service = function(NODE_A, "Communication_Service")
+    reader = function(NODE_A, "SensorBank_ReadSht30")
+    assert "if (sht30_defer_uart_tx == 0U) UartTx_DrainBoth(now);" in service, (
+        "blocking UART drains must be skipped during a SHT30 transaction")
+    assert "Command_Poll();" in service and "GasSafety_Service(now);" in service, (
+        "SHT30 timing guard must not suppress command or gas-safety servicing")
+    assert re.search(r"sht30_defer_uart_tx = 1U;.*?Sht30_Read\(&bus,"
+                     r" cfg->i2c_address, &sample\);.*?sht30_defer_uart_tx = 0U;",
+                     reader, re.DOTALL), (
+        "the UART guard must cover every SHT30 read and be cleared on return")
 
     # Fixed delay counts per primitive, derived from the parsed bodies: the bit
     # loop runs eight times and the tail adds the acknowledge or stop edges.
@@ -616,12 +628,24 @@ def check_i2c_bounds():
 
     fixed = (counts["I2c_Start"] + 3 * per_byte + counts["I2c_Stop"]
              + counts["I2c_Start"] + per_byte + 6 * per_byte + counts["I2c_Stop"])
-    assert fixed == value("NODE_A_SHT30_FIXED_DELAY_COUNT") == 190, fixed
-    worst_ms = (value("NODE_A_SHT30_MEASUREMENT_DELAY_MS") + overhead) + \
-        fixed * tick_cost
-    assert worst_ms == value("NODE_A_SHT30_WORST_CASE_MS") == 401, worst_ms
+    ready = function(NODE_A, "I2c_BusReady")
+    assert not re.search(r"\b(for|while)\s*\(", ready)
+    assert ready.count("I2c_Delay()") == 1
+    assert ready.count("I2c_Recover(bus)") == 1
+    assert "I2c_Sda(bus, GPIO_PIN_SET)" in ready
+    assert "I2c_Scl(bus, GPIO_PIN_SET)" in ready
+    ready_delays = 1 + function(NODE_A, "I2c_Recover").count("I2c_Delay()") * 9 + counts["I2c_Stop"]
+    assert ready_delays == value("NODE_A_I2C_READY_DELAY_COUNT") == 22
+    fixed += ready_delays
+    assert fixed == value("NODE_A_SHT30_FIXED_DELAY_COUNT") == 212, fixed
+    # The conversion wait performs 20 separate HAL_Delay(1) calls, not one
+    # HAL_Delay(20), so each iteration pays the HAL tick overhead.
+    conversion_ms = value("NODE_A_SHT30_MEASUREMENT_DELAY_MS") * tick_cost
+    assert conversion_ms == value("NODE_A_SHT30_CONVERSION_BUDGET_MS") == 40
+    worst_ms = conversion_ms + fixed * tick_cost
+    assert worst_ms == value("NODE_A_SHT30_WORST_CASE_MS") == 464, worst_ms
     timeout = value("NODE_A_SHT30_TIMEOUT_MS")
-    assert timeout > worst_ms, (timeout, worst_ms)
+    assert timeout == 750 and timeout > worst_ms, (timeout, worst_ms)
     assert "DelayWithCommunication(NODE_A_SHT30_MEASUREMENT_DELAY_MS)" in sht30
     assert "I2c_Stop(bus); return 0U;" in sht30, "every abort path must release the bus"
 
@@ -653,13 +677,13 @@ def check_i2c_bounds():
     # its own (much longer) deadline in place of the caller's.
     tick_users = {name for name, body in function_bodies(strip_c_noise(region)).items()
                   if "HAL_GetTick()" in body}
-    assert tick_users == {"I2c_DeadlineReached", "Sht30_Read", "Ina226_Read"}, (
+    assert tick_users == {"I2c_DeadlineReached", "Sht30_Read", "SensorBank_ReadSht30", "Ina226_Read"}, (
         f"unexpected HAL_GetTick() user in the I2C drivers: {sorted(tick_users)}")
     # Sampling a line is the job of the two byte primitives; a new helper that
     # reads SCL or SDA would be a bus-state wait in disguise.
     readers = {name for name, body in function_bodies(strip_c_noise(region)).items()
                if "HAL_GPIO_ReadPin" in body}
-    assert readers == {"I2c_WriteByte", "I2c_ReadByte"}, (
+    assert readers == {"I2c_WriteByte", "I2c_ReadByte", "I2c_BusReady"}, (
         f"unexpected line reader in the I2C drivers: {sorted(readers)}")
     # Delays that the budgets do not model would silently extend the transfers.
     delays = sorted(set(re.findall(r"HAL_Delay\(([^)]+)\)", strip_c_noise(region))))
@@ -768,12 +792,12 @@ def check_i2c_bounds():
     assert value("NODE_A_INA226_I2C_RECOVER_DELAY_COUNT") == recover_delays, \
         recover_delays
     assert value("NODE_A_INA226_FIXED_DELAY_COUNT") == 2 * pass_delays + \
-        2 * recover_delays
+        2 * recover_delays + ready_delays
     assert value("NODE_A_INA226_SETTLE_BUDGET_MS") == 2 * pass_settles, \
         pass_settles
     worst_ina226 = (value("NODE_A_INA226_FIXED_DELAY_COUNT") * tick_cost
                     + value("NODE_A_INA226_SETTLE_BUDGET_MS"))
-    assert value("NODE_A_INA226_WORST_CASE_MS") == worst_ina226 == 8328, worst_ina226
+    assert value("NODE_A_INA226_WORST_CASE_MS") == worst_ina226 == 8372, worst_ina226
     ina226_timeout = value("NODE_A_INA226_TIMEOUT_MS")
     assert ina226_timeout > value("NODE_A_INA226_WORST_CASE_MS"), (
         ina226_timeout, value("NODE_A_INA226_WORST_CASE_MS"))
@@ -837,7 +861,8 @@ def check_pin_map():
             ports[match.group(1)] = match.group(2)
 
     expected = {
-        "LED": ("GPIOA", 8), "BUZZER": ("GPIOB", 0), "RELAY": ("GPIOA", 1),
+        "LED": ("GPIOA", 8), "BUZZER": ("GPIOB", 0),
+        "FAN1_RELAY": ("GPIOA", 1), "FAN2_RELAY": ("GPIOA", 15),
         "SMOKE": ("GPIOB", 12), "FLAME": ("GPIOB", 14), "LEVEL": ("GPIOC", 0),
         "WS2812": ("GPIOB", 15), "FAN1_TACH": ("GPIOA", 6), "FAN2_TACH": ("GPIOA", 7),
         "FAN1_PWM": ("GPIOB", 8), "FAN2_PWM": ("GPIOB", 9),
@@ -868,8 +893,11 @@ def check_pin_map():
     modes = dict(re.findall(r"gpio\.Pin = (\w+); gpio\.Mode = (\w+);", gpio))
     pulls = dict(re.findall(r"gpio\.Pin = (\w+); gpio\.Mode = \w+; gpio\.Pull = (\w+);",
                             gpio))
-    for name in ("LED_Pin", "BUZZER_Pin", "RELAY_Pin"):
+    for name in ("LED_Pin", "BUZZER_Pin"):
         assert modes[name] == "GPIO_MODE_OUTPUT_PP", (name, modes.get(name))
+    assert "gpio.Pin = FAN1_RELAY_Pin | FAN2_RELAY_Pin;" in gpio
+    assert "gpio.Mode = GPIO_MODE_OUTPUT_PP;" in gpio
+    assert "FAN1_RELAY_Pin | FAN2_RELAY_Pin, GPIO_PIN_RESET" in gpio
     for name in ("SMOKE_Pin", "FLAME_Pin", "LEVEL_Pin"):
         assert modes[name] == "GPIO_MODE_INPUT", (name, modes.get(name))
     for name in ("SMOKE_Pin", "LEVEL_Pin"):

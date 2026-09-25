@@ -3,12 +3,13 @@
 
 #include <stdint.h>
 
-/* INA226 conversion constants for the installed R100 (100 mOhm) modules. */
+/* INA226 conversion constants for both installed R010 (10 mOhm) modules.
+ * Shunt voltage LSB is 2.5 uV, so one raw count is 250 uA. */
 #define NODE_A_INA226_BUS_RAW_TO_UV(raw) \
   ((uint32_t)(raw) * 1250UL)
 
 #define NODE_A_INA226_SHUNT_RAW_TO_UA(raw) \
-  ((int32_t)(raw) * 25L)
+  ((int32_t)(raw) * 250L)
 
 #define NODE_A_INA226_POWER_UW(bus_uv, current_ua) \
   ((int32_t)(((int64_t)(bus_uv) * (int64_t)(current_ua)) / 1000000LL))

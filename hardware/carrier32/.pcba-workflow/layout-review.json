@@ -1,0 +1,24 @@
+{
+  "schema": "pcb-layout-review-v1",
+  "status": "USER_REVIEW",
+  "board_revision": "visual-demo",
+  "connector_stack": {"status": "USER_REVIEW", "dimension_basis": "INFERRED"},
+  "mechanical_assembly": {
+    "status": "USER_REVIEW",
+    "same_scale_render": "build/demo/modules-3d-top.png",
+    "orthographic_dimension_view": "",
+    "overall_height_mm": null,
+    "overall_height_basis": "TBD",
+    "proxies": ["3dmodels/STM32F103RCT6_module_visual.wrl", "3dmodels/ST7735S_144_display_visual.wrl"]
+  },
+  "placement": {"logical": "USER_REVIEW", "visual_mechanical": "USER_REVIEW"},
+  "connectivity": {"raw_disconnects": 327, "signal_splits": null, "power_disconnects": null},
+  "drc": {"real_errors": 0, "waivers": []},
+  "renders": {
+    "top": "build/demo/modules-3d-top.png",
+    "bottom": "",
+    "isometric": "build/demo/modules-3d-iso.png",
+    "layers": []
+  },
+  "unresolved": ["Visual-only proxy dimensions are not verified for fabrication or assembly.", "327 board connections remain unrouted."]
+}

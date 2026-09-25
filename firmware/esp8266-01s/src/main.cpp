@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <cstdarg>
+#include <cstdio>
 #include <cstring>
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>
@@ -92,7 +94,38 @@ screen_routing::TelemetryAccumulator screenTelemetry{};
 screen_routing::TimeSyncSchedule timeSyncSchedule{};
 screen_routing::NtpAssociationState ntpAssociation{};
 screen_routing::MqttLinkStatusState mqttLinkStatus{};
+#if defined(BUILD_ROLE_CTRL02)
+screen_routing::NodeBHeartbeatState nodeBHeartbeat{};
+#endif
 screen_routing::UartTxQueue uartTxQueue{};
+/* Serial is the STM32 command link, not a separate debug console. Direct
+ * prints can land in the middle of a queued MQTT|... command while the UART
+ * FIFO is draining, making Node A reject a valid fan preset as invalid JSON.
+ * Put diagnostics through the same whole-frame queue as commands and time. */
+class DiagnosticLogger {
+ public:
+  void println(const char* line) const {
+    (void)screen_routing::EnqueueUartTxLine(
+        &uartTxQueue, screen_routing::UartTxFrameKind::Diagnostic,
+        line, std::strlen(line));
+  }
+
+  void printf(const char* format, ...) const {
+    char line[192];
+    va_list args;
+    va_start(args, format);
+    const int count = std::vsnprintf(line, sizeof(line), format, args);
+    va_end(args);
+    if (count <= 0 || static_cast<size_t>(count) >= sizeof(line)) return;
+    size_t length = static_cast<size_t>(count);
+    while (length != 0U && (line[length - 1U] == '\r' ||
+                             line[length - 1U] == '\n')) --length;
+    (void)screen_routing::EnqueueUartTxLine(
+        &uartTxQueue, screen_routing::UartTxFrameKind::Diagnostic,
+        line, length);
+  }
+};
+DiagnosticLogger diagnostic{};
 /* PubSubClient invokes its callback while servicing the ESP8266 network path.
  * RouteOutput is larger than 800 bytes, so allocating it in that callback can
  * exhaust the small system stack while a telemetry frame is being parsed. */
@@ -126,7 +159,7 @@ void selectBroker(const BrokerEndpoint& endpoint) {
   brokerAvailable = true;
   mqtt.setServer(brokerIp(), brokerEndpoint.port);
   lastMqttAttempt = millis() - kReconnectIntervalMs;
-  Serial.printf("#DISCOVERY broker=%s:%u\r\n", brokerIp().toString().c_str(), brokerEndpoint.port);
+  diagnostic.printf("#DISCOVERY broker=%s:%u\r\n", brokerIp().toString().c_str(), brokerEndpoint.port);
 }
 
 void persistBrokerAfterSuccessfulConnection() {
@@ -134,12 +167,12 @@ void persistBrokerAfterSuccessfulConnection() {
   const StoredBrokerEndpoint stored = makeStoredEndpoint(brokerEndpoint);
   EEPROM.put(0, stored);
   if (!EEPROM.commit()) {
-    Serial.println("#ERROR broker_persist_failed");
+    diagnostic.println("#ERROR broker_persist_failed");
     return;
   }
   savedBrokerEndpoint = brokerEndpoint;
   savedBrokerAvailable = true;
-  Serial.println("#DISCOVERY broker_saved");
+  diagnostic.println("#DISCOVERY broker_saved");
 }
 
 void handleDiscovery() {
@@ -156,11 +189,11 @@ void handleDiscovery() {
   }
   if (!discoveryListening) {
     if (!discoveryUdp.begin(kDiscoveryPort)) {
-      Serial.println("#ERROR discovery_listen_failed");
+      diagnostic.println("#ERROR discovery_listen_failed");
       return;
     }
     discoveryListening = true;
-    Serial.printf("#DISCOVERY listening udp=%u\r\n", kDiscoveryPort);
+    diagnostic.printf("#DISCOVERY listening udp=%u\r\n", kDiscoveryPort);
   }
 
   const int packetSize = discoveryUdp.parsePacket();
@@ -175,7 +208,7 @@ void handleDiscovery() {
                            DISCOVERY_HMAC_KEY, hmacKeyLength, &discovered)) {
     selectBroker(discovered);
   } else {
-    Serial.println("#ERROR discovery_packet_rejected");
+    diagnostic.println("#ERROR discovery_packet_rejected");
   }
 }
 
@@ -183,7 +216,7 @@ void printStatus() {
   const String broker = brokerAvailable
                             ? brokerIp().toString() + ":" + String(brokerEndpoint.port)
                             : "unknown";
-  Serial.printf("#STATUS wifi=%s wifi_code=%d ip=%s rssi=%d mqtt=%s broker=%s queued=%u heap=%u\r\n",
+  diagnostic.printf("#STATUS wifi=%s wifi_code=%d ip=%s rssi=%d mqtt=%s broker=%s queued=%u heap=%u\r\n",
                 WiFi.status() == WL_CONNECTED ? "up" : "down",
                 static_cast<int>(WiFi.status()), WiFi.localIP().toString().c_str(), WiFi.RSSI(),
                 mqtt.connected() ? "up" : "down", broker.c_str(), pendingCount, ESP.getFreeHeap());
@@ -226,13 +259,13 @@ bool uartTextIsSafe(const char* text, size_t length) {
 bool writeUartCommand(const char* topic, const char* payload, size_t length) {
   const size_t topicLength = std::strlen(topic);
   if (!uartTextIsSafe(topic, topicLength) || !uartTextIsSafe(payload, length)) {
-    Serial.println("#ERROR mqtt_downlink_control_chars");
+    diagnostic.println("#ERROR mqtt_downlink_control_chars");
     return false;
   }
   /* 6 = "MQTT|" plus the separating '|'. */
   const size_t frameLength = 6U + topicLength + length;
   if (frameLength > kMaxDownlinkLine) {
-    Serial.println("#ERROR mqtt_downlink_too_large");
+    diagnostic.println("#ERROR mqtt_downlink_too_large");
     return false;
   }
   char frame[kMaxDownlinkLine + 1U];
@@ -246,7 +279,7 @@ bool writeUartCommand(const char* topic, const char* payload, size_t length) {
           &uartTxQueue, screen_routing::UartTxFrameKind::Acknowledgement,
           frame, frameLength);
   if (result != screen_routing::UartTxEnqueueResult::Queued) {
-    Serial.printf("#ERROR mqtt_downlink_queue=%u\r\n",
+    diagnostic.printf("#ERROR mqtt_downlink_queue=%u\r\n",
                   static_cast<unsigned int>(result));
     return false;
   }
@@ -277,7 +310,7 @@ void pumpUartTxQueue() {
 
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
   if (length > kMaxSerialFrame) {
-    Serial.println("#ERROR mqtt_payload_too_large");
+    diagnostic.println("#ERROR mqtt_payload_too_large");
     return;
   }
 #if defined(BUILD_ROLE_CTRL02)
@@ -310,7 +343,7 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
                                       mqttRouteOutput.payload,
                                       mqttRouteOutput.payload_length);
   } else if (result != screen_routing::RouteResult::WrongTopic) {
-    Serial.printf("#ERROR screen_route=%u\r\n",
+    diagnostic.printf("#ERROR screen_route=%u\r\n",
                   static_cast<unsigned int>(result));
   }
 #else
@@ -320,7 +353,7 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
         currentEpochMilliseconds(), &screenTelemetry, &mqttRouteOutput);
     if (result != screen_routing::RouteResult::Ok ||
         mqttRouteOutput.kind != screen_routing::OutputKind::UartCommand) {
-      Serial.printf("#ERROR menu_command_rejected=%u\r\n",
+      diagnostic.printf("#ERROR menu_command_rejected=%u\r\n",
                     static_cast<unsigned int>(result));
       return;
     }
@@ -343,7 +376,7 @@ void connectWiFi() {
   }
   if (strcmp(WIFI_SSID, "replace-me") == 0) {
     if (!missingSecretsReported) {
-      Serial.println("#ERROR create include/secrets.h before deployment");
+      diagnostic.println("#ERROR create include/secrets.h before deployment");
       missingSecretsReported = true;
     }
     return;
@@ -357,7 +390,7 @@ void connectWiFi() {
     wifiStarted = true;
     lastWiFiAttempt = now;
     wifiDownSinceMs = now;
-    Serial.println("#WIFI connecting");
+    diagnostic.println("#WIFI connecting");
     return;
   }
   /* ESP8266 can briefly report IDLE/DISCONNECTED during a beacon miss or DHCP
@@ -384,12 +417,12 @@ void connectWiFi() {
     wifiDownSinceMs = now;
     WiFi.disconnect(false);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    Serial.printf("#WIFI hard_recovery status=%d\r\n",
+    diagnostic.printf("#WIFI hard_recovery status=%d\r\n",
                   static_cast<int>(WiFi.status()));
     return;
   }
   WiFi.reconnect();
-  Serial.printf("#WIFI reconnect status=%d\r\n", static_cast<int>(WiFi.status()));
+  diagnostic.printf("#WIFI reconnect status=%d\r\n", static_cast<int>(WiFi.status()));
 }
 
 void handleNetworkTime() {
@@ -404,7 +437,7 @@ void handleNetworkTime() {
     configTime(0, 0, "ntp.aliyun.com", "time1.cloud.tencent.com",
                "pool.ntp.org");
     ntpConfigureAttempted = true;
-    Serial.println("#NTP configured");
+    diagnostic.println("#NTP configured");
   }
   if (!connected) return;
   const time_t epoch = time(nullptr);
@@ -416,8 +449,15 @@ void handleNetworkTime() {
           epoch > 0 ? static_cast<uint64_t>(epoch) : 0ULL, line,
           sizeof(line), &written);
   if (result == screen_routing::TimeEmitResult::Emitted) {
-    screen_routing::EnqueueUartTxLine(
+    const screen_routing::UartTxEnqueueResult queued =
+        screen_routing::EnqueueUartTxLine(
         &uartTxQueue, screen_routing::UartTxFrameKind::TimeSync, line, written);
+    if (queued != screen_routing::UartTxEnqueueResult::Queued &&
+        queued != screen_routing::UartTxEnqueueResult::Coalesced) {
+      // Retry after UART congestion; a dropped time frame must not delay
+      // the clock for another ten minutes.
+      screen_routing::RequestTimeSync(&timeSyncSchedule);
+    }
   }
 }
 
@@ -460,7 +500,7 @@ void connectMqtt() {
                              : mqtt.connect(BUILD_DEVICE_ID, MQTT_USERNAME, MQTT_PASSWORD,
                                             statusTopic.c_str(), 1, true, "offline", true);
   if (!connected) {
-    Serial.printf("#MQTT connect_failed state=%d\r\n", mqtt.state());
+    diagnostic.printf("#MQTT connect_failed state=%d\r\n", mqtt.state());
     return;
   }
   /* WiFiClient::keepAlive() dereferences its internal ClientContext without a
@@ -471,21 +511,21 @@ void connectMqtt() {
       screen_routing::TopicsForRole(kBuildRole);
   for (size_t index = 0U; index < topics.subscription_count; ++index) {
     if (!mqtt.subscribe(topics.subscriptions[index], 1)) {
-      Serial.println("#MQTT subscribe_failed");
+      diagnostic.println("#MQTT subscribe_failed");
       mqtt.disconnect();
       return;
     }
   }
 #if defined(BUILD_ROLE_CTRL02)
   if (!mqtt.subscribe("ut/v1/CTRL-01/status", 1)) {
-    Serial.println("#MQTT peer_status_subscribe_failed");
+    diagnostic.println("#MQTT peer_status_subscribe_failed");
     mqtt.disconnect();
     return;
   }
 #endif
   mqtt.publish(statusTopic.c_str(), "online", true);
   persistBrokerAfterSuccessfulConnection();
-  Serial.println("#MQTT connected");
+  diagnostic.println("#MQTT connected");
 }
 
 const char* topicForPending(PendingKind kind) {
@@ -514,11 +554,11 @@ void enqueueFrame(const char* line, size_t length, PendingKind kind) {
           (pendingHead + telemetryLogicalIndex) % kPendingFrameCapacity);
       std::memcpy(pendingFrames[index], line, length);
       pendingFrames[index][length] = '\0';
-      Serial.println("#QUEUED telemetry_coalesced");
+      diagnostic.println("#QUEUED telemetry_coalesced");
       return;
     }
     if (telemetryLogicalIndex < 0) {
-      Serial.println("#ERROR mqtt_buffer_full_priority_frame_preserved");
+      diagnostic.println("#ERROR mqtt_buffer_full_priority_frame_preserved");
       return;
     }
     /* A command/ACK may evict stale telemetry, but never another accepted
@@ -534,14 +574,14 @@ void enqueueFrame(const char* line, size_t length, PendingKind kind) {
       pendingFrameKinds[target] = pendingFrameKinds[source];
     }
     --pendingCount;
-    Serial.println("#ERROR mqtt_buffer_telemetry_evicted");
+    diagnostic.println("#ERROR mqtt_buffer_telemetry_evicted");
   }
   const uint8_t index = (pendingHead + pendingCount) % kPendingFrameCapacity;
   std::memcpy(pendingFrames[index], line, length);
   pendingFrames[index][length] = '\0';
   pendingFrameKinds[index] = kind;
   pendingCount++;
-  Serial.printf("#QUEUED count=%u\r\n", pendingCount);
+  diagnostic.printf("#QUEUED count=%u\r\n", pendingCount);
 }
 
 void flushPendingFrame() {
@@ -553,7 +593,7 @@ void flushPendingFrame() {
   pendingFrameKinds[pendingHead] = PendingKind::Telemetry;
   pendingHead = (pendingHead + 1U) % kPendingFrameCapacity;
   pendingCount--;
-  Serial.printf("#PUBLISHED queued=%u\r\n", pendingCount);
+  diagnostic.printf("#PUBLISHED queued=%u\r\n", pendingCount);
 }
 
 void handleSerialLine(const char* line, size_t length) {
@@ -573,8 +613,15 @@ void handleSerialLine(const char* line, size_t length) {
     printStatus();
     return;
   }
+#if !defined(BUILD_ROLE_CTRL02)
+  if (screen_routing::IsCtrl01BootLine(line, length)) {
+    // Node A loses its clock on reboot; replay time immediately when ready.
+    screen_routing::RequestTimeSync(&timeSyncSchedule);
+    return;
+  }
+#endif
   if (line[0] != '{') {
-    Serial.println("#ERROR expected JSON, STATUS, or AT");
+    diagnostic.println("#ERROR expected JSON, STATUS, or AT");
     return;
   }
 #if defined(BUILD_ROLE_CTRL02)
@@ -583,14 +630,17 @@ void handleSerialLine(const char* line, size_t length) {
      * is the readiness handshake that makes ESP-02 replay the current link and
      * clock instead of leaving the display stale for up to ten minutes. */
     screen_routing::RequestMqttLinkStatus(&mqttLinkStatus);
-    screen_routing::RequestTimeSync(&timeSyncSchedule);
+    if (screen_routing::ShouldResyncForCtrl02Heartbeat(
+            &nodeBHeartbeat, line, length)) {
+      screen_routing::RequestTimeSync(&timeSyncSchedule);
+    }
     return;
   }
   const screen_routing::RouteResult result = screen_routing::RouteSerialLine(
       kBuildRole, line, length, currentEpochMilliseconds(), &mqttRouteOutput);
   if (result != screen_routing::RouteResult::Ok ||
       mqttRouteOutput.kind != screen_routing::OutputKind::MqttPublish) {
-    Serial.printf("#ERROR menu_serial_rejected=%u\r\n",
+    diagnostic.printf("#ERROR menu_serial_rejected=%u\r\n",
                   static_cast<unsigned int>(result));
     return;
   }
@@ -603,7 +653,7 @@ void handleSerialLine(const char* line, size_t length) {
     return;
   }
   if (mqtt.publish(mqttRouteOutput.topic, mqttRouteOutput.payload, false)) {
-    Serial.println(isTelemetry ? "#PUBLISHED" : "#MENU_PUBLISHED");
+    diagnostic.println(isTelemetry ? "#PUBLISHED" : "#MENU_PUBLISHED");
   } else {
     enqueueFrame(mqttRouteOutput.payload, mqttRouteOutput.payload_length, kind);
   }
@@ -621,7 +671,7 @@ void handleSerialLine(const char* line, size_t length) {
   }
   if (mqtt.publish(topic, reinterpret_cast<const uint8_t*>(line), length,
                    false)) {
-    Serial.println(isCommandAck ? "#ACK_PUBLISHED" : "#PUBLISHED");
+    diagnostic.println(isCommandAck ? "#ACK_PUBLISHED" : "#PUBLISHED");
   } else {
     enqueueFrame(line, length, kind);
   }
@@ -634,7 +684,7 @@ void readSerial() {
     if (c == '\n') {
       if (serialFrameDiscarding) {
         serialFrameDiscarding = false;
-        Serial.println("#ERROR serial_frame_dropped");
+        diagnostic.println("#ERROR serial_frame_dropped");
       } else {
         serialFrame[serialFrameLength] = '\0';
         handleSerialLine(serialFrame, serialFrameLength);
@@ -647,7 +697,7 @@ void readSerial() {
         serialFrameLength = 0U;
         serialFrame[0] = '\0';
         serialFrameDiscarding = true;
-        Serial.println("#ERROR serial_frame_too_large");
+        diagnostic.println("#ERROR serial_frame_too_large");
       } else {
         serialFrame[serialFrameLength++] = c;
       }
@@ -667,11 +717,12 @@ void setup() {
 #endif
   statusTopic = String("ut/v1/") + BUILD_DEVICE_ID + "/status";
   mqtt.setCallback(onMqttMessage);
+  screen_routing::InitUartTxQueue(&uartTxQueue);
   /* PubSubClient silently keeps its 256-byte default when the larger buffer
    * cannot be allocated; that would break every telemetry frame at runtime,
    * so surface the failure at boot instead. */
   if (!mqtt.setBufferSize(kMqttBufferSize)) {
-    Serial.println("#ERROR mqtt_buffer_alloc_failed");
+    diagnostic.println("#ERROR mqtt_buffer_alloc_failed");
   }
   mqtt.setKeepAlive(15);
   mqtt.setSocketTimeout(4);
@@ -679,18 +730,17 @@ void setup() {
   screen_routing::InitTimeSyncSchedule(&timeSyncSchedule);
   screen_routing::InitNtpAssociationState(&ntpAssociation);
   screen_routing::InitMqttLinkStatusState(&mqttLinkStatus);
-  screen_routing::InitUartTxQueue(&uartTxQueue);
   EEPROM.begin(sizeof(StoredBrokerEndpoint));
   StoredBrokerEndpoint stored{};
   EEPROM.get(0, stored);
   if (loadStoredEndpoint(stored, &savedBrokerEndpoint)) {
     savedBrokerAvailable = true;
     selectBroker(savedBrokerEndpoint);
-    Serial.println("#DISCOVERY restored_saved_broker");
+    diagnostic.println("#DISCOVERY restored_saved_broker");
   }
-  Serial.printf("#BOOT esp8266-01s mqtt-uart-bridge v3 device=%s\r\n", BUILD_DEVICE_ID);
+  diagnostic.printf("#BOOT esp8266-01s mqtt-uart-bridge v3 device=%s\r\n", BUILD_DEVICE_ID);
   if (std::strlen(DISCOVERY_HMAC_KEY) == 0U) {
-    Serial.println("#ERROR discovery_disabled_missing_hmac_key");
+    diagnostic.println("#ERROR discovery_disabled_missing_hmac_key");
   }
   connectWiFi();
 }

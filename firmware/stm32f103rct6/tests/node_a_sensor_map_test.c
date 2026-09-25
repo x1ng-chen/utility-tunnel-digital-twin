@@ -135,9 +135,9 @@ _Static_assert(NODE_A_GAS_VENTILATION_SHOULD_RUN(0U, 1U, 30000U) == 0U,
 /* --- Preserved INA226 measurement mapping (Task 7) -------------------------- */
 _Static_assert(NODE_A_INA226_BUS_RAW_TO_UV(9520U) == 11900000UL,
                "INA226 bus voltage conversion must preserve a measured 11.9 V rail");
-_Static_assert(NODE_A_INA226_SHUNT_RAW_TO_UA(400) == 10000L,
-               "R100 shunt conversion must map 1 mV to 10 mA");
-_Static_assert(NODE_A_INA226_POWER_UW(11900000UL, 10000L) == 119000L,
+_Static_assert(NODE_A_INA226_SHUNT_RAW_TO_UA(400) == 100000L,
+               "R010 shunt conversion must map 1 mV to 100 mA");
+_Static_assert(NODE_A_INA226_POWER_UW(11900000UL, 100000L) == 1190000L,
                "power must be derived from measured bus voltage and shunt current");
 _Static_assert(NODE_A_INA226_SAMPLE_STUCK_03FF(1023U, 1023, 1023, 1023U) == 1U,
                "identical 0x03ff measurement registers must be rejected");

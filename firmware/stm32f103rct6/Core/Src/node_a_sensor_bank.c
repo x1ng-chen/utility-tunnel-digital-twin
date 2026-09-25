@@ -1,140 +1,11 @@
 #include "node_a_sensor_bank.h"
 #include <string.h>
 
-#define SHT30_CMD_MEASURE_HIGH 0x2C06U
 #define GAS_ADC_FILTER_SAMPLES 64U
 #define DIGITAL_DEBOUNCE_SAMPLES 4U
 
-static void I2c_Delay_Bank(const NodeASensorBank *bank) {
-  if (bank && bank->service_cb) {
-    bank->service_cb(bank->service_ctx);
-  }
-  for (volatile int d = 0; d < 20; ++d) {
-    __NOP();
-  }
-}
-
-static void I2c_Scl_Set(GPIO_TypeDef *port, uint16_t pin, GPIO_PinState state) {
-  HAL_GPIO_WritePin(port, pin, state);
-}
-
-static void I2c_Sda_Set(GPIO_TypeDef *port, uint16_t pin, GPIO_PinState state) {
-  HAL_GPIO_WritePin(port, pin, state);
-}
-
-static void I2c_Start_Bank(const NodeASensorBank *bank, GPIO_TypeDef *scl_port, uint16_t scl_pin,
-                           GPIO_TypeDef *sda_port, uint16_t sda_pin) {
-  I2c_Sda_Set(sda_port, sda_pin, GPIO_PIN_SET);
-  I2c_Scl_Set(scl_port, scl_pin, GPIO_PIN_SET);
-  I2c_Delay_Bank(bank);
-  I2c_Sda_Set(sda_port, sda_pin, GPIO_PIN_RESET);
-  I2c_Delay_Bank(bank);
-  I2c_Scl_Set(scl_port, scl_pin, GPIO_PIN_RESET);
-}
-
-static void I2c_Stop_Bank(const NodeASensorBank *bank, GPIO_TypeDef *scl_port, uint16_t scl_pin,
-                          GPIO_TypeDef *sda_port, uint16_t sda_pin) {
-  I2c_Sda_Set(sda_port, sda_pin, GPIO_PIN_RESET);
-  I2c_Delay_Bank(bank);
-  I2c_Scl_Set(scl_port, scl_pin, GPIO_PIN_SET);
-  I2c_Delay_Bank(bank);
-  I2c_Sda_Set(sda_port, sda_pin, GPIO_PIN_SET);
-  I2c_Delay_Bank(bank);
-}
-
-static uint8_t I2c_WriteByte_Bank(const NodeASensorBank *bank, GPIO_TypeDef *scl_port, uint16_t scl_pin,
-                                  GPIO_TypeDef *sda_port, uint16_t sda_pin, uint8_t value) {
-  for (uint8_t bit = 0U; bit < 8U; ++bit) {
-    I2c_Sda_Set(sda_port, sda_pin, (value & 0x80U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    I2c_Delay_Bank(bank);
-    I2c_Scl_Set(scl_port, scl_pin, GPIO_PIN_SET);
-    I2c_Delay_Bank(bank);
-    I2c_Scl_Set(scl_port, scl_pin, GPIO_PIN_RESET);
-    value <<= 1U;
-  }
-  I2c_Sda_Set(sda_port, sda_pin, GPIO_PIN_SET);
-  I2c_Delay_Bank(bank);
-  I2c_Scl_Set(scl_port, scl_pin, GPIO_PIN_SET);
-  I2c_Delay_Bank(bank);
-  uint8_t ack = (HAL_GPIO_ReadPin(sda_port, sda_pin) == GPIO_PIN_RESET) ? 1U : 0U;
-  I2c_Scl_Set(scl_port, scl_pin, GPIO_PIN_RESET);
-  return ack;
-}
-
-static uint8_t I2c_ReadByte_Bank(const NodeASensorBank *bank, GPIO_TypeDef *scl_port, uint16_t scl_pin,
-                                 GPIO_TypeDef *sda_port, uint16_t sda_pin, uint8_t ack) {
-  uint8_t value = 0U;
-  I2c_Sda_Set(sda_port, sda_pin, GPIO_PIN_SET);
-  for (uint8_t bit = 0U; bit < 8U; ++bit) {
-    value <<= 1U;
-    I2c_Delay_Bank(bank);
-    I2c_Scl_Set(scl_port, scl_pin, GPIO_PIN_SET);
-    I2c_Delay_Bank(bank);
-    if (HAL_GPIO_ReadPin(sda_port, sda_pin) == GPIO_PIN_SET) {
-      value |= 1U;
-    }
-    I2c_Scl_Set(scl_port, scl_pin, GPIO_PIN_RESET);
-  }
-  I2c_Sda_Set(sda_port, sda_pin, ack ? GPIO_PIN_RESET : GPIO_PIN_SET);
-  I2c_Delay_Bank(bank);
-  I2c_Scl_Set(scl_port, scl_pin, GPIO_PIN_SET);
-  I2c_Delay_Bank(bank);
-  I2c_Scl_Set(scl_port, scl_pin, GPIO_PIN_RESET);
-  I2c_Sda_Set(sda_port, sda_pin, GPIO_PIN_SET);
-  return value;
-}
-
-static uint8_t Sht30_Crc8(const uint8_t *data, uint8_t length) {
-  uint8_t crc = 0xFFU;
-  while (length-- > 0U) {
-    crc ^= *data++;
-    for (uint8_t i = 0U; i < 8U; ++i) {
-      crc = (crc & 0x80U) ? (uint8_t)((crc << 1U) ^ 0x31U) : (uint8_t)(crc << 1U);
-    }
-  }
-  return crc;
-}
-
-static uint8_t Sht30_ReadSample(const NodeASensorBank *bank, const NodeI2CSensorPin *cfg,
-                                int16_t *temp_c, uint16_t *hum_rh) {
-  uint8_t response[6];
-  I2c_Start_Bank(bank, cfg->scl_port, cfg->scl_pin, cfg->sda_port, cfg->sda_pin);
-  if (!I2c_WriteByte_Bank(bank, cfg->scl_port, cfg->scl_pin, cfg->sda_port, cfg->sda_pin,
-                          (uint8_t)(cfg->i2c_address << 1U)) ||
-      !I2c_WriteByte_Bank(bank, cfg->scl_port, cfg->scl_pin, cfg->sda_port, cfg->sda_pin,
-                          (uint8_t)(SHT30_CMD_MEASURE_HIGH >> 8U)) ||
-      !I2c_WriteByte_Bank(bank, cfg->scl_port, cfg->scl_pin, cfg->sda_port, cfg->sda_pin,
-                          (uint8_t)SHT30_CMD_MEASURE_HIGH)) {
-    I2c_Stop_Bank(bank, cfg->scl_port, cfg->scl_pin, cfg->sda_port, cfg->sda_pin);
-    return 0U;
-  }
-  I2c_Stop_Bank(bank, cfg->scl_port, cfg->scl_pin, cfg->sda_port, cfg->sda_pin);
-
-  for (uint8_t wait = 0U; wait < 20U; ++wait) {
-    I2c_Delay_Bank(bank);
-  }
-
-  I2c_Start_Bank(bank, cfg->scl_port, cfg->scl_pin, cfg->sda_port, cfg->sda_pin);
-  if (!I2c_WriteByte_Bank(bank, cfg->scl_port, cfg->scl_pin, cfg->sda_port, cfg->sda_pin,
-                          (uint8_t)((cfg->i2c_address << 1U) | 1U))) {
-    I2c_Stop_Bank(bank, cfg->scl_port, cfg->scl_pin, cfg->sda_port, cfg->sda_pin);
-    return 0U;
-  }
-  for (uint8_t i = 0U; i < 6U; ++i) {
-    response[i] = I2c_ReadByte_Bank(bank, cfg->scl_port, cfg->scl_pin, cfg->sda_port,
-                                    cfg->sda_pin, i < 5U);
-  }
-  I2c_Stop_Bank(bank, cfg->scl_port, cfg->scl_pin, cfg->sda_port, cfg->sda_pin);
-
-  if (Sht30_Crc8(response, 2U) != response[2] || Sht30_Crc8(&response[3], 2U) != response[5]) {
-    return 0U;
-  }
-  uint16_t raw_temp = (uint16_t)(((uint16_t)response[0] << 8U) | response[1]);
-  uint16_t raw_hum = (uint16_t)(((uint16_t)response[3] << 8U) | response[4]);
-  *temp_c = (int16_t)(((int32_t)17500 * raw_temp) / 65535 - 4500);
-  *hum_rh = (uint16_t)(((uint32_t)10000 * raw_hum) / 65535U);
-  return 1U;
-}
+/* SHT acquisition is provided by the application-owned bounded I2C driver.
+ * Keeping one bus owner avoids mixing stretch and non-stretch transactions. */
 
 void NodeASensorBank_Init(NodeASensorBank *bank, ADC_HandleTypeDef *hadc,
                           NodeAServiceCallback service_cb, void *service_ctx) {
@@ -163,7 +34,8 @@ void NodeASensorBank_Init(NodeASensorBank *bank, ADC_HandleTypeDef *hadc,
    * this slower inventory-bank copy remains telemetry-only to avoid duplicate
    * alarm ownership. MQ2-01 and FLAME-01 retain bank safety linkage. */
   int8_t pos;
-  if ((pos = NodeASensorBank_FindIndex(bank, "SHT-01")) >= 0) NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
+  for (uint8_t i = 0U; i < NODE_A_I2C_SENSOR_COUNT; ++i)
+    NodeASensorBank_SetEnabled(bank, i, 1U);
   if ((pos = NodeASensorBank_FindIndex(bank, "MQ4-01")) >= 0) {
     NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
   }
@@ -241,7 +113,8 @@ void NodeASensorBank_Tick(NodeASensorBank *bank, uint32_t now_ms) {
     const NodeI2CSensorPin *cfg = &kNodeAI2CPins[item];
     int16_t temp_c = 0;
     uint16_t hum_rh = 0;
-    if (Sht30_ReadSample(bank, cfg, &temp_c, &hum_rh)) {
+    if (bank->sht30_reader &&
+        bank->sht30_reader(cfg, &temp_c, &hum_rh)) {
       SensorReading_SetSht30(reading, temp_c, hum_rh, now_ms, SENSOR_QUALITY_GOOD);
     } else {
       SensorReading_SetMissing(reading, now_ms);

@@ -75,6 +75,11 @@ uint8_t UartTx_Enqueue(UartTxQueue *queue, const char *line, uint16_t length);
 uint8_t UartTx_EnqueuePriority(UartTxQueue *queue, const char *line,
                                uint16_t length);
 
+/* Insert an urgent line after the first queued line terminator.  This keeps
+ * any partially sent frame intact while avoiding a wait behind later frames. */
+uint8_t UartTx_EnqueuePriorityNext(UartTxQueue *queue, const char *line,
+                                   uint16_t length);
+
 /* Sends exactly one byte with the STM32F1-safe short timeout shared by every
  * foreground UART producer. */
 HAL_StatusTypeDef UartTx_WriteByte(UART_HandleTypeDef *uart, uint8_t *byte);

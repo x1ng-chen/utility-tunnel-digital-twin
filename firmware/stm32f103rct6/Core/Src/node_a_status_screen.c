@@ -18,6 +18,7 @@
 
 #define NODE_A_STATUS_LABEL_X     4
 #define NODE_A_STATUS_VALUE_X    36
+#define NODE_A_STATUS_ENV_VALUE_X 28
 #define NODE_A_STATUS_ROW_TOP    26
 #define NODE_A_STATUS_ROW_STEP   16
 #define NODE_A_STATUS_CLOCK_X    (LCD_WIDTH - 5 * 8)
@@ -29,7 +30,7 @@ static int RowY(uint8_t row)
   return NODE_A_STATUS_ROW_TOP + ((int)row * NODE_A_STATUS_ROW_STEP);
 }
 
-#define NODE_A_STATUS_CAROUSEL_PAGES 3U
+#define NODE_A_STATUS_CAROUSEL_PAGES 6U
 
 static void SelectPage(NodeAStatusModel *model, uint8_t alarm_active, uint32_t now_ms)
 {
@@ -70,6 +71,45 @@ void NodeAStatus_Init(NodeAStatusScreen *screen, uint32_t now_ms)
   screen->rendered_at_ms = now_ms;
 }
 
+void NodeAStatus_CaptureInventory(NodeAStatusSnapshot *snapshot,
+                                  const SensorReading *readings, uint8_t count)
+{
+  uint8_t index = 0U;
+  if (snapshot == NULL || readings == NULL) return;
+  (void)memset(snapshot->sht, 0, sizeof(snapshot->sht));
+  (void)memset(snapshot->analog, 0, sizeof(snapshot->analog));
+  (void)memset(snapshot->digital, 0, sizeof(snapshot->digital));
+
+  for (uint8_t i = 0U; i < NODE_A_STATUS_SHT_COUNT && index < count; ++i, ++index)
+  {
+    const SensorReading *source = &readings[index];
+    NodeAStatusSht *target = &snapshot->sht[i];
+    target->enabled = source->enabled;
+    target->online = source->online;
+    target->quality = source->quality;
+    target->temperature_centi_c = source->temperature_centi_c;
+    target->humidity_centi_rh = source->humidity_centi_rh;
+  }
+  for (uint8_t i = 0U; i < NODE_A_STATUS_ANALOG_COUNT && index < count; ++i, ++index)
+  {
+    const SensorReading *source = &readings[index];
+    NodeAStatusAnalog *target = &snapshot->analog[i];
+    target->enabled = source->enabled;
+    target->online = source->online;
+    target->quality = source->quality;
+    target->raw = source->raw;
+  }
+  for (uint8_t i = 0U; i < NODE_A_STATUS_DIGITAL_COUNT && index < count; ++i, ++index)
+  {
+    const SensorReading *source = &readings[index];
+    NodeAStatusDigital *target = &snapshot->digital[i];
+    target->enabled = source->enabled;
+    target->online = source->online;
+    target->quality = source->quality;
+    target->active_low = source->digital_value;
+  }
+}
+
 NodeAStatusPage NodeAStatus_CurrentPage(const NodeAStatusScreen *screen)
 {
   return (screen == NULL) ? NODE_A_STATUS_PAGE_ENVIRONMENT : screen->model.page;
@@ -79,7 +119,10 @@ const char *NodeAStatus_PageTitle(NodeAStatusPage page)
 {
   switch (page)
   {
-    case NODE_A_STATUS_PAGE_GAS: return "GAS";
+    case NODE_A_STATUS_PAGE_GAS_1: return "GAS1";
+    case NODE_A_STATUS_PAGE_GAS_2: return "GAS2";
+    case NODE_A_STATUS_PAGE_INPUTS_1: return "INPUT1";
+    case NODE_A_STATUS_PAGE_INPUTS_2: return "INPUT2";
     case NODE_A_STATUS_PAGE_FANS: return "FAN";
     case NODE_A_STATUS_PAGE_ALARM: return "ALARM";
     case NODE_A_STATUS_PAGE_ENVIRONMENT:
@@ -147,14 +190,16 @@ size_t NodeAStatus_DescribeAlarms(const NodeAStatusSnapshot *snapshot,
 
 /* ---------- drawing ---------- */
 
-static void FormatCenti(char *output, size_t size, int32_t centi, const char *suffix)
+static void FormatShtCompact(char *output, size_t size, int16_t temperature_centi_c,
+                             uint16_t humidity_centi_rh)
 {
-  int64_t value = centi;
+  int32_t value = temperature_centi_c;
   const char *sign = "";
   if (value < 0) { sign = "-"; value = -value; }
-  (void)snprintf(output, size, "%s%u.%02u%s", sign,
-                 (unsigned int)(value / 100),
-                 (unsigned int)(value % 100), suffix);
+  value = (value + 5) / 10; /* One decimal keeps four SHT rows legible. */
+  (void)snprintf(output, size, "%s%u.%uC %u%%", sign,
+                 (unsigned int)(value / 10), (unsigned int)(value % 10),
+                 (unsigned int)((humidity_centi_rh + 50U) / 100U));
 }
 
 static uint16_t AlarmColor(uint8_t alarm, uint8_t warning)
@@ -183,67 +228,93 @@ static void DrawHeader(NodeAStatusPage page, const UiClockSnapshot *clock)
 static void DrawEnvironment(const NodeAStatusSnapshot *snapshot)
 {
   char text[NODE_A_STATUS_VALUE_MAX];
+  char label[4];
   DrawHeader(NODE_A_STATUS_PAGE_ENVIRONMENT, &snapshot->clock);
 
-  if (snapshot->sht30_online == 0U)
+  /* The actual panel is 128x128: four compact T/H rows fit without clipping. */
+  for (uint8_t i = 0U; i < NODE_A_STATUS_SHT_COUNT; ++i)
   {
-    (void)snprintf(text, sizeof(text), "OFF");
-    DrawRow(0U, "TEMP", text, NODE_A_STATUS_MUTED);
-    DrawRow(1U, "HUMI", text, NODE_A_STATUS_MUTED);
+    const NodeAStatusSht *reading = &snapshot->sht[i];
+    const uint16_t color = (reading->enabled != 0U && reading->online != 0U &&
+                            reading->quality == SENSOR_QUALITY_GOOD &&
+                            reading->temperature_centi_c >= -4500 &&
+                            reading->temperature_centi_c <= 13000 &&
+                            reading->humidity_centi_rh <= 10000U)
+                               ? NODE_A_STATUS_FG : NODE_A_STATUS_MUTED;
+    const char *unavailable = (reading->enabled == 0U) ? "PLAN" :
+                              (reading->online == 0U || reading->quality == SENSOR_QUALITY_MISSING)
+                                  ? "OFF" : "BAD";
+    (void)snprintf(label, sizeof(label), "S%u", (unsigned int)(i + 1U));
+    if (color == NODE_A_STATUS_FG)
+      FormatShtCompact(text, sizeof(text), reading->temperature_centi_c,
+                       reading->humidity_centi_rh);
+    else (void)snprintf(text, sizeof(text), "%s", unavailable);
+    ST7735_DrawString(NODE_A_STATUS_LABEL_X, RowY(i), label,
+                      NODE_A_STATUS_MUTED, NODE_A_STATUS_BG);
+    ST7735_DrawString(NODE_A_STATUS_ENV_VALUE_X, RowY(i), text,
+                      color, NODE_A_STATUS_BG);
   }
-  else
-  {
-    /* Node A has no temperature alarm threshold, so the reading is reported
-     * as data and never coloured as a warning the firmware did not raise. */
-    FormatCenti(text, sizeof(text), snapshot->temperature_centi_c, " C");
-    DrawRow(0U, "TEMP", text, NODE_A_STATUS_FG);
-    FormatCenti(text, sizeof(text), (int32_t)snapshot->humidity_centi_rh, " %");
-    DrawRow(1U, "HUMI", text, NODE_A_STATUS_FG);
-  }
-
-  (void)snprintf(text, sizeof(text), "%s",
-                 (snapshot->level_detected != 0U) ? "WET" : "DRY");
-  DrawRow(2U, "LVL", text,
-          (snapshot->level_detected != 0U) ? NODE_A_STATUS_WARNING : NODE_A_STATUS_FG);
-
-  (void)snprintf(text, sizeof(text), "%s",
-                 (snapshot->flame_alarm != 0U) ? "FIRE" : "OK");
-  DrawRow(3U, "FLAM", text,
-          (snapshot->flame_alarm != 0U) ? NODE_A_STATUS_DANGER : NODE_A_STATUS_FG);
 }
 
-static void DrawGas(const NodeAStatusSnapshot *snapshot)
+static void DrawGas(const NodeAStatusSnapshot *snapshot, NodeAStatusPage page,
+                    uint8_t first, uint8_t count)
 {
+  static const char *const labels[NODE_A_STATUS_ANALOG_COUNT] = {
+    "CO1", "M41", "O21", "CO2", "M42", "O22", "CO3"
+  };
   char text[NODE_A_STATUS_VALUE_MAX];
-  DrawHeader(NODE_A_STATUS_PAGE_GAS, &snapshot->clock);
+  DrawHeader(page, &snapshot->clock);
 
-  /* The oxygen and CO front ends are not calibrated, so their raw counts are
-   * shown as data only; the methane and smoke channels are the ones that can
-   * raise the alarm page. */
-  if (snapshot->oxygen_online == 0U) (void)snprintf(text, sizeof(text), "OFF");
-  else (void)snprintf(text, sizeof(text), "%u RAW", (unsigned int)snapshot->oxygen_raw);
-  DrawRow(0U, "O2", text,
-          (snapshot->oxygen_online == 0U) ? NODE_A_STATUS_MUTED
-          : AlarmColor(snapshot->oxygen_alarm, snapshot->oxygen_warning));
+  /* These channels are not calibrated to concentration units.  Display ADC
+   * counts, never ppm or a misleading 'OK'.  Planned pins stay PLAN. */
+  for (uint8_t row = 0U; row < count; ++row)
+  {
+    const uint8_t i = (uint8_t)(first + row);
+    const NodeAStatusAnalog *reading = &snapshot->analog[i];
+    uint16_t color = NODE_A_STATUS_MUTED;
+    if (reading->enabled == 0U) (void)snprintf(text, sizeof(text), "PLAN");
+    else if (reading->online == 0U || reading->quality == SENSOR_QUALITY_MISSING)
+      (void)snprintf(text, sizeof(text), "OFF");
+    else if (reading->quality == SENSOR_QUALITY_BAD)
+      (void)snprintf(text, sizeof(text), "BAD");
+    else
+    {
+      (void)snprintf(text, sizeof(text), "%u RAW", (unsigned int)reading->raw);
+      color = NODE_A_STATUS_FG;
+      if (i == 0U) color = AlarmColor(snapshot->co_alarm, snapshot->co_warning);
+      if (i == 1U) color = AlarmColor(snapshot->methane_alarm, snapshot->methane_warning);
+      if (i == 2U) color = AlarmColor(snapshot->oxygen_alarm, snapshot->oxygen_warning);
+    }
+    DrawRow(row, labels[i], text, color);
+  }
+}
 
-  if (snapshot->methane_online == 0U) (void)snprintf(text, sizeof(text), "OFF");
-  else if (snapshot->methane_alarm != 0U) (void)snprintf(text, sizeof(text), "ALARM");
-  else if (snapshot->methane_warning != 0U) (void)snprintf(text, sizeof(text), "WARN");
-  else (void)snprintf(text, sizeof(text), "OK");
-  DrawRow(1U, "CH4", text,
-          (snapshot->methane_online == 0U) ? NODE_A_STATUS_MUTED
-          : AlarmColor(snapshot->methane_alarm, snapshot->methane_warning));
-
-  if (snapshot->co_online == 0U) (void)snprintf(text, sizeof(text), "OFF");
-  else (void)snprintf(text, sizeof(text), "%u RAW", (unsigned int)snapshot->co_raw);
-  DrawRow(2U, "CO", text,
-          (snapshot->co_online == 0U) ? NODE_A_STATUS_MUTED
-          : AlarmColor(snapshot->co_alarm, snapshot->co_warning));
-
-  (void)snprintf(text, sizeof(text), "%s",
-                 (snapshot->smoke_alarm != 0U) ? "ALARM" : "OK");
-  DrawRow(3U, "SMOKE", text,
-          (snapshot->smoke_alarm != 0U) ? NODE_A_STATUS_DANGER : NODE_A_STATUS_FG);
+static void DrawInputs(const NodeAStatusSnapshot *snapshot, NodeAStatusPage page,
+                       uint8_t first, uint8_t count)
+{
+  static const char *const labels[NODE_A_STATUS_DIGITAL_COUNT] = {
+    "M21", "FL1", "LV1", "FL2", "FL3", "M22", "M23", "LV2", "LV3"
+  };
+  char text[NODE_A_STATUS_VALUE_MAX];
+  DrawHeader(page, &snapshot->clock);
+  for (uint8_t row = 0U; row < count; ++row)
+  {
+    const uint8_t index = (uint8_t)(first + row);
+    const NodeAStatusDigital *reading = &snapshot->digital[index];
+    uint16_t color = NODE_A_STATUS_MUTED;
+    if (reading->enabled == 0U) (void)snprintf(text, sizeof(text), "PLAN");
+    else if (reading->online == 0U || reading->quality == SENSOR_QUALITY_MISSING)
+      (void)snprintf(text, sizeof(text), "OFF");
+    else if (reading->quality == SENSOR_QUALITY_BAD)
+      (void)snprintf(text, sizeof(text), "BAD");
+    else
+    {
+      /* Report the electrical input state, not an unverified sensor verdict. */
+      (void)snprintf(text, sizeof(text), "%s", reading->active_low ? "LOW" : "HIGH");
+      color = reading->active_low ? NODE_A_STATUS_WARNING : NODE_A_STATUS_FG;
+    }
+    DrawRow(row, labels[index], text, color);
+  }
 }
 
 static void FormatFanRow(char *output, size_t size, uint8_t pwm_percent, uint32_t rpm)
@@ -336,9 +407,21 @@ static void RenderPage(const NodeAStatusModel *model, const NodeAStatusSnapshot 
   ST7735_BeginFrame();
   switch (model->page)
   {
-    case NODE_A_STATUS_PAGE_GAS:
+    case NODE_A_STATUS_PAGE_GAS_1:
       ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NODE_A_STATUS_BG);
-      DrawGas(snapshot);
+      DrawGas(snapshot, NODE_A_STATUS_PAGE_GAS_1, 0U, 4U);
+      break;
+    case NODE_A_STATUS_PAGE_GAS_2:
+      ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NODE_A_STATUS_BG);
+      DrawGas(snapshot, NODE_A_STATUS_PAGE_GAS_2, 4U, 3U);
+      break;
+    case NODE_A_STATUS_PAGE_INPUTS_1:
+      ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NODE_A_STATUS_BG);
+      DrawInputs(snapshot, NODE_A_STATUS_PAGE_INPUTS_1, 0U, 5U);
+      break;
+    case NODE_A_STATUS_PAGE_INPUTS_2:
+      ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NODE_A_STATUS_BG);
+      DrawInputs(snapshot, NODE_A_STATUS_PAGE_INPUTS_2, 5U, 4U);
       break;
     case NODE_A_STATUS_PAGE_FANS:
       ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NODE_A_STATUS_BG);
@@ -352,6 +435,58 @@ static void RenderPage(const NodeAStatusModel *model, const NodeAStatusSnapshot 
       ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NODE_A_STATUS_BG);
       DrawEnvironment(snapshot);
       break;
+  }
+}
+
+static uint8_t VisibleDataChanged(NodeAStatusPage page,
+                                  const NodeAStatusSnapshot *before,
+                                  const NodeAStatusSnapshot *after)
+{
+  if (before->clock.synchronized != after->clock.synchronized ||
+      before->clock.hour != after->clock.hour ||
+      before->clock.minute != after->clock.minute) return 1U;
+  switch (page)
+  {
+    case NODE_A_STATUS_PAGE_ENVIRONMENT:
+      return (uint8_t)(memcmp(before->sht, after->sht, sizeof(after->sht)) != 0);
+    case NODE_A_STATUS_PAGE_GAS_1:
+      return (uint8_t)(memcmp(before->analog, after->analog,
+                             4U * sizeof(after->analog[0])) != 0 ||
+                       before->co_alarm != after->co_alarm ||
+                       before->co_warning != after->co_warning ||
+                       before->methane_alarm != after->methane_alarm ||
+                       before->methane_warning != after->methane_warning ||
+                       before->oxygen_alarm != after->oxygen_alarm ||
+                       before->oxygen_warning != after->oxygen_warning);
+    case NODE_A_STATUS_PAGE_GAS_2:
+      return (uint8_t)(memcmp(&before->analog[4], &after->analog[4],
+                             3U * sizeof(after->analog[0])) != 0);
+    case NODE_A_STATUS_PAGE_INPUTS_1:
+      return (uint8_t)(memcmp(before->digital, after->digital,
+                             5U * sizeof(after->digital[0])) != 0);
+    case NODE_A_STATUS_PAGE_INPUTS_2:
+      return (uint8_t)(memcmp(&before->digital[5], &after->digital[5],
+                             4U * sizeof(after->digital[0])) != 0);
+    case NODE_A_STATUS_PAGE_FANS:
+      return (uint8_t)(before->fan1_pwm_percent != after->fan1_pwm_percent ||
+                       before->fan2_pwm_percent != after->fan2_pwm_percent ||
+                       before->fan1_rpm != after->fan1_rpm ||
+                       before->fan2_rpm != after->fan2_rpm ||
+                       before->fan1_power_online != after->fan1_power_online ||
+                       before->fan2_power_online != after->fan2_power_online ||
+                       before->fan1_millivolts != after->fan1_millivolts ||
+                       before->fan2_millivolts != after->fan2_millivolts ||
+                       before->fan1_milliamps != after->fan1_milliamps ||
+                       before->fan2_milliamps != after->fan2_milliamps);
+    case NODE_A_STATUS_PAGE_ALARM:
+      return (uint8_t)(before->gas_alarm != after->gas_alarm ||
+                       before->methane_alarm != after->methane_alarm ||
+                       before->smoke_alarm != after->smoke_alarm ||
+                       before->flame_alarm != after->flame_alarm ||
+                       before->relay_on != after->relay_on ||
+                       before->buzzer_muted != after->buzzer_muted);
+    default:
+      return 1U;
   }
 }
 
@@ -369,7 +504,8 @@ void NodeAStatus_Update(NodeAStatusScreen *screen, const NodeAStatusSnapshot *sn
    * comparison is kept cheap enough to run every main-loop iteration. */
   page_changed = (uint8_t)((screen->model.page != previous) || (screen->rendered_once == 0U));
   data_changed = (uint8_t)((screen->rendered_once == 0U) ||
-                           (memcmp(&screen->rendered, snapshot, sizeof(*snapshot)) != 0));
+                           VisibleDataChanged(screen->model.page, &screen->rendered,
+                                              snapshot));
   refresh_due = (uint8_t)((screen->rendered_once == 0U) ||
                           ((uint32_t)(now_ms - screen->rendered_at_ms) >=
                            NODE_A_STATUS_REFRESH_MS));

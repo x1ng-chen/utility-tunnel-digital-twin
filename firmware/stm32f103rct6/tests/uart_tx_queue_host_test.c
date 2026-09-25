@@ -273,6 +273,40 @@ static void test_priority_refusal_is_counted(void)
   CHECK(queue.priority_dropped_bytes == 1U);
 }
 
+static void test_urgent_command_follows_current_frame_and_precedes_backlog(void)
+{
+  UartTxQueue queue;
+  const char first[] = "AAAA\r\n";
+  const char second[] = "BBBB\r\n";
+  const char command[] = "CMD\r\n";
+  const char expected[] = "AAAA\r\nCMD\r\nBBBB\r\n";
+
+  link_reset();
+  UartTx_Init(&queue);
+  CHECK(UartTx_Enqueue(&queue, first, sizeof(first) - 1U) == 1U);
+  CHECK(UartTx_Enqueue(&queue, second, sizeof(second) - 1U) == 1U);
+  CHECK(UartTx_Drain(&queue, &kUart, 2U, 0U) == 2U);
+  CHECK(UartTx_EnqueuePriorityNext(&queue, command,
+                                   sizeof(command) - 1U) == 1U);
+  CHECK(UartTx_Drain(&queue, &kUart, 30U, 0U) ==
+        sizeof(expected) - 1U - 2U);
+  CHECK(link_length == sizeof(expected) - 1U);
+  CHECK(memcmp(link_bytes, expected, sizeof(expected) - 1U) == 0);
+
+  /* Repeat after the ring has wrapped, where insertion shifts bytes across
+   * the physical end of the array. */
+  link_reset();
+  UartTx_Init(&queue);
+  queue.head = UART_TX_CAPACITY - 3U;
+  queue.tail = queue.head;
+  CHECK(UartTx_Enqueue(&queue, first, sizeof(first) - 1U) == 1U);
+  CHECK(UartTx_Enqueue(&queue, second, sizeof(second) - 1U) == 1U);
+  CHECK(UartTx_EnqueuePriorityNext(&queue, command,
+                                   sizeof(command) - 1U) == 1U);
+  CHECK(UartTx_Drain(&queue, &kUart, 30U, 0U) == sizeof(expected) - 1U);
+  CHECK(memcmp(link_bytes, expected, sizeof(expected) - 1U) == 0);
+}
+
 int main(void)
 {
   test_a_single_byte_uses_a_nonzero_timeout();
@@ -283,6 +317,7 @@ int main(void)
   test_stalled_link_is_skipped_then_recovered();
   test_normal_frames_leave_the_ack_reserve_available();
   test_priority_refusal_is_counted();
+  test_urgent_command_follows_current_frame_and_precedes_backlog();
 
   if (failures != 0) {
     (void)fprintf(stderr, "%d check(s) failed\n", failures);

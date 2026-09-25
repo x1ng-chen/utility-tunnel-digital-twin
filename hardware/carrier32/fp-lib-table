@@ -1,8 +1,12 @@
 (fp_lib_table
+  (lib (name "Carrier32") (type "KiCad") (uri "${KIPRJMOD}/Carrier32.pretty") (options "") (descr "Visual-only carrier footprint proxies"))
   (lib (name "Capacitor_SMD") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Capacitor_SMD.pretty") (options "") (descr ""))
   (lib (name "Connector_JST") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Connector_JST.pretty") (options "") (descr ""))
+  (lib (name "Connector_PinSocket_2.54mm") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Connector_PinSocket_2.54mm.pretty") (options "") (descr ""))
+  (lib (name "LED_SMD") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/LED_SMD.pretty") (options "") (descr ""))
   (lib (name "Diode_SMD") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Diode_SMD.pretty") (options "") (descr ""))
   (lib (name "Fuse") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Fuse.pretty") (options "") (descr ""))
+  (lib (name "Inductor_SMD") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Inductor_SMD.pretty") (options "") (descr ""))
   (lib (name "Jumper") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Jumper.pretty") (options "") (descr ""))
   (lib (name "Package_SO") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Package_SO.pretty") (options "") (descr ""))
   (lib (name "Package_SON") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Package_SON.pretty") (options "") (descr ""))

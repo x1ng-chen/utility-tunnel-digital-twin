@@ -1,0 +1,22 @@
+#VRML V2.0 utf8
+# Visual-only 1.44-inch ST7735S display module proxy, 32 x 35 mm.
+Transform {
+  scale 0.393700787 0.393700787 0.393700787
+  children [
+    Transform { translation 0 -19 29.21 children [
+      Shape { appearance Appearance { material Material { diffuseColor 0.05 0.16 0.29 } } geometry Box { size 32 35 1.2 } }
+    ] }
+    Transform { translation 0 -26.62 31.37 children [
+      Shape { appearance Appearance { material Material { diffuseColor 0.025 0.025 0.03 } } geometry Box { size 29 29 0.5 } }
+    ] }
+    Transform { translation 0 -26.62 32.11 children [
+      Shape { appearance Appearance { material Material { diffuseColor 0.045 0.22 0.34 emissiveColor 0.01 0.05 0.08 } } geometry Box { size 25.5 25.5 0.06 } }
+    ] }
+    Transform { translation 0 -26.62 32.21 children [
+      Shape { appearance Appearance { material Material { diffuseColor 0.1 0.38 0.55 } } geometry Box { size 20 2.2 0.03 } }
+    ] }
+    Transform { translation 0 -43.13 32.21 children [
+      Shape { appearance Appearance { material Material { diffuseColor 0.12 0.45 0.54 } } geometry Box { size 15 1.3 0.03 } }
+    ] }
+  ]
+}

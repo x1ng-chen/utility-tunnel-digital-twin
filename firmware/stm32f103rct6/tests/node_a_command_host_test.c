@@ -16,8 +16,8 @@ static const NodeASafetyState VENTILATING = {0, 0, 0, 0, 1};
 static NodeAActuatorState default_actuators(void)
 {
   NodeAActuatorState actual;
-  actual.fan1_pwm_percent = 100U;
-  actual.fan2_pwm_percent = 100U;
+  actual.fan1_pwm_percent = 0U;
+  actual.fan2_pwm_percent = 0U;
   actual.relay_on = 0U;
   actual.buzzer_on = 0U;
   actual.buzzer_muted = 0U;
@@ -131,7 +131,7 @@ static int test_fan_duties(void)
       "\"action\":\"fan1_duty\",\"ttlMs\":10000,\"value\":30}",
       1U, &SAFE, &actual);
   CHECK(result.status == NODE_A_STATUS_ACCEPTED);
-  CHECK(actual.fan1_pwm_percent == 30U && actual.fan2_pwm_percent == 100U);
+  CHECK(actual.fan1_pwm_percent == 30U && actual.fan2_pwm_percent == 0U);
   CHECK(actual.relay_on == 1U);
 
   actual = default_actuators();
@@ -172,13 +172,13 @@ static int test_fan_duties(void)
       1U, &SAFE, &actual);
   CHECK(result.status == NODE_A_STATUS_REJECTED);
   CHECK(strcmp(result.reason, "invalid_duty_percent") == 0);
-  CHECK(actual.fan1_pwm_percent == 100U);
+  CHECK(actual.fan1_pwm_percent == 0U);
 
   actual = default_actuators();
   CHECK(apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"w-2\","
       "\"action\":\"fan_pwm\",\"ttlMs\":10000,\"dutyPercent\":101}",
       1U, &SAFE, &actual).status == NODE_A_STATUS_REJECTED);
-  CHECK(actual.fan1_pwm_percent == 100U);
+  CHECK(actual.fan1_pwm_percent == 0U);
 
   actual = default_actuators();
   CHECK(apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"w-3\","
@@ -202,6 +202,54 @@ static int test_both_start_and_stop(void)
   actual.relay_on = 1U;
   CHECK(apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"m-6\","
       "\"action\":\"fans_all_stop\",\"ttlMs\":10000,\"value\":0}",
+      1U, &SAFE, &actual).status == NODE_A_STATUS_ACCEPTED);
+  CHECK(actual.fan1_pwm_percent == 0U && actual.fan2_pwm_percent == 0U);
+  CHECK(actual.relay_on == 0U);
+  return 0;
+}
+
+static int test_independent_fan_power_intent(void)
+{
+  NodeAActuatorState actual = default_actuators();
+  NodeACommand normalized;
+
+  /* This is the exact CTRL-01 ESP normalization of a Node B fan preset. */
+  CHECK(NodeACommand_Parse("{\"schema\":\"ut.command.v1\",\"cmdId\":\"menu-CTRL-02-1844700745-6\","
+      "\"target\":\"CTRL-01\",\"action\":\"fan1_duty\",\"value\":30,"
+      "\"createdAtMs\":1790211402187,\"ttlMs\":10000}", &normalized) != 0U);
+  CHECK(normalized.action == NODE_A_ACTION_FAN1_DUTY && normalized.value == 30U);
+
+  CHECK(apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"f1-on\","
+      "\"action\":\"fan1_duty\",\"ttlMs\":10000,\"value\":30}",
+      1U, &SAFE, &actual).status == NODE_A_STATUS_ACCEPTED);
+  CHECK(actual.fan1_pwm_percent == 30U && actual.fan2_pwm_percent == 0U);
+  CHECK(actual.relay_on == 1U);
+
+  CHECK(apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"f2-on\","
+      "\"action\":\"fan2_duty\",\"ttlMs\":10000,\"value\":60}",
+      1U, &SAFE, &actual).status == NODE_A_STATUS_ACCEPTED);
+  CHECK(actual.fan1_pwm_percent == 30U && actual.fan2_pwm_percent == 60U);
+  CHECK(actual.relay_on == 1U);
+
+  CHECK(apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"f1-off\","
+      "\"action\":\"fan1_duty\",\"ttlMs\":10000,\"value\":0}",
+      1U, &SAFE, &actual).status == NODE_A_STATUS_ACCEPTED);
+  CHECK(actual.fan1_pwm_percent == 0U && actual.fan2_pwm_percent == 60U);
+  CHECK(actual.relay_on == 1U);
+
+  CHECK(apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"f2-off\","
+      "\"action\":\"fan2_duty\",\"ttlMs\":10000,\"value\":0}",
+      1U, &SAFE, &actual).status == NODE_A_STATUS_ACCEPTED);
+  CHECK(actual.fan1_pwm_percent == 0U && actual.fan2_pwm_percent == 0U);
+  CHECK(actual.relay_on == 0U);
+
+  CHECK(apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"legacy-on\","
+      "\"action\":\"relay_on\",\"ttlMs\":10000}",
+      1U, &SAFE, &actual).status == NODE_A_STATUS_ACCEPTED);
+  CHECK(actual.fan1_pwm_percent == 100U && actual.fan2_pwm_percent == 100U);
+  CHECK(actual.relay_on == 1U);
+  CHECK(apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"legacy-off\","
+      "\"action\":\"relay_off\",\"ttlMs\":10000}",
       1U, &SAFE, &actual).status == NODE_A_STATUS_ACCEPTED);
   CHECK(actual.fan1_pwm_percent == 0U && actual.fan2_pwm_percent == 0U);
   CHECK(actual.relay_on == 0U);
@@ -243,8 +291,18 @@ static int test_led_modes_and_brightness(void)
           index, brightness[index]);
       CHECK(apply(json, 1U, &SAFE, &actual).status == NODE_A_STATUS_ACCEPTED);
       CHECK(actual.led_brightness_percent == brightness[index]);
+      CHECK(actual.led_mode == NODE_A_LED_WHITE);
     }
   }
+
+  /* Brightness must preserve a deliberately selected effect. */
+  actual = default_actuators();
+  actual.led_mode = NODE_A_LED_FIRE;
+  CHECK(apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"br-fire\","
+      "\"action\":\"led_brightness\",\"ttlMs\":10000,\"value\":50}",
+      1U, &SAFE, &actual).status == NODE_A_STATUS_ACCEPTED);
+  CHECK(actual.led_brightness_percent == 50U);
+  CHECK(actual.led_mode == NODE_A_LED_FIRE);
 
   actual = default_actuators();
   CHECK(apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"br-bad\","
@@ -315,7 +373,7 @@ static int test_invalid_action_and_ttl(void)
       10000U, &SAFE, &actual);
   CHECK(result.status == NODE_A_STATUS_EXPIRED);
   CHECK(strcmp(result.reason, "ttl_elapsed") == 0);
-  CHECK(actual.fan1_pwm_percent == 100U);
+  CHECK(actual.fan1_pwm_percent == 0U);
 
   /* At the boundary just before expiry the command still executes. */
   result = apply("{\"schema\":\"ut.command.v1\",\"cmdId\":\"edge\","
@@ -355,6 +413,8 @@ static int test_safety_rejection_leaves_state_unchanged(void)
   for (index = 0U; index < sizeof(rejected_actions) / sizeof(rejected_actions[0]); ++index)
   {
     NodeAActuatorState actual = default_actuators();
+    actual.fan1_pwm_percent = 100U;
+    actual.fan2_pwm_percent = 100U;
     actual.relay_on = 1U;
     NodeACommandResult result = apply(rejected_actions[index], 1U, &VENTILATING, &actual);
     CHECK(result.status == NODE_A_STATUS_REJECTED);
@@ -477,7 +537,7 @@ static int test_complete_json_validation_is_atomic(void)
     /* Model the dispatcher boundary: malformed input must never reach Apply. */
     if (NodeACommand_Parse(malformed[index], &command) != 0U)
       (void)NodeACommand_Apply(&command, 1U, &SAFE, &actual);
-    CHECK(actual.fan1_pwm_percent == 100U && actual.fan2_pwm_percent == 100U);
+    CHECK(actual.fan1_pwm_percent == 0U && actual.fan2_pwm_percent == 0U);
   }
   return 0;
 }
@@ -512,6 +572,7 @@ int main(void)
   if (test_body_bounds() != 0) return 1;
   if (test_fan_duties() != 0) return 1;
   if (test_both_start_and_stop() != 0) return 1;
+  if (test_independent_fan_power_intent() != 0) return 1;
   if (test_led_modes_and_brightness() != 0) return 1;
   if (test_buzzer_actions_and_safety_transition() != 0) return 1;
   if (test_invalid_action_and_ttl() != 0) return 1;

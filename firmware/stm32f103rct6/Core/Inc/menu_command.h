@@ -41,6 +41,9 @@ uint8_t MenuCommand_Begin(MenuCommandContext *context, UiAction action, uint8_t 
                           uint64_t created_at_ms, char *line, size_t line_capacity,
                           size_t *written);
 uint8_t MenuCommand_ParseAck(const char *line, size_t length, MenuCommandAck *ack);
+/* Accept an authoritative result carried either by a standalone ACK or by a
+ * screen snapshot's lastCommand field. */
+uint8_t MenuCommand_AcceptResult(MenuCommandContext *context, const char *command_id);
 uint8_t MenuCommand_AcceptAck(MenuCommandContext *context, const MenuCommandAck *ack);
 void MenuCommandTx_Init(MenuCommandTxQueue *queue);
 /* A failed frame is dropped atomically; the next enqueue reinitializes the

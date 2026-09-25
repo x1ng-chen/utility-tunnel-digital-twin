@@ -469,6 +469,10 @@ void test_menu_command_rejects_identifier_target_action_value_and_ttl_boundaries
       CommandAction::LedMode, CommandAction::LedMode,
       CommandAction::LedMode, CommandAction::LedMode,
       CommandAction::LedMode, CommandAction::LedMode,
+      CommandAction::LedMode, CommandAction::LedMode,
+      CommandAction::LedMode, CommandAction::LedMode,
+      CommandAction::LedMode, CommandAction::LedMode,
+      CommandAction::LedMode, CommandAction::LedMode,
       CommandAction::LedBrightness, CommandAction::LedBrightness,
       CommandAction::LedBrightness, CommandAction::LedBrightness,
       CommandAction::BuzzerTest, CommandAction::BuzzerMute,
@@ -477,6 +481,7 @@ void test_menu_command_rejects_identifier_target_action_value_and_ttl_boundaries
   const uint8_t values[] = {
       0U, 30U, 60U, 100U, 0U, 0U, 0U, 30U, 60U, 100U,
       0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U,
+      8U, 9U, 10U, 11U, 12U, 13U, 14U, 15U,
       25U, 50U, 75U, 100U, 0U, 0U, 0U,
   };
   for (size_t index = 0U; index < sizeof(actions) / sizeof(actions[0]); ++index) {
@@ -492,7 +497,7 @@ void test_menu_command_rejects_identifier_target_action_value_and_ttl_boundaries
   CHECK_EQ(Result::OutOfRange, BuildMenuCommand(command, encoded, sizeof(encoded), &length));
   command = validCommand();
   command.action = CommandAction::LedMode;
-  command.value = 8U;
+  command.value = 16U;
   CHECK_EQ(Result::OutOfRange, BuildMenuCommand(command, encoded, sizeof(encoded), &length));
   command.action = CommandAction::LedBrightness;
   command.value = 60U;
@@ -667,7 +672,7 @@ void test_field_specific_errors_distinguish_strings_enums_and_ranges() {
   const size_t temperature = invalid_quality.find("\"temperature\":[");
   const size_t quality = invalid_quality.find("]", temperature);
   CHECK_TRUE(temperature != std::string::npos && quality != std::string::npos);
-  if (quality != std::string::npos) invalid_quality[quality - 1U] = '4';
+  if (quality != std::string::npos) invalid_quality[quality - 1U] = '5';
   CHECK_EQ(Result::InvalidEnum,
            ParseSnapshot(invalid_quality.c_str(), invalid_quality.size(), kFreshNowMs,
                          &parsed));
@@ -683,7 +688,7 @@ void test_field_specific_errors_distinguish_strings_enums_and_ranges() {
   CHECK_EQ(Result::OutOfRange,
            BuildSnapshot(snapshot, encoded, sizeof(encoded), &length));
   snapshot = validSnapshot();
-  snapshot.temperature.quality = static_cast<Quality>(4U);
+  snapshot.temperature.quality = static_cast<Quality>(5U);
   CHECK_EQ(Result::InvalidEnum,
            BuildSnapshot(snapshot, encoded, sizeof(encoded), &length));
   snapshot = validSnapshot();
@@ -1120,37 +1125,17 @@ void fuzzParsersDeterministically() {
 
 void test_multi_sensor_snapshot_round_trip() {
   ScreenSnapshot snapshot = validSnapshot();
-  snapshot.sensor_count = 3U;
+  snapshot.sensor_count = 1U;
 
   // 1. FLAME-04 alarm from CTRL-02
   std::strcpy(snapshot.sensors[0].asset_code, "FLAME-04");
   snapshot.sensors[0].kind = static_cast<uint8_t>(SensorKind::Flame);
   snapshot.sensors[0].value = 1;
   snapshot.sensors[0].scale = 1;
-  snapshot.sensors[0].quality = Quality::Valid;
+  snapshot.sensors[0].quality = Quality::Missing;
   snapshot.sensors[0].alarm = 1U;
   std::strcpy(snapshot.sensors[0].source, "CTRL-02");
   snapshot.sensors[0].updated_at_ms = kFreshNowMs - 500ULL;
-
-  // 2. MQ4-01 good from CTRL-01
-  std::strcpy(snapshot.sensors[1].asset_code, "MQ4-01");
-  snapshot.sensors[1].kind = static_cast<uint8_t>(SensorKind::Mq4);
-  snapshot.sensors[1].value = 120;
-  snapshot.sensors[1].scale = 1;
-  snapshot.sensors[1].quality = Quality::Valid;
-  snapshot.sensors[1].alarm = 0U;
-  std::strcpy(snapshot.sensors[1].source, "CTRL-01");
-  snapshot.sensors[1].updated_at_ms = kFreshNowMs - 400ULL;
-
-  // 3. SHT-03 missing
-  std::strcpy(snapshot.sensors[2].asset_code, "SHT-03");
-  snapshot.sensors[2].kind = static_cast<uint8_t>(SensorKind::Sht30);
-  snapshot.sensors[2].value = 0;
-  snapshot.sensors[2].scale = 100;
-  snapshot.sensors[2].quality = Quality::Missing;
-  snapshot.sensors[2].alarm = 0U;
-  std::strcpy(snapshot.sensors[2].source, "CTRL-01");
-  snapshot.sensors[2].updated_at_ms = kFreshNowMs - 300ULL;
 
   std::strcpy(snapshot.alarm_label, "FLAME-04");
 
@@ -1162,24 +1147,35 @@ void test_multi_sensor_snapshot_round_trip() {
   ScreenSnapshot parsed{};
   CHECK_EQ(Result::Ok, ParseSnapshot(encoded, length, kFreshNowMs, &parsed));
 
-  CHECK_EQ(3U, parsed.sensor_count);
+  CHECK_EQ(1U, parsed.sensor_count);
   CHECK_TRUE(std::strcmp(parsed.sensors[0].asset_code, "FLAME-04") == 0);
   CHECK_TRUE(std::strcmp(parsed.sensors[0].source, "CTRL-02") == 0);
   CHECK_EQ(1U, parsed.sensors[0].alarm);
-
-  CHECK_TRUE(std::strcmp(parsed.sensors[1].asset_code, "MQ4-01") == 0);
-  CHECK_TRUE(std::strcmp(parsed.sensors[1].source, "CTRL-01") == 0);
-  CHECK_EQ(Quality::Valid, parsed.sensors[1].quality);
-
-  CHECK_TRUE(std::strcmp(parsed.sensors[2].asset_code, "SHT-03") == 0);
-  CHECK_EQ(Quality::Missing, parsed.sensors[2].quality);
-
   CHECK_EQ(1U, SummaryAlarmCount(parsed));
   CHECK_EQ(Quality::Missing, WorstQuality(parsed));
   CHECK_TRUE(std::strcmp(AlarmLabel(parsed), "FLAME-04") == 0);
+
+  // The fixed 768-byte UART contract cannot carry all sensor details in a
+  // single snapshot. Reject oversized frames rather than silently truncating.
+  snapshot.sensor_count = 3U;
+  std::strcpy(snapshot.sensors[1].asset_code, "MQ4-01");
+  std::strcpy(snapshot.sensors[1].source, "CTRL-01");
+  snapshot.sensors[1].quality = Quality::Valid;
+  snapshot.sensors[1].updated_at_ms = kFreshNowMs - 400ULL;
+  std::strcpy(snapshot.sensors[2].asset_code, "SHT-03");
+  std::strcpy(snapshot.sensors[2].source, "CTRL-01");
+  snapshot.sensors[2].quality = Quality::Missing;
+  snapshot.sensors[2].updated_at_ms = kFreshNowMs - 300ULL;
+  CHECK_EQ(Result::TooLarge, BuildSnapshot(snapshot, encoded, sizeof(encoded), &length));
 }
 
 int main() {
+#if defined(SCREEN_PROTOCOL_MENU_FOCUSED_TEST)
+  test_menu_command_preserves_39_character_id_and_decodes_escapes();
+  test_menu_command_rejects_identifier_target_action_value_and_ttl_boundaries();
+  if (failures == 0) std::puts("screen_protocol menu tests passed");
+  return failures == 0 ? 0 : 1;
+#else
   test_multi_sensor_snapshot_round_trip();
   test_snapshot_round_trip_is_complete_and_canonical();
   test_snapshot_rejects_missing_unknown_malformed_wrong_type_and_nonfinite();
@@ -1201,4 +1197,5 @@ int main() {
   fuzzParsersDeterministically();
   if (failures == 0) std::puts("screen_protocol tests passed");
   return failures == 0 ? 0 : 1;
+#endif
 }

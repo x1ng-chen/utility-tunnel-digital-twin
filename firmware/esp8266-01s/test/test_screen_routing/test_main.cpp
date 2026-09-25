@@ -113,6 +113,30 @@ void test_ctrl01_one_menu_delivery_produces_one_uart_command() {
   CHECK_TRUE(std::strcmp(output.payload, kExpectedNormalized) == 0);
 }
 
+void test_stars_menu_survives_both_esp_roles() {
+  constexpr char stars[] =
+      "{\"schema\":\"ut.menu.command.v1\",\"cmdId\":\"menu-stars-14\","
+      "\"target\":\"CTRL-01\",\"action\":\"led_mode\",\"value\":14,"
+      "\"createdAtMs\":1704067219000,\"ttlMs\":10000}";
+  RouteOutput publish{};
+  CHECK_EQ(RouteResult::Ok,
+           RouteSerialLine(Role::Ctrl02, stars, sizeof(stars) - 1U,
+                           kNowMs, &publish));
+  CHECK_EQ(OutputKind::MqttPublish, publish.kind);
+  CHECK_TRUE(std::strcmp(publish.topic, "ut/v1/CTRL-01/cmd/menu") == 0);
+
+  TelemetryAccumulator accumulator{};
+  InitTelemetryAccumulator(&accumulator);
+  RouteOutput uart{};
+  CHECK_EQ(RouteResult::Ok,
+           RouteMqttMessage(Role::Ctrl01, publish.topic, publish.payload,
+                            publish.payload_length, kNowMs, &accumulator,
+                            &uart));
+  CHECK_EQ(OutputKind::UartCommand, uart.kind);
+  CHECK_TRUE(std::strstr(uart.payload, "\"action\":\"led_mode\"") != nullptr);
+  CHECK_TRUE(std::strstr(uart.payload, "\"value\":14") != nullptr);
+}
+
 void test_subsecond_clock_accepts_node_b_command_from_same_second() {
   const uint64_t now_ms =
       EpochMillisecondsFromUnixParts(1704067220LL, 654321L);
@@ -212,8 +236,8 @@ void test_uart_tx_queue_coalesces_snapshots_and_never_mixes_frames() {
   char drained[256]{};
   const size_t length = drainUartQueue(&queue, 5U, drained, sizeof(drained));
   constexpr char expected[] =
-      "{\"snapshot\":2}\r\n"
-      "{\"cmdId\":\"menu-CTRL-02-boot-7\",\"status\":\"accepted\"}\r\n";
+      "{\"cmdId\":\"menu-CTRL-02-boot-7\",\"status\":\"accepted\"}\r\n"
+      "{\"snapshot\":2}\r\n";
   CHECK_EQ(sizeof(expected) - 1U, length);
   CHECK_TRUE(std::memcmp(drained, expected, sizeof(expected) - 1U) == 0);
   CHECK_TRUE(std::strstr(drained, "menu-CTRL-02-boot-7") != nullptr);
@@ -289,6 +313,59 @@ void test_uart_tx_queue_ack_evicts_stale_snapshot_when_full() {
   CHECK_TRUE(std::strstr(drained, "ack-2") != nullptr);
   CHECK_TRUE(std::strstr(drained, "ack-3") != nullptr);
   CHECK_TRUE(std::strstr(drained, "snapshot") == nullptr);
+}
+
+void test_ack_precedes_unsent_snapshot_and_follows_partial_frame() {
+  UartTxQueue queue{};
+  InitUartTxQueue(&queue);
+  constexpr char snapshot[] = "{\"snapshot\":1}";
+  constexpr char ack[] = "{\"cmdId\":\"urgent\"}";
+  CHECK_EQ(UartTxEnqueueResult::Queued,
+           EnqueueUartTxLine(&queue, UartTxFrameKind::Snapshot,
+                             snapshot, sizeof(snapshot) - 1U));
+  CHECK_EQ(UartTxEnqueueResult::Queued,
+           EnqueueUartTxLine(&queue, UartTxFrameKind::Acknowledgement,
+                             ack, sizeof(ack) - 1U));
+  char drained[128]{};
+  drainUartQueue(&queue, 64U, drained, sizeof(drained));
+  CHECK_TRUE(std::strncmp(drained, ack, sizeof(ack) - 1U) == 0);
+  CHECK_TRUE(std::strstr(drained, snapshot) != nullptr);
+
+  InitUartTxQueue(&queue);
+  CHECK_EQ(UartTxEnqueueResult::Queued,
+           EnqueueUartTxLine(&queue, UartTxFrameKind::Snapshot,
+                             snapshot, sizeof(snapshot) - 1U));
+  const uint8_t* bytes = nullptr;
+  CHECK_EQ(5U, UartTxPeek(&queue, 5U, &bytes));
+  UartTxConsume(&queue, 5U);
+  CHECK_EQ(UartTxEnqueueResult::Queued,
+           EnqueueUartTxLine(&queue, UartTxFrameKind::Acknowledgement,
+                             ack, sizeof(ack) - 1U));
+  char tail[128]{};
+  drainUartQueue(&queue, 64U, tail, sizeof(tail));
+  CHECK_TRUE(std::strstr(tail, snapshot + 5U) == tail);
+  CHECK_TRUE(std::strstr(tail, ack) != nullptr);
+}
+
+void test_diagnostic_waits_for_partial_fan_command() {
+  UartTxQueue queue{};
+  InitUartTxQueue(&queue);
+  constexpr char command[] =
+      "MQTT|ut/v1/CTRL-01/cmd/menu|{\"action\":\"fan1_duty\"}";
+  constexpr char diagnostic[] = "#PUBLISHED";
+  CHECK_EQ(UartTxEnqueueResult::Queued,
+           EnqueueUartTxLine(&queue, UartTxFrameKind::Acknowledgement,
+                             command, sizeof(command) - 1U));
+  const uint8_t* bytes = nullptr;
+  CHECK_EQ(9U, UartTxPeek(&queue, 9U, &bytes));
+  UartTxConsume(&queue, 9U);
+  CHECK_EQ(UartTxEnqueueResult::Queued,
+           EnqueueUartTxLine(&queue, UartTxFrameKind::Diagnostic,
+                             diagnostic, sizeof(diagnostic) - 1U));
+  char tail[128]{};
+  drainUartQueue(&queue, 7U, tail, sizeof(tail));
+  CHECK_TRUE(std::strncmp(tail, command + 9U, sizeof(command) - 10U) == 0);
+  CHECK_TRUE(std::strstr(tail, "}\r\n#PUBLISHED\r\n") != nullptr);
 }
 
 void test_normalization_preserves_every_menu_field() {
@@ -721,6 +798,19 @@ void test_ctrl02_status_heartbeat_requests_resynchronization() {
       "{\"schema\":\"ut.menu.command.v1\"}",
       sizeof("{\"schema\":\"ut.menu.command.v1\"}") - 1U));
   CHECK_TRUE(!IsCtrl02StatusHeartbeat(nullptr, 0U));
+  NodeBHeartbeatState heartbeat{};
+  CHECK_TRUE(ShouldResyncForCtrl02Heartbeat(&heartbeat, status, sizeof(status) - 1U));
+  CHECK_TRUE(!ShouldResyncForCtrl02Heartbeat(&heartbeat, status, sizeof(status) - 1U));
+  constexpr char next_status[] =
+      "{\"schema\":\"ut.node-b.status.v1\",\"nodeId\":\"node-b\","
+      "\"seq\":172,\"display\":\"online\"}";
+  CHECK_TRUE(!ShouldResyncForCtrl02Heartbeat(&heartbeat, next_status,
+                                             sizeof(next_status) - 1U));
+  constexpr char reboot_status[] =
+      "{\"schema\":\"ut.node-b.status.v1\",\"nodeId\":\"node-b\","
+      "\"seq\":1,\"display\":\"online\"}";
+  CHECK_TRUE(ShouldResyncForCtrl02Heartbeat(&heartbeat, reboot_status,
+                                            sizeof(reboot_status) - 1U));
 
   TimeSyncSchedule time_schedule{};
   InitTimeSyncSchedule(&time_schedule);
@@ -748,6 +838,34 @@ void test_ctrl02_status_heartbeat_requests_resynchronization() {
   CHECK_EQ(MqttLinkStatusResult::Emitted,
            BuildMqttLinkStatus(&mqtt_state, true, mqtt_output,
                                sizeof(mqtt_output), &mqtt_written));
+}
+
+void test_ctrl01_boot_replays_time_without_waiting_for_period() {
+  constexpr char boot[] = "#NODE node-a boot";
+  CHECK_TRUE(IsCtrl01BootLine(boot, sizeof(boot) - 1U));
+  CHECK_TRUE(!IsCtrl01BootLine(nullptr, 0U));
+  CHECK_TRUE(!IsCtrl01BootLine("#NODE node-b boot",
+                               sizeof("#NODE node-b boot") - 1U));
+  CHECK_TRUE(!IsCtrl01BootLine("#NODE node-a boot extra",
+                               sizeof("#NODE node-a boot extra") - 1U));
+
+  TimeSyncSchedule schedule{};
+  InitTimeSyncSchedule(&schedule);
+  char output[kUartLineLimit + 1U]{};
+  size_t written = 0U;
+  CHECK_EQ(TimeEmitResult::Emitted,
+           BuildDueTimeSync(&schedule, 100U, kMinEpochSeconds, output,
+                            sizeof(output), &written));
+  CHECK_EQ(TimeEmitResult::NotDue,
+           BuildDueTimeSync(&schedule, 101U, kMinEpochSeconds, output,
+                            sizeof(output), &written));
+  if (IsCtrl01BootLine(boot, sizeof(boot) - 1U)) RequestTimeSync(&schedule);
+  CHECK_EQ(TimeEmitResult::Emitted,
+           BuildDueTimeSync(&schedule, 102U, kMinEpochSeconds, output,
+                            sizeof(output), &written));
+  TimeSync sync{};
+  CHECK_EQ(Result::Ok, ParseTimeSync(output, written, &sync));
+  CHECK_EQ(1U, sync.sequence);
 }
 
 void test_time_sync_is_immediate_periodic_valid_and_wrap_safe() {
@@ -1142,13 +1260,31 @@ void test_ctrl02_accepts_a_node_a_ack_without_a_timestamp() {
 }  // namespace
 
 int main() {
+#if defined(SCREEN_ROUTING_STARS_FOCUSED_TEST)
+  test_stars_menu_survives_both_esp_roles();
+#elif defined(SCREEN_ROUTING_UART_DIAGNOSTIC_FOCUSED_TEST)
+  test_diagnostic_waits_for_partial_fan_command();
+#elif defined(SCREEN_ROUTING_ACK_FOCUSED_TEST)
+  test_uart_tx_queue_coalesces_snapshots_and_never_mixes_frames();
+  test_uart_tx_queue_full_policy_preserves_accepted_command_ids();
+  test_uart_tx_queue_ack_evicts_stale_snapshot_when_full();
+  test_ack_precedes_unsent_snapshot_and_follows_partial_frame();
+  test_diagnostic_waits_for_partial_fan_command();
+  test_ctrl02_status_heartbeat_requests_resynchronization();
+  test_ctrl01_boot_replays_time_without_waiting_for_period();
+  test_time_sync_is_immediate_periodic_valid_and_wrap_safe();
+  test_ctrl02_forwards_only_valid_ack_and_preserves_result();
+#else
   test_role_routes_are_exact_and_idempotent();
   test_ctrl01_one_menu_delivery_produces_one_uart_command();
+  test_stars_menu_survives_both_esp_roles();
   test_subsecond_clock_accepts_node_b_command_from_same_second();
   test_uart_tx_queue_handles_long_line_and_backpressure_without_blocking();
   test_uart_tx_queue_coalesces_snapshots_and_never_mixes_frames();
   test_uart_tx_queue_full_policy_preserves_accepted_command_ids();
   test_uart_tx_queue_ack_evicts_stale_snapshot_when_full();
+  test_ack_precedes_unsent_snapshot_and_follows_partial_frame();
+  test_diagnostic_waits_for_partial_fan_command();
   test_normalization_preserves_every_menu_field();
   test_normalization_rejects_missing_future_expired_and_oversized_input();
   test_ctrl02_serial_menu_has_one_safe_publish_route();
@@ -1163,12 +1299,14 @@ int main() {
   test_ntp_configuration_is_once_per_wifi_association();
   test_mqtt_link_status_emits_initial_and_changed_state();
   test_ctrl02_status_heartbeat_requests_resynchronization();
+  test_ctrl01_boot_replays_time_without_waiting_for_period();
   test_time_sync_is_immediate_periodic_valid_and_wrap_safe();
   test_ctrl02_consumes_the_node_a_producer_vectors();
   test_ctrl02_accepts_a_legacy_non_ladder_fan_duty();
   test_ctrl02_converges_over_a_frame_rotation();
   test_ctrl02_tracks_the_methane_alarm_across_a_cycle();
   test_ctrl02_accepts_a_node_a_ack_without_a_timestamp();
+#endif
   if (failures == 0) std::puts("screen_routing tests passed");
   return failures == 0 ? 0 : 1;
 }

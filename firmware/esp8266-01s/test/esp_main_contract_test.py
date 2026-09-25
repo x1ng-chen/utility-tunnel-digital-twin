@@ -20,6 +20,14 @@ def function_body(name: str) -> str:
 
 
 class EspMainContractTest(unittest.TestCase):
+    def test_diagnostics_share_the_framed_uart_queue(self):
+        # A direct Serial.println can split MQTT|... JSON between UART chunks.
+        self.assertNotIn("Serial.println(", SOURCE)
+        self.assertNotIn("Serial.printf(", SOURCE)
+        logger = function_body("class DiagnosticLogger")
+        self.assertIn("EnqueueUartTxLine", logger)
+        self.assertEqual(SOURCE.count("Serial.write("), 1)
+
     def test_mqtt_callback_never_writes_ctrl01_uart_synchronously(self):
         writer = function_body("bool writeUartCommand")
         self.assertNotIn("Serial.print(", writer)
@@ -29,6 +37,19 @@ class EspMainContractTest(unittest.TestCase):
     def test_main_loop_drains_the_uart_queue(self):
         loop = function_body("void loop()")
         self.assertIn("pumpUartTxQueue();", loop)
+
+    def test_ctrl01_boot_requests_clock_replay_before_json_filter(self):
+        handler = function_body("void handleSerialLine")
+        self.assertIn("IsCtrl01BootLine(line, length)", handler)
+        self.assertLess(handler.index("IsCtrl01BootLine(line, length)"),
+                        handler.index("if (line[0] != '{')"))
+        self.assertIn("RequestTimeSync(&timeSyncSchedule)", handler)
+
+    def test_clock_enqueue_failure_retries_instead_of_waiting_ten_minutes(self):
+        handler = function_body("void handleNetworkTime")
+        self.assertIn("UartTxEnqueueResult::Queued", handler)
+        self.assertIn("UartTxEnqueueResult::Coalesced", handler)
+        self.assertIn("RequestTimeSync(&timeSyncSchedule)", handler)
 
     def test_ack_classification_parses_the_protocol_instead_of_matching_bytes(self):
         handler = function_body("void handleSerialLine")

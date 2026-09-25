@@ -107,6 +107,11 @@ struct MqttLinkStatusState {
   bool connected;
 };
 
+struct NodeBHeartbeatState {
+  uint32_t last_sequence;
+  bool initialized;
+};
+
 enum class MqttLinkStatusResult : uint8_t {
   Emitted = 0,
   Unchanged,
@@ -163,7 +168,12 @@ bool ShouldConfigureNtp(NtpAssociationState* state, bool wifi_connected);
 
 void InitMqttLinkStatusState(MqttLinkStatusState* state);
 
+bool IsCtrl01BootLine(const char* line, size_t length);
+
 bool IsCtrl02StatusHeartbeat(const char* line, size_t length);
+
+bool ShouldResyncForCtrl02Heartbeat(NodeBHeartbeatState* state,
+                                   const char* line, size_t length);
 
 void RequestMqttLinkStatus(MqttLinkStatusState* state);
 

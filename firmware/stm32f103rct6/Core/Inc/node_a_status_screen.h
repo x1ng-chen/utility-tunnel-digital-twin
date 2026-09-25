@@ -12,6 +12,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "multi_sensor.h"
 #include "ui_model.h"
 
 /* Normal pages rotate every five seconds; the alarm page preempts them. */
@@ -21,6 +22,9 @@
 #define NODE_A_STATUS_REFRESH_MS      1000U
 #define NODE_A_STATUS_CLOCK_TEXT_SIZE    6U
 #define NODE_A_STATUS_ALARM_TEXT_SIZE   32U
+#define NODE_A_STATUS_SHT_COUNT          4U
+#define NODE_A_STATUS_ANALOG_COUNT       7U
+#define NODE_A_STATUS_DIGITAL_COUNT      9U
 
 /* Page palette (RGB565). Declared here, not in the driver, so the host test
  * can assert what the renderer actually asked the panel to show. */
@@ -33,19 +37,44 @@
 
 typedef enum {
   NODE_A_STATUS_PAGE_ENVIRONMENT = 0,
-  NODE_A_STATUS_PAGE_GAS,
+  NODE_A_STATUS_PAGE_GAS_1,
+  NODE_A_STATUS_PAGE_GAS_2,
+  NODE_A_STATUS_PAGE_INPUTS_1,
+  NODE_A_STATUS_PAGE_INPUTS_2,
   NODE_A_STATUS_PAGE_FANS,
   NODE_A_STATUS_PAGE_ALARM
 } NodeAStatusPage;
 
-/* One atomic view of Node A's local state.  node_a.c fills the slow sensor
- * fields from the telemetry block and the fast safety/actuator fields from the
- * display tick, then hands the whole struct to the renderer in one call. */
 typedef struct {
-  /* Environment */
-  uint8_t sht30_online;
+  uint8_t enabled;
+  uint8_t online;
+  SensorQuality quality;
   int16_t temperature_centi_c;
   uint16_t humidity_centi_rh;
+} NodeAStatusSht;
+
+typedef struct {
+  uint8_t enabled;
+  uint8_t online;
+  SensorQuality quality;
+  uint16_t raw;
+} NodeAStatusAnalog;
+
+typedef struct {
+  uint8_t enabled;
+  uint8_t online;
+  SensorQuality quality;
+  /* The planned digital modules are active-low: 1 means the pin is LOW. */
+  uint8_t active_low;
+} NodeAStatusDigital;
+
+/* One atomic view of Node A's local state.  node_a.c copies the sensor bank
+ * and fast safety/actuator state, then hands the struct to the renderer. */
+typedef struct {
+  /* Environment */
+  NodeAStatusSht sht[NODE_A_STATUS_SHT_COUNT];
+  NodeAStatusAnalog analog[NODE_A_STATUS_ANALOG_COUNT];
+  NodeAStatusDigital digital[NODE_A_STATUS_DIGITAL_COUNT];
   uint8_t level_detected;
   uint8_t flame_alarm;
   /* Gas */
@@ -101,6 +130,11 @@ typedef struct {
 } NodeAStatusScreen;
 
 void NodeAStatus_Init(NodeAStatusScreen *screen, uint32_t now_ms);
+
+/* Copy the local 4 + 7 + 9 sensor inventory into one display snapshot; no
+ * sensor bus access or actuator operation occurs in this helper. */
+void NodeAStatus_CaptureInventory(NodeAStatusSnapshot *snapshot,
+                                  const SensorReading *readings, uint8_t count);
 
 /* Select the page for this tick and repaint when the page, the snapshot or the
  * refresh interval changed.  Waiting for the dwell is never allowed to delay

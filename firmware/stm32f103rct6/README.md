@@ -94,7 +94,9 @@ cmake --build --preset NodeA
 ```
 
 烧录文件：`build/NodeA/stm32_controller.bin`
-参考占用：RAM 5744 B / 48 KB（11.69%）、FLASH 56880 B / 256 KB（21.70%）。
+当前 Node A 构建占用：RAM 13272 B / 48 KB（27.00%）、FLASH 69716 B / 256 KB（26.59%）。
+
+Node A 的 128×128 副屏每 5 秒轮播六页：`ENV` 显示本地 SHT-01～04 的温度/湿度；`GAS1/2` 显示规划的 7 路 CO、MQ4、O2 模拟通道；`INPUT1/2` 显示规划的 9 路 MQ2、火焰、水位数字输入；`FAN` 显示两路 PWM、转速及 INA226 电压/电流。报警仍立即接管屏幕。未启用、离线、异常分别显示 `PLAN`、`OFF`、`BAD`；模拟量未经标定，仅显示 `RAW` ADC 计数，数字量显示引脚 `LOW/HIGH`，不把它们误报为浓度或传感器正常状态。
 
 ### CTRL-02 / Node B（主屏 + 摇杆）
 

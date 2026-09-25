@@ -185,6 +185,11 @@ static int test_commands_and_ack_atomicity(void)
   CHECK(MenuCommand_ParseAck(valid_ack, strlen(valid_ack), &ack) == 1U);
   CHECK(MenuCommand_AcceptAck(&context, &ack) == 1U); /* positive match */
   CHECK(MenuCommand_AcceptAck(&context, &ack) == 0U); /* duplicate */
+  CHECK(MenuCommand_Begin(&context, UI_ACTION_LED_BRIGHTNESS, 100U,
+                          1704067200000ULL, line, sizeof(line), &length) == 1U);
+  CHECK(MenuCommand_AcceptResult(&context, "menu-CTRL-02-7-wrong") == 0U);
+  CHECK(MenuCommand_AcceptResult(&context, context.active_command_id) == 1U);
+  CHECK(MenuCommand_AcceptResult(&context, context.active_command_id) == 0U);
   CHECK(MenuCommand_NextBootId(0U, 0x12345678U) != MenuCommand_NextBootId(1U, 0x12345678U));
   MenuCommandTx_Init(&queue);
   CHECK(MenuCommandTx_Enqueue(&queue, "abc", 3U) == 1U);

@@ -156,10 +156,12 @@ static void format_fan_frame(char *frame, uint16_t *length, uint32_t sequence,
   const uint32_t rpm = (fan_index == 0U) ? snapshot->fan1_rpm : snapshot->fan2_rpm;
   const uint8_t duty = (fan_index == 0U) ? snapshot->actuators.fan1_pwm_percent
                                          : snapshot->actuators.fan2_pwm_percent;
+  const uint8_t relay_active = (uint8_t)((snapshot->actuators.relay_on != 0U) &&
+                                          (duty != 0U));
   /* Tach capture is independent of INA226. A missing power monitor must not
    * erase a valid RPM measurement; conversely, nonzero duty with no pulses is
    * explicitly suspect rather than reported as healthy zero speed. */
-  const char *rpm_quality = (duty == 0U || rpm != 0U) ? "good" : "suspect";
+  const char *rpm_quality = (relay_active == 0U || rpm != 0U) ? "good" : "suspect";
   int32_t current_abs = power->current_microamps;
   const char *current_sign = "";
   int written;
@@ -181,7 +183,7 @@ static void format_fan_frame(char *frame, uint16_t *length, uint32_t sequence,
     (unsigned long)((power->bus_microvolts % 1000000UL) / 1000UL), quality,
     asset, current_sign, (long)(current_abs / 1000L), (long)(current_abs % 1000L), quality,
     asset, (unsigned long)rpm, rpm_quality,
-    (unsigned int)snapshot->actuators.relay_on, (unsigned int)duty,
+    (unsigned int)relay_active, (unsigned int)duty,
     (unsigned int)(snapshot->auto_ventilation_active ? 1U : 0U),
     (unsigned int)(snapshot->cooldown_active ? 1U : 0U),
     (power->power_microwatts < 0) ? "-" : "",
@@ -324,6 +326,28 @@ static void format_actuator_frame(char *frame, uint16_t *length, uint32_t sequen
  * the single-frame rotation step the board emits.  `index` is always the
  * rotation slot itself (0..NODE_A_TELEMETRY_FRAME_COUNT-1), which is why the
  * frame order here is the rotation order. */
+static void append_sht_reading(char *frame, uint16_t *length,
+                               const NodeATelemetrySnapshot *snapshot,
+                               const char *code)
+{
+  const SensorReading *sht = find_reading_by_code(snapshot->sensors,
+                                                snapshot->sensor_count, code);
+  if (sht == NULL || *length < 4U) return;
+  const uint16_t offset = (uint16_t)(*length - 4U); /* replace ]}\r\n */
+  int32_t temperature = sht->temperature_centi_c;
+  const char *sign = temperature < 0 ? "-" : "";
+  if (temperature < 0) temperature = -temperature;
+  const char *quality = sht->online && sht->quality == SENSOR_QUALITY_GOOD
+                          ? "good" : "missing";
+  const int n = snprintf(frame + offset, TELEMETRY_LINE_LIMIT - offset,
+    ",{\"assetCode\":\"%s\",\"metric\":\"temperature\",\"value\":%s%ld.%02ld,\"unit\":\"degC\",\"quality\":\"%s\"},"
+    "{\"assetCode\":\"%s\",\"metric\":\"humidity\",\"value\":%u.%02u,\"unit\":\"%%RH\",\"quality\":\"%s\"}]}\r\n",
+    code, sign, (long)(temperature / 100), (long)(temperature % 100), quality,
+    code, (unsigned)(sht->humidity_centi_rh / 100U),
+    (unsigned)(sht->humidity_centi_rh % 100U), quality);
+  write_frame(frame, length, n < 0 ? n : (int)offset + n);
+}
+
 static void format_indexed_frame(char *frame, uint16_t *length, uint32_t sequence,
                                  const NodeATelemetrySnapshot *snapshot,
                                  uint8_t index)
@@ -342,12 +366,15 @@ static void format_indexed_frame(char *frame, uint16_t *length, uint32_t sequenc
       break;
     case 3U:
       format_gas_status_frame(frame, length, sequence, snapshot);
+      append_sht_reading(frame, length, snapshot, "SHT-02");
       break;
     case 4U:
       format_gas_raw_frame(frame, length, sequence, snapshot);
+      append_sht_reading(frame, length, snapshot, "SHT-03");
       break;
     default:
       format_actuator_frame(frame, length, sequence, snapshot);
+      append_sht_reading(frame, length, snapshot, "SHT-04");
       break;
   }
 }

@@ -112,9 +112,17 @@ static int check_selectable_command_options(void)
 
   enter_page(&state, 4U);
   (void)UiState_Handle(&state, UI_EVT_DOWN, 40U);
-  (void)UiState_Handle(&state, UI_EVT_PRESS, 41U);
+  next = UiState_Handle(&state, UI_EVT_PRESS, 41U);
+  CHECK(next.kind == UI_EFFECT_SEND_COMMAND);
+  CHECK(next.action == UI_ACTION_LED_BRIGHTNESS);
+  CHECK(next.value == 25U);
+
+  enter_page(&state, 4U);
+  (void)UiState_Handle(&state, UI_EVT_DOWN, 42U);
+  (void)UiState_Handle(&state, UI_EVT_RIGHT, 43U);
+  CHECK(state.option_editing == 1U);
   (void)UiState_Handle(&state, UI_EVT_UP, 42U);
-  next = UiState_Handle(&state, UI_EVT_PRESS, 43U);
+  next = UiState_Handle(&state, UI_EVT_PRESS, 44U);
   CHECK(next.kind == UI_EFFECT_SEND_COMMAND);
   CHECK(next.action == UI_ACTION_LED_BRIGHTNESS);
   CHECK(next.value == 50U);
