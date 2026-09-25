@@ -74,6 +74,7 @@
 - 四块 SHT30、两块 INA226 的物理接线已完成；SHT30 有短时通信与屏幕证据。INA226 的 R010 分流电阻已确认，但读数精度未通过独立测量校准。
 - 液位 L01 曾完成干/湿触发和遥测；L02–L05 为规划通道，不能把五路规划当作五路实测。CO、O2、MQ、火焰等后续传感器仍须逐路核对供电、电平、极性并做正常/触发/断线三态试验。
 - [Carrier32 展示草稿说明](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/hardware/carrier32/docs/visual-demo.md)和 [.pcba-workflow 门禁状态](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/.pcba-workflow/program-state.json)明确未通过的设计、采购、布线与制造门禁；**不要依据这些草稿下单打板**。
+- 其他独立工作树已按原样归档到 [网关气体字段 WIP](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/worktree/backend-cloud)、[三维镜头预览 WIP](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/worktree/frontend)、[早期气体 ADC WIP](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/worktree/firmware-hardware) 和 [旧本地 main 快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/archive/legacy-local-main-20260926)。这些分支**未合并到默认分支，也不是新增的整机验收结论**。
 
 > [!CAUTION]
 > 项目负责人已明确确认：历史提交中的 Wi-Fi 密码是经授权用于隔离台架联调的配置，不作为误提交或安全事件处理。IoTDA 设备密钥属于独立的云端凭据；在其授权范围尚未确认前，仍建议轮换并只保存在受控本地环境。
