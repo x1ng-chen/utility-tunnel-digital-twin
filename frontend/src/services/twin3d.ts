@@ -1,4 +1,5 @@
 import type { Alert, Asset, TwinModelRelease } from '../types';
+import v13AssetBindings from './v13AssetBindings.json';
 
 export type TwinVisualState = 'normal' | 'warning' | 'alarm' | 'unknown';
 
@@ -59,9 +60,16 @@ export function resolveTwinVisualState(asset: Asset, alerts: Alert[]): TwinVisua
   return 'unknown';
 }
 
-export function modelNodeNames(asset: Asset) {
-  const v13LevelProbe = /^LEVEL-L0[1-5]$/.test(asset.code) ? `${asset.code}-探头` : '';
-  return [asset.mesh, asset.code, `ASSET_${asset.code.replaceAll('-', '_')}`, v13LevelProbe].filter(Boolean);
+export function v13ModelNodeName(code: string) {
+  return (v13AssetBindings as Record<string, string>)[code] || null;
+}
+
+export function modelNodeNames(asset: Asset, version: 'release' | 'v13' = 'release') {
+  if (version === 'v13') {
+    const node = v13ModelNodeName(asset.code);
+    return node ? [node] : [];
+  }
+  return [asset.mesh, asset.code, `ASSET_${asset.code.replaceAll('-', '_')}`].filter(Boolean);
 }
 
 /**

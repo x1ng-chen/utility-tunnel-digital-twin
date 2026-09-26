@@ -1011,6 +1011,12 @@ test('默认 V13 模型分别定位五个液位探头并可切回已启用版本
   await expect(page.getByText('V13 当前模型', { exact: true }).first()).toBeVisible();
   await expect(page.locator('.twin-scene')).toHaveAttribute('data-model-state', 'loaded', { timeout: 60_000 });
   await expect(page.locator('.twin-model-readiness')).toContainText('五个液位探头可分别定位');
+  await expect(page.locator('.twin-model-contract')).toContainText('12 / 19 个设备在 V13 模型中已定位');
+  await expect(page.locator('.twin-model-binding-list')).toContainText('ENV-01');
+  for (const [code, node] of [['LED-01', 'LED-STRIP'], ['DISP-01', 'TFT-01'], ['FAN-02', 'FAN-02-上框']]) {
+    await page.locator('.twin-quick-switch-list').getByRole('button', { name: new RegExp(`设备编码 ${code}`) }).click();
+    await expect(page.locator('.twin-inspector-grid')).toContainText(node);
+  }
   const cards = page.locator('.level-station-card');
   const cameraTargets = new Set();
   for (let index = 1; index <= 5; index += 1) {

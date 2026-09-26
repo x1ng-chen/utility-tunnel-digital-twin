@@ -10,25 +10,28 @@ import { inspectGlb } from './glb-contract.mjs';
 const script = resolve('tools/check-twin-model-artifacts.mjs');
 const seed = readFileSync('backend/operations/management/commands/seed_demo.py','utf8');
 const frontend = readFileSync('frontend/src/stores/operations.ts','utf8');
+const v13Bindings = readFileSync('frontend/src/services/v13AssetBindings.json','utf8');
+const v13NodeNames = [...new Set(Object.values(JSON.parse(v13Bindings)))];
 const contract = [...seed.matchAll(/'code':\s*'([^']+)'[\s\S]*?'mesh':\s*'([^']+)'/g)].map(m => ({asset_id:m[1],meshNames:[m[2]]}));
-function binary(emptyLast=false, runtime=false) {
-  const names = runtime ? Array.from({length:5},(_,index)=>`LEVEL-L0${index+1}-探头`) : contract.map(a=>a.meshNames[0]);
-  const doc = {asset:{version:'2.0'}, nodes:names.map((name,i) => ({name, ...(emptyLast && i===names.length-1 ? {} : {mesh:0})})), meshes:[{primitives:[{}]}]};
+function binary(emptyLast=false, runtime=false, missingV13Mapped=false) {
+  const names = runtime ? v13NodeNames : contract.map(a=>a.meshNames[0]);
+  const doc = {asset:{version:'2.0'}, nodes:names.map((name,i) => ({name, ...(emptyLast && i===names.length-1 || missingV13Mapped && i===0 ? {} : {mesh:0})})), meshes:[{primitives:[{}]}]};
   const text = JSON.stringify(doc);
   const body = Buffer.from(text+' '.repeat((4-Buffer.byteLength(text)%4)%4));
   const b = Buffer.alloc(20+body.length);
   b.write('glTF'); b.writeUInt32LE(2,4); b.writeUInt32LE(b.length,8); b.writeUInt32LE(body.length,12); b.writeUInt32LE(0x4e4f534a,16); body.copy(b,20);
   return b;
 }
-for (const scenario of ['valid','missing-map','missing-candidate','pointer','wrong-hash','empty-binding','wrong-runtime-hash','missing-level','wrong-source-hash']) {
+for (const scenario of ['valid','missing-map','missing-candidate','pointer','wrong-hash','empty-binding','wrong-runtime-hash','missing-level','missing-v13-mapped','wrong-source-hash']) {
   test(`release gate ${scenario}`, () => {
     const root = mkdtempSync(join(tmpdir(),'ut-model-gate-'));
     const put = (path,data) => { const file=join(root,path); mkdirSync(dirname(file),{recursive:true}); writeFileSync(file,data); };
     try {
       put('backend/operations/management/commands/seed_demo.py',seed);
       put('frontend/src/stores/operations.ts',frontend);
+      put('frontend/src/services/v13AssetBindings.json',v13Bindings);
       put('model/README.md','V13 frontend/public/models/utility-tunnel.glb');
-      const runtime = binary(scenario==='missing-level',true);
+      const runtime = binary(scenario==='missing-level',true,scenario==='missing-v13-mapped');
       const rollback = binary();
       const source = Buffer.from('fixture BLEND source');
       put('model/utility-tunnel-annular-v13-candidate.blend',source);
@@ -41,7 +44,7 @@ for (const scenario of ['valid','missing-map','missing-candidate','pointer','wro
         runtimeSha256:scenario==='wrong-runtime-hash'?'incorrect':inspectGlb(runtime).sha256,
         rollback:'frontend/public/models/utility-tunnel-v07.glb',
         rollbackSha256:inspectGlb(rollback).sha256,
-        visibleMeshCount:5,
+        visibleMeshCount:inspectGlb(runtime).nodeCount,
         levelNodes:Array.from({length:5},(_,index)=>`LEVEL-L0${index+1}-探头`),
       }));
       const candidate=binary(scenario==='empty-binding');

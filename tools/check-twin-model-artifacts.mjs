@@ -5,6 +5,7 @@ import { inspectGlb, missingBindings } from './glb-contract.mjs';
 const runtimePath = 'frontend/public/models/utility-tunnel.glb';
 const rollbackPath = 'frontend/public/models/utility-tunnel-v07.glb';
 const runtimeManifestPath = 'model/v13-runtime-handoff.json';
+const v13BindingsPath = 'frontend/src/services/v13AssetBindings.json';
 const candidatePath = 'model/utility-tunnel-annular-v09-candidate.glb';
 const candidateMapPath = 'model/asset-map-v09-candidate.json';
 const strict = process.argv.includes('--require-candidate');
@@ -45,10 +46,26 @@ function mappedAssets(assetMap) {
 const runtime = parseGlb(runtimePath);
 const rollback = parseGlb(rollbackPath);
 const runtimeManifest = existsSync(runtimeManifestPath) ? JSON.parse(readFileSync(runtimeManifestPath, 'utf8')) : null;
+const v13Bindings = existsSync(v13BindingsPath) ? JSON.parse(readFileSync(v13BindingsPath, 'utf8')) : null;
 const candidate = parseGlb(candidatePath);
 const contract = currentAssetContract();
 const readme = readFileSync(modelReadmePath, 'utf8');
 const failures = [];
+
+if (!v13Bindings || !Object.keys(v13Bindings).length) failures.push('缺少 V13 前端资产节点映射');
+else {
+  const assetCodes = new Set(contract.map((asset) => asset.code));
+  const entries = Object.entries(v13Bindings);
+  const unknownCodes = entries.filter(([code]) => !assetCodes.has(code)).map(([code]) => code);
+  if (unknownCodes.length) failures.push(`V13 映射引用了台账中不存在的资产：${unknownCodes.join('、')}`);
+  const duplicateNodes = entries.map(([, node]) => node).filter((node, index, nodes) => nodes.indexOf(node) !== index);
+  if (duplicateNodes.length) failures.push(`V13 多个资产绑定同一个节点：${[...new Set(duplicateNodes)].join('、')}`);
+  const missingNodes = runtime.available ? entries.filter(([, node]) => !runtime.bindable.has(node)).map(([code, node]) => `${code}=${node}`) : [];
+  if (missingNodes.length) failures.push(`V13 资产映射引用了模型中不存在的网格：${missingNodes.join('、')}`);
+  const expectedLevels = Array.from({ length: 5 }, (_, index) => `LEVEL-L0${index + 1}`);
+  const missingLevelMappings = expectedLevels.filter((code) => v13Bindings[code] !== `${code}-探头`);
+  if (missingLevelMappings.length) failures.push(`V13 五个液位测点映射不完整：${missingLevelMappings.join('、')}`);
+}
 
 if (!runtime.available) failures.push(`网页运行时模型不可用：${runtime.reason}`);
 if (runtime.available && runtime.bytes > maxModelBytes) failures.push(`网页运行时模型 ${(runtime.bytes / 1024 / 1024).toFixed(1)}MB 超过 32MB 浏览器发布上限`);
@@ -105,6 +122,6 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`三维模型交付检查通过：V13 网页运行时 ${(runtime.bytes / 1024 / 1024).toFixed(1)}MB，5/5 个液位探头可定位；其他资产按实际映射状态显示。`);
+console.log(`三维模型交付检查通过：V13 网页运行时 ${(runtime.bytes / 1024 / 1024).toFixed(1)}MB，${Object.keys(v13Bindings).length}/${contract.length} 个台账资产有确认节点（含 5/5 个液位探头）；其余资产显示为未映射。`);
 if (candidate.available) console.log(`V09 候选：${(candidate.bytes / 1024 / 1024).toFixed(1)}MB，${candidate.nodeCount} 个 GLB 节点；${candidateNote}。`);
 else console.log(`V09 候选暂不参与二进制门禁：${candidateNote}；网页使用 V13，已启用版本可单独切换。`);

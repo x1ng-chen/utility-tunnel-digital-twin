@@ -8,7 +8,7 @@
 
 `frontend/public/models/utility-tunnel.glb` 从用户提供、与仓库归档 SHA256 相同的 V13 BLEND 导出。Blender 5.2.2 仅导出当前可见且参与渲染的 829 个网格；72 个有意隐藏的围护和屋面部件未导出。运行 GLB 有 829 个唯一命名网格，五个 `LEVEL-L01-探头` 至 `LEVEL-L05-探头` 均可分别绑定和定位。源文件与运行文件的哈希、命令及节点清单在 `v13-runtime-handoff.json`，导出脚本为 `tools/export_v13_runtime.py`。
 
-网页默认加载 V13；可切换到此前已启用的模型版本，静态 V07 回退文件是 `frontend/public/models/utility-tunnel-v07.glb`。V13 没有覆盖旧台账中所有设备的节点名称，未绑定资产明确显示为缺失映射，不在新模型中生成伪造定位点。模型替换属于网页可视化，不改变实体接口和安全验收状态。
+网页默认加载 V13；可切换到此前已启用的模型版本，静态 V07 回退文件是 `frontend/public/models/utility-tunnel-v07.glb`。前端的 `frontend/src/services/v13AssetBindings.json` 明确列出 12 个可确认的资产节点，包括 5 个独立液位探头。`FAN-02` 以四线排风机上框作为定位和交互锚点。旧台账的 `SEEP-W01`、`MOIST-01`、`ENV-01`、`GAS-01`、`VIB-01`、`FAN-01`、`PCB-01` 在 V13 中没有可确认的同一实物节点：浮球不等于旧水位传感器，SHT30 不等于 DHT11，气体管路不等于复合监测节点，四线风机也不等于旧双路驱动小风扇。未绑定资产明确显示为缺失映射，不在新模型中生成伪造定位点。模型替换属于网页可视化，不改变实体接口和安全验收状态。
 
 ## 前一审查归档：V12（2026-09-10，重建进行中）
 
