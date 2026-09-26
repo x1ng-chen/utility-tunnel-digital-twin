@@ -1,10 +1,14 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { inspectGlb, missingBindings } from './glb-contract.mjs';
 
 const runtimePath = 'frontend/public/models/utility-tunnel.glb';
+const rollbackPath = 'frontend/public/models/utility-tunnel-v07.glb';
+const runtimeManifestPath = 'model/v13-runtime-handoff.json';
 const candidatePath = 'model/utility-tunnel-annular-v09-candidate.glb';
 const candidateMapPath = 'model/asset-map-v09-candidate.json';
 const strict = process.argv.includes('--require-candidate');
+const requireSource = process.argv.includes('--require-source');
 const seedPath = 'backend/operations/management/commands/seed_demo.py';
 const modelReadmePath = 'model/README.md';
 const maxModelBytes = 32 * 1024 * 1024;
@@ -39,6 +43,8 @@ function mappedAssets(assetMap) {
 }
 
 const runtime = parseGlb(runtimePath);
+const rollback = parseGlb(rollbackPath);
+const runtimeManifest = existsSync(runtimeManifestPath) ? JSON.parse(readFileSync(runtimeManifestPath, 'utf8')) : null;
 const candidate = parseGlb(candidatePath);
 const contract = currentAssetContract();
 const readme = readFileSync(modelReadmePath, 'utf8');
@@ -46,9 +52,29 @@ const failures = [];
 
 if (!runtime.available) failures.push(`网页运行时模型不可用：${runtime.reason}`);
 if (runtime.available && runtime.bytes > maxModelBytes) failures.push(`网页运行时模型 ${(runtime.bytes / 1024 / 1024).toFixed(1)}MB 超过 32MB 浏览器发布上限`);
-const missingRuntimeNodes = runtime.available ? missingBindings(runtime, contract) : contract;
-if (missingRuntimeNodes.length) failures.push(`运行时模型缺少资产节点：${missingRuntimeNodes.map((asset) => `${asset.code}=${asset.mesh}`).join('、')}`);
-if (!readme.includes('V07') || !readme.includes('asset-map-v07-final.json')) failures.push('模型 README 未声明已验证的 V07 网页运行时基线');
+if (!rollback.available) failures.push(`V07 回退模型不可用：${rollback.reason}`);
+const missingRollbackNodes = rollback.available ? missingBindings(rollback, contract) : contract;
+if (missingRollbackNodes.length) failures.push(`V07 回退模型缺少资产节点：${missingRollbackNodes.map((asset) => asset.code).join('、')}`);
+if (!runtimeManifest) failures.push('缺少 V13 运行模型同源导出记录');
+else {
+  if (runtimeManifest.runtime !== runtimePath) failures.push('V13 运行模型路径与导出记录不一致');
+  if (runtime.available && runtime.sha256 !== runtimeManifest.runtimeSha256) failures.push('V13 运行模型 SHA-256 与导出记录不一致');
+  if (runtime.available && runtime.nodeCount !== runtimeManifest.visibleMeshCount) failures.push('V13 运行模型节点数与可见网格导出记录不一致');
+  if (runtimeManifest.rollback !== rollbackPath || rollback.available && runtimeManifest.rollbackSha256 !== rollback.sha256) failures.push('V07 回退模型 SHA-256 与导出记录不一致');
+  const expectedLevels = Array.from({ length: 5 }, (_, index) => `LEVEL-L0${index + 1}-探头`);
+  if (JSON.stringify(runtimeManifest.levelNodes) !== JSON.stringify(expectedLevels)) failures.push('V13 五个测点的导出契约不完整');
+  const missingLevels = runtime.available ? expectedLevels.filter((name) => !runtime.bindable.has(name)) : expectedLevels;
+  if (missingLevels.length) failures.push(`V13 运行模型缺少液位探头：${missingLevels.join('、')}`);
+  if (requireSource) {
+    if (!existsSync(runtimeManifest.source)) failures.push('V13 BLEND 源文件不存在');
+    else {
+      const source = readFileSync(runtimeManifest.source);
+      if (source.toString('utf8', 0, 80).startsWith('version https://git-lfs.github.com/spec/v1')) failures.push('V13 BLEND 源文件 LFS 对象未下载');
+      else if (createHash('sha256').update(source).digest('hex') !== runtimeManifest.sourceSha256) failures.push('V13 BLEND 源文件 SHA-256 与导出记录不一致');
+    }
+  }
+}
+if (!readme.includes('V13') || !readme.includes('frontend/public/models/utility-tunnel.glb')) failures.push('模型 README 未声明 V13 前端运行时模型');
 
 let candidateReady = false;
 if (strict && !candidate.available) failures.push(`候选模型不可用：${candidate.reason}`);
@@ -79,6 +105,6 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`三维模型交付检查通过：网页运行时 ${(runtime.bytes / 1024 / 1024).toFixed(1)}MB，${contract.length}/${contract.length} 个资产节点可定位。`);
+console.log(`三维模型交付检查通过：V13 网页运行时 ${(runtime.bytes / 1024 / 1024).toFixed(1)}MB，5/5 个液位探头可定位；其他资产按实际映射状态显示。`);
 if (candidate.available) console.log(`V09 候选：${(candidate.bytes / 1024 / 1024).toFixed(1)}MB，${candidate.nodeCount} 个 GLB 节点；${candidateNote}。`);
-else console.log(`V09 候选暂不参与二进制门禁：${candidateNote}；网页继续使用已验证的 V07。`);
+else console.log(`V09 候选暂不参与二进制门禁：${candidateNote}；网页使用 V13，已启用版本可单独切换。`);

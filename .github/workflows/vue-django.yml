@@ -53,10 +53,10 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
-      - name: Fetch the candidate package from LFS (fail closed)
-        run: git lfs pull --include="model/utility-tunnel-annular-v09-candidate.*,model/previews/v09-*.png" --exclude=""
+      - name: Fetch candidate and V13 source from LFS (fail closed)
+        run: git lfs pull --include="model/utility-tunnel-annular-v09-candidate.*,model/previews/v09-*.png,model/utility-tunnel-annular-v13-candidate.blend" --exclude=""
       - run: node --test tools/glb-contract.test.mjs tools/model-gate.test.mjs
-      - run: node tools/check-twin-model-artifacts.mjs --require-candidate
+      - run: node tools/check-twin-model-artifacts.mjs --require-candidate --require-source
       - run: node tools/model-package.mjs
   repository-safety:
     name: Repository safety scan
@@ -64,9 +64,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          # Keep CI deterministic when optional candidate-model LFS objects are
-          # unavailable; the model gate validates the V07 runtime and reports
-          # an explicit V08 candidate deferral instead of failing checkout.
+          # The frontend runtime GLB is checked in directly. Historical and
+          # optional model archives remain in LFS and are audited separately.
           lfs: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:

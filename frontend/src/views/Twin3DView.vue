@@ -63,7 +63,7 @@ const modelReport = ref<TwinModelBindingReport>({ mode: 'fallback', expectedCoun
 const serverModelReadiness = ref<TwinModelReadinessResponse | null>(null);
 const activeModelUrl = ref<string>();
 const modelSource = ref<'checking' | 'active' | 'preview' | 'candidate' | 'unavailable'>('checking');
-const showV13Candidate = computed(() => route.query.model === 'v13');
+const showV13Candidate = computed(() => route.query.model !== 'v07');
 let modelRequestToken = 0;
 let modelObjectUrl: string | undefined;
 const filterOptions: Array<{ value: 'all' | TwinVisualState; label: string }> = [
@@ -74,7 +74,7 @@ const selectedModelNodeLabel = computed(() => {
   const asset = selectedAsset.value;
   if (!asset) return '待绑定';
   if (modelSource.value !== 'candidate') return asset.mesh || '待绑定';
-  if (!modelReport.value.boundCodes.includes(asset.code)) return 'V13 预览未映射';
+  if (!modelReport.value.boundCodes.includes(asset.code)) return 'V13 模型未映射';
   return /^LEVEL-L0[1-5]$/.test(asset.code) ? `${asset.code}-探头` : asset.code;
 });
 const stationCards = computed(() => levelStationCards(store.assets, store.alerts, store.telemetry, store.hardwareBindings, store.source, store.offline, now.value.getTime()));
@@ -104,7 +104,7 @@ const modelDeliveryCount = computed(() => modelSource.value === 'candidate' ? mo
 const modelDeliveryTotal = computed(() => modelSource.value === 'candidate' ? modelReport.value.expectedCount : serverModelReadiness.value?.summary.activeAssetCount ?? localModelReadiness.value.activeAssetCount);
 const nodeMappingsComplete = computed(() => modelDeliveryCount.value >= modelDeliveryTotal.value && modelDeliveryTotal.value > 0);
 const modelDeliveryLabel = computed(() => {
-  if (modelSource.value === 'candidate') return 'V13 设计预览';
+  if (modelSource.value === 'candidate') return 'V13 当前模型';
   if (modelSource.value === 'checking') return '正在验证模型版本';
   if (modelSource.value === 'unavailable') return '模型文件暂不可用';
   if (modelSource.value === 'preview') return nodeMappingsComplete.value ? '等待启用模型版本' : `待补齐 ${Math.max(modelDeliveryTotal.value - modelDeliveryCount.value, 0)} 个节点`;
@@ -114,8 +114,8 @@ const modelDeliveryLabel = computed(() => {
 });
 const modelDeliveryHint = computed(() => {
   if (modelSource.value === 'candidate') return modelReport.value.mode === 'fallback'
-    ? 'V13 候选 GLB 尚未加载；请检查预览文件和网络。'
-    : 'V13 候选 GLB 仅供设计预览；五个液位探头可分别定位。原始 BLEND 与已归档 GLB 尚未完成同源重导出，其余未绑定设备不按实体模型定位。';
+    ? 'V13 模型尚未加载；请检查模型文件和网络。'
+    : '当前加载由 V13 BLEND 导出的模型；五个液位探头可分别定位。其余未绑定设备仍按缺失节点显示，待资产映射补齐。';
   if (modelSource.value === 'checking') return '正在从服务端核验启用模型版本，暂不把预览场景标记为实体模型。';
   if (modelSource.value === 'unavailable') return '已启用的实体模型文件暂时无法获取，系统已切换到可交互预览，未将预览误标为实体模型。请检查模型存储与网络后重新检测。';
   if (modelSource.value === 'preview') return nodeMappingsComplete.value
@@ -162,8 +162,8 @@ function selectPreset(zone: string) {
 function retryModel() { scene.value?.reloadModel(); }
 function toggleModelVersion() {
   const query = { ...route.query };
-  if (showV13Candidate.value) delete query.model;
-  else query.model = 'v13';
+  if (showV13Candidate.value) query.model = 'v07';
+  else delete query.model;
   void router.replace({ query });
 }
 function receiveModelReport(report: TwinModelBindingReport) { modelReport.value = report; }
@@ -172,17 +172,17 @@ async function refreshModelReadiness() {
   if (showV13Candidate.value) {
     serverModelReadiness.value = null;
     releaseModelObjectUrl();
-    activeModelUrl.value = '/models/utility-tunnel-v13-candidate.glb';
+    activeModelUrl.value = '/models/utility-tunnel.glb';
     modelSource.value = 'candidate';
     return;
   }
   modelSource.value = store.source !== 'api' || store.offline ? 'preview' : 'checking';
-  if (store.source !== 'api' || store.offline) { serverModelReadiness.value = null; releaseModelObjectUrl(); return; }
+  if (store.source !== 'api' || store.offline) { serverModelReadiness.value = null; releaseModelObjectUrl(); activeModelUrl.value = '/models/utility-tunnel-v07.glb'; return; }
   try {
     const readiness = (await api.twinModelReadiness()).data as TwinModelReadinessResponse;
     if (requestToken !== modelRequestToken) return;
     serverModelReadiness.value = readiness;
-    if (!readiness.activeRelease) { modelSource.value = 'preview'; releaseModelObjectUrl(); return; }
+    if (!readiness.activeRelease) { modelSource.value = 'preview'; releaseModelObjectUrl(); activeModelUrl.value = '/models/utility-tunnel-v07.glb'; return; }
     try {
       const response = await api.twinModelFile(readiness.activeRelease.id);
       if (requestToken !== modelRequestToken) return;
@@ -314,7 +314,7 @@ onBeforeUnmount(() => {
   <AppShell>
     <section class="twin-title section-title">
       <div><span class="eyebrow light">实体设备可视化</span><h1>三维孪生中心</h1><p>以真实实体模型定位设备、告警与工单；三维状态与运行数据实时同步。</p></div>
-      <div class="twin-title-actions"><span :class="['twin-live', { blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><i />{{ modelDeliveryLabel }}</span><button type="button" class="outline-button" @click="toggleModelVersion">{{ showV13Candidate ? '返回当前模型' : '预览 V13 模型' }}</button><button v-if="modelReport.mode === 'fallback' || modelSource === 'unavailable'" type="button" class="outline-button twin-model-retry-top" @click="retryModel"><RefreshCw />检测模型</button><button class="primary-button compact-button" @click="resetView"><RotateCcw />重置视角</button><button class="outline-button" @click="fullscreen"><Expand />全屏查看</button></div>
+      <div class="twin-title-actions"><span :class="['twin-live', { blocked: !modelDeliveryReady && modelSource !== 'candidate' }]" :title="modelDeliveryHint"><i />{{ modelDeliveryLabel }}</span><button type="button" class="outline-button" @click="toggleModelVersion">{{ showV13Candidate ? '查看已启用版本' : '返回 V13 模型' }}</button><button v-if="modelReport.mode === 'fallback' || modelSource === 'unavailable'" type="button" class="outline-button twin-model-retry-top" @click="retryModel"><RefreshCw />检测模型</button><button class="primary-button compact-button" @click="resetView"><RotateCcw />重置视角</button><button class="outline-button" @click="fullscreen"><Expand />全屏查看</button></div>
     </section>
     <section class="twin-workspace">
       <div class="twin-auto-locate" role="group" aria-label="新告警自动定位">
@@ -324,7 +324,7 @@ onBeforeUnmount(() => {
       <article ref="stage" :class="['twin-stage-panel', { 'twin-fullscreen-active': fullscreenActive }]" @pointerdown.capture="pauseAutoLocate" @wheel.capture.passive="pauseAutoLocate" @keydown.capture="pauseAutoLocate" @pointermove="onStagePointerMove" @pointerdown="onStagePointerDown" @pointerup="onStagePointerUp" @pointerleave="onStagePointerLeave">
         <nav class="twin-preset-hud" aria-label="三维视角预设"><span><Camera />视角预设</span><button v-for="preset in ['总览','电力舱','燃气舱','水浸点']" :key="preset" @click="selectPreset(preset)">{{ preset }}</button></nav>
         <aside class="twin-risk-hud" aria-label="风险设备列表"><strong>风险设备 · {{ riskAssets.length }} 台</strong><button v-for="asset in riskAssets" :key="asset.id" type="button" :aria-pressed="selectedCode === asset.code" :title="asset.name" @click="select(asset.code)"><i :class="resolveTwinVisualState(asset, store.alerts)" /><span>{{ asset.code }}</span><small>{{ asset.name }}</small></button><p v-if="!riskAssets.length">当前无风险设备</p></aside>
-        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" :model-url="activeModelUrl" :model-enabled="modelSource === 'active' || modelSource === 'preview' || modelSource === 'candidate'" @select="select" @model-report="receiveModelReport" />
+        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" :model-url="activeModelUrl" :model-enabled="modelSource === 'active' || modelSource === 'preview' || modelSource === 'candidate'" :show-unbound-markers="modelSource !== 'candidate'" @select="select" @model-report="receiveModelReport" />
         <div v-if="selectedAsset" class="twin-focus-status" aria-live="polite"><span :class="resolveTwinVisualState(selectedAsset, store.alerts)"><i />{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span><b :title="selectedAsset.name">{{ selectedAssetName }}</b><small>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</small><div v-if="riskAssets.length" class="twin-risk-patrol"><em>{{ riskPatrolLabel }}</em><button type="button" aria-label="巡检上一异常设备" @click="inspectRisk(-1)">← 上一异常</button><button type="button" aria-label="巡检下一异常设备" @click="inspectRisk(1)">下一异常 →</button></div></div>
         <nav class="twin-quick-switch" aria-label="场景内设备切换" @pointerenter="onQuickSwitchPointerMove" @pointerdown.capture="onQuickSwitchPointerDown" @pointermove.capture="onQuickSwitchPointerMove" @pointerup.capture="onQuickSwitchPointerEnd" @pointercancel.capture="onQuickSwitchPointerEnd" @mousedown.stop>
           <div class="twin-quick-switch-tools"><div class="twin-quick-switch-heading"><span>设备快速切换 · {{ visibleAssets.length }}/{{ store.assets.length }}</span><b>{{ selectedAssetName || '请选择设备' }}</b></div><div class="twin-switch-filters" role="group" aria-label="按运行状态筛选设备"><button v-for="filter in filterOptions" :key="filter.value" :class="{ selected: stateFilter === filter.value }" type="button" @pointerdown.stop @click.stop="stateFilter = filter.value">{{ filter.label }}</button></div></div>
@@ -343,7 +343,7 @@ onBeforeUnmount(() => {
         <template v-if="selectedAsset">
           <header><div><span class="eyebrow">当前设备</span><h2 :title="selectedAsset.name">{{ selectedAssetName }}</h2><code>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</code></div><span :class="['twin-state-chip', resolveTwinVisualState(selectedAsset, store.alerts)]">{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span></header>
           <section :class="['twin-model-readiness', modelReport.mode, modelSource]"><span>实体模型接入</span><div><b>{{ modelSource === 'unavailable' ? '模型文件不可用' : modelSource === 'checking' ? '正在核验模型' : modelReport.mode === 'loaded' ? '模型已加载' : '预览场景' }}</b><strong>{{ modelBindingText }}</strong></div><p>{{ modelDeliveryHint }}</p><button v-if="modelReport.mode === 'fallback' || modelSource === 'unavailable'" type="button" class="twin-model-retry" @click="retryModel">重新检测模型</button></section>
-          <section :class="['twin-model-contract', { ready: modelDeliveryReady, blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><span>模型交付检查</span><b>{{ modelDeliveryLabel }}</b><p>{{ modelDeliveryCount }} / {{ modelDeliveryTotal }} {{ modelSource === 'candidate' ? '个设备在 V13 预览中已定位' : '个设备已具备标准节点名称' }}</p></section>
+          <section :class="['twin-model-contract', { ready: modelDeliveryReady, blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><span>模型交付检查</span><b>{{ modelDeliveryLabel }}</b><p>{{ modelDeliveryCount }} / {{ modelDeliveryTotal }} {{ modelSource === 'candidate' ? '个设备在 V13 模型中已定位' : '个设备已具备标准节点名称' }}</p></section>
           <details class="twin-model-binding-list"><summary>查看实体模型映射</summary><p v-if="modelReport.isComplete">模型中的设备节点已全部绑定，可进行状态高亮与点击定位。</p><p v-else>待补齐：{{ modelReport.missingCodes.join('、') }}</p><div><span v-for="code in modelReport.boundCodes" :key="code">{{ code }}</span></div></details>
           <p v-if="navigationContext" class="twin-navigation-context" role="status">{{ navigationContext }}</p>
           <div class="twin-inspector-grid"><div><span>所在区域</span><b>{{ selectedAsset.zone }}</b></div><div><span>实体模型</span><b>{{ selectedModelNodeLabel }}</b></div><div><span>最新上报</span><b>{{ formatTime(selectedAsset.lastSeenAt) }}</b></div><div><span>最近采集值</span><b>{{ selectedTelemetry && !['invalid', 'missing'].includes(selectedTelemetryState) ? `${selectedTelemetry.value} ${selectedTelemetry.unit}` : '暂无可信读数' }}</b><small>{{ telemetryStateLabel[selectedTelemetryState] }}{{ selectedTelemetry ? ` · ${formatTime(selectedTelemetry.recordedAt)}` : '' }}</small></div></div>
