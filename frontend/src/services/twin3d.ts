@@ -60,7 +60,8 @@ export function resolveTwinVisualState(asset: Asset, alerts: Alert[]): TwinVisua
 }
 
 export function modelNodeNames(asset: Asset) {
-  return [asset.mesh, asset.code, `ASSET_${asset.code.replaceAll('-', '_')}`].filter(Boolean);
+  const v13LevelProbe = /^LEVEL-L0[1-5]$/.test(asset.code) ? `${asset.code}-探头` : '';
+  return [asset.mesh, asset.code, `ASSET_${asset.code.replaceAll('-', '_')}`, v13LevelProbe].filter(Boolean);
 }
 
 /**

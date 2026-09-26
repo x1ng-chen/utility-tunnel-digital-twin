@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useNow } from '@vueuse/core';
 import { Download, Fan, Lightbulb, RefreshCw, TrendingUp } from 'lucide-vue-next';
 import AppShell from '../components/AppShell.vue';
 import DashboardSignal from '../components/DashboardSignal.vue';
@@ -8,32 +9,43 @@ import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
 import { presentAudit } from '../utils/audit';
 import { resolveTwinVisualState, twinStateLabel, type TwinVisualState } from '../services/twin3d';
+import type { Telemetry } from '../types';
+import { latestTelemetry, telemetryState, telemetryStateLabel } from '../utils/telemetryState';
 
 const store = useOperationsStore();
 const auth = useAuthStore();
+const now = useNow({ interval: 10_000 });
 const mapAssets = computed(() => store.assets.map((asset) => ({ ...asset, visualState: resolveTwinVisualState(asset, store.alerts) })));
 const mapStates: TwinVisualState[] = ['alarm', 'warning', 'normal', 'unknown'];
 const signalOffline = computed(() => store.offline || store.dashboard.assets.online === 0 || store.assets.find((item) => item.code === store.dashboard.telemetry?.assetCode)?.status === 'offline');
 const signalThreshold = computed(() => store.thresholds.find((item) => item.key === store.dashboard.telemetry?.metricKey)?.warning);
+const signalAsset = computed(() => store.assets.find((item) => item.code === store.dashboard.telemetry?.assetCode));
+const signalBinding = computed(() => store.hardwareBindings.find((item) => item.assetCode === signalAsset.value?.code));
+const sourceLabel = computed(() => store.source === 'demo' ? '演示数据' : store.offline ? 'API 离线快照' : store.realtimeState === 'connected' ? 'API 实时连接' : 'API 快照 · 实时连接恢复中');
 const reportError = ref('');
 const exporting = ref(false);
 const commandError = ref('');
 const commandResult = ref('');
 const commandSending = ref(false);
+const lastConfirmedCommand = ref<{ label: string; at: string } | null>(null);
 const pendingCommand = ref<{ action: ControllerAction; dutyPercent?: number } | null>(null);
 const canControlEquipment = computed(() => store.source === 'api' && !store.offline && ['operator', 'administrator'].includes(auth.user?.role || ''));
 const fanLive = computed(() => {
-  const latest = (assetCode: string, metricKey: string) => store.telemetry
-    .filter((item) => item.assetCode === assetCode && (item.metricKey === metricKey || item.metric === metricKey))
-    .sort((left, right) => new Date(right.recordedAt).getTime() - new Date(left.recordedAt).getTime())[0];
+  const latest = (assetCode: string, metricKey: string) => latestTelemetry(store.telemetry, assetCode, metricKey);
   return {
     fan1: { rpm: latest('FAN-01', 'rotational.speed'), current: latest('FAN-01', 'motor.current'), power: latest('FAN-01', 'power') },
     fan2: { rpm: latest('FAN-02', 'rotational.speed'), current: latest('FAN-02', 'motor.current'), power: latest('FAN-02', 'power') },
   };
 });
 
-function fanValue(value: number | undefined, digits = 0) {
-  return value == null ? '—' : value.toFixed(digits);
+function fanValue(reading: Telemetry | undefined, digits = 0) {
+  return !reading || reading.quality === 'bad' || reading.quality === 'missing' || !Number.isFinite(reading.value) ? '—' : reading.value.toFixed(digits);
+}
+
+function fanState(assetCode: string, reading: Telemetry | undefined) {
+  const asset = store.assets.find((item) => item.code === assetCode);
+  const binding = store.hardwareBindings.find((item) => item.assetCode === assetCode);
+  return telemetryStateLabel[telemetryState(reading, asset, binding, store.source, store.offline, now.value.getTime())];
 }
 
 async function sync() {
@@ -81,9 +93,14 @@ async function confirmControllerCommand() {
     const confirmation = await api.controllerCommandConfirmation(pending.action, pending.dutyPercent);
     const response = await api.controllerCommand(pending.action, confirmation.data.confirmationToken, pending.dutyPercent);
     const ack = response.data.ack as { status?: string; reason?: string } | null;
-    commandResult.value = ack?.status === 'accepted'
-      ? `设备已确认：${ack.reason || pending.action}`
-      : '命令已交给 MQTT，等待设备回执。';
+    if (ack?.status === 'accepted') {
+      lastConfirmedCommand.value = { label: commandLabel(pending.action, pending.dutyPercent), at: new Date().toISOString() };
+      commandResult.value = `已收到设备回执：${ack.reason || pending.action}。请以随后上报的设备状态核对实际效果。`;
+    } else if (ack) {
+      commandError.value = `设备未接受命令：${ack.reason || ack.status || '原因待核查'}`;
+    } else {
+      commandResult.value = '命令已发布，等待设备回执；当前执行结果未确认。';
+    }
     pendingCommand.value = null;
     await store.refresh('api');
   } catch (cause) {
@@ -97,7 +114,7 @@ async function confirmControllerCommand() {
 <template>
   <AppShell>
     <section class="hero">
-      <div><span class="eyebrow light">CONTROL ROOM · LIVE FEED</span><h1>运行，一眼掌握</h1><p>集中掌握综合管廊运行状态，所有关键操作均记录审计。</p><p v-if="store.lastSyncedAt">最近同步：{{ new Date(store.lastSyncedAt).toLocaleString('zh-CN') }}</p><p v-if="reportError" class="inline-message error-message" role="alert">{{ reportError }}</p></div>
+      <div><span class="eyebrow light">CONTROL ROOM · LIVE FEED</span><h1>运行，一眼掌握</h1><p>集中掌握综合管廊运行状态，所有关键操作均记录审计。</p><p class="dashboard-source" role="status">数据来源：{{ sourceLabel }}</p><p v-if="store.lastSyncedAt">最近同步：{{ new Date(store.lastSyncedAt).toLocaleString('zh-CN') }}</p><p v-if="reportError" class="inline-message error-message" role="alert">{{ reportError }}</p></div>
       <div class="section-actions"><button class="primary-button compact-button" :disabled="store.loading" @click="sync"><RefreshCw />{{ store.loading ? '同步中…' : '刷新数据' }}</button><button class="primary-button" :disabled="exporting" @click="report"><Download />{{ exporting ? '正在生成…' : '导出运行快照' }}</button></div>
     </section>
     <section class="metric-grid">
@@ -120,9 +137,26 @@ async function confirmControllerCommand() {
         </div>
         <p class="map-disclaimer">位置示意，不代表真实坐标；状态与三维告警一致，在线数量请查看上方统计。点击设备可定位三维模型。</p>
       </article>
-      <DashboardSignal :selected="store.dashboard.telemetry" :samples="store.telemetry" :offline="signalOffline" :threshold="signalThreshold" />
+      <DashboardSignal :selected="store.dashboard.telemetry" :samples="store.telemetry" :offline="signalOffline" :source="store.source" :asset="signalAsset" :binding="signalBinding" :threshold="signalThreshold" />
     </section>
-    <section class="dashboard-grid lower-grid"><article class="panel activity-panel"><div class="panel-head"><div><span class="eyebrow">ACTIVITY STREAM</span><h2>最新运行动态</h2></div><RouterLink to="/audit">审计追踪 →</RouterLink></div><div v-for="item in store.audit.slice(0, 4)" :key="item.id" class="activity-item"><i /><time>{{ new Date(item.occurredAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time><div><b>{{ presentAudit(item).title }}</b><p>{{ presentAudit(item).description }}</p></div></div><div v-if="!store.audit.length" class="empty-state">当前暂无审计记录。</div></article><article class="panel control-panel"><div class="panel-head"><div><span class="eyebrow">CTRL-01 · MQTT</span><h2>双风机控制</h2></div><Fan /></div><p>两台风机共用继电器总使能，转速与电流独立采集，PWM 可分别调节。每次下发都需二次确认，确认凭据仅可使用一次。</p><div class="fan-live-grid"><div><b>FAN-01</b><strong>{{ fanValue(fanLive.fan1.rpm?.value) }}<small> RPM</small></strong><span>{{ fanValue(fanLive.fan1.current?.value, 2) }} mA · {{ fanValue(fanLive.fan1.power?.value, 3) }} W</span></div><div><b>FAN-02</b><strong>{{ fanValue(fanLive.fan2.rpm?.value) }}<small> RPM</small></strong><span>{{ fanValue(fanLive.fan2.current?.value, 2) }} mA · {{ fanValue(fanLive.fan2.power?.value, 3) }} W</span></div></div><span class="control-group-title"><Fan />共用电源</span><div class="fan-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_on')">{{ commandSending ? '下发中…' : '启动风扇（10秒）' }}</button><button class="stop-action" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_off')">立即停止</button></div><span class="control-group-title"><Fan />风机 1 转速</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 100)">100%</button></div><span class="control-group-title"><Fan />风机 2 转速</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 100)">100%</button></div><span class="control-group-title"><Lightbulb />灯带联调</span><div class="lighting-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_blue')">蓝色</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_green')">绿色</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_red')">红色</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_off')">熄灭</button></div><small v-if="!canControlEquipment">请使用在线 API 模式并以运维员或管理员身份登录。</small><b v-if="commandResult" class="command-ok">{{ commandResult }}</b><b v-if="commandError" class="command-error">{{ commandError }}</b></article></section>
+    <section class="dashboard-grid lower-grid">
+      <article class="panel activity-panel"><div class="panel-head"><div><span class="eyebrow">ACTIVITY STREAM</span><h2>最新运行动态</h2></div><RouterLink to="/audit">审计追踪 →</RouterLink></div><div v-for="item in store.audit.slice(0, 4)" :key="item.id" class="activity-item"><i /><time>{{ new Date(item.occurredAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time><div><b>{{ presentAudit(item).title }}</b><p>{{ presentAudit(item).description }}</p></div></div><div v-if="!store.audit.length" class="empty-state">当前暂无审计记录。</div></article>
+      <article class="panel control-panel">
+        <div class="panel-head"><div><span class="eyebrow">CTRL-01 · MQTT</span><h2>双风机控制</h2></div><Fan /></div>
+        <p>两台风机共用继电器总使能，转速与电流独立采集，PWM 可分别调节。每次下发都需二次确认，确认凭据仅可使用一次。</p>
+        <div class="fan-live-grid">
+          <div><b>FAN-01</b><strong>{{ fanValue(fanLive.fan1.rpm) }}<small> RPM</small></strong><span>{{ fanValue(fanLive.fan1.current, 2) }} mA · {{ fanValue(fanLive.fan1.power, 3) }} W</span><small>{{ fanState('FAN-01', fanLive.fan1.rpm) }} · {{ fanLive.fan1.rpm ? new Date(fanLive.fan1.rpm.recordedAt).toLocaleString('zh-CN') : '暂无采集时间' }}</small></div>
+          <div><b>FAN-02</b><strong>{{ fanValue(fanLive.fan2.rpm) }}<small> RPM</small></strong><span>{{ fanValue(fanLive.fan2.current, 2) }} mA · {{ fanValue(fanLive.fan2.power, 3) }} W</span><small>{{ fanState('FAN-02', fanLive.fan2.rpm) }} · {{ fanLive.fan2.rpm ? new Date(fanLive.fan2.rpm.recordedAt).toLocaleString('zh-CN') : '暂无采集时间' }}</small></div>
+        </div>
+        <span class="control-group-title"><Fan />共用电源</span><div class="fan-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_on')">{{ commandSending ? '下发中…' : '启动风扇（10秒）' }}</button><button class="stop-action" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_off')">立即停止</button></div>
+        <span class="control-group-title"><Fan />风机 1 转速</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 100)">100%</button></div>
+        <span class="control-group-title"><Fan />风机 2 转速</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 100)">100%</button></div>
+        <span class="control-group-title"><Lightbulb />灯带联调</span><div class="lighting-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_blue')">蓝色</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_green')">绿色</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_red')">红色</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_off')">熄灭</button></div>
+        <small v-if="!canControlEquipment">请使用在线 API 模式并以运维员或管理员身份登录。</small>
+        <p v-if="lastConfirmedCommand" class="command-last-receipt">本页最近回执：{{ lastConfirmedCommand.label }} · {{ new Date(lastConfirmedCommand.at).toLocaleTimeString('zh-CN') }}。当前实际状态请以遥测核对。</p>
+        <b v-if="commandResult" class="command-ok" role="status">{{ commandResult }}</b><b v-if="commandError" class="command-error" role="alert">{{ commandError }}</b>
+      </article>
+    </section>
     <div v-if="pendingCommand" class="command-confirmation-mask" role="presentation" @click.self="cancelControllerCommand">
       <section class="command-confirmation" role="dialog" aria-modal="true" aria-labelledby="command-confirmation-title">
         <span class="eyebrow">安全控制确认</span><h2 id="command-confirmation-title">确认下发设备命令</h2>
@@ -136,6 +170,10 @@ async function confirmControllerCommand() {
 
 <style scoped>
 .map-node { text-decoration: none; }
+.dashboard-source { display: inline-block; padding: 5px 10px; border: 1px solid var(--ops-line); border-radius: 6px; color: var(--ops-signal); }
+.fan-live-grid div > small { display: block; margin-top: 5px; color: var(--ops-muted); }
+.fan-speed-actions button:first-child { border-color: #35547c; background: #152842; color: #b5c9eb; }
+.command-last-receipt { margin-top: 12px; color: var(--ops-muted); font-size: 12px; }
 .command-confirmation-mask { position: fixed; z-index: 12100; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(0, 0, 0, .72); }
 .command-confirmation { width: min(480px, 100%); padding: 24px; border: 1px solid var(--ops-signal); background: var(--ops-bg-deep); box-shadow: 16px 16px 0 rgba(0, 0, 0, .55); }
 .command-confirmation h2 { margin: 10px 0 16px; font-size: 24px; }

@@ -455,7 +455,8 @@ test('设备控制必须经二次确认并按一次性凭据顺序下发', async
   expect(confirmationRequests).toBe(0);
   await page.getByRole('button', { name: '启动风扇（10秒）' }).click();
   await page.getByRole('dialog', { name: '确认下发设备命令' }).getByRole('button', { name: '确认并下发' }).click();
-  await expect(page.getByText('设备已确认：relay_active')).toBeVisible();
+  await expect(page.getByText('已收到设备回执：relay_active。请以随后上报的设备状态核对实际效果。')).toBeVisible();
+  await expect(page.getByText(/本页最近回执：启动风扇（10 秒）/)).toBeVisible();
   expect(confirmationRequests).toBe(1);
   expect(commandRequests).toBe(1);
 });
@@ -953,4 +954,65 @@ test('已启用模型文件读取失败时不把预览场景误报为实体模�
   await expect(readiness.getByText('模型已加载', { exact: true })).toHaveCount(0);
   await expect(page.locator('.twin-scene')).toHaveAttribute('data-model-state', 'fallback');
   await expect(page.locator('.twin-live[title*="实体模型文件暂时无法获取"]')).toContainText('模型文件暂不可用');
+});
+
+test('五个液位节点分别定位，L03 告警只高亮对应测点', async ({ page, request }) => {
+  const base = process.env.E2E_API_URL || 'http://127.0.0.1:8000/api';
+  const login = await request.post(`${base}/auth/login/`, { data: { email: 'admin', password: adminPassword } });
+  expect(login.ok()).toBe(true);
+  const headers = { Authorization: `Bearer ${(await login.json()).accessToken}` };
+
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await page.goto(`${webUrl}/twin-3d?asset=LEVEL-L01`);
+  const cards = page.locator('.level-station-card');
+  await expect(cards).toHaveCount(5);
+  await expect(page.locator('.twin-scene')).toHaveAttribute('data-model-state', 'loaded', { timeout: 30_000 });
+  const cameraTargets = new Set();
+  for (let index = 1; index <= 5; index += 1) {
+    const code = `LEVEL-L0${index}`;
+    await cards.filter({ hasText: code }).click();
+    await expect(page.locator('.twin-focus-status')).toContainText(code);
+    await expect(page.locator('.twin-canvas')).toHaveAttribute('data-camera-target', /\d/);
+    cameraTargets.add(await page.locator('.twin-canvas').getAttribute('data-camera-target'));
+  }
+  expect(cameraTargets.size).toBe(5);
+
+  const response = await request.post(`${base}/telemetry/`, { headers, data: { readings: [{
+    eventId: `level-l03-browser-${Date.now()}`, assetCode: 'LEVEL-L03', metricKey: 'level.detected',
+    metric: '液位检测', value: 1, unit: 'bool', quality: 'good', recordedAt: new Date().toISOString(),
+  }] } });
+  expect(response.ok(), await response.text()).toBe(true);
+  await page.goto(`${webUrl}/twin-3d?asset=LEVEL-L03`);
+  await expect(cards.filter({ hasText: 'LEVEL-L03' })).toHaveClass(/alarm/);
+  await expect(cards.filter({ hasText: 'LEVEL-L02' })).not.toHaveClass(/alarm/);
+  await expect(page.locator('.twin-focus-status')).toContainText('LEVEL-L03');
+  await expect(page.locator('.twin-inspector')).toContainText('液位检测');
+});
+
+test('V13 设计预览在新模型中分别定位五个液位探头', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await page.goto(`${webUrl}/twin-3d?model=v13&asset=LEVEL-L01`);
+  await expect(page.getByText('V13 设计预览', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('.twin-scene')).toHaveAttribute('data-model-state', 'loaded', { timeout: 60_000 });
+  await expect(page.locator('.twin-model-readiness')).toContainText('五个液位探头可分别定位');
+  const cards = page.locator('.level-station-card');
+  const cameraTargets = new Set();
+  for (let index = 1; index <= 5; index += 1) {
+    const code = `LEVEL-L0${index}`;
+    await cards.filter({ hasText: code }).click();
+    await expect(page.locator('.twin-focus-status')).toContainText(code);
+    cameraTargets.add(await page.locator('.twin-canvas').getAttribute('data-camera-target'));
+  }
+  expect(cameraTargets.size).toBe(5);
+  await page.getByRole('button', { name: '返回当前模型' }).click();
+  await expect(page).not.toHaveURL(/model=v13/);
 });
