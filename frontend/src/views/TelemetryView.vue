@@ -260,8 +260,8 @@ watch(() => store.source, (next, previous) => {
 
     <section class="insight-metrics">
       <article><span>样本总量</span><strong>{{ store.telemetrySummary.sampleCount }}</strong><small>当前条件内全部记录</small></article>
-      <article><span>平均值</span><strong>{{ store.telemetrySummary.average == null ? '--' : store.telemetrySummary.average.toFixed(2) }}</strong><small>{{ store.telemetrySummary.comparable ? (store.telemetrySummary.latest?.unit || '暂无单位') : '请选择单一指标' }}</small></article>
-      <article><span>值域范围</span><strong>{{ store.telemetrySummary.minimum == null ? '--' : `${store.telemetrySummary.minimum}—${store.telemetrySummary.maximum}` }}</strong><small>最小值—最大值</small></article>
+      <article><span>可信样本平均值</span><strong>{{ store.telemetrySummary.average == null ? '--' : store.telemetrySummary.average.toFixed(2) }}</strong><small>{{ store.telemetrySummary.comparable ? (store.telemetrySummary.qualityCounts.good ? '仅统计良好质量记录' : '暂无良好质量记录') : '请选择单一指标' }}</small></article>
+      <article><span>可信样本值域</span><strong>{{ store.telemetrySummary.minimum == null ? '--' : `${store.telemetrySummary.minimum}—${store.telemetrySummary.maximum}` }}</strong><small>仅统计良好质量记录</small></article>
       <article><span>良好率</span><strong>{{ goodRate }}<em>%</em></strong><small>{{ store.telemetrySummary.qualityCounts.good }} 条可信样本</small></article>
       <article><span>报警次数</span><strong>{{ alertTotal == null ? '--' : alertTotal }}</strong><small>资产与时间范围告警总数</small></article>
       <article><span>采集时段</span><strong>{{ spanLabel }}</strong><small>{{ spanRange }}</small></article>

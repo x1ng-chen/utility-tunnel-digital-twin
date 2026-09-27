@@ -120,6 +120,18 @@ test('normalizes sloppy device readings and skips contract-breaking ones', () =>
   assert.equal(batch.readings[0].value, 1);
   assert.equal(batch.readings[1].value, 22.5);
   assert.equal(batch.skipped.length, 2);
+  assert.equal(batch.readings[0].quality, 'suspect');
+  assert.equal(batch.readings[1].quality, 'suspect');
+});
+
+test('does not turn missing or nonnumeric readings into zero', () => {
+  const readings = [null, undefined, '', '  ', false, [], {}, '0', 0].map((value) => ({
+    assetCode: 'ENV-01', metric: 'temperature', value, unit: 'degC',
+  }));
+  const batch = toDjangoBatch({ schema: 'ut.telemetry.v1', readings }, { receivedAt: RECEIVED_AT });
+  assert.deepEqual(batch.readings.map(({ value }) => value), [0, 0]);
+  assert.equal(batch.skipped.length, 7);
+  assert.ok(batch.readings.every(({ quality }) => quality === 'suspect'));
 });
 
 test('keeps eventIds inside the 80 character contract for long device ids', () => {

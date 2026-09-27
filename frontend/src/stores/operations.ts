@@ -533,14 +533,15 @@ export function summarizeTelemetry(items: Telemetry[]): TelemetrySummary {
   for (const item of items) qualityCounts[item.quality] += 1;
   if (!items.length) return { sampleCount: 0, comparable: true, minimum: null, maximum: null, average: null, startedAt: null, endedAt: null, qualityCounts, latest: null };
   const ordered = [...items].sort((left, right) => new Date(right.recordedAt).getTime() - new Date(left.recordedAt).getTime() || right.id - left.id);
-  const comparable = new Set(items.map((item) => `${item.metricKey || ''}\u0000${item.unit}`)).size <= 1;
-  const values = items.map((item) => item.value);
+  const trusted = items.filter((item) => item.quality === 'good');
+  const comparable = new Set(trusted.map((item) => `${item.metricKey || ''}\u0000${item.unit}`)).size <= 1;
+  const values = trusted.map((item) => item.value);
   return {
     sampleCount: items.length,
     comparable,
-    minimum: comparable ? Math.min(...values) : null,
-    maximum: comparable ? Math.max(...values) : null,
-    average: comparable ? values.reduce((total, value) => total + value, 0) / values.length : null,
+    minimum: comparable && values.length ? Math.min(...values) : null,
+    maximum: comparable && values.length ? Math.max(...values) : null,
+    average: comparable && values.length ? values.reduce((total, value) => total + value, 0) / values.length : null,
     startedAt: ordered.at(-1)!.recordedAt,
     endedAt: ordered[0].recordedAt,
     qualityCounts,

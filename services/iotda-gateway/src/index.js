@@ -35,7 +35,7 @@ const telemetrySchema = z.object({
     metric: z.string(),
     value: z.number().finite(),
     unit: z.string(),
-    quality: z.enum(['good', 'suspect', 'bad', 'missing']).default('good'),
+    quality: z.enum(['good', 'suspect', 'bad', 'missing']).default('suspect'),
   })).min(1).max(32),
 });
 

@@ -233,6 +233,7 @@ describe('operations store', () => {
     expect(store.telemetryInsights).toHaveLength(1);
     expect(store.telemetrySummary.sampleCount).toBe(1);
     expect(store.telemetrySummary.qualityCounts.suspect).toBe(1);
+    expect(store.telemetrySummary.average).toBeNull();
     expect(store.telemetry).toHaveLength(24);
   });
 
@@ -274,6 +275,19 @@ describe('operations store', () => {
     expect(mixed.comparable).toBe(false);
     expect(mixed.average).toBeNull();
     expect(mixed.minimum).toBeNull();
+  });
+
+  it('calculates numeric summaries from good samples while retaining all quality counts', () => {
+    const store = useOperationsStore();
+    const sample = store.telemetry[0]!;
+    const summary = summarizeTelemetry([
+      { ...sample, id: 901, metricKey: 'temperature', value: 20, unit: '°C', quality: 'good' },
+      { ...sample, id: 902, metricKey: 'temperature', value: 100, unit: '°C', quality: 'suspect' },
+    ]);
+    expect(summary.sampleCount).toBe(2);
+    expect(summary.qualityCounts).toMatchObject({ good: 1, suspect: 1 });
+    expect(summary.average).toBe(20);
+    expect(summary.minimum).toBe(20);
   });
 
   it('rejects an inverted telemetry time range consistently in demo mode', async () => {

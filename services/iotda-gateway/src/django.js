@@ -60,7 +60,8 @@ export function toDjangoBatch(telemetry, { deviceId = 'CTRL-01', receivedAt = ne
   telemetry.readings.forEach((reading, index) => {
     const assetCode = String(reading.assetCode || '').toUpperCase();
     const metricKey = String(reading.metric || '').toLowerCase();
-    const value = Number(reading.value);
+    const rawValue = reading.value;
+    const value = Number(rawValue);
     if (!ASSET_CODE_PATTERN.test(assetCode)) {
       skipped.push({ assetCode: reading.assetCode, metric: reading.metric, reason: 'assetCode does not match the platform pattern' });
       return;
@@ -69,8 +70,8 @@ export function toDjangoBatch(telemetry, { deviceId = 'CTRL-01', receivedAt = ne
       skipped.push({ assetCode, metric: reading.metric, reason: 'metricKey does not match the platform pattern' });
       return;
     }
-    if (!Number.isFinite(value)) {
-      skipped.push({ assetCode, metric: metricKey, reason: 'value is not finite' });
+    if ((typeof rawValue !== 'number' && (typeof rawValue !== 'string' || !rawValue.trim())) || !Number.isFinite(value)) {
+      skipped.push({ assetCode, metric: metricKey, reason: 'value is missing or not a finite number' });
       return;
     }
     readings.push({
@@ -80,7 +81,7 @@ export function toDjangoBatch(telemetry, { deviceId = 'CTRL-01', receivedAt = ne
       metric: DJANGO_METRIC_LABELS[metricKey] || metricKey,
       value,
       unit: DJANGO_UNIT_MAP[reading.unit] || reading.unit,
-      quality: reading.quality || 'good',
+      quality: reading.quality ?? 'suspect',
       recordedAt,
     });
   });
