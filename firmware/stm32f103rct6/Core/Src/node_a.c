@@ -7,6 +7,7 @@
 #include "node_a_status_screen.h"
 #include "node_a_telemetry.h"
 #include "node_a_sensor_bank.h"
+#include "sensor_telemetry.h"
 #include "uart_tx_queue.h"
 #include "st7735.h"
 #include "st7735_bus.h"
@@ -39,12 +40,9 @@ _Static_assert(NODE_A_STATUS_DIGITAL_COUNT == NODE_A_DIGITAL_PIN_COUNT,
  * take - which is exactly the state-carrying-frame staleness this budget
  * exists to remove.
  *
- * So the board emits ONE frame per interval and rotates through the six
- * NodeATelemetry_QueueNext slots.  The offered rate is then one frame per
- * interval: at most NODE_A_TELEMETRY_FRAME_SIZE bytes, comfortably inside the
- * link's share of the interval, and in the steady state well inside it (the
- * cycle averages 2870 / 6 bytes per interval, about 239 B/s against the link's
- * 960 B/s).  The rest of the interval's bytes are the reserve the command ACKs
+ * The board emits one legacy frame and one rotating inventory frame per
+ * interval. Both are below 768 bytes, so their worst-case total fits in the
+ * 1920-byte 9600 8N1 interval. The rest of the interval's bytes reserve command ACKs
  * and the #STATE/#NODETEST diagnostics draw on;
  * NODE_A_UART_ACK_RESERVE_BYTES is the smallest reserve the queue has to be
  * able to hold on top of one frame.  These assertions fail the build if a
@@ -57,6 +55,9 @@ _Static_assert(NODE_A_TX_LINK_BYTES_PER_CYCLE == 1920U,
                "one telemetry interval must carry 1920 bytes at 9600 8N1");
 _Static_assert(NODE_A_TELEMETRY_FRAME_SIZE < NODE_A_TX_LINK_BYTES_PER_CYCLE,
                "one telemetry frame per interval must fit the link budget");
+_Static_assert(NODE_A_TELEMETRY_FRAME_SIZE + SENSOR_TELEMETRY_FRAME_LIMIT <
+                   NODE_A_TX_LINK_BYTES_PER_CYCLE,
+               "legacy plus inventory frames must fit one UART interval");
 _Static_assert((NODE_A_TELEMETRY_FRAME_SIZE - 2U) <= UART_TX_FRAME_LIMIT,
                "a telemetry frame without its CRLF must fit the queue's limit");
 _Static_assert(UART_TX_CAPACITY >=
@@ -240,6 +241,7 @@ static uint16_t node_test_length;
  * safety and actuator fields by the display tick. */
 static NodeAStatusScreen status_screen;
 static NodeAStatusSnapshot status_sensors;
+static NodeAStatusPeerState peer_sensors;
 static NodeASensorBank sensor_bank;
 /* ut.time.sync.v1 arrives from ESP-01 on USART2 as a bare JSON line, so it gets
  * its own bounded slot instead of the command queue. */
@@ -260,6 +262,9 @@ static uint8_t test_telemetry_burst;
  * a frame the queue refused - and whose sequence was therefore never
  * committed - is retried as the same frame on the next pass. */
 static uint32_t telemetry_sequence;
+static uint8_t telemetry_legacy_slot;
+static SensorTelemetryCursor telemetry_inventory_cursor;
+static char telemetry_inventory_frame[SENSOR_TELEMETRY_FRAME_LIMIT];
 typedef struct {
   UartTxQueue *esp;
   UartTxQueue *debug;
@@ -955,7 +960,20 @@ static void SendTelemetry(const Sht30Reading readings[3], uint8_t smoke_detected
                          oxygen_online, methane_raw, methane_microvolts,
                          methane_online, co_raw, co_microvolts, co_online,
                          fan1_power, fan1_rpm, fan2_power, fan2_rpm, &snapshot);
-  (void)Telemetry_EmitOneFrame(&snapshot);
+  if (Telemetry_EmitOneFrame(&snapshot) != 0U) {
+    SensorTelemetryCursor candidate = telemetry_inventory_cursor;
+    TelemetryQueueContext queues = {&esp_tx_queue, &debug_tx_queue};
+    uint16_t length = 0U;
+    candidate.sequence = telemetry_sequence + 1U;
+    if (SensorTelemetry_FormatNext(NodeASensorBank_Readings(&sensor_bank),
+                                   NodeASensorBank_Count(&sensor_bank),
+                                   &candidate, telemetry_inventory_frame,
+                                   sizeof(telemetry_inventory_frame), &length) &&
+        Telemetry_EnqueueBoth(&queues, telemetry_inventory_frame, length)) {
+      telemetry_sequence = candidate.sequence - 1U;
+      telemetry_inventory_cursor = candidate;
+    }
+  }
 }
 
 /* Test-only: emits one full rotation without waiting an interval per frame, so
@@ -1045,9 +1063,11 @@ static uint8_t Telemetry_EmitOneFrame(const NodeATelemetrySnapshot *snapshot)
 {
   TelemetryQueueContext queues = {&esp_tx_queue, &debug_tx_queue};
 
-  if (NodeATelemetry_QueueNext(&telemetry_sequence, snapshot,
-                               Telemetry_EnqueueBoth, &queues) == 0U)
+  if (NodeATelemetry_QueueSlot(&telemetry_sequence, telemetry_legacy_slot,
+                               snapshot, Telemetry_EnqueueBoth, &queues) == 0U)
     return 0U;
+  telemetry_legacy_slot = (uint8_t)((telemetry_legacy_slot + 1U) %
+                                     NODE_A_TELEMETRY_FRAME_COUNT);
   /* A command can arrive while the frame is being handed to the queue, so keep
    * answering instead of waiting for the next pass. */
   while (esp_rx_count != 0U) Command_Poll();
@@ -1666,6 +1686,11 @@ static void Command_HandleLine(char *line, uint32_t received_at)
   char *topic;
   char *payload;
 
+  if (strncmp(line, "PEER|", 5U) == 0 || strcmp(line, "PEERDOWN") == 0)
+  {
+    (void)NodeAStatus_ApplyPeerLine(&peer_sensors, line, received_at);
+    return;
+  }
   if (strncmp(line, "MQTT|", 5U) != 0) return;
   topic = line + 5U;
   payload = strchr(topic, '|');
@@ -2072,7 +2097,8 @@ static void Status_Tick(uint32_t now)
   /* One atomic copy per frame: the renderer never sees a half-updated mix. */
   NodeAStatusSnapshot snapshot = status_sensors;
   NodeAStatus_CaptureInventory(&snapshot, NodeASensorBank_Readings(&sensor_bank),
-                               NodeASensorBank_Count(&sensor_bank));
+                                 NodeASensorBank_Count(&sensor_bank));
+  NodeAStatus_CapturePeer(&snapshot, &peer_sensors, now);
 
   /* The bench probe injects alarm *inputs*; it never fakes an actuator, so the
    * alarm page may report a simulated source while VENT still shows the real
@@ -2145,12 +2171,24 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *uart)
       ++esp_rx_completed_lines;
       /* ESP diagnostic replies such as #PUBLISHED share USART2 with downlink
        * commands.  They must never occupy the bounded command queue. */
-      if ((esp_rx_length >= 5U) &&
-          (esp_rx_lines[esp_rx_tail][0] == 'M') &&
-          (esp_rx_lines[esp_rx_tail][1] == 'Q') &&
-          (esp_rx_lines[esp_rx_tail][2] == 'T') &&
-          (esp_rx_lines[esp_rx_tail][3] == 'T') &&
-          (esp_rx_lines[esp_rx_tail][4] == '|'))
+      if (((esp_rx_length >= 5U) &&
+           (esp_rx_lines[esp_rx_tail][0] == 'M') &&
+           (esp_rx_lines[esp_rx_tail][1] == 'Q') &&
+           (esp_rx_lines[esp_rx_tail][2] == 'T') &&
+           (esp_rx_lines[esp_rx_tail][3] == 'T') &&
+           (esp_rx_lines[esp_rx_tail][4] == '|')) ||
+          ((esp_rx_length >= 5U) &&
+           (esp_rx_lines[esp_rx_tail][0] == 'P') &&
+           (esp_rx_lines[esp_rx_tail][1] == 'E') &&
+           (esp_rx_lines[esp_rx_tail][2] == 'E') &&
+           (esp_rx_lines[esp_rx_tail][3] == 'R') &&
+           (esp_rx_lines[esp_rx_tail][4] == '|')) ||
+          ((esp_rx_length == 8U) &&
+           (esp_rx_lines[esp_rx_tail][0] == 'P') &&
+           (esp_rx_lines[esp_rx_tail][1] == 'E') &&
+           (esp_rx_lines[esp_rx_tail][2] == 'E') &&
+           (esp_rx_lines[esp_rx_tail][3] == 'R') &&
+           (esp_rx_lines[esp_rx_tail][4] == 'D')))
       {
         if (esp_rx_count < ESP_RX_QUEUE_CAPACITY)
         {
@@ -2234,6 +2272,7 @@ int main(void)
   MX_ADC1_Init();
   if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) Error_Handler();
   NodeASensorBank_Init(&sensor_bank, &hadc1, SensorBank_ServiceCallback, NULL);
+  SensorTelemetry_Init(&telemetry_inventory_cursor, 1U);
   sensor_bank.sht30_reader = SensorBank_ReadSht30;
   UartTx_InitWithReserve(&esp_tx_queue, NODE_A_UART_ACK_RESERVE_BYTES);
   UartTx_InitWithReserve(&debug_tx_queue, NODE_A_UART_ACK_RESERVE_BYTES);
@@ -2247,7 +2286,7 @@ int main(void)
   ST7735_Init();
   Tx_EnqueueLine("#NODE node-a boot\r\n", 19U);
   {
-    static const char build[] = "#FW node-a sensorscreen-20260925\r\n";
+    static const char build[] = "#FW node-a sensors-all-20260927\r\n";
     Tx_EnqueueLine(build, (uint16_t)(sizeof(build) - 1U));
   }
   for (;;)
@@ -2541,8 +2580,12 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(LEVEL_GPIO_Port, &gpio);
   gpio.Pin = GPIO_PIN_8 | GPIO_PIN_9; gpio.Mode = GPIO_MODE_INPUT; gpio.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOC, &gpio);
+  /* PC10 remains input-only: on the bench it is tied to the FAN-01 driver
+   * base, while TIM4_CH3 on PB8 provides the actual PWM drive. */
   gpio.Pin = GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13; gpio.Mode = GPIO_MODE_INPUT; gpio.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &gpio);
+  gpio.Pin = NODE_A_MQ2_2_PIN; gpio.Mode = GPIO_MODE_INPUT; gpio.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(NODE_A_MQ2_2_PORT, &gpio);
   /* Standard four-wire PC fan TACH is open collector.  The external 10 kOhm
    * pull-up to 3.3 V defines a safe logic level; the internal pull-up is also
    * enabled so a temporarily disconnected resistor cannot leave PA6 floating. */

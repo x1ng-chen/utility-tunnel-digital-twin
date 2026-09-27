@@ -85,6 +85,15 @@ static uint8_t saw_text_in_color(const char *needle, uint16_t color)
   return 0U;
 }
 
+static uint8_t row_has_label(uint8_t row, const char *label)
+{
+  for (uint16_t i = 0U; i < drawn_count; ++i) {
+    if (drawn[i].x == 4 && drawn[i].y == 26 + (int)row * 16 &&
+        strcmp(drawn[i].text, label) == 0) return 1U;
+  }
+  return 0U;
+}
+
 static int check_drawn_within_panel(void)
 {
   for (uint16_t i = 0U; i < drawn_count; ++i) {
@@ -115,6 +124,24 @@ static NodeAStatusSnapshot idle_snapshot(void)
     snapshot.digital[i].online = 1U;
     snapshot.digital[i].quality = SENSOR_QUALITY_GOOD;
   }
+  for (uint8_t i = 7U; i < 9U; ++i) {
+    snapshot.digital[i].enabled = 1U;
+    snapshot.digital[i].online = 1U;
+    snapshot.digital[i].quality = SENSOR_QUALITY_GOOD;
+  }
+  snapshot.digital[7].active_low = 1U;
+  for (uint8_t i = 0U; i < NODE_A_STATUS_PEER_ANALOG_COUNT; ++i) {
+    snapshot.peer_analog[i].enabled = 1U;
+    snapshot.peer_analog[i].online = 1U;
+    snapshot.peer_analog[i].quality = SENSOR_QUALITY_GOOD;
+    snapshot.peer_analog[i].raw = (uint16_t)(600U + i);
+  }
+  for (uint8_t i = 0U; i < NODE_A_STATUS_PEER_DIGITAL_COUNT; ++i) {
+    snapshot.peer_digital[i].enabled = (uint8_t)(i != 5U);
+    snapshot.peer_digital[i].online = 1U;
+    snapshot.peer_digital[i].quality = SENSOR_QUALITY_GOOD;
+    snapshot.peer_digital[i].active_low = (uint8_t)(i & 1U);
+  }
   snapshot.fan1_pwm_percent = 60U;
   snapshot.fan2_pwm_percent = 100U;
   snapshot.fan1_rpm = 1240U;
@@ -140,25 +167,31 @@ static int check_page_sequence(void)
   NodeAStatus_Update(&screen, &snapshot, 0U, NODE_A_STATUS_DWELL_MS - 1U);
   CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_ENVIRONMENT);
   NodeAStatus_Update(&screen, &snapshot, 0U, NODE_A_STATUS_DWELL_MS);
-  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_GAS_1);
+  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_CO);
   NodeAStatus_Update(&screen, &snapshot, 0U, 2U * NODE_A_STATUS_DWELL_MS - 1U);
-  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_GAS_1);
+  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_CO);
   NodeAStatus_Update(&screen, &snapshot, 0U, 2U * NODE_A_STATUS_DWELL_MS);
-  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_GAS_2);
+  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_MQ4);
   NodeAStatus_Update(&screen, &snapshot, 0U, 3U * NODE_A_STATUS_DWELL_MS);
-  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_INPUTS_1);
+  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_O2);
   NodeAStatus_Update(&screen, &snapshot, 0U, 4U * NODE_A_STATUS_DWELL_MS);
-  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_INPUTS_2);
+  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_MQ2);
   NodeAStatus_Update(&screen, &snapshot, 0U, 5U * NODE_A_STATUS_DWELL_MS);
-  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_FANS);
+  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_FLAME);
   NodeAStatus_Update(&screen, &snapshot, 0U, 6U * NODE_A_STATUS_DWELL_MS);
+  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_LEVELS);
+  NodeAStatus_Update(&screen, &snapshot, 0U, 7U * NODE_A_STATUS_DWELL_MS);
+  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_FANS);
+  NodeAStatus_Update(&screen, &snapshot, 0U, 8U * NODE_A_STATUS_DWELL_MS);
   CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_ENVIRONMENT);
   CHECK(NODE_A_STATUS_DWELL_MS == 5000U);
   CHECK(strcmp(NodeAStatus_PageTitle(NODE_A_STATUS_PAGE_ENVIRONMENT), "ENV") == 0);
-  CHECK(strcmp(NodeAStatus_PageTitle(NODE_A_STATUS_PAGE_GAS_1), "GAS1") == 0);
-  CHECK(strcmp(NodeAStatus_PageTitle(NODE_A_STATUS_PAGE_GAS_2), "GAS2") == 0);
-  CHECK(strcmp(NodeAStatus_PageTitle(NODE_A_STATUS_PAGE_INPUTS_1), "INPUT1") == 0);
-  CHECK(strcmp(NodeAStatus_PageTitle(NODE_A_STATUS_PAGE_INPUTS_2), "INPUT2") == 0);
+  CHECK(strcmp(NodeAStatus_PageTitle(NODE_A_STATUS_PAGE_CO), "CO") == 0);
+  CHECK(strcmp(NodeAStatus_PageTitle(NODE_A_STATUS_PAGE_MQ4), "MQ4") == 0);
+  CHECK(strcmp(NodeAStatus_PageTitle(NODE_A_STATUS_PAGE_O2), "O2") == 0);
+  CHECK(strcmp(NodeAStatus_PageTitle(NODE_A_STATUS_PAGE_MQ2), "MQ2") == 0);
+  CHECK(strcmp(NodeAStatus_PageTitle(NODE_A_STATUS_PAGE_FLAME), "FLAME") == 0);
+  CHECK(strcmp(NodeAStatus_PageTitle(NODE_A_STATUS_PAGE_LEVELS), "LEVEL") == 0);
   CHECK(strcmp(NodeAStatus_PageTitle(NODE_A_STATUS_PAGE_FANS), "FAN") == 0);
   CHECK(strcmp(NodeAStatus_PageTitle(NODE_A_STATUS_PAGE_ALARM), "ALARM") == 0);
   return 0;
@@ -183,21 +216,21 @@ static int check_alarm_takeover(void)
   /* A takeover from the last carousel page behaves the same way. */
   NodeAStatus_Init(&screen, 0U);
   NodeAStatus_Update(&screen, &snapshot, 0U, 0U);
-  NodeAStatus_Update(&screen, &snapshot, 0U, 5U * NODE_A_STATUS_DWELL_MS);
+  NodeAStatus_Update(&screen, &snapshot, 0U, 7U * NODE_A_STATUS_DWELL_MS);
   CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_FANS);
-  NodeAStatus_Update(&screen, &snapshot, 1U, 5U * NODE_A_STATUS_DWELL_MS + 10U);
+  NodeAStatus_Update(&screen, &snapshot, 1U, 7U * NODE_A_STATUS_DWELL_MS + 10U);
   CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_ALARM);
 
   /* Recovery restarts the carousel from the environment page and the dwell
    * restarts from the moment the alarm cleared. */
-  NodeAStatus_Update(&screen, &snapshot, 0U, 5U * NODE_A_STATUS_DWELL_MS + 20U);
+  NodeAStatus_Update(&screen, &snapshot, 0U, 7U * NODE_A_STATUS_DWELL_MS + 20U);
   CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_ENVIRONMENT);
   NodeAStatus_Update(&screen, &snapshot, 0U,
-                     5U * NODE_A_STATUS_DWELL_MS + 20U + NODE_A_STATUS_DWELL_MS - 1U);
+                     7U * NODE_A_STATUS_DWELL_MS + 20U + NODE_A_STATUS_DWELL_MS - 1U);
   CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_ENVIRONMENT);
   NodeAStatus_Update(&screen, &snapshot, 0U,
-                     5U * NODE_A_STATUS_DWELL_MS + 20U + NODE_A_STATUS_DWELL_MS);
-  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_GAS_1);
+                     7U * NODE_A_STATUS_DWELL_MS + 20U + NODE_A_STATUS_DWELL_MS);
+  CHECK(NodeAStatus_CurrentPage(&screen) == NODE_A_STATUS_PAGE_CO);
   return 0;
 }
 
@@ -308,34 +341,58 @@ static int check_render_pages(void)
 
   reset_recorder();
   NodeAStatus_Update(&screen, &snapshot, 0U, NODE_A_STATUS_DWELL_MS);
-  CHECK(saw_text("GAS1"));
-  CHECK(saw_text("CO1") && saw_text("512 RAW"));
-  CHECK(saw_text("M41") && saw_text("513 RAW"));
-  CHECK(saw_text("O21") && saw_text("514 RAW"));
-  CHECK(saw_text("CO2") && saw_text("PLAN"));
+  CHECK(saw_text("CO"));
+  CHECK(row_has_label(0U, "CO1") && saw_text("512 RAW"));
+  CHECK(row_has_label(1U, "CO2") && row_has_label(2U, "CO3"));
+  CHECK(row_has_label(3U, "CO4") && row_has_label(4U, "CO5"));
+  CHECK(!saw_text("M41") && !saw_text("M42"));
   CHECK(check_drawn_within_panel() == 0);
 
   reset_recorder();
   NodeAStatus_Update(&screen, &snapshot, 0U, 2U * NODE_A_STATUS_DWELL_MS);
-  CHECK(saw_text("GAS2"));
-  CHECK(saw_text("M42") && saw_text("O22") && saw_text("CO3"));
+  CHECK(saw_text("MQ4"));
+  CHECK(row_has_label(0U, "M41") && saw_text("513 RAW"));
+  CHECK(row_has_label(1U, "M42") && row_has_label(2U, "M43") &&
+        row_has_label(3U, "M44") && row_has_label(4U, "M45"));
+  CHECK(!saw_text("CO1") && !saw_text("O21"));
   CHECK(saw_text("PLAN"));
 
   reset_recorder();
   NodeAStatus_Update(&screen, &snapshot, 0U, 3U * NODE_A_STATUS_DWELL_MS);
-  CHECK(saw_text("INPUT1"));
-  CHECK(saw_text("M21") && saw_text("HIGH"));
-  CHECK(saw_text("FL3") && saw_text("PLAN"));
+  CHECK(saw_text("O2"));
+  CHECK(row_has_label(0U, "O21") && row_has_label(1U, "O22") &&
+        row_has_label(2U, "O23"));
   CHECK(check_drawn_within_panel() == 0);
 
   reset_recorder();
   NodeAStatus_Update(&screen, &snapshot, 0U, 4U * NODE_A_STATUS_DWELL_MS);
-  CHECK(saw_text("INPUT2"));
-  CHECK(saw_text("M22") && saw_text("LV3"));
-  CHECK(saw_text("PLAN"));
+  CHECK(saw_text("MQ2"));
+  CHECK(row_has_label(0U, "M21") && saw_text("HIGH"));
+  CHECK(row_has_label(1U, "M22") && row_has_label(2U, "M23"));
+  CHECK(row_has_label(3U, "M24") && row_has_label(4U, "M25"));
+  CHECK(!saw_text("LV1") && !saw_text("LV2") && !saw_text("LV3"));
+  CHECK(check_drawn_within_panel() == 0);
 
   reset_recorder();
   NodeAStatus_Update(&screen, &snapshot, 0U, 5U * NODE_A_STATUS_DWELL_MS);
+  CHECK(saw_text("FLAME"));
+  CHECK(row_has_label(0U, "FL1") && row_has_label(1U, "FL2") &&
+        row_has_label(2U, "FL3") && row_has_label(3U, "FL4") &&
+        row_has_label(4U, "FL5"));
+  CHECK(check_drawn_within_panel() == 0);
+
+  reset_recorder();
+  NodeAStatus_Update(&screen, &snapshot, 0U, 6U * NODE_A_STATUS_DWELL_MS);
+  CHECK(saw_text("LEVEL"));
+  CHECK(row_has_label(0U, "LV1") && row_has_label(1U, "LV2") &&
+        row_has_label(2U, "LV3") && row_has_label(3U, "LV4") &&
+        row_has_label(4U, "LV5"));
+  CHECK(!saw_text("M21") && !saw_text("FL1"));
+  CHECK(saw_text("LOW") && saw_text("HIGH"));
+  CHECK(saw_text("PLAN"));
+
+  reset_recorder();
+  NodeAStatus_Update(&screen, &snapshot, 0U, 7U * NODE_A_STATUS_DWELL_MS);
   CHECK(saw_text("FAN"));
   CHECK(saw_text("F1") && saw_text("1240"));
   CHECK(saw_text("F2") && saw_text("2380"));
@@ -401,6 +458,41 @@ static int check_redraw_policy(void)
   CHECK(fill_count == 2U);
   NodeAStatus_Update(&screen, &snapshot, 0U, 4U + NODE_A_STATUS_REFRESH_MS);
   CHECK(fill_count == 3U);
+
+  /* The grouped pages repaint for their own channels, even though the
+   * inventory indexes are no longer contiguous. */
+  NodeAStatus_Init(&screen, 0U);
+  snapshot = idle_snapshot();
+  reset_recorder();
+  NodeAStatus_Update(&screen, &snapshot, 0U, NODE_A_STATUS_DWELL_MS);
+  CHECK(fill_count == 1U);
+  snapshot.analog[1].raw++; /* MQ4 is on the next page. */
+  NodeAStatus_Update(&screen, &snapshot, 0U, NODE_A_STATUS_DWELL_MS + 1U);
+  CHECK(fill_count == 1U);
+  snapshot.analog[3].raw++; /* CO2 is on this page. */
+  NodeAStatus_Update(&screen, &snapshot, 0U, NODE_A_STATUS_DWELL_MS + 2U);
+  CHECK(fill_count == 2U);
+
+  NodeAStatus_Update(&screen, &snapshot, 0U, 2U * NODE_A_STATUS_DWELL_MS);
+  CHECK(fill_count == 3U);
+  snapshot.analog[3].raw++;
+  NodeAStatus_Update(&screen, &snapshot, 0U, 2U * NODE_A_STATUS_DWELL_MS + 1U);
+  CHECK(fill_count == 3U);
+  snapshot.analog[4].raw++;
+  NodeAStatus_Update(&screen, &snapshot, 0U, 2U * NODE_A_STATUS_DWELL_MS + 2U);
+  CHECK(fill_count == 4U);
+
+  NodeAStatus_Update(&screen, &snapshot, 0U, 6U * NODE_A_STATUS_DWELL_MS);
+  CHECK(fill_count == 5U);
+  snapshot.digital[0].active_low = 1U;
+  NodeAStatus_Update(&screen, &snapshot, 0U, 6U * NODE_A_STATUS_DWELL_MS + 1U);
+  CHECK(fill_count == 5U);
+  snapshot.digital[7].active_low = 0U;
+  NodeAStatus_Update(&screen, &snapshot, 0U, 6U * NODE_A_STATUS_DWELL_MS + 2U);
+  CHECK(fill_count == 6U);
+  snapshot.peer_digital[4].active_low = 1U;
+  NodeAStatus_Update(&screen, &snapshot, 0U, 6U * NODE_A_STATUS_DWELL_MS + 3U);
+  CHECK(fill_count == 7U);
   return 0;
 }
 
@@ -436,6 +528,26 @@ static int check_inventory_mapping(void)
   return 0;
 }
 
+static int check_peer_bridge(void)
+{
+  NodeAStatusPeerState peer = {0};
+  NodeAStatusSnapshot snapshot = idle_snapshot();
+  CHECK(NodeAStatus_ApplyPeerLine(&peer, "PEER|0,123,0;10,1,0;11,0,3", 100U) == 1U);
+  NodeAStatus_CapturePeer(&snapshot, &peer, 101U);
+  CHECK(snapshot.peer_analog[0].online == 1U && snapshot.peer_analog[0].raw == 123U);
+  CHECK(snapshot.peer_digital[4].online == 1U && snapshot.peer_digital[4].active_low == 1U);
+  CHECK(snapshot.peer_digital[5].enabled == 0U);
+  CHECK(NodeAStatus_ApplyPeerLine(&peer, "PEER|10,0,0;12,1,0", 200U) == 0U);
+  NodeAStatus_CapturePeer(&snapshot, &peer, 201U);
+  CHECK(snapshot.peer_digital[4].active_low == 1U); /* Invalid line was atomic. */
+  NodeAStatus_CapturePeer(&snapshot, &peer, 100U + NODE_A_STATUS_PEER_STALE_MS + 1U);
+  CHECK(snapshot.peer_analog[0].online == 0U && snapshot.peer_digital[4].online == 0U);
+  CHECK(NodeAStatus_ApplyPeerLine(&peer, "PEERDOWN", 40000U) == 1U);
+  NodeAStatus_CapturePeer(&snapshot, &peer, 40001U);
+  CHECK(snapshot.peer_digital[4].online == 0U);
+  return 0;
+}
+
 int main(void)
 {
   if (check_page_sequence() != 0) return 1;
@@ -446,6 +558,7 @@ int main(void)
   if (check_render_pages() != 0) return 1;
   if (check_redraw_policy() != 0) return 1;
   if (check_inventory_mapping() != 0) return 1;
+  if (check_peer_bridge() != 0) return 1;
   puts("Node A status screen host test: PASS");
   return 0;
 }

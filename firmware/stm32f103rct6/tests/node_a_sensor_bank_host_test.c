@@ -28,6 +28,14 @@ int main(void) {
   assert(NodeASensorBank_Count(&bank) == 20U);
   assert(find_reading(&bank, "SHT-04") != 0);
   assert(find_reading(&bank, "LEVEL-03") != 0);
+  assert(find_reading(&bank, "LEVEL-02")->enabled == 1U);
+  assert(find_reading(&bank, "LEVEL-03")->enabled == 1U);
+  for (uint8_t i = 0U; i < NodeASensorBank_Count(&bank); ++i) {
+    assert(bank.readings[i].enabled == 1U);
+  }
+  assert(find_reading(&bank, "MQ2-02")->commissioned_for_alarm == 0U);
+  assert(find_reading(&bank, "FLAME-02")->commissioned_for_alarm == 0U);
+  assert(find_reading(&bank, "CO-02")->calibrated == 0U);
 
   /* Enable SHT-04 and LEVEL-03 for test */
   int8_t sht4_idx = NodeASensorBank_FindIndex(&bank, "SHT-04");

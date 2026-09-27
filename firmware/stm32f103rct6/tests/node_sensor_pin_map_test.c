@@ -56,7 +56,7 @@ int main(void) {
     { (void*)GPIOC, GPIO_PIN_0 },  /* LEVEL-01 */
     { (void*)GPIOC, GPIO_PIN_8 },  /* FLAME-02 */
     { (void*)GPIOC, GPIO_PIN_9 },  /* FLAME-03 */
-    { (void*)GPIOC, GPIO_PIN_10 }, /* MQ2-02 */
+    { (void*)NODE_A_MQ2_2_PORT, NODE_A_MQ2_2_PIN }, /* MQ2-02 */
     { (void*)GPIOC, GPIO_PIN_11 }, /* MQ2-03 */
     { (void*)GPIOC, GPIO_PIN_12 }, /* LEVEL-02 */
     { (void*)GPIOC, GPIO_PIN_13 }  /* LEVEL-03 */
@@ -85,8 +85,12 @@ int main(void) {
     { (void*)GPIOC, GPIO_PIN_7 },  /* Screen 1 BLK */
     { (void*)GPIOB, GPIO_PIN_15 }  /* WS2812 */
   };
+  /* PC10 is physically occupied by the FAN-01 transistor-base circuit. */
+  PortPin node_a_fan_base = { (void*)GPIOC, GPIO_PIN_10 };
   assert_no_overlap(node_a_sensor_pins, sizeof(node_a_sensor_pins)/sizeof(node_a_sensor_pins[0]),
                     node_a_reserved_pins, sizeof(node_a_reserved_pins)/sizeof(node_a_reserved_pins[0]));
+  assert_no_overlap(node_a_sensor_pins, sizeof(node_a_sensor_pins)/sizeof(node_a_sensor_pins[0]),
+                    &node_a_fan_base, 1U);
 
   /* Check Node B sensor pins against duplicates and reserved pins */
   PortPin node_b_sensor_pins[] = {

@@ -81,6 +81,8 @@ const visibleAssets = computed(() => store.assets.filter((asset) => {
   return matchesQuery && (stateFilter.value === 'all' || resolveTwinVisualState(asset, store.alerts) === stateFilter.value);
 }));
 const riskAssets = computed(() => store.assets.filter((asset) => ['alarm', 'warning'].includes(resolveTwinVisualState(asset, store.alerts))));
+const unlocatedAlerts = computed(() => store.alerts.filter((alert) => ['open', 'acknowledged'].includes(alert.status)
+  && (!alert.assetCode || !store.assets.some((asset) => asset.code === alert.assetCode))));
 const riskPatrolLabel = computed(() => {
   if (!riskAssets.value.length) return '';
   const current = riskAssets.value.findIndex((asset) => asset.code === selectedCode.value);
@@ -286,7 +288,7 @@ onBeforeUnmount(() => {
       </div>
       <article ref="stage" :class="['twin-stage-panel', { 'twin-fullscreen-active': fullscreenActive }]" @pointerdown.capture="pauseAutoLocate" @wheel.capture.passive="pauseAutoLocate" @keydown.capture="pauseAutoLocate" @pointermove="onStagePointerMove" @pointerdown="onStagePointerDown" @pointerup="onStagePointerUp" @pointerleave="onStagePointerLeave">
         <nav class="twin-preset-hud" aria-label="三维视角预设"><span><Camera />视角预设</span><button v-for="preset in ['总览','电力舱','燃气舱','水浸点']" :key="preset" @click="selectPreset(preset)">{{ preset }}</button></nav>
-        <aside class="twin-risk-hud" aria-label="风险设备列表"><strong>风险设备 · {{ riskAssets.length }} 台</strong><button v-for="asset in riskAssets" :key="asset.id" type="button" :aria-pressed="selectedCode === asset.code" :title="asset.name" @click="select(asset.code)"><i :class="resolveTwinVisualState(asset, store.alerts)" /><span>{{ asset.code }}</span><small>{{ asset.name }}</small></button><p v-if="!riskAssets.length">当前无风险设备</p></aside>
+        <aside class="twin-risk-hud" aria-label="风险设备列表"><strong>风险设备 · {{ riskAssets.length }} 台</strong><button v-for="asset in riskAssets" :key="asset.id" type="button" :aria-pressed="selectedCode === asset.code" :title="`${asset.name} · ${primaryTwinAlert(asset.code, store.alerts)?.title || '设备状态异常'}`" @click="select(asset.code)"><i :class="resolveTwinVisualState(asset, store.alerts)" /><span>{{ asset.code }}</span><small>{{ primaryTwinAlert(asset.code, store.alerts)?.title || asset.name }}</small></button><p v-if="!riskAssets.length">当前无风险设备</p><p v-if="unlocatedAlerts.length" class="twin-unlocated-alerts">另有 {{ unlocatedAlerts.length }} 条告警缺少资产定位，请在告警中心核对。</p></aside>
         <div class="twin-leak-simulator" :class="{ active: Boolean(effectiveLeakCode) }" role="group" aria-label="管道泄漏模拟">
           <strong>泄漏模拟</strong>
           <select v-model="leakTargetCode" aria-label="选择模拟泄漏测点"><option v-for="asset in leakCandidates" :key="asset.code" :value="asset.code">{{ asset.code }} · {{ leakPipeLabel(asset) }}</option></select>
@@ -294,7 +296,7 @@ onBeforeUnmount(() => {
           <button type="button" :disabled="!simulatedLeakCode" @click="stopLeakSimulation">停止</button>
           <span v-if="effectiveLeakCode"><i />{{ simulatedLeakCode ? '模拟' : '实时' }} · {{ effectiveLeakLabel }}</span>
         </div>
-        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" :model-url="activeModelUrl" :leak-asset-code="effectiveLeakCode" @select="select" @model-report="receiveModelReport" />
+        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" :model-url="activeModelUrl" :leak-asset-code="effectiveLeakCode" :focus-on-load="Boolean(requestedCode)" @select="select" @model-report="receiveModelReport" />
         <div v-if="selectedAsset" class="twin-focus-status" aria-live="polite"><span :class="resolveTwinVisualState(selectedAsset, store.alerts)"><i />{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span><b :title="selectedAsset.name">{{ selectedAssetName }}</b><small>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</small><div v-if="riskAssets.length" class="twin-risk-patrol"><em>{{ riskPatrolLabel }}</em><button type="button" aria-label="巡检上一异常设备" @click="inspectRisk(-1)">← 上一异常</button><button type="button" aria-label="巡检下一异常设备" @click="inspectRisk(1)">下一异常 →</button></div></div>
         <nav class="twin-quick-switch" aria-label="场景内设备切换" @pointerenter="onQuickSwitchPointerMove" @pointerdown.capture="onQuickSwitchPointerDown" @pointermove.capture="onQuickSwitchPointerMove" @pointerup.capture="onQuickSwitchPointerEnd" @pointercancel.capture="onQuickSwitchPointerEnd" @mousedown.stop>
           <div class="twin-quick-switch-tools"><div class="twin-quick-switch-heading"><span>设备快速切换 · {{ visibleAssets.length }}/{{ store.assets.length }}</span><b>{{ selectedAssetName || '请选择设备' }}</b></div><div class="twin-switch-filters" role="group" aria-label="按运行状态筛选设备"><button v-for="filter in filterOptions" :key="filter.value" :class="{ selected: stateFilter === filter.value }" type="button" @pointerdown.stop @click.stop="stateFilter = filter.value">{{ filter.label }}</button></div></div>
@@ -390,4 +392,5 @@ onBeforeUnmount(() => {
    top (and hiding those states); its container stays mounted for the global
    cursor regression but contributes no visual while the scene is fullscreen. */
 .twin-stage-panel.twin-fullscreen-active :deep(.experience-cursor) > * { display: none; }
+.twin-risk-hud .twin-unlocated-alerts { border-top: 1px solid var(--ops-line); color: #ffd28a; line-height: 1.5; }
 </style>

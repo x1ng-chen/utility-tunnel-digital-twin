@@ -30,26 +30,14 @@ void NodeASensorBank_Init(NodeASensorBank *bank, ADC_HandleTypeDef *hadc,
                        kNodeADigitalPins[i].kind, 0U);
   }
 
-  /* Default enabled. MQ4-01 safety is owned by the dedicated 200 ms gas path;
-   * this slower inventory-bank copy remains telemetry-only to avoid duplicate
-   * alarm ownership. MQ2-01 and FLAME-01 retain bank safety linkage. */
-  int8_t pos;
-  for (uint8_t i = 0U; i < NODE_A_I2C_SENSOR_COUNT; ++i)
+  /* Every physically fitted channel is sampled and reported. New channels
+   * stay uncalibrated and have no alarm authority until bench validation. */
+  for (uint8_t i = 0U; i < NODE_A_SENSOR_COUNT; ++i)
     NodeASensorBank_SetEnabled(bank, i, 1U);
-  if ((pos = NodeASensorBank_FindIndex(bank, "MQ4-01")) >= 0) {
-    NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
-  }
-  if ((pos = NodeASensorBank_FindIndex(bank, "CO-01")) >= 0) NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
-  if ((pos = NodeASensorBank_FindIndex(bank, "O2-01")) >= 0) NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
-  if ((pos = NodeASensorBank_FindIndex(bank, "MQ2-01")) >= 0) {
-    NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
-    NodeASensorBank_SetCommissionedForAlarm(bank, (uint8_t)pos, 1U);
-  }
-  if ((pos = NodeASensorBank_FindIndex(bank, "FLAME-01")) >= 0) {
-    NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
-    NodeASensorBank_SetCommissionedForAlarm(bank, (uint8_t)pos, 1U);
-  }
-  if ((pos = NodeASensorBank_FindIndex(bank, "LEVEL-01")) >= 0) NodeASensorBank_SetEnabled(bank, (uint8_t)pos, 1U);
+  int8_t pos = NodeASensorBank_FindIndex(bank, "MQ2-01");
+  if (pos >= 0) NodeASensorBank_SetCommissionedForAlarm(bank, (uint8_t)pos, 1U);
+  pos = NodeASensorBank_FindIndex(bank, "FLAME-01");
+  if (pos >= 0) NodeASensorBank_SetCommissionedForAlarm(bank, (uint8_t)pos, 1U);
 }
 
 uint8_t NodeASensorBank_Count(const NodeASensorBank *bank) {

@@ -1257,6 +1257,27 @@ void test_ctrl02_accepts_a_node_a_ack_without_a_timestamp() {
   CHECK_TRUE(ack.completed_at_ms >= kMinEpochSeconds * 1000ULL);
 }
 
+void test_ctrl01_compacts_peer_sensor_telemetry() {
+  constexpr char payload[] =
+      "{\"schema\":\"ut.telemetry.v1\",\"seq\":7,\"readings\":["
+      "{\"assetCode\":\"MQ4-03\",\"metric\":\"raw\",\"value\":123,\"unit\":\"adc\",\"quality\":\"good\"},"
+      "{\"assetCode\":\"MQ4-03\",\"metric\":\"voltage\",\"value\":100.0,\"unit\":\"mV\",\"quality\":\"good\"},"
+      "{\"assetCode\":\"LEVEL-04\",\"metric\":\"level.detected\",\"value\":1,\"unit\":\"bool\",\"quality\":\"suspect\"}]}";
+  char output[128]{};
+  size_t written = 0U;
+  CHECK_EQ(RouteResult::Ok,
+           BuildPeerTelemetryLine(payload, sizeof(payload) - 1U,
+                                  output, sizeof(output), &written));
+  CHECK_TRUE(std::strcmp(output, "PEER|0,123,0;10,1,1") == 0);
+  CHECK_EQ(std::strlen(output), written);
+  constexpr char invalid[] =
+      "{\"schema\":\"ut.telemetry.v1\",\"seq\":8,\"readings\":["
+      "{\"assetCode\":\"LEVEL-04\",\"metric\":\"level.detected\",\"value\":2,\"quality\":\"good\"}]}";
+  CHECK_EQ(RouteResult::InvalidPayload,
+           BuildPeerTelemetryLine(invalid, sizeof(invalid) - 1U,
+                                  output, sizeof(output), &written));
+}
+
 }  // namespace
 
 int main() {
@@ -1275,6 +1296,7 @@ int main() {
   test_time_sync_is_immediate_periodic_valid_and_wrap_safe();
   test_ctrl02_forwards_only_valid_ack_and_preserves_result();
 #else
+  test_ctrl01_compacts_peer_sensor_telemetry();
   test_role_routes_are_exact_and_idempotent();
   test_ctrl01_one_menu_delivery_produces_one_uart_command();
   test_stars_menu_survives_both_esp_roles();

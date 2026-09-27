@@ -58,7 +58,9 @@ export function toDjangoBatch(telemetry, { deviceId = 'CTRL-01', receivedAt = ne
   const readings = [];
   const skipped = [];
   telemetry.readings.forEach((reading, index) => {
-    const assetCode = String(reading.assetCode || '').toUpperCase();
+    const rawAssetCode = String(reading.assetCode || '').toUpperCase();
+    // MCU inventory uses LEVEL-01..05; the platform assets are LEVEL-L01..L05.
+    const assetCode = rawAssetCode.replace(/^LEVEL-0([1-5])$/, 'LEVEL-L0$1');
     const metricKey = String(reading.metric || '').toLowerCase();
     const value = Number(reading.value);
     if (!ASSET_CODE_PATTERN.test(assetCode)) {

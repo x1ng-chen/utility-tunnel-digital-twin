@@ -1,0 +1,14 @@
+{
+  "CTRL-01": "CTRL-01",
+  "LED-01": "LED-STRIP",
+  "DISP-01": "TFT-01",
+  "BUZZ-01": "BUZZ-01",
+  "RELAY-01": "RELAY-01",
+  "FAN-02": "FAN-02-上框",
+  "NET-01": "NET-01",
+  "LEVEL-L01": "LEVEL-L01-探头",
+  "LEVEL-L02": "LEVEL-L02-探头",
+  "LEVEL-L03": "LEVEL-L03-探头",
+  "LEVEL-L04": "LEVEL-L04-探头",
+  "LEVEL-L05": "LEVEL-L05-探头"
+}

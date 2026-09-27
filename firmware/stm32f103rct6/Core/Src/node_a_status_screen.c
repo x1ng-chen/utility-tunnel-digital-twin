@@ -3,8 +3,9 @@
  * @brief   CTRL-01 read-only status screen: five-second carousel plus a red
  *          alarm page that takes the panel over the moment an alarm latches.
  *
- * The screen renders Node A's own local state.  It has no command path: it
- * never parses the ESP-01 MQTT stream, never touches an actuator and never
+ * The screen renders Node A's local state plus validated peer sensor readings
+ * supplied by ESP-01 over its serial link.  It has no command path: it
+ * never parses MQTT JSON, never touches an actuator and never
  * reads the joystick (Node A has none).  The page model is HAL-free so the
  * carousel timing and the takeover rules are host-testable; only the drawing
  * helpers below touch the ST7735 driver.
@@ -12,6 +13,7 @@
 #include "node_a_status_screen.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "st7735.h"
@@ -30,7 +32,19 @@ static int RowY(uint8_t row)
   return NODE_A_STATUS_ROW_TOP + ((int)row * NODE_A_STATUS_ROW_STEP);
 }
 
-#define NODE_A_STATUS_CAROUSEL_PAGES 6U
+#define NODE_A_STATUS_CAROUSEL_PAGES 8U
+
+/* Keep every installed sensor family on one page.  These are inventory
+ * indexes, not display row numbers; Node A's three level inputs are local. */
+#define PEER_INDEX(index) ((uint8_t)(0x80U | (index)))
+static const uint8_t gas_co[] = {0U, 3U, 6U, PEER_INDEX(4U), PEER_INDEX(5U)};
+static const uint8_t gas_mq4[] = {1U, 4U, PEER_INDEX(0U), PEER_INDEX(1U), PEER_INDEX(2U)};
+static const uint8_t gas_o2[] = {2U, 5U, PEER_INDEX(3U)};
+static const uint8_t smoke[] = {0U, 5U, 6U, PEER_INDEX(2U), PEER_INDEX(3U)};
+static const uint8_t flame[] = {1U, 3U, 4U, PEER_INDEX(0U), PEER_INDEX(1U)};
+static const uint8_t levels[] = {2U, 7U, 8U, PEER_INDEX(4U), PEER_INDEX(5U)};
+
+#define COUNT_OF(array) ((uint8_t)(sizeof(array) / sizeof((array)[0])))
 
 static void SelectPage(NodeAStatusModel *model, uint8_t alarm_active, uint32_t now_ms)
 {
@@ -110,6 +124,78 @@ void NodeAStatus_CaptureInventory(NodeAStatusSnapshot *snapshot,
   }
 }
 
+uint8_t NodeAStatus_ApplyPeerLine(NodeAStatusPeerState *peer,
+                                  const char *line, uint32_t now_ms)
+{
+  NodeAStatusPeerState next;
+  const char *cursor;
+  uint8_t parsed = 0U;
+  if (peer == NULL || line == NULL) return 0U;
+  if (strcmp(line, "PEERDOWN") == 0)
+  {
+    for (uint8_t i = 0U; i < NODE_A_STATUS_PEER_COUNT; ++i)
+      peer->readings[i].seen = 0U;
+    return 1U;
+  }
+  if (strncmp(line, "PEER|", 5U) != 0) return 0U;
+  next = *peer;
+  cursor = line + 5U;
+  do
+  {
+    char *end;
+    unsigned long index, value, quality;
+    if (*cursor < '0' || *cursor > '9') return 0U;
+    index = strtoul(cursor, &end, 10);
+    if (*end != ',' || index >= NODE_A_STATUS_PEER_COUNT) return 0U;
+    cursor = end + 1;
+    if (*cursor < '0' || *cursor > '9') return 0U;
+    value = strtoul(cursor, &end, 10);
+    if (*end != ',' || value > ((index < 6U) ? 4095UL : 1UL)) return 0U;
+    cursor = end + 1;
+    if (*cursor < '0' || *cursor > '3') return 0U;
+    quality = strtoul(cursor, &end, 10);
+    if (quality > 3UL || (*end != ';' && *end != '\0')) return 0U;
+    next.readings[index].value = (uint16_t)value;
+    next.readings[index].quality = (SensorQuality)quality;
+    next.readings[index].received_at_ms = now_ms;
+    next.readings[index].seen = 1U;
+    ++parsed;
+    cursor = end;
+    if (*cursor == ';') ++cursor;
+  } while (*cursor != '\0');
+  if (parsed == 0U) return 0U;
+  *peer = next;
+  return 1U;
+}
+
+void NodeAStatus_CapturePeer(NodeAStatusSnapshot *snapshot,
+                             const NodeAStatusPeerState *peer, uint32_t now_ms)
+{
+  if (snapshot == NULL || peer == NULL) return;
+  for (uint8_t i = 0U; i < NODE_A_STATUS_PEER_COUNT; ++i)
+  {
+    const NodeAStatusPeerReading *reading = &peer->readings[i];
+    const uint8_t fresh = (uint8_t)(reading->seen != 0U &&
+        (uint32_t)(now_ms - reading->received_at_ms) <= NODE_A_STATUS_PEER_STALE_MS);
+    if (i < NODE_A_STATUS_PEER_ANALOG_COUNT)
+    {
+      NodeAStatusAnalog *target = &snapshot->peer_analog[i];
+      target->enabled = 1U;
+      target->online = fresh;
+      target->quality = fresh ? reading->quality : SENSOR_QUALITY_MISSING;
+      target->raw = fresh ? reading->value : 0U;
+    }
+    else
+    {
+      NodeAStatusDigital *target = &snapshot->peer_digital[i - NODE_A_STATUS_PEER_ANALOG_COUNT];
+      target->enabled = (uint8_t)(i != 11U); /* L05 is physically removed. */
+      target->online = fresh;
+      target->quality = fresh ? reading->quality : SENSOR_QUALITY_MISSING;
+      target->active_low = fresh ? (uint8_t)reading->value : 0U;
+    }
+  }
+}
+
 NodeAStatusPage NodeAStatus_CurrentPage(const NodeAStatusScreen *screen)
 {
   return (screen == NULL) ? NODE_A_STATUS_PAGE_ENVIRONMENT : screen->model.page;
@@ -119,10 +205,12 @@ const char *NodeAStatus_PageTitle(NodeAStatusPage page)
 {
   switch (page)
   {
-    case NODE_A_STATUS_PAGE_GAS_1: return "GAS1";
-    case NODE_A_STATUS_PAGE_GAS_2: return "GAS2";
-    case NODE_A_STATUS_PAGE_INPUTS_1: return "INPUT1";
-    case NODE_A_STATUS_PAGE_INPUTS_2: return "INPUT2";
+    case NODE_A_STATUS_PAGE_CO: return "CO";
+    case NODE_A_STATUS_PAGE_MQ4: return "MQ4";
+    case NODE_A_STATUS_PAGE_O2: return "O2";
+    case NODE_A_STATUS_PAGE_MQ2: return "MQ2";
+    case NODE_A_STATUS_PAGE_FLAME: return "FLAME";
+    case NODE_A_STATUS_PAGE_LEVELS: return "LEVEL";
     case NODE_A_STATUS_PAGE_FANS: return "FAN";
     case NODE_A_STATUS_PAGE_ALARM: return "ALARM";
     case NODE_A_STATUS_PAGE_ENVIRONMENT:
@@ -257,10 +345,13 @@ static void DrawEnvironment(const NodeAStatusSnapshot *snapshot)
 }
 
 static void DrawGas(const NodeAStatusSnapshot *snapshot, NodeAStatusPage page,
-                    uint8_t first, uint8_t count)
+                    const uint8_t *indices, uint8_t count)
 {
   static const char *const labels[NODE_A_STATUS_ANALOG_COUNT] = {
     "CO1", "M41", "O21", "CO2", "M42", "O22", "CO3"
+  };
+  static const char *const peer_labels[NODE_A_STATUS_PEER_ANALOG_COUNT] = {
+    "M43", "M44", "M45", "O23", "CO4", "CO5"
   };
   char text[NODE_A_STATUS_VALUE_MAX];
   DrawHeader(page, &snapshot->clock);
@@ -269,8 +360,11 @@ static void DrawGas(const NodeAStatusSnapshot *snapshot, NodeAStatusPage page,
    * counts, never ppm or a misleading 'OK'.  Planned pins stay PLAN. */
   for (uint8_t row = 0U; row < count; ++row)
   {
-    const uint8_t i = (uint8_t)(first + row);
-    const NodeAStatusAnalog *reading = &snapshot->analog[i];
+    const uint8_t encoded = indices[row];
+    const uint8_t remote = (uint8_t)((encoded & 0x80U) != 0U);
+    const uint8_t i = (uint8_t)(encoded & 0x7FU);
+    const NodeAStatusAnalog *reading = remote ? &snapshot->peer_analog[i] :
+                                                &snapshot->analog[i];
     uint16_t color = NODE_A_STATUS_MUTED;
     if (reading->enabled == 0U) (void)snprintf(text, sizeof(text), "PLAN");
     else if (reading->online == 0U || reading->quality == SENSOR_QUALITY_MISSING)
@@ -281,26 +375,32 @@ static void DrawGas(const NodeAStatusSnapshot *snapshot, NodeAStatusPage page,
     {
       (void)snprintf(text, sizeof(text), "%u RAW", (unsigned int)reading->raw);
       color = NODE_A_STATUS_FG;
-      if (i == 0U) color = AlarmColor(snapshot->co_alarm, snapshot->co_warning);
-      if (i == 1U) color = AlarmColor(snapshot->methane_alarm, snapshot->methane_warning);
-      if (i == 2U) color = AlarmColor(snapshot->oxygen_alarm, snapshot->oxygen_warning);
+      if (remote == 0U && i == 0U) color = AlarmColor(snapshot->co_alarm, snapshot->co_warning);
+      if (remote == 0U && i == 1U) color = AlarmColor(snapshot->methane_alarm, snapshot->methane_warning);
+      if (remote == 0U && i == 2U) color = AlarmColor(snapshot->oxygen_alarm, snapshot->oxygen_warning);
     }
-    DrawRow(row, labels[i], text, color);
+    DrawRow(row, remote ? peer_labels[i] : labels[i], text, color);
   }
 }
 
 static void DrawInputs(const NodeAStatusSnapshot *snapshot, NodeAStatusPage page,
-                       uint8_t first, uint8_t count)
+                       const uint8_t *indices, uint8_t count)
 {
   static const char *const labels[NODE_A_STATUS_DIGITAL_COUNT] = {
     "M21", "FL1", "LV1", "FL2", "FL3", "M22", "M23", "LV2", "LV3"
+  };
+  static const char *const peer_labels[NODE_A_STATUS_PEER_DIGITAL_COUNT] = {
+    "FL4", "FL5", "M24", "M25", "LV4", "LV5"
   };
   char text[NODE_A_STATUS_VALUE_MAX];
   DrawHeader(page, &snapshot->clock);
   for (uint8_t row = 0U; row < count; ++row)
   {
-    const uint8_t index = (uint8_t)(first + row);
-    const NodeAStatusDigital *reading = &snapshot->digital[index];
+    const uint8_t encoded = indices[row];
+    const uint8_t remote = (uint8_t)((encoded & 0x80U) != 0U);
+    const uint8_t index = (uint8_t)(encoded & 0x7FU);
+    const NodeAStatusDigital *reading = remote ? &snapshot->peer_digital[index] :
+                                                 &snapshot->digital[index];
     uint16_t color = NODE_A_STATUS_MUTED;
     if (reading->enabled == 0U) (void)snprintf(text, sizeof(text), "PLAN");
     else if (reading->online == 0U || reading->quality == SENSOR_QUALITY_MISSING)
@@ -313,7 +413,7 @@ static void DrawInputs(const NodeAStatusSnapshot *snapshot, NodeAStatusPage page
       (void)snprintf(text, sizeof(text), "%s", reading->active_low ? "LOW" : "HIGH");
       color = reading->active_low ? NODE_A_STATUS_WARNING : NODE_A_STATUS_FG;
     }
-    DrawRow(row, labels[index], text, color);
+    DrawRow(row, remote ? peer_labels[index] : labels[index], text, color);
   }
 }
 
@@ -407,21 +507,29 @@ static void RenderPage(const NodeAStatusModel *model, const NodeAStatusSnapshot 
   ST7735_BeginFrame();
   switch (model->page)
   {
-    case NODE_A_STATUS_PAGE_GAS_1:
+    case NODE_A_STATUS_PAGE_CO:
       ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NODE_A_STATUS_BG);
-      DrawGas(snapshot, NODE_A_STATUS_PAGE_GAS_1, 0U, 4U);
+      DrawGas(snapshot, NODE_A_STATUS_PAGE_CO, gas_co, COUNT_OF(gas_co));
       break;
-    case NODE_A_STATUS_PAGE_GAS_2:
+    case NODE_A_STATUS_PAGE_MQ4:
       ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NODE_A_STATUS_BG);
-      DrawGas(snapshot, NODE_A_STATUS_PAGE_GAS_2, 4U, 3U);
+      DrawGas(snapshot, NODE_A_STATUS_PAGE_MQ4, gas_mq4, COUNT_OF(gas_mq4));
       break;
-    case NODE_A_STATUS_PAGE_INPUTS_1:
+    case NODE_A_STATUS_PAGE_O2:
       ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NODE_A_STATUS_BG);
-      DrawInputs(snapshot, NODE_A_STATUS_PAGE_INPUTS_1, 0U, 5U);
+      DrawGas(snapshot, NODE_A_STATUS_PAGE_O2, gas_o2, COUNT_OF(gas_o2));
       break;
-    case NODE_A_STATUS_PAGE_INPUTS_2:
+    case NODE_A_STATUS_PAGE_MQ2:
       ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NODE_A_STATUS_BG);
-      DrawInputs(snapshot, NODE_A_STATUS_PAGE_INPUTS_2, 5U, 4U);
+      DrawInputs(snapshot, NODE_A_STATUS_PAGE_MQ2, smoke, COUNT_OF(smoke));
+      break;
+    case NODE_A_STATUS_PAGE_FLAME:
+      ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NODE_A_STATUS_BG);
+      DrawInputs(snapshot, NODE_A_STATUS_PAGE_FLAME, flame, COUNT_OF(flame));
+      break;
+    case NODE_A_STATUS_PAGE_LEVELS:
+      ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NODE_A_STATUS_BG);
+      DrawInputs(snapshot, NODE_A_STATUS_PAGE_LEVELS, levels, COUNT_OF(levels));
       break;
     case NODE_A_STATUS_PAGE_FANS:
       ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NODE_A_STATUS_BG);
@@ -438,6 +546,44 @@ static void RenderPage(const NodeAStatusModel *model, const NodeAStatusSnapshot 
   }
 }
 
+static uint8_t AnalogRowsChanged(const NodeAStatusSnapshot *before,
+                                 const NodeAStatusSnapshot *after,
+                                 const uint8_t *indices, uint8_t count)
+{
+  for (uint8_t row = 0U; row < count; ++row)
+  {
+    const uint8_t encoded = indices[row];
+    const uint8_t index = (uint8_t)(encoded & 0x7FU);
+    if ((encoded & 0x80U) != 0U)
+    {
+      if (memcmp(&before->peer_analog[index], &after->peer_analog[index],
+                 sizeof(after->peer_analog[index])) != 0) return 1U;
+    }
+    else if (memcmp(&before->analog[index], &after->analog[index],
+                    sizeof(after->analog[index])) != 0) return 1U;
+  }
+  return 0U;
+}
+
+static uint8_t DigitalRowsChanged(const NodeAStatusSnapshot *before,
+                                  const NodeAStatusSnapshot *after,
+                                  const uint8_t *indices, uint8_t count)
+{
+  for (uint8_t row = 0U; row < count; ++row)
+  {
+    const uint8_t encoded = indices[row];
+    const uint8_t index = (uint8_t)(encoded & 0x7FU);
+    if ((encoded & 0x80U) != 0U)
+    {
+      if (memcmp(&before->peer_digital[index], &after->peer_digital[index],
+                 sizeof(after->peer_digital[index])) != 0) return 1U;
+    }
+    else if (memcmp(&before->digital[index], &after->digital[index],
+                    sizeof(after->digital[index])) != 0) return 1U;
+  }
+  return 0U;
+}
+
 static uint8_t VisibleDataChanged(NodeAStatusPage page,
                                   const NodeAStatusSnapshot *before,
                                   const NodeAStatusSnapshot *after)
@@ -449,24 +595,27 @@ static uint8_t VisibleDataChanged(NodeAStatusPage page,
   {
     case NODE_A_STATUS_PAGE_ENVIRONMENT:
       return (uint8_t)(memcmp(before->sht, after->sht, sizeof(after->sht)) != 0);
-    case NODE_A_STATUS_PAGE_GAS_1:
-      return (uint8_t)(memcmp(before->analog, after->analog,
-                             4U * sizeof(after->analog[0])) != 0 ||
+    case NODE_A_STATUS_PAGE_CO:
+      return (uint8_t)(AnalogRowsChanged(before, after, gas_co,
+                                         COUNT_OF(gas_co)) != 0U ||
                        before->co_alarm != after->co_alarm ||
-                       before->co_warning != after->co_warning ||
+                       before->co_warning != after->co_warning);
+    case NODE_A_STATUS_PAGE_MQ4:
+      return (uint8_t)(AnalogRowsChanged(before, after, gas_mq4,
+                                         COUNT_OF(gas_mq4)) != 0U ||
                        before->methane_alarm != after->methane_alarm ||
-                       before->methane_warning != after->methane_warning ||
+                       before->methane_warning != after->methane_warning);
+    case NODE_A_STATUS_PAGE_O2:
+      return (uint8_t)(AnalogRowsChanged(before, after, gas_o2,
+                                         COUNT_OF(gas_o2)) != 0U ||
                        before->oxygen_alarm != after->oxygen_alarm ||
                        before->oxygen_warning != after->oxygen_warning);
-    case NODE_A_STATUS_PAGE_GAS_2:
-      return (uint8_t)(memcmp(&before->analog[4], &after->analog[4],
-                             3U * sizeof(after->analog[0])) != 0);
-    case NODE_A_STATUS_PAGE_INPUTS_1:
-      return (uint8_t)(memcmp(before->digital, after->digital,
-                             5U * sizeof(after->digital[0])) != 0);
-    case NODE_A_STATUS_PAGE_INPUTS_2:
-      return (uint8_t)(memcmp(&before->digital[5], &after->digital[5],
-                             4U * sizeof(after->digital[0])) != 0);
+    case NODE_A_STATUS_PAGE_MQ2:
+      return DigitalRowsChanged(before, after, smoke, COUNT_OF(smoke));
+    case NODE_A_STATUS_PAGE_FLAME:
+      return DigitalRowsChanged(before, after, flame, COUNT_OF(flame));
+    case NODE_A_STATUS_PAGE_LEVELS:
+      return DigitalRowsChanged(before, after, levels, COUNT_OF(levels));
     case NODE_A_STATUS_PAGE_FANS:
       return (uint8_t)(before->fan1_pwm_percent != after->fan1_pwm_percent ||
                        before->fan2_pwm_percent != after->fan2_pwm_percent ||

@@ -52,7 +52,7 @@ static int failures = 0;
 #define TEST_LINK_BYTES_PER_CYCLE \
   ((TEST_BAUD * (TEST_INTERVAL_MS / 1000U)) / TEST_BITS_PER_BYTE)
 #define TEST_ACK_RESERVE_BYTES        350U   /* NODE_A_UART_ACK_RESERVE_BYTES */
-#define TEST_CYCLE_BYTES             2867U
+#define TEST_CYCLE_BYTES             3051U
 #define TEST_WIDEST_FRAME_BYTES       682U   /* the environmental frame */
 
 /* Microseconds one byte occupies the wire at the modelled baud: 10 bit times
@@ -168,6 +168,10 @@ static const SensorReading fixture_sensors[] = {
   { .asset_code = "FLAME-01", .kind = SENSOR_KIND_FLAME, .quality = SENSOR_QUALITY_GOOD,
     .online = 1U, .alarm = 0U },
   { .asset_code = "LEVEL-01", .kind = SENSOR_KIND_LEVEL, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .alarm = 0U },
+  { .asset_code = "LEVEL-02", .kind = SENSOR_KIND_LEVEL, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .alarm = 0U },
+  { .asset_code = "LEVEL-03", .kind = SENSOR_KIND_LEVEL, .quality = SENSOR_QUALITY_GOOD,
     .online = 1U, .alarm = 0U }
 };
 

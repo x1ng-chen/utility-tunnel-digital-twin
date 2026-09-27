@@ -93,6 +93,39 @@ int main(void) {
   }
   assert(frames_count > 1U);
 
+  /* The fitted Node A inventory must fit in rotating UART frames without
+   * silently omitting any of the 20 asset codes. */
+  static const char *const node_a_codes[20] = {
+    "SHT-01", "SHT-02", "SHT-03", "SHT-04",
+    "CO-01", "MQ4-01", "O2-01", "CO-02", "MQ4-02", "O2-02", "CO-03",
+    "MQ2-01", "FLAME-01", "LEVEL-01", "FLAME-02", "FLAME-03",
+    "MQ2-02", "MQ2-03", "LEVEL-02", "LEVEL-03"
+  };
+  SensorReading node_a[20];
+  uint8_t seen[20] = {0};
+  for (uint8_t i = 0U; i < 20U; ++i) {
+    SensorKind kind = i < 4U ? SENSOR_KIND_SHT30 :
+                      i < 11U ? SENSOR_KIND_CO : SENSOR_KIND_MQ2;
+    SensorReading_Init(&node_a[i], node_a_codes[i], kind, 1U);
+    if (kind == SENSOR_KIND_SHT30)
+      SensorReading_SetSht30(&node_a[i], 2500, 5000U, 100U, SENSOR_QUALITY_GOOD);
+    else if (kind == SENSOR_KIND_CO)
+      SensorReading_SetAnalog(&node_a[i], 4094U, 3299000UL, 100U, SENSOR_QUALITY_SUSPECT);
+    else
+      SensorReading_SetDigital(&node_a[i], 0U, 0U, 100U, SENSOR_QUALITY_GOOD);
+  }
+  SensorTelemetry_Init(&cursor, 1U);
+  for (uint8_t frame_no = 0U; frame_no < 20U; ++frame_no) {
+    assert(SensorTelemetry_FormatNext(node_a, 20U, &cursor, frame,
+                                      sizeof frame, &length) == 1U);
+    assert(length <= 767U);
+    for (uint8_t i = 0U; i < 20U; ++i) {
+      if (strstr(frame, node_a_codes[i]) != NULL) seen[i] = 1U;
+    }
+    if (cursor.next_index == 0U) break;
+  }
+  for (uint8_t i = 0U; i < 20U; ++i) assert(seen[i] == 1U);
+
   printf("sensor_telemetry_host_test passed!\n");
   return 0;
 }

@@ -321,6 +321,20 @@ test('dead-letters an idempotency conflict instead of retrying forever', async (
   }
 });
 
+test('maps MCU level channel codes to the platform level assets', () => {
+  const telemetry = {
+    schema: 'ut.telemetry.v1',
+    readings: [1, 2, 3, 4].map((number) => ({
+      assetCode: `LEVEL-0${number}`, metric: 'level.detected',
+      value: number % 2, unit: 'bool', quality: 'good',
+    })),
+  };
+  const batch = toDjangoBatch(telemetry, { deviceId: 'CTRL-01', receivedAt: RECEIVED_AT });
+  assert.deepEqual(batch.readings.map((reading) => reading.assetCode),
+    ['LEVEL-L01', 'LEVEL-L02', 'LEVEL-L03', 'LEVEL-L04']);
+  assert.equal(batch.skipped.length, 0);
+});
+
 test('dead-letters a poison transient conflict after the retry budget', async () => {
   const server = await startServer((record, response) => {
     if (record.url === '/api/auth/login/') {

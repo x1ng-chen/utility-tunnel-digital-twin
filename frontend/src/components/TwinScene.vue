@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Hand, Home, Orbit, ZoomIn, ZoomOut } from 'lucide-vue-next';
-import { Box3, BoxGeometry, Color, DirectionalLight, Fog, Group, HemisphereLight, MOUSE, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera, PointLight, Raycaster, Scene, Sphere, SphereGeometry, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from 'three';
+import { Box3, BoxGeometry, CanvasTexture, Color, DirectionalLight, Fog, Group, HemisphereLight, MOUSE, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera, PointLight, Raycaster, Scene, Sphere, SphereGeometry, Sprite, SpriteMaterial, SRGBColorSpace, TorusGeometry, Vector2, Vector3, WebGLRenderer } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Alert, Asset } from '../types';
 import { cameraFitDistance } from '../utils/cameraFit';
-import { leakPipeNodeNames, modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
+import { isUnoccupiedTwinModelNodeName, leakPipeNodeNames, modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
 
-const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string; leakAssetCode?: string | null }>();
+const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string; leakAssetCode?: string | null; focusOnLoad?: boolean }>();
 const emit = defineEmits<{ select: [code: string]; modelReport: [report: TwinModelBindingReport] }>();
 const host = ref<HTMLDivElement>();
 const modelState = ref<'loading' | 'loaded' | 'fallback'>('loading');
@@ -32,6 +32,7 @@ const assetObjects = new Map<string, Object3D>();
 // UI navigation. The scene graph is static between model reloads, so cache
 // the small material lists once and update only those materials per frame.
 const animatedMaterials = new Map<string, MeshStandardMaterial[]>();
+const alertOverlays = new Map<string, { root: Group; ring: Mesh; light: PointLight; signature: string; target: Object3D }>();
 const modelBoundCodes = new Set<string>();
 const materialBaselines = new WeakMap<MeshStandardMaterial, { color: Color; emissive: Color }>();
 let modelRoot: Object3D | undefined;
@@ -90,7 +91,9 @@ function publishModelReport(mode: TwinModelBindingReport['mode'], boundCodes: It
 }
 
 function addFallbackAsset(asset: Asset) {
-  if (!scene || assetObjects.has(asset.code)) return;
+  // Placeholder geometry belongs only to the synthetic preview scene. An
+  // unmatched asset has no known position in the delivered Blender model.
+  if (!scene || modelRoot || assetObjects.has(asset.code)) return;
   if (!fallbackAssetRoot) {
     fallbackAssetRoot = new Group();
     fallbackAssetRoot.name = 'TWIN_FALLBACK_ASSETS';
@@ -149,10 +152,7 @@ function bindModelAssets(root: Object3D) {
   props.assets.forEach((asset) => {
     if (modelBoundCodes.has(asset.code)) { boundCodes.push(asset.code); return; }
     const node = findModelNode(root, asset);
-    if (!node) {
-      addFallbackAsset(asset);
-      return;
-    }
+    if (!node) return;
     node.userData.assetCode = asset.code;
     const materials: MeshStandardMaterial[] = [];
     node.traverse((child) => {
@@ -176,6 +176,88 @@ function syncSceneAssets() {
     props.assets.forEach((asset) => addFallbackAsset(asset));
     publishModelReport('fallback');
   }
+  syncAlertOverlays();
+}
+
+function removeAlertOverlay(code: string) {
+  const overlay = alertOverlays.get(code);
+  if (!overlay) return;
+  const { root } = overlay;
+  root.traverse((object) => {
+    if (object instanceof Mesh) {
+      object.geometry.dispose();
+      (Array.isArray(object.material) ? object.material : [object.material]).forEach((material) => material.dispose());
+    } else if (object instanceof Sprite) {
+      object.material.map?.dispose();
+      object.material.dispose();
+    }
+  });
+  root.removeFromParent();
+  alertOverlays.delete(code);
+}
+
+function clearAlertOverlays() {
+  [...alertOverlays.keys()].forEach(removeAlertOverlay);
+}
+
+function makeAlertLabel(code: string, title: string, critical: boolean) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const context = canvas.getContext('2d');
+  if (!context) return null;
+  context.fillStyle = critical ? '#981d37' : '#946018';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.strokeStyle = critical ? '#ff7994' : '#ffd27f';
+  context.lineWidth = 8;
+  context.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
+  context.fillStyle = '#ffffff';
+  context.font = 'bold 31px sans-serif';
+  context.fillText(`${critical ? '严重' : '警告'} · ${code}`, 18, 48, canvas.width - 36);
+  context.font = '26px sans-serif';
+  context.fillText(title, 18, 94, canvas.width - 36);
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
+function syncAlertOverlays() {
+  if (!scene) return;
+  const visibleCodes = new Set<string>();
+  props.assets.forEach((asset) => {
+    const alert = primaryTwinAlert(asset.code, props.alerts);
+    const target = assetObjects.get(asset.code);
+    if (!alert || alert.severity === 'info' || !target) return;
+    visibleCodes.add(asset.code);
+    const signature = `${alert.id}:${alert.severity}:${alert.title}`;
+    const current = alertOverlays.get(asset.code);
+    if (current?.signature === signature && current.target === target) return;
+    removeAlertOverlay(asset.code);
+    const critical = alert.severity === 'critical';
+    const color = critical ? 0xff4568 : 0xffbb62;
+    const bounds = new Box3().setFromObject(target);
+    const center = bounds.isEmpty() ? target.getWorldPosition(new Vector3()) : bounds.getCenter(new Vector3());
+    const size = Math.max(sceneRadius * .012, .002);
+    const root = new Group();
+    root.name = `ALERT_OVERLAY_${asset.code}`;
+    root.userData.assetCode = asset.code;
+    root.position.set(center.x, (bounds.isEmpty() ? center.y : bounds.max.y) + size * 1.8, center.z);
+    const ring = new Mesh(new TorusGeometry(size, size * .14, 8, 32), new MeshBasicMaterial({ color, transparent: true, opacity: .9, depthTest: false }));
+    ring.userData.assetCode = asset.code;
+    const light = new PointLight(color, critical ? 2.5 : 1.5, size * 12, 2);
+    const texture = makeAlertLabel(asset.code, alert.title, critical);
+    if (texture) {
+      const label = new Sprite(new SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+      label.position.y = size * 2.2;
+      label.scale.set(size * 7, size * 1.75, 1);
+      label.userData.assetCode = asset.code;
+      root.add(label);
+    }
+    root.add(ring, light);
+    scene!.add(root);
+    alertOverlays.set(asset.code, { root, ring, light, signature, target });
+  });
+  [...alertOverlays.keys()].filter((code) => !visibleCodes.has(code)).forEach(removeAlertOverlay);
 }
 
 function clearLeakOverlay() {
@@ -201,15 +283,19 @@ function syncLeakOverlay() {
       target = modelRoot.getObjectByName(name);
       if (target) break;
     }
+    // Never invent a pipe location or wrap a sensor/parent mesh in a large
+    // translucent box when this V13 export has no matching pipe segment.
+    if (!target) return;
+  } else {
+    target = assetObjects.get(asset.code);
   }
-  target ||= assetObjects.get(asset.code);
   const bounds = target ? new Box3().setFromObject(target) : new Box3();
   const centre = bounds.isEmpty()
     ? new Vector3((Number(asset.position.x) / 100 - .5) * 27, .6, (Number(asset.position.y) / 100 - .5) * 14)
     : bounds.getCenter(new Vector3());
   const size = bounds.isEmpty() ? new Vector3(4.2, .34, .34) : bounds.getSize(new Vector3());
-  const pipeLength = Math.max(size.x, size.z, sceneRadius * .11, 2.2);
-  const pipeWidth = Math.max(Math.min(size.y, pipeLength * .18), sceneRadius * .008, .16);
+  const pipeLength = Math.max(size.x, size.z, sceneRadius * .02);
+  const pipeWidth = Math.max(Math.min(size.y, pipeLength * .18), sceneRadius * .004);
   leakOverlayRoot = new Group();
   leakOverlayRoot.name = `LEAK_PIPE_OVERLAY_${asset.code}`;
   leakOverlayRoot.userData.assetCode = asset.code;
@@ -225,6 +311,7 @@ function syncLeakOverlay() {
 
 function clearLoadedModel() {
   window.clearTimeout(modelLoadTimeout);
+  clearAlertOverlays();
   const disposableRoots = [modelRoot, fallbackSceneRoot, fallbackAssetRoot].filter(Boolean) as Object3D[];
   const disposedGeometries = new Set<object>();
   const disposedMaterials = new Set<object>();
@@ -354,6 +441,14 @@ function setNavigationMode(mode: 'pan' | 'orbit') {
 
 function onCanvasPointerDown(event: PointerEvent) {
   if (!renderer || !camera || !controls) return;
+  if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const markerHit = raycaster.intersectObjects([...alertOverlays.values()].map((entry) => entry.root), true)[0];
+  const markerCode = markerHit?.object.userData.assetCode as string | undefined;
+  if (markerCode) { emit('select', markerCode); return; }
   if (event.button === 0 && navigationMode.value === 'pan') {
     pendingPanGesture = {
       pointerId: event.pointerId,
@@ -365,10 +460,6 @@ function onCanvasPointerDown(event: PointerEvent) {
   }
   // Camera gestures must never select an object and pull the target back to it.
   if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || navigationMode.value === 'pan') return;
-  const rect = renderer.domElement.getBoundingClientRect();
-  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-  raycaster.setFromCamera(pointer, camera);
   const hit = raycaster.intersectObjects([...assetObjects.values()], true)[0];
   const code = hit?.object.userData.assetCode as string | undefined;
   if (code) emit('select', code);
@@ -420,6 +511,12 @@ function animate(timestamp = 0) {
     leakOverlayMaterial.opacity = pulse;
     leakOverlayRoot.scale.set(1, 1 + pulse * .28, 1 + pulse * .28);
   }
+  alertOverlays.forEach(({ ring, light }, code) => {
+    const critical = primaryTwinAlert(code, props.alerts)?.severity === 'critical';
+    const pulse = Math.sin(now * (critical ? 7 : 4.5));
+    ring.scale.setScalar(1 + pulse * .2);
+    light.intensity = (critical ? 2.5 : 1.5) + pulse * .6;
+  });
   props.assets.forEach((asset) => {
     const materials = animatedMaterials.get(asset.code);
     if (!materials?.length) return;
@@ -429,6 +526,11 @@ function animate(timestamp = 0) {
     materials.forEach((material) => { material.emissiveIntensity = intensity; });
   });
   controls?.update();
+  if (scene?.fog instanceof Fog && camera && controls) {
+    const distance = camera.position.distanceTo(controls.target);
+    scene.fog.near = Math.max(0, distance - sceneRadius * 1.5);
+    scene.fog.far = distance + sceneRadius * 1.5;
+  }
   if (renderer && scene && camera) renderer.render(scene, camera);
 }
 
@@ -449,15 +551,17 @@ function loadModel() {
     applyVisualState();
     syncLeakOverlay();
     resetView();
-    // The GLTF success/error paths restore focus after a late model ready; the
-    // timeout fallback must do the same so a new-alarm auto-locate that arrived
-    // while the model was still loading is not silently dropped.
-    if (props.selectedCode) focusAsset(props.selectedCode);
+    syncAlertOverlays();
+    // Preserve an explicitly requested deep-link focus after loading.
+    if (props.focusOnLoad && props.selectedCode) focusAsset(props.selectedCode);
   }, 25_000);
   new GLTFLoader().load(props.modelUrl || twinModelUrl, (gltf) => {
     if (loadToken !== modelLoadToken || !scene) return;
     window.clearTimeout(modelLoadTimeout);
     modelRoot = gltf.scene;
+    modelRoot.traverse((object) => {
+      if (isUnoccupiedTwinModelNodeName(object.name) || isUnoccupiedTwinModelNodeName(object.userData?.name ?? '')) object.visible = false;
+    });
     scene.add(modelRoot);
     publishModelReport('loaded', bindModelAssets(modelRoot));
     modelState.value = 'loaded';
@@ -466,7 +570,8 @@ function loadModel() {
     applyVisualState();
     syncLeakOverlay();
     resetView();
-    if (props.selectedCode) focusAsset(props.selectedCode);
+    syncAlertOverlays();
+    if (props.focusOnLoad && props.selectedCode) focusAsset(props.selectedCode);
   }, (progress) => {
     if (loadToken !== modelLoadToken) return;
     if (progress.total > 0) {
@@ -485,7 +590,8 @@ function loadModel() {
     applyVisualState();
     syncLeakOverlay();
     resetView();
-    if (props.selectedCode) focusAsset(props.selectedCode);
+    syncAlertOverlays();
+    if (props.focusOnLoad && props.selectedCode) focusAsset(props.selectedCode);
   });
 }
 
@@ -559,7 +665,7 @@ onMounted(() => {
 // refreshes must never re-run it, otherwise OrbitControls appears to "spring
 // back" while an operator is zooming or rotating the model.
 watch(() => props.assets, () => { syncSceneAssets(); applyVisualState(); syncLeakOverlay(); }, { deep: true });
-watch(() => props.alerts, applyVisualState, { deep: true });
+watch(() => props.alerts, () => { applyVisualState(); syncAlertOverlays(); }, { deep: true });
 watch(() => props.leakAssetCode, syncLeakOverlay);
 watch(() => props.selectedCode, (next, previous) => {
   applyVisualState();

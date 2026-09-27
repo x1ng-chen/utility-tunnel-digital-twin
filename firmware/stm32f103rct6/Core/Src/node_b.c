@@ -690,6 +690,10 @@ int main(void)
   NodeBSensorBank_Init(&sensor_bank, &hadc1);
   SensorTelemetry_Init(&telemetry_cursor, 1U);
   Tx_EnqueueLine("#NODE node-b boot\r\n", 19U);
+  {
+    static const char build[] = "#FW node-b sensors-all-20260927\r\n";
+    Tx_EnqueueLine(build, (uint16_t)(sizeof(build) - 1U));
+  }
 
   static uint32_t last_telemetry = HAL_MAX_DELAY;
   static uint32_t last_sensor_sample = HAL_MAX_DELAY;

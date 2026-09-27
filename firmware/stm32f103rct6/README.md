@@ -96,7 +96,7 @@ cmake --build --preset NodeA
 烧录文件：`build/NodeA/stm32_controller.bin`
 当前 Node A 构建占用：RAM 13272 B / 48 KB（27.00%）、FLASH 69716 B / 256 KB（26.59%）。
 
-Node A 的 128×128 副屏每 5 秒轮播六页：`ENV` 显示本地 SHT-01～04 的温度/湿度；`GAS1/2` 显示规划的 7 路 CO、MQ4、O2 模拟通道；`INPUT1/2` 显示规划的 9 路 MQ2、火焰、水位数字输入；`FAN` 显示两路 PWM、转速及 INA226 电压/电流。报警仍立即接管屏幕。未启用、离线、异常分别显示 `PLAN`、`OFF`、`BAD`；模拟量未经标定，仅显示 `RAW` ADC 计数，数字量显示引脚 `LOW/HIGH`，不把它们误报为浓度或传感器正常状态。
+Node A 的 128×128 副屏每 5 秒轮播八页，汇总两块板的传感器：`ENV` 显示 SHT-01～04；`CO` 显示 CO-01～05；`MQ4` 显示 MQ4-01～05；`O2` 显示 O2-01～03；`MQ2` 显示 MQ2-01～05；`FLAME` 显示 FLAME-01～05；`LEVEL` 显示 L01～L05（L05 已拆除，显示 `PLAN`）；`FAN` 显示两路 PWM、转速及 INA226 电压/电流。Node A 每 2 秒发送一帧既有控制器遥测及一帧轮转的 20 路传感器库存遥测，共用连续序号；Node B 每 2 秒发送一帧轮转的本地传感器遥测。Node B 遥测通过 MQTT 到新版 ESP-01，再以紧凑串口帧送 Node A；超过 30 秒未收到某一路数据或 Node B 离线时，该路显示 `OFF`。**旧版 ESP-01 未实现这条 Node B 回传路径，单独更新 STM32 不会使 Node A 屏幕显示 Node B 的实时值。**报警仍立即接管屏幕。未启用、离线、异常分别显示 `PLAN`、`OFF`、`BAD`；模拟量未经标定，仅显示 `RAW` ADC 计数，数字量显示引脚 `LOW/HIGH`。
 
 ### CTRL-02 / Node B（主屏 + 摇杆）
 
@@ -164,7 +164,7 @@ Node B 摇杆 → 菜单命令 → USART2 → ESP-02
 | 角色 | 订阅 | 发布 |
 |---|---|---|
 | ESP-01 `CTRL-01` | `ut/v1/CTRL-01/cmd/#`（已覆盖 `cmd/menu`，不重复订阅） | `ut/v1/CTRL-01/telemetry`、`ut/v1/CTRL-01/cmd_ack`、`ut/v1/CTRL-01/status` |
-| ESP-02 `CTRL-02` | `ut/v1/CTRL-01/telemetry`、`ut/v1/CTRL-01/cmd_ack` | `ut/v1/CTRL-01/cmd/menu`（**唯一**串口发布主题；`ut/v1/CTRL-02/*` 遥测发布未实现） |
+| ESP-02 `CTRL-02` | `ut/v1/CTRL-01/telemetry`、`ut/v1/CTRL-01/cmd_ack`、`ut/v1/CTRL-01/status` | `ut/v1/CTRL-01/cmd/menu`、`ut/v1/CTRL-02/telemetry`、`ut/v1/CTRL-02/status`；Node B 本地传感器遥测发布到 CTRL-02 主题 |
 
 安全联动优先级始终高于菜单命令：已验证的甲烷报警可强制通风、红色闪烁和
 蜂鸣；未标定的氧气与 CO 通道只显示数据，不驱动执行器。5 秒内没有匹配回执
@@ -199,9 +199,9 @@ SWD（`PA13/PA14`）在两块板上都保留，可随时用 ST-Link 连接；两
 
 - **SHT30 温湿度**：4 路（Node A 两条独立软件 I2C 总线，每条总线支持 0x44/0x45 双地址）
 - **模拟量输入**：13 路（Node A 7 路：3 路已有 PC1-PC3 + 4 路新增 PA0, PA4, PA5, PB1；Node B 6 路：PA0, PA1, PA4, PA6, PB0, PB1）
-- **数字量输入**：15 路（Node A 9 路：PB12, PB14, PC0 + PC8-PC13；Node B 6 路：PC6-PC11）
+- **数字量输入**：15 路（Node A 9 路：PB12、PB13、PB14、PC0、PC8、PC9、PC11、PC12、PC13；Node B 6 路：PC6-PC11）。Node A 的 PC10 已由风机 01 基极接线占用，不分给 MQ2-02。
 - **安全与隔离策略**：
-  - 新增通道固件默认置为禁用（`enabled=0`）；
+  - 当前台架已接的 31 路默认启用采集；已拆除的 `LEVEL-05` 保持禁用。启用采集不等于校准或授权报警联动；
   - 仅显式标定且受权通道（`MQ4-01` 等）触发自动通风与声光联锁；
   - 模拟未标定通道上报 `suspect`，数字通道实施 4 次去抖滤波；
   - 各传感器独立陈旧超时，单点断线不影响同总线或其余 31 路通道。

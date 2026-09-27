@@ -128,6 +128,13 @@ uint8_t NodeATelemetry_QueueNext(uint32_t *sequence,
                                  NodeATelemetryEnqueueFn enqueue,
                                  void *context);
 
+/* Production uses an independent legacy-slot cursor because inventory frames
+ * share the same strictly increasing MQTT sequence between legacy frames. */
+uint8_t NodeATelemetry_QueueSlot(uint32_t *sequence, uint8_t slot,
+                                 const NodeATelemetrySnapshot *snapshot,
+                                 NodeATelemetryEnqueueFn enqueue,
+                                 void *context);
+
 /* Offers exactly one complete rotation request.  A refusal leaves the cursor
  * parked at the first unaccepted slot and returns 0; retrying the request
  * resumes there and returns 1 only after all six slots are accepted. */

@@ -35,8 +35,9 @@ extern "C" {
 #define NODE_A_FLAME2_PIN         GPIO_PIN_8
 #define NODE_A_FLAME3_PORT        GPIOC
 #define NODE_A_FLAME3_PIN         GPIO_PIN_9
-#define NODE_A_MQ2_2_PORT         GPIOC
-#define NODE_A_MQ2_2_PIN          GPIO_PIN_10
+/* Bench wiring: PC10 is already tied to the FAN-01 transistor base. */
+#define NODE_A_MQ2_2_PORT         GPIOB
+#define NODE_A_MQ2_2_PIN          GPIO_PIN_13
 #define NODE_A_MQ2_3_PORT         GPIOC
 #define NODE_A_MQ2_3_PIN          GPIO_PIN_11
 #define NODE_A_LEVEL2_PORT        GPIOC

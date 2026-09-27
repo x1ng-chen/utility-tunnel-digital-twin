@@ -127,6 +127,12 @@ enum class TimeEmitResult : uint8_t {
 
 const RouteTopics& TopicsForRole(Role role);
 
+/* Compact the peer's sensor telemetry for CTRL-01's 9600-baud status screen.
+ * Each record is index,value,quality; voltage duplicates are omitted. */
+RouteResult BuildPeerTelemetryLine(const char* payload, size_t length,
+                                   char* output, size_t capacity,
+                                   size_t* written);
+
 void InitTelemetryAccumulator(TelemetryAccumulator* accumulator);
 
 void BeginTelemetrySession(TelemetryAccumulator* accumulator);

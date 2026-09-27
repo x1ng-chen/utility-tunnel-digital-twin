@@ -1,4 +1,5 @@
 import type { Alert, Asset, TwinModelRelease } from '../types';
+import v13AssetBindings from './v13AssetBindings.json';
 
 export type TwinVisualState = 'normal' | 'warning' | 'alarm' | 'unknown';
 
@@ -84,14 +85,49 @@ export function leakPipeLabel(asset: Asset) {
 }
 
 export function resolveTwinVisualState(asset: Asset, alerts: Alert[]): TwinVisualState {
-  if (asset.status === 'alarm' || activeTwinAlerts(asset.code, alerts).length) return 'alarm';
-  if (asset.status === 'warning') return 'warning';
+  const active = activeTwinAlerts(asset.code, alerts);
+  if (asset.status === 'alarm' || active.some((alert) => alert.severity === 'critical')) return 'alarm';
+  if (asset.status === 'warning' || active.some((alert) => alert.severity === 'warning')) return 'warning';
   if (asset.status === 'normal') return 'normal';
   return 'unknown';
 }
 
 export function modelNodeNames(asset: Asset) {
-  return [asset.mesh, asset.code, `ASSET_${asset.code.replaceAll('-', '_')}`].filter(Boolean);
+  // These physical sensors do not exist. A stale mesh value must not attach
+  // them to a station occupied by another sensor.
+  if (/^(?:SHT30|SHT)-05$|^LEVEL-(?:L)?05$|^O2-0[4-5]$/.test(asset.code)) return [];
+  const legacyBinding = (v13AssetBindings as Record<string, string>)[asset.code];
+  const positionMappedSensor = /^(?:(?:SHT30|SHT)-0[1-4]|O2-0[1-3])$/.test(asset.code);
+  const stalePositionMesh = /^(?:SHT30|ME2O2)-0[1-5]-/.test(asset.mesh ?? '');
+  const mesh = positionMappedSensor && stalePositionMesh ? null : asset.mesh;
+  return [...twinSensorModelNodeNames(asset.code), mesh, legacyBinding, asset.code, `ASSET_${asset.code.replaceAll('-', '_')}`].filter((name): name is string => Boolean(name));
+}
+
+/** Empty V13 display stations have no physical sensor or live alarm location. */
+export function isUnoccupiedTwinModelNodeName(name: string): boolean {
+  return /^(?:SHT30-03|ME2O2-(?:02|04))-/.test(name);
+}
+
+/** Match bench telemetry codes to the individually numbered nodes in the user's V13 GLB. */
+export function twinSensorModelNodeNames(code: string): string[] {
+  const match = /^(SHT30|SHT|MQ7|CO|MQ4|ME2O2|O2|MQ2|FLAME|LEVEL)-(?:L)?(0[1-5])$/.exec(code);
+  if (!match) return [];
+  const [, family, index] = match;
+  // The fifth level station remains visible in the model but its physical
+  // sensor has been removed; never bind a live alarm to that visual station.
+  if (family === 'LEVEL') return Number(index) <= 4 ? [`LEVEL-L${index}-探头`] : [];
+  // Four physical SHTs occupy model slots 01, 02, 04 and 05. Slot 03 is empty.
+  if (family === 'SHT' || family === 'SHT30') {
+    const modelIndex = ({ '01': '01', '02': '02', '03': '04', '04': '05' } as Record<string, string>)[index];
+    return modelIndex ? [`SHT30-${modelIndex}-板`] : [];
+  }
+  // Three physical oxygen sensors use the five V13 display stations 01/03/05.
+  if (family === 'O2') {
+    const modelIndex = ({ '01': '01', '02': '03', '03': '05' } as Record<string, string>)[index];
+    return modelIndex ? [`ME2O2-${modelIndex}-板`] : [];
+  }
+  const modelFamily = ({ SHT: 'SHT30', CO: 'MQ7', O2: 'ME2O2' } as Record<string, string>)[family] ?? family;
+  return [`${modelFamily}-${index}-板`];
 }
 
 /**

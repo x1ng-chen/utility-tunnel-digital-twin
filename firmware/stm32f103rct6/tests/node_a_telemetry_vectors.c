@@ -29,6 +29,10 @@ static const SensorReading fixture_sensors[] = {
   { .asset_code = "FLAME-01", .kind = SENSOR_KIND_FLAME, .quality = SENSOR_QUALITY_GOOD,
     .online = 1U, .alarm = 0U },
   { .asset_code = "LEVEL-01", .kind = SENSOR_KIND_LEVEL, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .alarm = 0U },
+  { .asset_code = "LEVEL-02", .kind = SENSOR_KIND_LEVEL, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .alarm = 0U },
+  { .asset_code = "LEVEL-03", .kind = SENSOR_KIND_LEVEL, .quality = SENSOR_QUALITY_GOOD,
     .online = 1U, .alarm = 0U }
 };
 

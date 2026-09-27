@@ -43,6 +43,14 @@ using screen_protocol::kMaxEpochSeconds;
 using screen_protocol::kMinEpochSeconds;
 using screen_protocol::kUartLineLimit;
 
+#if SCREEN_ROUTING_CTRL02
+/* ESP8266's loop stack is 4096 bytes. A TelemetryAccumulator is about 2 KB;
+ * keep the transactional copy out of the MQTT callback's stack. Routing is
+ * synchronous in the ESP main loop, so this scratch object is never shared by
+ * concurrent calls. */
+TelemetryAccumulator routeCandidate{};
+#endif
+
 constexpr char kCtrl01MenuCommand[] = "ut/v1/CTRL-01/cmd/menu";
 
 /* The local alarm-source bits the screen renders.  They mirror
@@ -117,7 +125,6 @@ bool copyTopic(const char* topic, char* output) {
   return true;
 }
 
-#if SCREEN_ROUTING_CTRL02
 class JsonSyntaxParser {
  public:
   JsonSyntaxParser(const char* begin, const char* end)
@@ -385,6 +392,7 @@ const char* matchingDelimiter(const char* open, const char* end) {
   return nullptr;
 }
 
+#if SCREEN_ROUTING_CTRL02
 Quality parseQuality(const char* value) {
   if (std::strcmp(value, "good") == 0) return Quality::Valid;
   if (std::strcmp(value, "stale") == 0) return Quality::Stale;
@@ -831,7 +839,8 @@ RouteResult updateTelemetry(TelemetryAccumulator* accumulator,
   const char* readings_end = matchingDelimiter(readings, end);
   if (readings_end == nullptr) return RouteResult::InvalidPayload;
 
-  TelemetryAccumulator candidate = *accumulator;
+  TelemetryAccumulator& candidate = routeCandidate;
+  candidate = *accumulator;
   if (!candidate.initialized) InitTelemetryAccumulator(&candidate);
   bool recognized = false;
   int frame_fan_index = -1;
@@ -961,14 +970,20 @@ RouteResult updateTelemetry(TelemetryAccumulator* accumulator,
   /* The UART snapshot has a fixed 768-byte ceiling. Keep all sensor readings
    * in the accumulator, but rotate one item per emitted frame; Node B merges
    * items by asset code across the frame sequence. */
-  ScreenSnapshot wire_snapshot = candidate.snapshot;
-  if (wire_snapshot.sensor_count > 1U) {
-    const size_t item_index = sequence % wire_snapshot.sensor_count;
-    wire_snapshot.sensors[0] = wire_snapshot.sensors[item_index];
-    wire_snapshot.sensor_count = 1U;
+  const uint8_t sensor_count = candidate.snapshot.sensor_count;
+  ScreenSensorReading first_sensor{};
+  if (sensor_count > 1U) {
+    const size_t item_index = sequence % sensor_count;
+    first_sensor = candidate.snapshot.sensors[0];
+    candidate.snapshot.sensors[0] = candidate.snapshot.sensors[item_index];
+    candidate.snapshot.sensor_count = 1U;
   }
-  const Result build = BuildSnapshot(wire_snapshot, output,
+  const Result build = BuildSnapshot(candidate.snapshot, output,
                                      output_capacity, written);
+  if (sensor_count > 1U) {
+    candidate.snapshot.sensors[0] = first_sensor;
+    candidate.snapshot.sensor_count = sensor_count;
+  }
   if (build != Result::Ok) return mapProtocolResult(build);
   *accumulator = candidate;
   return RouteResult::Ok;
@@ -987,6 +1002,84 @@ const RouteTopics& TopicsForRole(Role role) {
   (void)role;
   return kCtrl01Topics;
 #endif
+}
+
+RouteResult BuildPeerTelemetryLine(const char* payload, size_t length,
+                                   char* output, size_t capacity,
+                                   size_t* written) {
+  if (written != nullptr) *written = 0U;
+  if (output == nullptr || capacity == 0U || written == nullptr ||
+      !validJsonEnvelope(payload, length)) return RouteResult::InvalidPayload;
+  output[0] = '\0';
+  const char* const end = payload + length;
+  char schema[32];
+  uint32_t sequence = 0U;
+  if (!readStringField(payload, end, "schema", schema, sizeof(schema)) ||
+      std::strcmp(schema, "ut.telemetry.v1") != 0 ||
+      !readUint32Field(payload, end, "seq", &sequence) ||
+      countKey(payload, end, "readings") != 1U) return RouteResult::InvalidPayload;
+  (void)sequence;
+
+  static const char* const assets[] = {
+      "MQ4-03", "MQ4-04", "MQ4-05", "O2-03", "CO-04", "CO-05",
+      "FLAME-04", "FLAME-05", "MQ2-04", "MQ2-05", "LEVEL-04", "LEVEL-05"};
+  static const char* const metrics[] = {
+      "raw", "raw", "raw", "raw", "raw", "raw",
+      "flame.alarm", "flame.alarm", "smoke.alarm", "smoke.alarm",
+      "level.detected", "level.detected"};
+  const char* readings = valueAfterKey(payload, end, "readings");
+  if (readings == nullptr || *readings != '[') return RouteResult::InvalidPayload;
+  const char* const readings_end = matchingDelimiter(readings, end);
+  if (readings_end == nullptr) return RouteResult::InvalidPayload;
+  size_t used = 5U;
+  if (capacity <= used) return RouteResult::OutputTooSmall;
+  std::memcpy(output, "PEER|", used);
+  output[used] = '\0';
+  bool found = false;
+  const char* cursor = readings + 1U;
+  while (cursor < readings_end) {
+    while (cursor < readings_end && (*cursor == ' ' || *cursor == '\t' ||
+           *cursor == '\r' || *cursor == '\n' || *cursor == ',')) ++cursor;
+    if (cursor == readings_end) break;
+    if (*cursor != '{') return RouteResult::InvalidPayload;
+    const char* const object_end = matchingDelimiter(cursor, readings_end + 1U);
+    if (object_end == nullptr) return RouteResult::InvalidPayload;
+    char asset[16], metric[24], quality[12];
+    double value = 0.0;
+    if (!readStringField(cursor, object_end + 1U, "assetCode", asset, sizeof(asset)) ||
+        !readStringField(cursor, object_end + 1U, "metric", metric, sizeof(metric)) ||
+        !readStringField(cursor, object_end + 1U, "quality", quality, sizeof(quality)) ||
+        !readNumberField(cursor, object_end + 1U, "value", &value)) {
+      return RouteResult::InvalidPayload;
+    }
+    uint8_t quality_code = 4U;
+    if (std::strcmp(quality, "good") == 0) quality_code = 0U;
+    else if (std::strcmp(quality, "suspect") == 0) quality_code = 1U;
+    else if (std::strcmp(quality, "bad") == 0) quality_code = 2U;
+    else if (std::strcmp(quality, "missing") == 0) quality_code = 3U;
+    if (quality_code > 3U) return RouteResult::InvalidPayload;
+    for (uint8_t index = 0U; index < 12U; ++index) {
+      if (std::strcmp(asset, assets[index]) != 0 ||
+          std::strcmp(metric, metrics[index]) != 0) continue;
+      const double maximum = index < 6U ? 4095.0 : 1.0;
+      if (value < 0.0 || value > maximum || std::floor(value) != value)
+        return RouteResult::InvalidPayload;
+      const int count = std::snprintf(output + used, capacity - used,
+                                      "%s%u,%u,%u", found ? ";" : "",
+                                      static_cast<unsigned int>(index),
+                                      static_cast<unsigned int>(value),
+                                      static_cast<unsigned int>(quality_code));
+      if (count < 0 || static_cast<size_t>(count) >= capacity - used)
+        return RouteResult::OutputTooSmall;
+      used += static_cast<size_t>(count);
+      found = true;
+      break;
+    }
+    cursor = object_end + 1U;
+  }
+  if (!found) return RouteResult::InvalidPayload;
+  *written = used;
+  return RouteResult::Ok;
 }
 
 uint64_t EpochMillisecondsFromUnixParts(int64_t epoch_seconds,
@@ -1316,7 +1409,8 @@ RouteResult RouteMqttMessage(Role role, const char* topic,
                                         &output->payload_length);
     if (built != Result::Ok) return mapProtocolResult(built);
     if (accumulator != nullptr) {
-      TelemetryAccumulator candidate = *accumulator;
+      TelemetryAccumulator& candidate = routeCandidate;
+      candidate = *accumulator;
       if (!candidate.initialized) InitTelemetryAccumulator(&candidate);
       std::strcpy(candidate.snapshot.last_command.command_id, ack.command_id);
       candidate.snapshot.last_command.accepted = ack.status == AckStatus::Accepted;

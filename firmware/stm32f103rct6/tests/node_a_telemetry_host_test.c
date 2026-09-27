@@ -14,6 +14,16 @@
 #include "vectors/node_a_telemetry_vectors.h"
 
 static int failures = 0;
+static char captured_slot_frame[NODE_A_TELEMETRY_FRAME_SIZE];
+
+static uint8_t capture_slot_frame(void *context, const char *frame, uint16_t length)
+{
+  (void)context;
+  if (length == 0U || length >= sizeof(captured_slot_frame)) return 0U;
+  memcpy(captured_slot_frame, frame, length);
+  captured_slot_frame[length] = '\0';
+  return 1U;
+}
 
 #define CHECK(condition)                                                      \
   do {                                                                        \
@@ -40,6 +50,10 @@ static const SensorReading fixture_sensors[] = {
   { .asset_code = "FLAME-01", .kind = SENSOR_KIND_FLAME, .quality = SENSOR_QUALITY_GOOD,
     .online = 1U, .alarm = 0U },
   { .asset_code = "LEVEL-01", .kind = SENSOR_KIND_LEVEL, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .alarm = 0U },
+  { .asset_code = "LEVEL-02", .kind = SENSOR_KIND_LEVEL, .quality = SENSOR_QUALITY_GOOD,
+    .online = 1U, .alarm = 0U },
+  { .asset_code = "LEVEL-03", .kind = SENSOR_KIND_LEVEL, .quality = SENSOR_QUALITY_GOOD,
     .online = 1U, .alarm = 0U }
 };
 
@@ -153,7 +167,7 @@ static int check_one_sequence_per_frame(void)
 /* The committed cycle total.  node_a.c's link-budget comment quotes it and the
  * ESP consumer suite relies on a cycle converging over six frames, so the
  * number is pinned here where it is re-derived from the board formatter. */
-#define NODE_A_TELEMETRY_CYCLE_BYTES 2867U
+#define NODE_A_TELEMETRY_CYCLE_BYTES 3051U
 
 /* The bridge caps a routed MQTT payload at screen_routing::kTransportPayloadLimit
  * and the display splits lines at screen_protocol::kUartLineLimit.  A frame must
@@ -269,6 +283,8 @@ static int check_emitted_vocabulary(void)
       "\"assetCode\":\"FLAME-01\",\"metric\":\"flame.alarm\"",
       "\"assetCode\":\"FLAME-01\",\"metric\":\"flame.rawLevel\"",
       "\"assetCode\":\"LEVEL-01\",\"metric\":\"level.detected\"",
+      "\"assetCode\":\"LEVEL-02\",\"metric\":\"level.detected\"",
+      "\"assetCode\":\"LEVEL-03\",\"metric\":\"level.detected\"",
       "\"assetCode\":\"O2-01\",\"metric\":\"oxygen.raw\"",
       "\"assetCode\":\"O2-01\",\"metric\":\"oxygen.voltage\"",
       "\"assetCode\":\"MQ4-01\",\"metric\":\"methane.raw\"",
@@ -395,6 +411,21 @@ static int check_each_fan_reports_its_own_relay(void)
 
 int main(void)
 {
+  {
+    NodeATelemetrySnapshot snapshot;
+    uint32_t sequence = 0U;
+    build_snapshot(&snapshot);
+    CHECK(NodeATelemetry_QueueSlot(&sequence, 0U, &snapshot,
+                                  capture_slot_frame, NULL) == 1U);
+    CHECK(sequence == 1U);
+    CHECK(strstr(captured_slot_frame, "SHT-01") != NULL);
+    ++sequence; /* One intervening rotating inventory frame was accepted. */
+    CHECK(NodeATelemetry_QueueSlot(&sequence, 1U, &snapshot,
+                                  capture_slot_frame, NULL) == 1U);
+    CHECK(sequence == 3U);
+    CHECK(strstr(captured_slot_frame, "FAN-01") != NULL);
+    CHECK(strstr(captured_slot_frame, "\"seq\":3") != NULL);
+  }
   {
     NodeATelemetrySnapshot snapshot;
     SensorReading sht[4] = {

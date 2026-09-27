@@ -25,6 +25,12 @@ int main(void) {
     assert(r != NULL);
     assert(strcmp(r->asset_code, expected_assets[i]) == 0);
   }
+  assert(find_reading(&bank, "LEVEL-04")->enabled == 1U);
+  assert(find_reading(&bank, "LEVEL-05")->enabled == 0U);
+  for (size_t i = 0; i < 11U; ++i) {
+    assert(bank.readings[i].enabled == 1U);
+    assert(bank.readings[i].commissioned_for_alarm == 0U);
+  }
 
   /* 2. Pin audit assertions:
    * No access to joystick PC0/PC1 or PC4

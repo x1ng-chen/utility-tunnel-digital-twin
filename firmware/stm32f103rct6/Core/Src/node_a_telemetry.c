@@ -348,6 +348,32 @@ static void append_sht_reading(char *frame, uint16_t *length,
   write_frame(frame, length, n < 0 ? n : (int)offset + n);
 }
 
+static void append_level_reading(char *frame, uint16_t *length,
+                                 const NodeATelemetrySnapshot *snapshot,
+                                 const char *code)
+{
+  const SensorReading *level = find_reading_by_code(snapshot->sensors,
+                                                   snapshot->sensor_count, code);
+  char item[160];
+  char *end_readings;
+  size_t offset;
+  if (level == NULL || *length < 4U) return;
+  const char *quality = level->quality == SENSOR_QUALITY_GOOD ? "good" : "missing";
+  const unsigned int detected = level->quality == SENSOR_QUALITY_GOOD
+                                    ? (unsigned int)level->alarm : 0U;
+  const int n = snprintf(item, sizeof(item),
+    ",{\"assetCode\":\"%s\",\"metric\":\"level.detected\",\"value\":%u,\"unit\":\"bool\",\"quality\":\"%s\"}",
+    code, detected, quality);
+  if (n <= 0 || (size_t)n >= sizeof(item) ||
+      (size_t)*length + (size_t)n >= TELEMETRY_LINE_LIMIT) return;
+  end_readings = strchr(frame, ']');
+  if (end_readings == NULL) return;
+  offset = (size_t)(end_readings - frame);
+  memmove(end_readings + n, end_readings, (size_t)*length - offset + 1U);
+  memcpy(end_readings, item, (size_t)n);
+  *length = (uint16_t)((size_t)*length + (size_t)n);
+}
+
 static void format_indexed_frame(char *frame, uint16_t *length, uint32_t sequence,
                                  const NodeATelemetrySnapshot *snapshot,
                                  uint8_t index)
@@ -360,9 +386,11 @@ static void format_indexed_frame(char *frame, uint16_t *length, uint32_t sequenc
       break;
     case 1U:
       format_fan_frame(frame, length, sequence, snapshot, 0U);
+      append_level_reading(frame, length, snapshot, "LEVEL-02");
       break;
     case 2U:
       format_fan_frame(frame, length, sequence, snapshot, 1U);
+      append_level_reading(frame, length, snapshot, "LEVEL-03");
       break;
     case 3U:
       format_gas_status_frame(frame, length, sequence, snapshot);
@@ -434,6 +462,23 @@ uint8_t NodeATelemetry_QueueNext(uint32_t *sequence,
     return 0U;
   if ((length == 0U) || (enqueue(context, frame, length) == 0U)) return 0U;
 
+  *sequence = candidate;
+  return 1U;
+}
+
+uint8_t NodeATelemetry_QueueSlot(uint32_t *sequence, uint8_t slot,
+                                 const NodeATelemetrySnapshot *snapshot,
+                                 NodeATelemetryEnqueueFn enqueue,
+                                 void *context)
+{
+  char frame[NODE_A_TELEMETRY_FRAME_SIZE];
+  uint16_t length = 0U;
+  uint32_t candidate;
+  if (sequence == NULL || snapshot == NULL || enqueue == NULL ||
+      slot >= NODE_A_TELEMETRY_FRAME_COUNT) return 0U;
+  candidate = *sequence + 1U;
+  format_indexed_frame(frame, &length, candidate, snapshot, slot);
+  if (length == 0U || enqueue(context, frame, length) == 0U) return 0U;
   *sequence = candidate;
   return 1U;
 }

@@ -347,6 +347,26 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
                   static_cast<unsigned int>(result));
   }
 #else
+  if (std::strcmp(topic, "ut/v1/CTRL-02/status") == 0) {
+    if (length == 7U && std::memcmp(payload, "offline", 7U) == 0) {
+      (void)screen_routing::EnqueueUartTxLine(
+          &uartTxQueue, screen_routing::UartTxFrameKind::Diagnostic,
+          "PEERDOWN", 8U);
+    }
+    return;
+  }
+  if (std::strcmp(topic, "ut/v1/CTRL-02/telemetry") == 0) {
+    char line[kMaxDownlinkLine + 1U];
+    size_t written = 0U;
+    if (screen_routing::BuildPeerTelemetryLine(
+            reinterpret_cast<const char*>(payload), length,
+            line, sizeof(line), &written) == screen_routing::RouteResult::Ok) {
+      (void)screen_routing::EnqueueUartTxLine(
+          &uartTxQueue, screen_routing::UartTxFrameKind::Diagnostic,
+          line, written);
+    }
+    return;
+  }
   if (std::strcmp(topic, "ut/v1/CTRL-01/cmd/menu") == 0) {
     const screen_routing::RouteResult result = screen_routing::RouteMqttMessage(
         kBuildRole, topic, reinterpret_cast<const char*>(payload), length,
@@ -519,6 +539,14 @@ void connectMqtt() {
 #if defined(BUILD_ROLE_CTRL02)
   if (!mqtt.subscribe("ut/v1/CTRL-01/status", 1)) {
     diagnostic.println("#MQTT peer_status_subscribe_failed");
+    mqtt.disconnect();
+    return;
+  }
+#endif
+#if !defined(BUILD_ROLE_CTRL02)
+  if (!mqtt.subscribe("ut/v1/CTRL-02/telemetry", 1) ||
+      !mqtt.subscribe("ut/v1/CTRL-02/status", 1)) {
+    diagnostic.println("#MQTT peer_subscribe_failed");
     mqtt.disconnect();
     return;
   }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { activeTwinAlerts, alertIndicatesLeak, leakCapableAsset, leakPipeLabel, leakPipeNodeNames, modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, summarizeTwinModelDelivery } from './twin3d';
+import { readFileSync } from 'node:fs';
+import { activeTwinAlerts, alertIndicatesLeak, isUnoccupiedTwinModelNodeName, leakCapableAsset, leakPipeLabel, leakPipeNodeNames, modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, summarizeTwinModelDelivery, twinSensorModelNodeNames } from './twin3d';
 import type { Alert, Asset } from '../types';
 
 const asset = { id: 1, code: 'ENV-01', mesh: 'MESH_ENV_01', status: 'normal' } as Asset;
@@ -9,8 +10,10 @@ describe('3D twin binding rules', () => {
     expect(resolveTwinVisualState({ ...asset, status: 'alarm' }, [])).toBe('alarm');
     expect(resolveTwinVisualState(asset, [{ assetCode: asset.code, status: 'resolved' } as Alert])).toBe('normal');
   });
-  it('treats an active alert as an alarm even when the asset is otherwise normal', () => {
-    expect(resolveTwinVisualState(asset, [{ assetCode: 'ENV-01', status: 'open' } as Alert])).toBe('alarm');
+  it('uses alert severity for the model colour even when the asset is otherwise normal', () => {
+    expect(resolveTwinVisualState(asset, [{ assetCode: 'ENV-01', status: 'open', severity: 'warning' } as Alert])).toBe('warning');
+    expect(resolveTwinVisualState(asset, [{ assetCode: 'ENV-01', status: 'open', severity: 'critical' } as Alert])).toBe('alarm');
+    expect(resolveTwinVisualState(asset, [{ assetCode: 'ENV-01', status: 'open', severity: 'info' } as Alert])).toBe('normal');
   });
 
   it('keeps resolved alerts out of the current scene state and prioritizes critical incidents', () => {
@@ -25,6 +28,61 @@ describe('3D twin binding rules', () => {
 
   it('offers stable Blender object-name fallbacks for every asset', () => {
     expect(modelNodeNames(asset)).toEqual(['MESH_ENV_01', 'ENV-01', 'ASSET_ENV_01']);
+  });
+
+  it('leaves SHT model slot 03 empty and shifts physical 03/04 to model slots 04/05', () => {
+    expect(['SHT-01', 'SHT-02', 'SHT-03', 'SHT-04'].map(twinSensorModelNodeNames)).toEqual([
+      ['SHT30-01-板'], ['SHT30-02-板'], ['SHT30-04-板'], ['SHT30-05-板'],
+    ]);
+    expect(twinSensorModelNodeNames('SHT30-03')).toEqual(['SHT30-04-板']);
+    expect(twinSensorModelNodeNames('SHT-05')).toEqual([]);
+    expect(modelNodeNames({ ...asset, code: 'SHT-03', mesh: 'SHT30-03-板' })[0]).toBe('SHT30-04-板');
+    expect(modelNodeNames({ ...asset, code: 'SHT-03', mesh: 'SHT30-03-板' })).not.toContain('SHT30-03-板');
+    expect(modelNodeNames({ ...asset, code: 'SHT-04', mesh: 'SHT30-04-板' })[0]).toBe('SHT30-05-板');
+    expect(modelNodeNames({ ...asset, code: 'SHT-04', mesh: 'SHT30-04-板' })).not.toContain('SHT30-04-板');
+    expect(modelNodeNames({ ...asset, code: 'SHT-05', mesh: 'SHT30-05-板' })).toEqual([]);
+    expect(isUnoccupiedTwinModelNodeName('SHT30-03-板')).toBe(true);
+    expect(isUnoccupiedTwinModelNodeName('SHT30-04-板')).toBe(false);
+  });
+
+  it('places three physical oxygen sensors at V13 stations 01, 03 and 05', () => {
+    expect(['O2-01', 'O2-02', 'O2-03'].map(twinSensorModelNodeNames)).toEqual([
+      ['ME2O2-01-板'], ['ME2O2-03-板'], ['ME2O2-05-板'],
+    ]);
+    expect(modelNodeNames({ ...asset, code: 'O2-02', mesh: 'ME2O2-02-板' })[0]).toBe('ME2O2-03-板');
+    expect(modelNodeNames({ ...asset, code: 'O2-02', mesh: 'ME2O2-02-板' })).not.toContain('ME2O2-02-板');
+    expect(modelNodeNames({ ...asset, code: 'O2-03', mesh: 'ME2O2-03-板' })[0]).toBe('ME2O2-05-板');
+    expect(modelNodeNames({ ...asset, code: 'O2-03', mesh: 'ME2O2-03-板' })).not.toContain('ME2O2-03-板');
+    expect(isUnoccupiedTwinModelNodeName('ME2O2-02-板')).toBe(true);
+    expect(isUnoccupiedTwinModelNodeName('ME2O2-04-支架')).toBe(true);
+    expect(isUnoccupiedTwinModelNodeName('ME2O2-03-板')).toBe(false);
+    expect(modelNodeNames({ ...asset, code: 'O2-04', mesh: 'ME2O2-04-板' })).toEqual([]);
+  });
+
+  it('binds every other bench code to its own V13 model node without locating removed level 05', () => {
+    expect(twinSensorModelNodeNames('SHT-02')).toEqual(['SHT30-02-板']);
+    expect(twinSensorModelNodeNames('CO-05')).toEqual(['MQ7-05-板']);
+    expect(twinSensorModelNodeNames('MQ4-03')).toEqual(['MQ4-03-板']);
+    expect(twinSensorModelNodeNames('O2-03')).toEqual(['ME2O2-05-板']);
+    expect(twinSensorModelNodeNames('MQ2-04')).toEqual(['MQ2-04-板']);
+    expect(twinSensorModelNodeNames('FLAME-05')).toEqual(['FLAME-05-板']);
+    expect(twinSensorModelNodeNames('LEVEL-04')).toEqual(['LEVEL-L04-探头']);
+    expect(twinSensorModelNodeNames('LEVEL-L05')).toEqual([]);
+    expect(modelNodeNames({ ...asset, code: 'CO-05', mesh: '' })).toContain('MQ7-05-板');
+  });
+
+  it('finds all 31 connected bench sensors in the deployed GLB', () => {
+    const glb = readFileSync(new URL('../../public/models/utility-tunnel.glb', import.meta.url));
+    const jsonSize = glb.readUInt32LE(12);
+    const model = JSON.parse(glb.subarray(20, 20 + jsonSize).toString('utf8')) as { nodes: Array<{ name?: string }> };
+    const names = new Set(model.nodes.map((node) => node.name));
+    const groups = { SHT: 4, CO: 5, MQ4: 5, O2: 3, MQ2: 5, FLAME: 5, LEVEL: 4 };
+    Object.entries(groups).forEach(([family, count]) => {
+      for (let i = 1; i <= count; i += 1) {
+        const code = `${family}-${String(i).padStart(2, '0')}`;
+        expect(twinSensorModelNodeNames(code).some((name) => names.has(name)), code).toBe(true);
+      }
+    });
   });
 
   it('does not count interactive fallback markers as Blender model bindings', () => {

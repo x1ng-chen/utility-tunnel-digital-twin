@@ -19,6 +19,11 @@ void NodeBSensorBank_Init(NodeBSensorBank *bank, ADC_HandleTypeDef *hadc) {
     SensorReading_Init(&bank->readings[idx], kNodeBDigitalPins[i].asset_code,
                        kNodeBDigitalPins[i].kind, 0U);
   }
+
+  /* LEVEL-05 was physically removed. The other eleven channels are fitted. */
+  for (uint8_t i = 0U; i < NODE_B_SENSOR_COUNT; ++i)
+    if (strcmp(bank->readings[i].asset_code, "LEVEL-05") != 0)
+      NodeBSensorBank_SetEnabled(bank, i, 1U);
 }
 
 uint8_t NodeBSensorBank_Count(const NodeBSensorBank *bank) {

@@ -1,0 +1,19 @@
+{
+  "source": "model/utility-tunnel-annular-v13-candidate.blend",
+  "sourceSha256": "155f0695d9a68629cf3c1a006ed22967011e909720db34528272ac81855649a7",
+  "runtime": "frontend/public/models/utility-tunnel.glb",
+  "runtimeSha256": "a89b5d09ea26c5db5c17acb72ac920fd9dd37697e009525fa0d81fc442dc8dab",
+  "rollback": "frontend/public/models/utility-tunnel-v07.glb",
+  "rollbackSha256": "c9eb987e2ca34329ba0c9e050b28a079b1443a9362b1672e15a533b23555027a",
+  "blenderVersion": "5.2.2 LTS",
+  "visibleMeshCount": 829,
+  "excludedHiddenMeshes": 72,
+  "levelNodes": [
+    "LEVEL-L01-探头",
+    "LEVEL-L02-探头",
+    "LEVEL-L03-探头",
+    "LEVEL-L04-探头",
+    "LEVEL-L05-探头"
+  ],
+  "exportCommand": "blender -b --python tools/export_v13_runtime.py -- source.blend frontend/public/models/utility-tunnel.glb"
+}
