@@ -287,9 +287,9 @@ export function createDjangoForwarder({
     }
   }
 
-  function forward(telemetry, receivedAt = new Date()) {
+  function forward(telemetry, receivedAt = new Date(), sourceDeviceId = deviceId) {
     if (state.stopped) return;
-    const batch = toDjangoBatch(telemetry, { deviceId, receivedAt });
+    const batch = toDjangoBatch(telemetry, { deviceId: sourceDeviceId, receivedAt });
     for (const item of batch.skipped) {
       log.warn(`Django reading skipped (${item.reason}): ${item.assetCode}/${item.metric}`);
     }

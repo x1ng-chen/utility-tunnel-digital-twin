@@ -91,7 +91,8 @@ const discovery = config.MQTT_DISCOVERY_ENABLED === 'true'
   })
   : null;
 
-const localTelemetryTopic = `ut/v1/${config.LOCAL_DEVICE_ID}/telemetry`;
+const localTelemetryTopics = [...new Set([config.LOCAL_DEVICE_ID, 'CTRL-01', 'CTRL-02'])]
+  .map((deviceId) => `ut/v1/${deviceId}/telemetry`);
 const localCloudCommandTopic = `ut/v1/${config.LOCAL_DEVICE_ID}/cmd/iotda`;
 const cloudMessageUpTopic = `$oc/devices/${config.IOTDA_DEVICE_ID}/sys/messages/up`;
 
@@ -163,13 +164,13 @@ const django = djangoEnabled
   : null;
 
 local.on('connect', () => {
-  local.subscribe(localTelemetryTopic, { qos: 1 }, (error) => {
+  local.subscribe(localTelemetryTopics, { qos: 1 }, (error) => {
     if (error) console.error('Local MQTT subscribe failed:', error.message);
-    else console.info(`Local MQTT ready: ${localTelemetryTopic}`);
+    else console.info(`Local MQTT ready: ${localTelemetryTopics.join(', ')}`);
   });
 });
 
-local.on('message', (_topic, payload) => {
+local.on('message', (topic, payload) => {
   let telemetry;
   try {
     telemetry = addCalculatedOxygenConcentration(telemetrySchema.parse(JSON.parse(payload.toString('utf8'))));
@@ -189,7 +190,7 @@ local.on('message', (_topic, payload) => {
     });
   }
   if (django) {
-    django.forward(telemetry);
+    django.forward(telemetry, new Date(), topic.split('/')[2]);
   }
 });
 

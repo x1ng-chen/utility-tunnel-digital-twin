@@ -104,6 +104,26 @@ test('uses the device timestamp when the message carries one', () => {
   assert.equal(batch.readings[0].recordedAt, '2026-08-29T07:59:58.000Z');
 });
 
+test('keeps Node B event ids separate when relaying the same telemetry frame', async () => {
+  const server = await startServer((record, response) => {
+    response.writeHead(201, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ items: [], created: record.body.readings.length, duplicates: 0, rules: {} }));
+  });
+  try {
+    const forwarder = createDjangoForwarder({ baseUrl: server.baseUrl, apiKey: 'x'.repeat(32) });
+    forwarder.forward(singleReading(1), RECEIVED_AT, 'CTRL-01');
+    forwarder.forward(singleReading(1), RECEIVED_AT, 'CTRL-02');
+    await waitFor(() => forwarder.counters.delivered === 2);
+    const ids = server.seen.map((record) => record.body.readings[0].eventId);
+    assert.equal(ids.length, 2);
+    assert.notEqual(ids[0], ids[1]);
+    assert.match(ids[1], /^gw:CTRL-02:/);
+    forwarder.close();
+  } finally {
+    server.server.close();
+  }
+});
+
 test('normalizes sloppy device readings and skips contract-breaking ones', () => {
   const telemetry = {
     schema: 'ut.telemetry.v1',
