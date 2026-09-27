@@ -417,6 +417,30 @@ test('drops a batch rejected with a validation error and keeps the lane flowing'
   }
 });
 
+test('keeps registered flame readings when another asset in the frame is unknown', async () => {
+  const server = await startServer((record, response) => {
+    const unknown = record.body.readings.some((reading) => reading.assetCode === 'MQ2-04');
+    response.writeHead(unknown ? 400 : 201, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(unknown
+      ? { error: 'validation_error', details: { assetCode: ['MQ2-04'] } }
+      : { items: [], created: record.body.readings.length, duplicates: 0, rules: {} }));
+  });
+  try {
+    const forwarder = createDjangoForwarder({ baseUrl: server.baseUrl, apiKey: 'x'.repeat(32) });
+    forwarder.forward({ schema: 'ut.telemetry.v1', readings: [
+      { assetCode: 'MQ2-04', metric: 'smoke.alarm', value: 0, unit: 'bool', quality: 'good' },
+      { assetCode: 'FLAME-04', metric: 'flame.alarm', value: 1, unit: 'bool', quality: 'good' },
+    ] }, RECEIVED_AT, 'CTRL-02');
+    await waitFor(() => forwarder.counters.delivered === 1);
+    assert.equal(forwarder.counters.dropped, 1);
+    assert.equal(server.seen.length, 2);
+    assert.deepEqual(server.seen[1].body.readings.map((reading) => reading.assetCode), ['FLAME-04']);
+    forwarder.close();
+  } finally {
+    server.server.close();
+  }
+});
+
 test('drops the oldest batch when the retry queue overflows', async () => {
   let released = false;
   const server = await startServer((record, response) => {

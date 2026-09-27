@@ -277,6 +277,17 @@ export function createDjangoForwarder({
         // keep the live lane flowing, matching the platform contract that
         // invalid data must not enter the database.
         const details = await response.json().catch(() => ({}));
+        const missingCodes = response.status === 400 && details.error === 'validation_error'
+          && Array.isArray(details.details?.assetCode) ? new Set(details.details.assetCode) : null;
+        if (missingCodes?.size) {
+          const result = outbox.rejectReadings(item.id, missingCodes, `status 400 ${JSON.stringify(details).slice(0, 300)}`);
+          if (result.rejected) {
+            counters.dropped += result.rejected;
+            counters.deadLetters += 1;
+            log.warn(`Django skipped ${result.rejected} unregistered reading(s), retained ${result.retained} valid reading(s).`);
+            continue;
+          }
+        }
         dropHead(`status ${response.status} ${JSON.stringify(details).slice(0, 300)}`);
       }
     } finally {

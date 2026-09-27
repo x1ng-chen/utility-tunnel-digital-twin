@@ -29,6 +29,7 @@ export class Outbox {
     this.head = this.db.prepare('SELECT id, batch_json, received_at FROM django_outbox ORDER BY id LIMIT 1');
     this.headExcept = this.db.prepare('SELECT id, batch_json, received_at FROM django_outbox WHERE id != ? ORDER BY id LIMIT 1');
     this.remove = this.db.prepare('DELETE FROM django_outbox WHERE id = ?');
+    this.updateBatch = this.db.prepare('UPDATE django_outbox SET batch_json = ? WHERE id = ?');
     this.size = this.db.prepare('SELECT COUNT(*) AS count FROM django_outbox');
     this.deadLetterSize = this.db.prepare('SELECT COUNT(*) AS count FROM django_dead_letter');
     this.insertDeadLetter = this.db.prepare('INSERT INTO django_dead_letter (original_id, batch_json, received_at, reason) VALUES (?, ?, ?, ?)');
@@ -72,6 +73,26 @@ export class Outbox {
       throw error;
     }
     return { id: row.id, batch: JSON.parse(row.batch_json), receivedAt: row.received_at };
+  }
+
+  rejectReadings(id, rejectedCodes, reason) {
+    const row = this.db.prepare('SELECT id, batch_json, received_at FROM django_outbox WHERE id = ?').get(id);
+    if (!row) return { rejected: 0, retained: 0 };
+    const batch = JSON.parse(row.batch_json);
+    const rejected = batch.readings.filter((reading) => rejectedCodes.has(reading.assetCode));
+    const retained = batch.readings.filter((reading) => !rejectedCodes.has(reading.assetCode));
+    if (!rejected.length) return { rejected: 0, retained: batch.readings.length };
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.insertDeadLetter.run(row.id, JSON.stringify({ readings: rejected }), row.received_at, String(reason).slice(0, 2000));
+      if (retained.length) this.updateBatch.run(JSON.stringify({ readings: retained }), row.id);
+      else this.remove.run(row.id);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+    return { rejected: rejected.length, retained: retained.length };
   }
 
   enqueue(batch, receivedAt, protectedId = null) {
