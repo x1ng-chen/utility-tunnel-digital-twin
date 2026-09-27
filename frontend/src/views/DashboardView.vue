@@ -10,7 +10,7 @@ import { useOperationsStore } from '../stores/operations';
 import { presentAudit } from '../utils/audit';
 import { resolveTwinVisualState, twinStateLabel, type TwinVisualState } from '../services/twin3d';
 import type { Telemetry } from '../types';
-import { latestTelemetry, telemetryState, telemetryStateLabel } from '../utils/telemetryState';
+import { displayTelemetryValue, latestTelemetry, telemetryState, telemetryStateLabel } from '../utils/telemetryState';
 
 const store = useOperationsStore();
 const auth = useAuthStore();
@@ -38,14 +38,18 @@ const fanLive = computed(() => {
   };
 });
 
-function fanValue(reading: Telemetry | undefined, digits = 0) {
-  return !reading || reading.quality === 'bad' || reading.quality === 'missing' || !Number.isFinite(reading.value) ? '—' : reading.value.toFixed(digits);
+function fanTelemetryState(assetCode: string, reading: Telemetry | undefined) {
+  const asset = store.assets.find((item) => item.code === assetCode);
+  const binding = store.hardwareBindings.find((item) => item.assetCode === assetCode);
+  return telemetryState(reading, asset, binding, store.source, store.offline, now.value.getTime());
+}
+
+function fanValue(assetCode: string, reading: Telemetry | undefined, digits = 0) {
+  return displayTelemetryValue(reading, fanTelemetryState(assetCode, reading), digits);
 }
 
 function fanState(assetCode: string, reading: Telemetry | undefined) {
-  const asset = store.assets.find((item) => item.code === assetCode);
-  const binding = store.hardwareBindings.find((item) => item.assetCode === assetCode);
-  return telemetryStateLabel[telemetryState(reading, asset, binding, store.source, store.offline, now.value.getTime())];
+  return telemetryStateLabel[fanTelemetryState(assetCode, reading)];
 }
 
 async function sync() {
@@ -145,8 +149,8 @@ async function confirmControllerCommand() {
         <div class="panel-head"><div><span class="eyebrow">CTRL-01 · MQTT</span><h2>双风机控制</h2></div><Fan /></div>
         <p>两台风机共用继电器总使能，转速与电流独立采集，PWM 可分别调节。每次下发都需二次确认，确认凭据仅可使用一次。</p>
         <div class="fan-live-grid">
-          <div><b>FAN-01</b><strong>{{ fanValue(fanLive.fan1.rpm) }}<small> RPM</small></strong><span>{{ fanValue(fanLive.fan1.current, 2) }} mA · {{ fanValue(fanLive.fan1.power, 3) }} W</span><small>{{ fanState('FAN-01', fanLive.fan1.rpm) }} · {{ fanLive.fan1.rpm ? new Date(fanLive.fan1.rpm.recordedAt).toLocaleString('zh-CN') : '暂无采集时间' }}</small></div>
-          <div><b>FAN-02</b><strong>{{ fanValue(fanLive.fan2.rpm) }}<small> RPM</small></strong><span>{{ fanValue(fanLive.fan2.current, 2) }} mA · {{ fanValue(fanLive.fan2.power, 3) }} W</span><small>{{ fanState('FAN-02', fanLive.fan2.rpm) }} · {{ fanLive.fan2.rpm ? new Date(fanLive.fan2.rpm.recordedAt).toLocaleString('zh-CN') : '暂无采集时间' }}</small></div>
+          <div><b>FAN-01</b><strong>{{ fanValue('FAN-01', fanLive.fan1.rpm) }}<small v-if="fanValue('FAN-01', fanLive.fan1.rpm) !== '—'"> RPM</small></strong><span>{{ fanValue('FAN-01', fanLive.fan1.current, 2) }} mA · {{ fanValue('FAN-01', fanLive.fan1.power, 3) }} W</span><small>{{ fanState('FAN-01', fanLive.fan1.rpm) }} · {{ fanLive.fan1.rpm ? new Date(fanLive.fan1.rpm.recordedAt).toLocaleString('zh-CN') : '暂无采集时间' }}</small></div>
+          <div><b>FAN-02</b><strong>{{ fanValue('FAN-02', fanLive.fan2.rpm) }}<small v-if="fanValue('FAN-02', fanLive.fan2.rpm) !== '—'"> RPM</small></strong><span>{{ fanValue('FAN-02', fanLive.fan2.current, 2) }} mA · {{ fanValue('FAN-02', fanLive.fan2.power, 3) }} W</span><small>{{ fanState('FAN-02', fanLive.fan2.rpm) }} · {{ fanLive.fan2.rpm ? new Date(fanLive.fan2.rpm.recordedAt).toLocaleString('zh-CN') : '暂无采集时间' }}</small></div>
         </div>
         <span class="control-group-title"><Fan />共用电源</span><div class="fan-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_on')">{{ commandSending ? '下发中…' : '启动风扇（10秒）' }}</button><button class="stop-action" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_off')">立即停止</button></div>
         <span class="control-group-title"><Fan />风机 1 转速</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 100)">100%</button></div>

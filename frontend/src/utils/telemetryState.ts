@@ -27,6 +27,11 @@ export const telemetryStateLabel: Record<TelemetryState, string> = {
   invalid: '数据待核验', suspect: '数据需核查', current: '最近有效上报',
 };
 
+export function displayTelemetryValue(reading: Telemetry | null | undefined, state: TelemetryState, digits = 0): string {
+  if (!reading || !Number.isFinite(reading.value) || (state !== 'current' && state !== 'demo')) return '—';
+  return new Intl.NumberFormat('zh-CN', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(reading.value);
+}
+
 export function latestTelemetry(readings: Telemetry[], assetCode: string, metricKey?: string): Telemetry | undefined {
   return readings
     .filter((reading) => reading.assetCode === assetCode && (!metricKey || reading.metricKey === metricKey || reading.metric === metricKey))

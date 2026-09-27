@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Asset, HardwareBinding, Telemetry } from '../types';
-import { latestTelemetry, telemetryState } from './telemetryState';
+import { displayTelemetryValue, latestTelemetry, telemetryState } from './telemetryState';
 
 const now = Date.parse('2026-09-26T00:10:00Z');
 const asset = { code: 'LEVEL-L03', status: 'normal' } as Asset;
@@ -21,5 +21,14 @@ describe('telemetry state shown to operators', () => {
   it('selects only the requested asset and metric', () => {
     expect(latestTelemetry([reading, { ...reading, id: 2, recordedAt: '2026-09-26T00:09:55Z' }, { ...reading, assetCode: 'LEVEL-L04', id: 3 }], 'LEVEL-L03', 'level.detected')?.id).toBe(2);
     expect(latestTelemetry([reading], 'LEVEL-L05')).toBeUndefined();
+  });
+
+  it('shows a prominent number only for current or explicitly demo data', () => {
+    expect(displayTelemetryValue(reading, 'current')).toBe('1');
+    expect(displayTelemetryValue(reading, 'demo')).toBe('1');
+    for (const state of ['offline', 'stale', 'invalid', 'suspect', 'missing'] as const) {
+      expect(displayTelemetryValue(reading, state)).toBe('—');
+    }
+    expect(displayTelemetryValue({ ...reading, value: Number.NaN }, 'current')).toBe('—');
   });
 });

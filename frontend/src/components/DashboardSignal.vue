@@ -4,7 +4,7 @@ import { useNow } from '@vueuse/core';
 import OpsChart from './ui/OpsChart.vue';
 import type { Asset, HardwareBinding, Telemetry } from '../types';
 import { selectSignalWindow } from '../utils/dashboardSignal';
-import { telemetryState, telemetryStateLabel } from '../utils/telemetryState';
+import { displayTelemetryValue, telemetryState, telemetryStateLabel } from '../utils/telemetryState';
 
 const props = defineProps<{ selected: Telemetry | null; samples: Telemetry[]; offline: boolean; source: 'demo' | 'api'; asset?: Asset; binding?: HardwareBinding; threshold?: number }>();
 const now = useNow({ interval: 10_000 });
@@ -12,8 +12,7 @@ const state = computed(() => telemetryState(props.selected, props.asset, props.b
 const window = computed(() => selectSignalWindow(props.samples, props.selected));
 const labels = computed(() => window.value.map((item) => new Date(item.recordedAt).toLocaleTimeString('zh-CN')));
 const series = computed(() => [{ name: props.selected?.metric || '采集值', data: window.value.map((item) => item.value), color: '#38bdf8' }]);
-const value = computed(() => props.selected && props.selected.quality !== 'missing' && Number.isFinite(props.selected.value)
-  ? new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 }).format(props.selected.value) : '--');
+const value = computed(() => displayTelemetryValue(props.selected, state.value, 2));
 const quality = computed(() => props.selected ? { good: '良好', suspect: '需核查', bad: '异常', missing: '缺失' }[props.selected.quality] : '暂无数据');
 const collectedAt = computed(() => props.selected && Number.isFinite(Date.parse(props.selected.recordedAt))
   ? new Date(props.selected.recordedAt).toLocaleString('zh-CN') : '暂无采集时间');
@@ -27,7 +26,7 @@ const collectedAt = computed(() => props.selected && Number.isFinite(Date.parse(
     </header>
     <div class="signal-reading">
       <p>{{ selected?.metric || '等待设备上报' }}<span>{{ selected?.assetCode || '尚无监测设备' }}</span></p>
-      <div><strong>{{ value }}</strong><span>{{ selected?.unit }}</span></div>
+      <div><strong>{{ value }}</strong><span v-if="value !== '—'">{{ selected?.unit }}</span></div>
       <time :datetime="selected?.recordedAt">采集于 {{ collectedAt }}</time>
     </div>
     <OpsChart v-if="window.length > 1" compact :labels="labels" :series="series" :threshold="threshold" />
