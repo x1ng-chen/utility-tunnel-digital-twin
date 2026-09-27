@@ -54,6 +54,11 @@ typedef struct
 #define NODE_A_TELEMETRY_FRAME_COUNT 6U
 #define NODE_A_TELEMETRY_FRAME_SIZE 768U
 
+/* A detected flame must be reported immediately rather than waiting for the
+ * rotating inventory frame to reach FLAME-01. */
+uint8_t NodeATelemetry_FormatFlameEvent(uint32_t sequence, char *frame,
+                                        uint16_t capacity, uint16_t *length);
+
 /* Slot 1 is the physically installed SHT30; the other slots are reserved
  * buses and must not create fabricated zero-value readings. */
 typedef struct {

@@ -81,7 +81,8 @@ static void format_environment_frame(char *frame, uint16_t *length, uint32_t seq
 
     const char *flame_code = (flame != NULL) ? flame->asset_code : "FLAME-01";
     const char *flame_quality = (flame != NULL && flame->quality == SENSOR_QUALITY_GOOD) ? "good" : "missing";
-    unsigned int flame_alarm = (flame != NULL) ? (unsigned int)flame->alarm : 0U;
+    unsigned int flame_alarm = (flame != NULL && flame->alarm != 0U) ||
+                               snapshot->flame_alarm != 0U;
 
     const char *level_code = (level != NULL) ? level->asset_code : "LEVEL-01";
     const char *level_quality = (level != NULL && level->quality == SENSOR_QUALITY_GOOD) ? "good" : ((level != NULL) ? "suspect" : "missing");
@@ -262,7 +263,8 @@ static void format_gas_raw_frame(char *frame, uint16_t *length, uint32_t sequenc
     const char *methane_quality = (mq4 != NULL && mq4->online && mq4->quality != SENSOR_QUALITY_MISSING) ? "good" : "missing";
     const char *co_quality = (co != NULL && co->online && co->quality != SENSOR_QUALITY_MISSING) ? "suspect" : "missing";
 
-    unsigned int flame_alarm = (flame != NULL) ? (unsigned int)flame->alarm : 0U;
+    unsigned int flame_alarm = (flame != NULL && flame->alarm != 0U) ||
+                               snapshot->flame_alarm != 0U;
     unsigned int mq4_raw = (mq4 != NULL) ? (unsigned int)mq4->raw : 0U;
     unsigned long mq4_uv = (mq4 != NULL) ? (unsigned long)mq4->microvolts : 0UL;
     unsigned int co_raw = (co != NULL) ? (unsigned int)co->raw : 0U;
@@ -444,6 +446,21 @@ uint8_t NodeATelemetry_FormatFrame(uint32_t sequence,
   format_indexed_frame(frame, length, sequence, snapshot,
                        (uint8_t)((sequence - 1U) % NODE_A_TELEMETRY_FRAME_COUNT));
   if (*length == 0U) return 0U;
+  return 1U;
+}
+
+uint8_t NodeATelemetry_FormatFlameEvent(uint32_t sequence, char *frame,
+                                        uint16_t capacity, uint16_t *length)
+{
+  int written;
+  if (frame == NULL || length == NULL || capacity == 0U) return 0U;
+  written = snprintf(frame, capacity,
+    "{\"schema\":\"ut.telemetry.v1\",\"seq\":%lu,\"readings\":["
+    "{\"assetCode\":\"FLAME-01\",\"metric\":\"flame.alarm\","
+    "\"value\":1,\"unit\":\"bool\",\"quality\":\"good\"}]}\r\n",
+    (unsigned long)sequence);
+  if (written <= 0 || written >= capacity) { *length = 0U; return 0U; }
+  *length = (uint16_t)written;
   return 1U;
 }
 

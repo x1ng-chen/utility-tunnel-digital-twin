@@ -3,7 +3,7 @@
 # 综合管廊数字孪生运维实体样品
 
 [![Plan](https://img.shields.io/badge/plan-V3.8-2E74B5)](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/main/docs/综合管廊数字孪生运维实体样品项目计划书_V3.8_当前软硬件进度与收尾计划版.docx)
-![Status](https://img.shields.io/badge/status-%E5%8F%B0%E6%9E%B6%E8%81%94%E8%B0%83%E4%B8%8E%E4%BC%A0%E6%84%9F%E5%99%A8%E6%8E%A5%E5%85%A5-F0AD4E)
+![Status](https://img.shields.io/badge/status-Demo%E9%98%B6%E6%AE%B5%E9%AA%8C%E6%94%B6-2E8B57)
 ![Visibility](https://img.shields.io/badge/visibility-private-6C757D)
 ![Safety](https://img.shields.io/badge/safety-low--voltage-success)
 
@@ -12,10 +12,10 @@
 面向教室桌面展示的综合管廊数字孪生运维样品，通过真实传感、STM32 现场控制、MQTT 数据链路和 Web 三维可视化，形成“监测—报警—联动—工单—处置—复核—归档”的完整运维闭环。
 
 > [!IMPORTANT]
-截至 2026-09-26，软件、双节点通信和三维基础已建立；Node A 台架完成四路 SHT30 的短时有效读数与轮播显示、双风机独立继电器/PWM/TACH 功能短测，Node B 灯带 Stars/100% 已获现场反馈。两路 INA226 已接入，但电流/功率精度、连续运行及异常恢复没有完成验收。CTRL-01 的 ESP-01S 已损坏，替换件及时间同步修复版待烧录复验；不能将当前状态写成整机交付。
+截至 2026-09-27，项目负责人确认双节点实物台架、31 路外部传感器接入、真实遥测、报警和用户指定 V13 三维模型达到课堂展示 **Demo 阶段验收**。FLAME-05 实物报警与 MQ2-04/05 烟雾报警已有后端证据；Node A 的 FLAME-01 短触发上报修复版已烧录并独立回读校验。最新实物触发后的三维高亮仍待两块 ESP 恢复在线后复测。Demo 验收不包含气体浓度标定、长时间稳定性、生产部署或 Carrier32 制板放行。
 
 > [!NOTE]
-软件平台的实际功能、运行方式、质量门禁和 PostgreSQL 接入说明见 [软件平台说明](docs/software-platform.md)。台架证据、待接入项与限制见 [2026-09-26 项目进度快照](docs/acceptance/2026-09-26-项目进度与验收边界.md)；“已实现”不等于“已完成真机或云端验收”。
+软件平台的运行方式见 [软件平台说明](docs/software-platform.md)。当前实物证据、固件标识与 Demo 验收边界见 [2026-09-27 Demo 阶段验收快照](docs/acceptance/2026-09-27-Demo阶段验收快照.md)；此前的 [9 月 26 日快照](docs/acceptance/2026-09-26-项目进度与验收边界.md)作为历史记录保留。
 
 > [!TIP]
 > 正式工程栈位于 `frontend/`（Vue 3）和 `backend/`（Django + DRF），可独立启动并连接 PostgreSQL；运行说明见 [Vue 3 + Django 标准软件栈](docs/vue-django-stack.md)。
@@ -50,27 +50,27 @@
 | 现场主控 | STM32F103RCT6 |
 | 部署方式 | 展示电脑本地服务 + 局域网热点或路由器 |
 | 运行原则 | 核心功能不依赖公网，断网时现场保护与局域网业务仍可运行 |
-| 当前状态 | 双节点台架及部分传感器已联调；四路 SHT30、双风机短测有证据；五路液位仅 L01 曾完成干湿触发，其余待接入；CTRL-01 ESP 待更换；系统级验收未完成 |
+| 当前状态 | 项目负责人确认课堂展示 Demo 阶段验收；31 路实物传感器接线和遥测已接入，FLAME-01 烧录后全链路复测、标定和工程验收仍待完成 |
 
 项目的成功标准包括：实体与三维对象编码一致、真实采集与真实控制、异常事件全流程留痕、局域网连续稳定运行，以及代码、硬件、模型、部署和测试资料可复现。
 
-### 当前交付快照（2026-09-26）
+### 当前交付快照（2026-09-27）
 
 | 工作域 | 已有成果 | 验收边界 |
 | --- | --- | --- |
-| STM32 台架 | Node A 四路 SHT30 已报告 `good` 并在屏幕依次显示；两台风机的继电器独立开关、PWM 调速和 TACH 非零转速经过短测；Node B 灯带 Stars/100% 有现场成功反馈 | INA226 电流/功率精度、风机长稳/故障场景及其余外部传感器仍待验收 |
-| ESP8266 | 双 ESP 链路历史上已连通本地 MQTT；Node A 时间同步修复版已构建 | CTRL-01 ESP-01S 损坏，替换件待到、未烧录；不能声称当前双节点联网或时间同步全程正常 |
-| 云端链路 | 本地MQTT → IoTDA MQTTS转发已实测；网关双路输出已实现，平台路经 `POST /api/telemetry/` 幂等入库并触发阈值告警（本地冒烟验证通过） | STM32→网关→Django 真机端到端入库、下行命令、持续运行及故障恢复仍待验收 |
+| STM32 台架 | Node A/B 已接 31 路外部实物传感器并上报；四路 SHT、四路液位、五路火焰及 MQ/CO/O2 编号已进入资产台账；Node A 的 FLAME-01 修复版已写入并回读校验 | INA226 精度、模拟量标定、逐路故障测试与长稳仍待工程验收 |
+| ESP8266 | CTRL-01/02 替换与升级均已烧录验证，历史运行时两路遥测曾同时进入本地 MQTT 和后端 | 最近一次 FLAME-01 复测前两块 ESP 离线，需恢复后核验现场链路 |
+| 报警链路 | FLAME-05 实物触发生成严重告警；MQ2-04/05 实物触发生成烟雾告警，MQ2-04 已在三维页出现告警提示 | FLAME-01 新固件写入后的实物告警与三维高亮尚未复测 |
 | 软件平台 | Vue 3 + Django 主栈完成 RBAC、资产、遥测、告警、工单、审计、数据洞察和运行检查 | 托管 PostgreSQL、域名、证书、容量和恢复演练依赖部署环境 |
-| GIS 与三维 | WGS84 空间治理、硬件绑定、受控 Web 运行模型、Three.js 三维场景、资产绑定完整性和二维降级已建立；模型与软件持续迭代 | 网页运行模型、实体安装和各资产全量映射仍须按版本逐项回归；三维外观不代替加工安全验证 |
+| GIS 与三维 | 网页运行用户指定 V13 模型，FLAME 等编号映射到实物；SHT 模型位 03 留空，三路 O2 位于 01/03/05 | 部分资产元数据仍需补齐模型节点名称，三维外观不代替加工安全验证 |
 | Carrier32 PCB | 双 STM32/双 ESP、32 路传感器接口的原理图、PCB、封装和 3D 展示草稿已形成 | **仅设计/展示草稿，不可制板、采购或装配**；未完成布线、电气/机械审查及制造发布门禁 |
 | 通信基线 | JDY-31已停用；ESP8266-01S是唯一无线通信模块 | 不再维护或验收蓝牙SPP链路 |
 
 ## 最新进度与未完成项
 
-- [当前进度、证据与验收边界](docs/acceptance/2026-09-26-项目进度与验收边界.md)记录实机结果与未证实事项；[双节点接线规划](docs/hardware/2026-09-24-双节点最新接线与传感器引脚规划.md)区分已接和预留引脚。
-- 四块 SHT30、两块 INA226 的物理接线已完成；SHT30 有短时通信与屏幕证据。INA226 的 R010 分流电阻已确认，但读数精度未通过独立测量校准。
-- 液位 L01 曾完成干/湿触发和遥测；L02–L05 为规划通道，不能把五路规划当作五路实测。CO、O2、MQ、火焰等后续传感器仍须逐路核对供电、电平、极性并做正常/触发/断线三态试验。
+- [最新 Demo 验收快照](docs/acceptance/2026-09-27-Demo阶段验收快照.md)记录当前实物、报警和剩余验证；[冻结接线表](docs/hardware/2026-09-27-双节点台架外部传感器接线冻结.md)是已接 31 路传感器的台架映射。
+- 液位 L01–L04 已接入；L05 实物已拆除。气体探头目前以原始量/电压展示，不把未标定数据解释为浓度。
+- FLAME-01 快速上报修复版已写入 Node A 并回读校验；两块 ESP 恢复在线后仍需做实物报警及三维节点高亮复测。
 - [Carrier32 展示草稿说明](hardware/carrier32/docs/visual-demo.md)和 [.pcba-workflow 门禁状态](.pcba-workflow/program-state.json)明确未通过的设计、采购、布线与制造门禁；**不要依据这些草稿下单打板**。
 - 其他独立工作树已按原样归档到 [网关气体字段 WIP](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/worktree/backend-cloud)、[三维镜头预览 WIP](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/worktree/frontend)、[早期气体 ADC WIP](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/worktree/firmware-hardware) 和 [旧本地 main 快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/archive/legacy-local-main-20260926)。这些分支**未合并到默认分支，也不是新增的整机验收结论**。
 
@@ -200,7 +200,7 @@ flowchart TB
 | 后端 | Django 5.2 LTS + Django REST Framework | 正式主软件栈，提供 Token 认证、RBAC、业务状态机、审计和 API；Python 依赖执行哈希锁定与漏洞审计 |
 | 数据库 | PostgreSQL（正式）/ SQLite（本地开发回退） | 资产、遥测、告警、工单、配置与审计的唯一主数据库 |
 | 前端 | Vue 3 + TypeScript + Vite | 正式主软件栈，通过构建时 `VITE_API_BASE_URL` 连接 Django API |
-| 数字孪生 | Vue 3 + Three.js / GLB，二维模型降级 | 环形 V04 正式模型已交付并接入默认 Web 路径；仍需完成所有资产节点的现场映射验收 |
+| 数字孪生 | Vue 3 + Three.js / GLB，二维模型降级 | 用户指定的环形 V13 候选模型已接入 Web；当前台架编号已映射，资产节点元数据仍需补齐 |
 | GIS | Leaflet 1.9.4 + WGS84 GeoJSON | 独立显示实物模块位置、坐标来源和固件接入状态；空间对象经导入、审核、发布与审计后进入运维地图，演示坐标与现场测绘严格区分 |
 | 资产主数据 | Vue 3 + Django 事务 API | 管理员维护设备身份、能力、孪生/GIS 坐标和生命周期；乐观锁、停用保护与审计留痕 |
 
@@ -392,6 +392,7 @@ chore(deploy): add mosquitto local configuration
 
 | 文档 | 说明 |
 | --- | --- |
+| [2026-09-27 Demo 阶段验收快照](docs/acceptance/2026-09-27-Demo阶段验收快照.md) | 当前台架、固件、报警及工程交付边界 |
 | [V3.4 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.4_当前进度与执行计划版.docx) | 当前可核查进度、剩余工作、可靠性风险、执行顺序与验收计划 |
 | [V3.3 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.3_精简云数据架构版.docx) | 历史需求、ESP8266通信基线、精简云数据架构与视觉智能扩展 |
 | [硬件现状与接入设计](docs/%E7%A1%AC%E4%BB%B6%E7%8E%B0%E7%8A%B6%E4%B8%8E%E6%8E%A5%E5%85%A5%E8%AE%BE%E8%AE%A1.md) | 实物照片索引、用途、接入边界、待核验项和采购缺口 |
@@ -415,4 +416,4 @@ chore(deploy): add mosquitto local configuration
 
 ---
 
-**文档基线：** V3.8 · **最后更新：** 2026-09-26 · **维护方：** 综合管廊数字孪生项目组
+**文档基线：** V3.8 · **最后更新：** 2026-09-27 · **维护方：** 综合管廊数字孪生项目组

@@ -345,6 +345,30 @@ static int check_gas_status_reports_the_operational_alarm(void)
   return 0;
 }
 
+static int check_short_flame_trigger_reaches_the_wire(void)
+{
+  NodeATelemetrySnapshot snapshot;
+  char frames[NODE_A_TELEMETRY_FRAME_COUNT][NODE_A_TELEMETRY_FRAME_SIZE];
+  uint16_t lengths[NODE_A_TELEMETRY_FRAME_COUNT] = {0U};
+  char event[192];
+  uint16_t event_length = 0U;
+  uint32_t sequence = 0U;
+
+  build_snapshot(&snapshot);
+  /* The rotating bank can still hold zero when the fast 50 ms safety sampler
+   * has already latched a brief low pulse on PB14. */
+  snapshot.flame_alarm = 1U;
+  NodeATelemetry_FormatAll(&sequence, &snapshot, frames, lengths);
+  CHECK(strstr(frames[0], "\"metric\":\"flame.alarm\",\"value\":1,") != NULL);
+  CHECK(strstr(frames[4], "\"metric\":\"flame.rawLevel\",\"value\":1,") != NULL);
+  CHECK(NodeATelemetry_FormatFlameEvent(7U, event, sizeof(event), &event_length) == 1U);
+  CHECK(strlen(event) == event_length);
+  CHECK(strstr(event, "\"seq\":7") != NULL);
+  CHECK(strstr(event, "\"assetCode\":\"FLAME-01\",\"metric\":\"flame.alarm\",\"value\":1,") != NULL);
+  CHECK(NodeATelemetry_FormatFlameEvent(7U, event, 8U, &event_length) == 0U);
+  return 0;
+}
+
 /* The legacy Web/IoTDA controller path may command any 0..100 duty.  The
  * producer must place that value verbatim in diag.pwmPercent: it is the only
  * ordered actual-duty signal the menu screen has. */
@@ -475,6 +499,7 @@ int main(void)
   (void)check_rotation_visits_every_frame();
   (void)check_emitted_vocabulary();
   (void)check_gas_status_reports_the_operational_alarm();
+  (void)check_short_flame_trigger_reaches_the_wire();
   (void)check_legacy_duty_reaches_the_wire();
   (void)check_each_fan_reports_its_own_relay();
 #endif

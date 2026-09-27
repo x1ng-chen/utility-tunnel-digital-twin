@@ -201,6 +201,7 @@ static uint8_t smoke_alarm;
 static uint8_t smoke_active_samples;
 static uint32_t smoke_last_sample_at;
 static uint8_t flame_alarm;
+static uint8_t flame_report_pending;
 static uint8_t flame_raw_level;
 static uint32_t flame_last_sample_at;
 static uint32_t flame_last_detected_at;
@@ -243,6 +244,7 @@ static NodeAStatusScreen status_screen;
 static NodeAStatusSnapshot status_sensors;
 static NodeAStatusPeerState peer_sensors;
 static NodeASensorBank sensor_bank;
+static int8_t flame_bank_index = -1;
 /* ut.time.sync.v1 arrives from ESP-01 on USART2 as a bare JSON line, so it gets
  * its own bounded slot instead of the command queue. */
 static UiClock esp_clock;
@@ -1177,6 +1179,7 @@ static void Flame_Poll(uint32_t now)
     if (flame_alarm == 0U)
     {
       flame_alarm = 1U;
+      flame_report_pending = 1U;
       NodeACommand_AlarmActivated(&g_actuator);
       Buzzer_Start(0xFFFFFFFFUL);
       Led_Render(now);
@@ -1193,6 +1196,24 @@ static void Flame_Poll(uint32_t now)
       Led_Render(now);
     }
   }
+}
+
+/* The normal six-slot telemetry rotation can take longer than the local
+ * alarm hold when a sensor bus is slow. Queue the rising edge as its own
+ * sequenced frame and retry if the ESP UART queue is full. */
+static void Flame_EmitPendingEvent(void)
+{
+  char frame[192];
+  uint16_t length = 0U;
+  TelemetryQueueContext queues = {&esp_tx_queue, &debug_tx_queue};
+  const uint32_t candidate = telemetry_sequence + 1U;
+
+  if (flame_report_pending == 0U) return;
+  if (NodeATelemetry_FormatFlameEvent(candidate, frame, sizeof(frame),
+                                      &length) == 0U) return;
+  if (Telemetry_EnqueueBoth(&queues, frame, length) == 0U) return;
+  telemetry_sequence = candidate;
+  flame_report_pending = 0U;
 }
 
 /* The liquid-level module runs from 5 V. Its DO signal passes through an
@@ -2272,6 +2293,7 @@ int main(void)
   MX_ADC1_Init();
   if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) Error_Handler();
   NodeASensorBank_Init(&sensor_bank, &hadc1, SensorBank_ServiceCallback, NULL);
+  flame_bank_index = NodeASensorBank_FindIndex(&sensor_bank, "FLAME-01");
   SensorTelemetry_Init(&telemetry_inventory_cursor, 1U);
   sensor_bank.sht30_reader = SensorBank_ReadSht30;
   UartTx_InitWithReserve(&esp_tx_queue, NODE_A_UART_ACK_RESERVE_BYTES);
@@ -2347,6 +2369,10 @@ int main(void)
      * can starve the panel forever and hide both time and environment data. */
     Status_Tick(now);
     NodeASensorBank_Tick(&sensor_bank, now);
+    if (flame_bank_index >= 0 && flame_alarm != 0U &&
+        sensor_bank.readings[flame_bank_index].quality == SENSOR_QUALITY_GOOD)
+      sensor_bank.readings[flame_bank_index].alarm = 1U;
+    Flame_EmitPendingEvent();
     if (telemetry_due != 0U)
     {
       /* The bank is the only SHT sampler; screen and telemetry share its cache. */
