@@ -63,6 +63,12 @@ export function toDjangoBatch(telemetry, { deviceId = 'CTRL-01', receivedAt = ne
     const assetCode = rawAssetCode.replace(/^LEVEL-0([1-5])$/, 'LEVEL-L0$1');
     const metricKey = String(reading.metric || '').toLowerCase();
     const value = Number(reading.value);
+    // The fifth probe was removed from the bench. Older Node B firmware can
+    // still emit its disabled/missing slot; do not create a phantom asset or
+    // fill the Django dead-letter store with that placeholder.
+    if (assetCode === 'LEVEL-L05') {
+      return;
+    }
     if (!ASSET_CODE_PATTERN.test(assetCode)) {
       skipped.push({ assetCode: reading.assetCode, metric: reading.metric, reason: 'assetCode does not match the platform pattern' });
       return;

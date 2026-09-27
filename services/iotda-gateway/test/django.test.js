@@ -104,6 +104,19 @@ test('uses the device timestamp when the message carries one', () => {
   assert.equal(batch.readings[0].recordedAt, '2026-08-29T07:59:58.000Z');
 });
 
+test('keeps fitted level channels and skips the removed fifth probe', () => {
+  const telemetry = {
+    schema: 'ut.telemetry.v1',
+    readings: [
+      { assetCode: 'LEVEL-04', metric: 'level.detected', value: 0, unit: 'bool', quality: 'good' },
+      { assetCode: 'LEVEL-05', metric: 'level.detected', value: 0, unit: 'bool', quality: 'missing' },
+    ],
+  };
+  const batch = toDjangoBatch(telemetry, { deviceId: 'CTRL-02', receivedAt: RECEIVED_AT });
+  assert.deepEqual(batch.readings.map((reading) => reading.assetCode), ['LEVEL-L04']);
+  assert.deepEqual(batch.skipped, []);
+});
+
 test('keeps Node B event ids separate when relaying the same telemetry frame', async () => {
   const server = await startServer((record, response) => {
     response.writeHead(201, { 'content-type': 'application/json' });
