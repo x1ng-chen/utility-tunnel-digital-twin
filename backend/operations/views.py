@@ -1813,11 +1813,11 @@ class TelemetrySummaryView(APIView):
             sample_count=Count('id'),
             started_at=Min('recorded_at'),
             ended_at=Max('recorded_at'),
-            metric_count=Count('metric_key', distinct=True),
-            unit_count=Count('unit', distinct=True),
         )
-        comparable = aggregate['metric_count'] <= 1 and aggregate['unit_count'] <= 1
-        values = queryset.aggregate(minimum=Min('value'), maximum=Max('value'), average=Avg('value')) if comparable else {'minimum': None, 'maximum': None, 'average': None}
+        trusted = queryset.filter(quality=Telemetry.Quality.GOOD)
+        trusted_metrics = trusted.aggregate(metric_count=Count('metric_key', distinct=True), unit_count=Count('unit', distinct=True))
+        comparable = trusted_metrics['metric_count'] <= 1 and trusted_metrics['unit_count'] <= 1
+        values = trusted.aggregate(minimum=Min('value'), maximum=Max('value'), average=Avg('value')) if comparable else {'minimum': None, 'maximum': None, 'average': None}
         quality_counts = {quality: 0 for quality in Telemetry.Quality.values}
         for row in queryset.values('quality').annotate(count=Count('id')):
             quality_counts[row['quality']] = row['count']

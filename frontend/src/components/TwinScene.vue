@@ -8,7 +8,7 @@ import type { Alert, Asset } from '../types';
 import { cameraFitDistance } from '../utils/cameraFit';
 import { modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
 
-const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string; modelEnabled?: boolean }>();
+const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string; modelEnabled?: boolean; showUnboundMarkers?: boolean; modelVersion?: 'release' | 'v13' }>();
 const emit = defineEmits<{ select: [code: string]; modelReport: [report: TwinModelBindingReport] }>();
 const host = ref<HTMLDivElement>();
 const modelState = ref<'loading' | 'loaded' | 'fallback'>('loading');
@@ -134,7 +134,7 @@ function normalizedModelNodeName(value: unknown) {
  * This keeps legacy exports usable without weakening the formal mesh contract.
  */
 function findModelNode(root: Object3D, asset: Asset) {
-  const candidates = modelNodeNames(asset);
+  const candidates = modelNodeNames(asset, props.modelVersion);
   for (const candidate of candidates) {
     const exact = root.getObjectByName(candidate);
     if (exact) return exact;
@@ -164,7 +164,7 @@ function bindModelAssets(root: Object3D) {
     if (modelBoundCodes.has(asset.code)) { boundCodes.push(asset.code); return; }
     const node = findModelNode(root, asset);
     if (!node) {
-      addFallbackAsset(asset);
+      if (props.showUnboundMarkers !== false) addFallbackAsset(asset);
       return;
     }
     node.userData.assetCode = asset.code;

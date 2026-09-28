@@ -25,6 +25,9 @@ describe('3D twin binding rules', () => {
 
   it('offers stable Blender object-name fallbacks for every asset', () => {
     expect(modelNodeNames(asset)).toEqual(['MESH_ENV_01', 'ENV-01', 'ASSET_ENV_01']);
+    expect(modelNodeNames({ ...asset, code: 'LEVEL-L03', mesh: 'MESH_V12-FSIR02_L03_PROBE' }, 'v13')).toEqual(['LEVEL-L03-探头']);
+    expect(modelNodeNames({ ...asset, code: 'DISP-01', mesh: 'MESH_DISP_01' }, 'v13')).toEqual(['TFT-01']);
+    expect(modelNodeNames({ ...asset, code: 'ENV-01', mesh: 'ENV-01' }, 'v13')).toEqual([]);
   });
 
   it('does not count interactive fallback markers as Blender model bindings', () => {

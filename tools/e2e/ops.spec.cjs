@@ -99,7 +99,7 @@ function trackConsoleErrors(page) {
 }
 
 function modelUploadFor(version) {
-  const original = fs.readFileSync(path.resolve(__dirname, '../../frontend/public/models/utility-tunnel.glb'));
+  const original = fs.readFileSync(path.resolve(__dirname, '../../frontend/public/models/utility-tunnel-v07.glb'));
   const jsonLength = original.readUInt32LE(12);
   const document = JSON.parse(original.subarray(20, 20 + jsonLength).toString('utf8').trimEnd());
   document.extras = { ...(document.extras || {}), regressionVersion: version };
@@ -230,7 +230,8 @@ test('三维孪生加载正式环形 V07 模型后可完整定位设备并展示
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await page.getByRole('button', { name: '三维孪生' }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await page.goto(`${webUrl}/twin-3d?model=v07`);
   await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
   await expect(page.getByRole('application', { name: '综合管廊三维数字孪生场景' })).toBeVisible();
   await expect(page.getByText('已加载实体三维模型')).toBeVisible();
@@ -307,13 +308,16 @@ test('三维孪生加载正式环形 V07 模型后可完整定位设备并展示
   await expect(page.locator('.gis-inspector').getByText('ENV-01 ·', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: '在三维中查看此设备 →' }).click();
   await expect(page).toHaveURL(/\/twin-3d\?asset=ENV-01/);
+  await page.getByRole('button', { name: '查看已启用版本' }).click();
   await expect(page.locator('.twin-inspector').getByText('已从 GIS 地图定位到当前设备。', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'NET-01' }).click();
   await expect(page.locator('.twin-focus-status').getByText('ESP8266-01S 通信模块', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '设备台账' }).click({ force: true });
-  await page.getByRole('button', { name: '定位 水位传感器' }).click({ force: true });
+  await page.locator('.asset-card').filter({ hasText: 'SEEP-W01' }).click();
+  await expect(page.locator('.asset-detail-panel').getByRole('heading', { name: '水位传感器', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '在三维中查看 →' }).click();
   await expect(page).toHaveURL(/\/twin-3d\?asset=SEEP-W01/);
+  await page.getByRole('button', { name: '查看已启用版本' }).click();
   await expect(page.locator('.twin-inspector').getByText('MESH_SEEP_W01', { exact: true })).toBeVisible();
 });
 
@@ -455,7 +459,8 @@ test('设备控制必须经二次确认并按一次性凭据顺序下发', async
   expect(confirmationRequests).toBe(0);
   await page.getByRole('button', { name: '启动风扇（10秒）' }).click();
   await page.getByRole('dialog', { name: '确认下发设备命令' }).getByRole('button', { name: '确认并下发' }).click();
-  await expect(page.getByText('设备已确认：relay_active')).toBeVisible();
+  await expect(page.getByText('已收到设备回执：relay_active。请以随后上报的设备状态核对实际效果。')).toBeVisible();
+  await expect(page.getByText(/本页最近回执：启动风扇（10 秒）/)).toBeVisible();
   expect(confirmationRequests).toBe(1);
   expect(commandRequests).toBe(1);
 });
@@ -672,6 +677,7 @@ test('管理员可校验、启用三维模型版本并由孪生页面鉴权加�
   await release.getByRole('button', { name: '启用此版本' }).click();
   await expect(release.getByText('当前使用', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '三维孪生' }).click();
+  await page.getByRole('button', { name: '查看已启用版本' }).click();
   await expect(page.locator('.twin-model-readiness.loaded').getByText('模型已加载', { exact: true })).toBeVisible({ timeout: 60_000 });
   const zoomIn = page.getByRole('button', { name: '放大三维模型' });
   const zoomOut = page.getByRole('button', { name: '缩小三维模型' });
@@ -872,6 +878,7 @@ test('三维页在 3 秒内将实时新告警定位到已绑定设备', async ({
   await expect(page).toHaveURL(/dashboard/);
   await expect(page.locator('[title="实时推送已连接"]')).toBeVisible();
   await page.getByRole('button', { name: '三维孪生' }).click();
+  await page.getByRole('button', { name: '查看已启用版本' }).click();
   await expect(page.locator('.twin-model-readiness.loaded').getByText('模型已加载', { exact: true })).toBeVisible({ timeout: 60_000 });
   const autoLocate = page.getByRole('checkbox', { name: '新告警自动定位' });
   await expect(autoLocate).toBeChecked();
@@ -948,9 +955,77 @@ test('已启用模型文件读取失败时不把预览场景误报为实体模�
   await page.getByLabel('密码', { exact: true }).fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
   await page.getByRole('button', { name: '三维孪生' }).click();
+  await page.getByRole('button', { name: '查看已启用版本' }).click();
   const readiness = page.locator('.twin-model-readiness');
   await expect(readiness.getByText('模型文件不可用', { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(readiness.getByText('模型已加载', { exact: true })).toHaveCount(0);
   await expect(page.locator('.twin-scene')).toHaveAttribute('data-model-state', 'fallback');
   await expect(page.locator('.twin-live[title*="实体模型文件暂时无法获取"]')).toContainText('模型文件暂不可用');
+});
+
+test('五个液位节点分别定位，L03 告警只高亮对应测点', async ({ page, request }) => {
+  const base = process.env.E2E_API_URL || 'http://127.0.0.1:8000/api';
+  const login = await request.post(`${base}/auth/login/`, { data: { email: 'admin', password: adminPassword } });
+  expect(login.ok()).toBe(true);
+  const headers = { Authorization: `Bearer ${(await login.json()).accessToken}` };
+
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await page.goto(`${webUrl}/twin-3d?asset=LEVEL-L01`);
+  const cards = page.locator('.level-station-card');
+  await expect(cards).toHaveCount(5);
+  await expect(page.locator('.twin-scene')).toHaveAttribute('data-model-state', 'loaded', { timeout: 30_000 });
+  const cameraTargets = new Set();
+  for (let index = 1; index <= 5; index += 1) {
+    const code = `LEVEL-L0${index}`;
+    await cards.filter({ hasText: code }).click();
+    await expect(page.locator('.twin-focus-status')).toContainText(code);
+    await expect(page.locator('.twin-canvas')).toHaveAttribute('data-camera-target', /\d/);
+    cameraTargets.add(await page.locator('.twin-canvas').getAttribute('data-camera-target'));
+  }
+  expect(cameraTargets.size).toBe(5);
+
+  const response = await request.post(`${base}/telemetry/`, { headers, data: { readings: [{
+    eventId: `level-l03-browser-${Date.now()}`, assetCode: 'LEVEL-L03', metricKey: 'level.detected',
+    metric: '液位检测', value: 1, unit: 'bool', quality: 'good', recordedAt: new Date().toISOString(),
+  }] } });
+  expect(response.ok(), await response.text()).toBe(true);
+  await page.goto(`${webUrl}/twin-3d?asset=LEVEL-L03`);
+  await expect(cards.filter({ hasText: 'LEVEL-L03' })).toHaveClass(/alarm/);
+  await expect(cards.filter({ hasText: 'LEVEL-L02' })).not.toHaveClass(/alarm/);
+  await expect(page.locator('.twin-focus-status')).toContainText('LEVEL-L03');
+  await expect(page.locator('.twin-inspector')).toContainText('液位检测');
+});
+
+test('默认 V13 模型分别定位五个液位探头并可切回已启用版本', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto(webUrl);
+  await page.getByLabel('账号或邮箱').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill(adminPassword);
+  await page.getByRole('button', { name: /安全登录/ }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await page.goto(`${webUrl}/twin-3d?asset=LEVEL-L01`);
+  await expect(page.getByText('V13 当前模型', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('.twin-scene')).toHaveAttribute('data-model-state', 'loaded', { timeout: 60_000 });
+  await expect(page.locator('.twin-model-readiness')).toContainText('五个液位探头可分别定位');
+  await expect(page.locator('.twin-model-contract')).toContainText('12 / 19 个设备在 V13 模型中已定位');
+  await expect(page.locator('.twin-model-binding-list')).toContainText('ENV-01');
+  for (const [code, node] of [['LED-01', 'LED-STRIP'], ['DISP-01', 'TFT-01'], ['FAN-02', 'FAN-02-上框']]) {
+    await page.locator('.twin-quick-switch-list').getByRole('button', { name: new RegExp(`设备编码 ${code}`) }).click();
+    await expect(page.locator('.twin-inspector-grid')).toContainText(node);
+  }
+  const cards = page.locator('.level-station-card');
+  const cameraTargets = new Set();
+  for (let index = 1; index <= 5; index += 1) {
+    const code = `LEVEL-L0${index}`;
+    await cards.filter({ hasText: code }).click();
+    await expect(page.locator('.twin-focus-status')).toContainText(code);
+    cameraTargets.add(await page.locator('.twin-canvas').getAttribute('data-camera-target'));
+  }
+  expect(cameraTargets.size).toBe(5);
+  await page.getByRole('button', { name: '查看已启用版本' }).click();
+  await expect(page).toHaveURL(/model=v07/);
 });

@@ -271,7 +271,7 @@ class Telemetry(models.Model):
     metric = models.CharField(max_length=80)
     value = models.FloatField()
     unit = models.CharField(max_length=20)
-    quality = models.CharField(max_length=20, choices=Quality.choices, default=Quality.GOOD)
+    quality = models.CharField(max_length=20, choices=Quality.choices, default=Quality.SUSPECT)
     recorded_at = models.DateTimeField()
     ingested_at = models.DateTimeField(default=timezone.now, editable=False)
 

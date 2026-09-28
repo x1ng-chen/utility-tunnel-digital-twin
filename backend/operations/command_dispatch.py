@@ -12,6 +12,21 @@ class CommandDispatchError(RuntimeError):
     """The command could not be safely handed to the local broker."""
 
 
+ACK_STATUSES = {'accepted', 'rejected', 'duplicate', 'expired'}
+
+
+def matching_command_ack(payload: Any, command_id: str) -> dict[str, Any] | None:
+    """Ignore malformed or unrelated MQTT frames instead of reporting an acknowledgement."""
+    if not isinstance(payload, dict):
+        return None
+    status = payload.get('status')
+    if (payload.get('schema') != 'ut.command.ack.v1' or payload.get('cmdId') != command_id
+            or not isinstance(status, str) or status not in ACK_STATUSES
+            or not isinstance(payload.get('reason'), str)):
+        return None
+    return payload
+
+
 def publish_controller_command(command: dict[str, Any]) -> dict[str, Any] | None:
     """Publish one command and return its matching acknowledgement when available."""
     command_id = command['cmdId']
@@ -46,8 +61,9 @@ def publish_controller_command(command: dict[str, Any]) -> dict[str, Any] | None
             payload = json.loads(message.payload.decode('utf-8'))
         except (UnicodeDecodeError, json.JSONDecodeError):
             return
-        if isinstance(payload, dict) and payload.get('cmdId') == command_id:
-            received_ack.append(payload)
+        ack = matching_command_ack(payload, command_id)
+        if ack is not None:
+            received_ack.append(ack)
             acknowledged.set()
 
     client.on_connect = on_connect

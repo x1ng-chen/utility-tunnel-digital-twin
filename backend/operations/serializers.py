@@ -369,14 +369,21 @@ class TelemetrySerializer(serializers.ModelSerializer):
         fields = ['id', 'eventId', 'assetCode', 'metricKey', 'metric', 'value', 'unit', 'quality', 'recordedAt', 'ingestedAt']
 
 
+class TelemetryValueField(serializers.FloatField):
+    def to_internal_value(self, data):
+        if isinstance(data, bool):
+            raise serializers.ValidationError('Telemetry value must be a number, not a boolean.')
+        return super().to_internal_value(data)
+
+
 class TelemetryReadingSerializer(serializers.Serializer):
     eventId = serializers.RegexField(r'^[A-Za-z0-9._:-]{1,80}$', max_length=80)
     assetCode = serializers.RegexField(r'^[A-Z0-9][A-Z0-9_-]{1,39}$', max_length=40)
     metricKey = serializers.RegexField(r'^[a-z][a-z0-9_.-]{1,39}$', max_length=40)
     metric = serializers.CharField(max_length=80)
-    value = serializers.FloatField(min_value=-1_000_000_000, max_value=1_000_000_000)
+    value = TelemetryValueField(min_value=-1_000_000_000, max_value=1_000_000_000)
     unit = serializers.CharField(max_length=20)
-    quality = serializers.ChoiceField(choices=Telemetry.Quality.choices, default=Telemetry.Quality.GOOD)
+    quality = serializers.ChoiceField(choices=Telemetry.Quality.choices, default=Telemetry.Quality.SUSPECT)
     recordedAt = serializers.DateTimeField()
 
     def validate_value(self, value):
