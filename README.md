@@ -66,11 +66,11 @@
 | Carrier32 PCB | 双 STM32/双 ESP、32 路传感器接口的原理图、PCB、封装和 3D 展示草稿已形成 | **仅设计/展示草稿，不可制板、采购或装配**；未完成布线、电气/机械审查及制造发布门禁 |
 | 通信基线 | JDY-31已停用；ESP8266-01S是唯一无线通信模块 | 不再维护或验收蓝牙SPP链路 |
 
-## 最新进度与未完成项
+## 最新进度与工程边界
 
-当前台架固件、冻结接线、V13 模型映射和最新验收快照已同步至 [功能分支](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/feature/dual-screen-joystick-menu)。默认分支首页是项目进度入口；可烧录源码以功能分支为准。
+当前台架固件、冻结接线和 V13 模型映射已同步至 [功能分支](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/feature/dual-screen-joystick-menu)。最新项目方验收结论记录在默认分支；可烧录源码以功能分支为准。
 
-- [9 月 27 日 Demo 验收快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/acceptance/2026-09-27-Demo阶段验收快照.md)记录当前实物、报警和剩余验证；[冻结接线表](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/hardware/2026-09-27-双节点台架外部传感器接线冻结.md)是已接 31 路传感器的台架映射。
+- [9 月 27 日 Demo 验收快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/acceptance/2026-09-27-Demo阶段验收快照.md)记录当时的实物、报警和待复测事项；[冻结接线表](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/hardware/2026-09-27-双节点台架外部传感器接线冻结.md)是已接 31 路传感器的台架映射。
 - 液位 L01–L04 已接入；L05 实物已拆除。气体探头目前以原始量/电压展示，不把未标定数据解释为浓度。
 - 项目负责人确认两块 ESP 已恢复在线，FLAME-01 新固件的实物报警、后端告警与 V13 三维高亮全链路复测完成；[最新验收状态](docs/acceptance/2026-09-28-项目方验收状态.md)记录确认依据与边界。
 - [Carrier32 展示草稿说明](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/hardware/carrier32/docs/visual-demo.md)和 [.pcba-workflow 门禁状态](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/.pcba-workflow/program-state.json)明确未通过的设计、采购、布线与制造门禁；**不要依据这些草稿下单打板**。
@@ -395,7 +395,8 @@ chore(deploy): add mosquitto local configuration
 
 | 文档 | 说明 |
 | --- | --- |
-| [2026-09-27 Demo 阶段验收快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/acceptance/2026-09-27-Demo阶段验收快照.md) | 当前台架、固件、报警及工程交付边界 |
+| [2026-09-28 项目方验收状态](docs/acceptance/2026-09-28-项目方验收状态.md) | 最新项目方验收结论及 FLAME-01 全链路复测状态 |
+| [2026-09-27 Demo 阶段验收快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/acceptance/2026-09-27-Demo阶段验收快照.md) | 历史台架、固件、报警及工程交付边界 |
 | [V3.4 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.4_当前进度与执行计划版.docx) | 当前可核查进度、剩余工作、可靠性风险、执行顺序与验收计划 |
 | [V3.3 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.3_精简云数据架构版.docx) | 历史需求、ESP8266通信基线、精简云数据架构与视觉智能扩展 |
 | [硬件现状与接入设计](docs/%E7%A1%AC%E4%BB%B6%E7%8E%B0%E7%8A%B6%E4%B8%8E%E6%8E%A5%E5%85%A5%E8%AE%BE%E8%AE%A1.md) | 实物照片索引、用途、接入边界、待核验项和采购缺口 |
