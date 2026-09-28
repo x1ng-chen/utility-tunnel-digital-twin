@@ -2338,16 +2338,23 @@ int main(void)
       alarm_active = ((smoke_alarm != 0U) || (flame_alarm != 0U) ||
                       (gas_alarm != 0U) || (safety_eval.audible_required != 0U)) ? 1U : 0U;
     }
-    if ((alarm_active == 0U) && (g_actuator.buzzer_on != 0U) &&
-        ((now - buzzer_started_at) >= buzzer_duration_ms))
-      Buzzer_Silence();
     if (alarm_active != 0U)
     {
+      /* Bank-only alarms must own the buzzer state as well as the GPIO.
+       * Otherwise their direct pin assertion survives alarm clearance while
+       * telemetry still incorrectly reports buzzer.active=0. */
+      if (g_actuator.buzzer_on == 0U) Buzzer_Start(0xFFFFFFFFUL);
       if (g_actuator.buzzer_muted != 0U)
         HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_RESET);
       else
         HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_SET);
     }
+    else if ((g_actuator.buzzer_on != 0U) &&
+             ((buzzer_duration_ms == 0xFFFFFFFFUL) ||
+              ((now - buzzer_started_at) >= buzzer_duration_ms)))
+      Buzzer_Silence();
+    else if (g_actuator.buzzer_on == 0U)
+      HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_RESET);
     if ((gas_ventilation_active == 0U) && (g_actuator.relay_on != 0U) &&
         (relay_duration_ms != 0xFFFFFFFFUL) &&
         ((now - relay_started_at) >= relay_duration_ms))
