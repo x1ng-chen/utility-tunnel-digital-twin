@@ -23,6 +23,7 @@ import {
   WifiOff,
 } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
+import AiAssistant from './AiAssistant.vue';
 import { useOperationsStore } from '../stores/operations';
 import { serviceStatus } from '../utils/serviceStatus';
 
@@ -236,6 +237,7 @@ function alertCount(path: string) {
       </div>
 
       <div class="page-content"><slot /></div>
+      <AiAssistant :page-name="currentNav.label" />
 
       <Teleport to="body">
         <div v-if="searchOpen" class="command-mask" @click.self="searchOpen = false">

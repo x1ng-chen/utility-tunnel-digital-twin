@@ -1180,7 +1180,7 @@ class OperationsApiTests(TestCase):
         self.assertEqual(len({tuple(sorted(position.items())) for _, position in positions}), 14)
         water = Asset.objects.get(hardware_code='H-04')
         self.assertEqual(water.integration_status, Asset.IntegrationStatus.CALIBRATION_REQUIRED)
-        self.assertEqual(float(water.latitude), 31.230505)
+        self.assertEqual(float(water.latitude), 36.635775)
         self.assertEqual(Asset.objects.filter(latitude__isnull=False, longitude__isnull=False).count(), 14)
 
     def test_e2e_cleanup_removes_legacy_and_timestamped_twin_test_assets(self):

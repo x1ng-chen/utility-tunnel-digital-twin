@@ -68,10 +68,24 @@ function renderMarkers(fit = true) {
   if (!map || !markers) return;
   markers.clearLayers();
   const bounds: L.LatLngExpression[] = [];
+  const groups = new Map<string, Asset[]>();
   for (const asset of locatedAssets.value) {
     const point: L.LatLngExpression = [asset.latitude, asset.longitude];
     bounds.push(point);
-    L.marker(point, { icon: markerIcon(asset), title: `${asset.hardwareCode ?? asset.code} ${asset.name}` })
+    const key = `${asset.latitude.toFixed(6)},${asset.longitude.toFixed(6)}`;
+    groups.set(key, [...(groups.get(key) ?? []), asset]);
+  }
+  for (const group of groups.values()) {
+    const asset = group[0]!;
+    const point: L.LatLngExpression = [asset.latitude!, asset.longitude!];
+    const grouped = group.length > 1;
+    const icon = grouped ? L.divIcon({
+      className: 'gis-marker-shell',
+      html: `<div class="gis-marker site"><i></i><span>${group.length} 个设备</span></div>`,
+      iconSize: [58, 42],
+      iconAnchor: [29, 34],
+    }) : markerIcon(asset);
+    L.marker(point, { icon, title: grouped ? `共 ${group.length} 个设备` : `${asset.hardwareCode ?? asset.code} ${asset.name}` })
       .on('click', () => { selectedCode.value = asset.code; })
       .addTo(markers);
   }
@@ -105,7 +119,7 @@ function openAlertCenter() { if (selectedAlert.value) void router.push({ path: '
 onMounted(async () => {
   await nextTick();
   if (!mapElement.value) return;
-  map = L.map(mapElement.value, { zoomControl: false, minZoom: 2, maxZoom: 20 }).setView([31.2304, 121.4737], 18);
+  map = L.map(mapElement.value, { zoomControl: false, minZoom: 2, maxZoom: 20 }).setView([36.635670, 109.472480], 18);
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   const tileUrl = import.meta.env.VITE_GIS_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   L.tileLayer(tileUrl, {
@@ -143,13 +157,13 @@ onBeforeUnmount(() => {
 <template>
   <AppShell>
     <section class="section-title gis-title">
-      <div><span class="eyebrow light">空间位置总览</span><h1>GIS 空间运维总览</h1><p>以受治理的 WGS84 坐标、审核空间图层和硬件绑定契约支撑现场地图；二维孪生仍由设备台账负责。</p></div>
+      <div><span class="eyebrow light">空间位置总览</span><h1>GIS 空间运维总览</h1><p>演示定位：陕西省延安市延安大学新城校区信息大厦 B 栋。以受治理的 WGS84 坐标、审核空间图层和硬件绑定契约支撑现场地图；二维孪生仍由设备台账负责。</p></div>
       <div class="gis-live"><i />{{ connectedCount }} / {{ store.assets.length }} 固件链路已接入</div>
     </section>
 
     <section v-if="demoCoordinateCount" class="coordinate-notice" role="note">
       <span>坐标数据声明</span>
-      <strong>{{ demoCoordinateCount }} 个模块当前使用演示锚点，不是 GPS 或现场测绘坐标。</strong>
+      <strong>{{ demoCoordinateCount }} 个模块当前使用信息大厦附近的演示锚点，不是 B 栋内各设备的 GPS 或现场测绘坐标。</strong>
       <p>真实坐标和管廊图层必须经 GeoJSON 导入、来源登记和管理员审核后发布；系统不会把未审核数据展示为现场位置。</p>
     </section>
 
@@ -208,5 +222,6 @@ onBeforeUnmount(() => {
   background: #ff4d61;
   box-shadow: 0 0 0 8px #ff4d6124, 0 0 25px #ff4d61;
 }
+.gis-marker.site i { border-color: #cce0ff; background: #6287ee; box-shadow: 0 0 0 8px #6287ee24, 0 0 25px #6287ee; }
 .gis-module-list button > i.alarm, .gis-legend i.alarm { background: #ff4d61; }
 </style>

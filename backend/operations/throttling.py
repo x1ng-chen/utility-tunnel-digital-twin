@@ -67,3 +67,14 @@ class PasswordChangeRateThrottle(SimpleRateThrottle):
         if not request.user or not request.user.is_authenticated:
             return None
         return self.cache_format % {'scope': self.scope, 'ident': request.user.pk}
+
+
+class AiAssistantRateThrottle(SimpleRateThrottle):
+    """Keep paid assistant requests within a per-user budget."""
+
+    scope = 'ai_assistant'
+
+    def get_cache_key(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return None
+        return self.cache_format % {'scope': self.scope, 'ident': request.user.pk}
