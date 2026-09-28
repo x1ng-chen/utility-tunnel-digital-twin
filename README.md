@@ -3,7 +3,7 @@
 # 综合管廊数字孪生运维实体样品
 
 [![Plan](https://img.shields.io/badge/plan-V3.8-2E74B5)](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/main/docs/综合管廊数字孪生运维实体样品项目计划书_V3.8_当前软硬件进度与收尾计划版.docx)
-![Status](https://img.shields.io/badge/status-Demo%E9%98%B6%E6%AE%B5%E9%AA%8C%E6%94%B6-2E8B57)
+![Status](https://img.shields.io/badge/status-%E9%A1%B9%E7%9B%AE%E6%96%B9%E9%AA%8C%E6%94%B6-2E8B57)
 ![Visibility](https://img.shields.io/badge/visibility-private-6C757D)
 ![Safety](https://img.shields.io/badge/safety-low--voltage-success)
 
@@ -12,10 +12,10 @@
 面向教室桌面展示的综合管廊数字孪生运维样品，通过真实传感、STM32 现场控制、MQTT 数据链路和 Web 三维可视化，形成“监测—报警—联动—工单—处置—复核—归档”的完整运维闭环。
 
 > [!IMPORTANT]
-截至 2026-09-27，项目负责人确认双节点实物台架、31 路外部传感器接入、真实遥测、报警和用户指定 V13 三维模型达到课堂展示 **Demo 阶段验收**。FLAME-05 实物报警与 MQ2-04/05 烟雾报警已有后端证据；Node A 的 FLAME-01 短触发上报修复版已烧录并独立回读校验。最新实物触发后的三维高亮仍待两块 ESP 恢复在线后复测。Demo 验收不包含气体浓度标定、长时间稳定性、生产部署或 Carrier32 制板放行。
+截至 2026-09-28，项目负责人确认本项目已达到项目方当前约定的验收标准。两块 ESP 已恢复在线；Node A 的 FLAME-01 修复版固件已完成“实物触发 → 后端告警 → V13 三维高亮”全链路复测。此前的离线和待复测描述已过时。此次确认不自动放行 Carrier32 制板或生产部署；详见 [最新项目方验收状态](docs/acceptance/2026-09-28-项目方验收状态.md)。
 
 > [!NOTE]
-软件平台的运行方式见 [软件平台说明](docs/software-platform.md)。当前实物证据、固件标识与边界见 [2026-09-27 Demo 阶段验收快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/acceptance/2026-09-27-Demo阶段验收快照.md)；此前的 [9 月 26 日快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/acceptance/2026-09-26-项目进度与验收边界.md)作为历史记录保留。
+软件平台的运行方式见 [软件平台说明](docs/software-platform.md)。当前验收结论见 [2026-09-28 项目方验收状态](docs/acceptance/2026-09-28-项目方验收状态.md)；历史实物证据、固件标识与边界见 [2026-09-27 Demo 阶段验收快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/acceptance/2026-09-27-Demo阶段验收快照.md)；此前的 [9 月 26 日快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/acceptance/2026-09-26-项目进度与验收边界.md)作为历史记录保留。
 
 > [!TIP]
 > 正式工程栈位于 `frontend/`（Vue 3）和 `backend/`（Django + DRF），可独立启动并连接 PostgreSQL；运行说明见 [Vue 3 + Django 标准软件栈](docs/vue-django-stack.md)。
@@ -50,17 +50,17 @@
 | 现场主控 | STM32F103RCT6 |
 | 部署方式 | 展示电脑本地服务 + 局域网热点或路由器 |
 | 运行原则 | 核心功能不依赖公网，断网时现场保护与局域网业务仍可运行 |
-| 当前状态 | 项目负责人确认课堂展示 Demo 阶段验收；31 路实物传感器接线和遥测已接入，FLAME-01 烧录后全链路复测、标定和工程验收仍待完成 |
+| 当前状态 | 项目负责人确认已达到项目方当前验收标准；31 路实物传感器接线和遥测已接入，两块 ESP 恢复在线，FLAME-01 实物报警至 V13 高亮全链路复测已完成 |
 
 项目的成功标准包括：实体与三维对象编码一致、真实采集与真实控制、异常事件全流程留痕、局域网连续稳定运行，以及代码、硬件、模型、部署和测试资料可复现。
 
-### 当前交付快照（2026-09-27）
+### 当前交付快照（2026-09-28）
 
 | 工作域 | 已有成果 | 验收边界 |
 | --- | --- | --- |
 | STM32 台架 | Node A/B 已接 31 路外部实物传感器并上报；四路 SHT、四路液位、五路火焰及 MQ/CO/O2 编号已进入资产台账；Node A 的 FLAME-01 修复版已写入并回读校验 | INA226 精度、模拟量标定、逐路故障测试与长稳仍待工程验收 |
-| ESP8266 | CTRL-01/02 替换与升级均已烧录验证，历史运行时两路遥测曾同时进入本地 MQTT 和后端 | 最近一次 FLAME-01 复测前两块 ESP 离线，需恢复后核验现场链路 |
-| 报警链路 | FLAME-05 实物触发生成严重告警；MQ2-04/05 实物触发生成烟雾告警，MQ2-04 已在三维页出现告警提示 | FLAME-01 新固件写入后的实物告警与三维高亮尚未复测 |
+| ESP8266 | CTRL-01/02 替换与升级均已烧录验证；项目负责人确认两块 ESP 已恢复在线，FLAME-01 复测链路贯通 | 本次状态依据项目负责人确认，现场原始日志与截图未随本次文档更新归档 |
+| 报警链路 | FLAME-05 实物触发生成严重告警；MQ2-04/05 实物触发生成烟雾告警；项目负责人确认 FLAME-01 新固件实物触发、后端告警与 V13 高亮全链路复测完成 | 本次复测的原始日志与截图未随本次文档更新归档 |
 | 软件平台 | Vue 3 + Django 主栈完成 RBAC、资产、遥测、告警、工单、审计、数据洞察和运行检查 | 托管 PostgreSQL、域名、证书、容量和恢复演练依赖部署环境 |
 | GIS 与三维 | 网页运行用户指定 V13 模型，FLAME 等编号映射到实物；SHT 模型位 03 留空，三路 O2 位于 01/03/05 | 部分资产元数据仍需补齐模型节点名称，三维外观不代替加工安全验证 |
 | Carrier32 PCB | 双 STM32/双 ESP、32 路传感器接口的原理图、PCB、封装和 3D 展示草稿已形成 | **仅设计/展示草稿，不可制板、采购或装配**；未完成布线、电气/机械审查及制造发布门禁 |
@@ -70,9 +70,9 @@
 
 当前台架固件、冻结接线、V13 模型映射和最新验收快照已同步至 [功能分支](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/feature/dual-screen-joystick-menu)。默认分支首页是项目进度入口；可烧录源码以功能分支为准。
 
-- [最新 Demo 验收快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/acceptance/2026-09-27-Demo阶段验收快照.md)记录当前实物、报警和剩余验证；[冻结接线表](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/hardware/2026-09-27-双节点台架外部传感器接线冻结.md)是已接 31 路传感器的台架映射。
+- [9 月 27 日 Demo 验收快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/acceptance/2026-09-27-Demo阶段验收快照.md)记录当前实物、报警和剩余验证；[冻结接线表](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/hardware/2026-09-27-双节点台架外部传感器接线冻结.md)是已接 31 路传感器的台架映射。
 - 液位 L01–L04 已接入；L05 实物已拆除。气体探头目前以原始量/电压展示，不把未标定数据解释为浓度。
-- FLAME-01 快速上报修复版已写入 Node A 并回读校验；两块 ESP 恢复在线后仍需做实物报警及三维节点高亮复测。
+- 项目负责人确认两块 ESP 已恢复在线，FLAME-01 新固件的实物报警、后端告警与 V13 三维高亮全链路复测完成；[最新验收状态](docs/acceptance/2026-09-28-项目方验收状态.md)记录确认依据与边界。
 - [Carrier32 展示草稿说明](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/hardware/carrier32/docs/visual-demo.md)和 [.pcba-workflow 门禁状态](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/.pcba-workflow/program-state.json)明确未通过的设计、采购、布线与制造门禁；**不要依据这些草稿下单打板**。
 - 其他独立工作树已按原样归档到 [网关气体字段 WIP](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/worktree/backend-cloud)、[三维镜头预览 WIP](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/worktree/frontend)、[早期气体 ADC WIP](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/worktree/firmware-hardware) 和 [旧本地 main 快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/archive/legacy-local-main-20260926)。这些分支**未合并到默认分支，也不是新增的整机验收结论**。
 - 9 月 27 日旧本地 `main` 上未提交的台架与仪表盘试验另存为 [本地 WIP 快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/snapshot/local-main-wip-20260927)；该快照未合并、未作为当前可烧录版本验收。运行日志、Flash 备份和本地密钥仍仅保留在台架电脑。
@@ -419,4 +419,4 @@ chore(deploy): add mosquitto local configuration
 
 ---
 
-**文档基线：** V3.8 · **最后更新：** 2026-09-27 · **维护方：** 综合管廊数字孪生项目组
+**文档基线：** V3.8 · **最后更新：** 2026-09-28 · **维护方：** 综合管廊数字孪生项目组
