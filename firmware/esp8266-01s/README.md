@@ -1,5 +1,7 @@
 # ESP8266-01S 本地 MQTT 串口桥
 
+> **当前台架版本（2026-09-28）**：Node A/B 与双 ESP 已接入 31 路传感器，项目负责人已确认当前范围验收。可烧录源码、当前引脚表及全传感器记录位于 [功能分支](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/feature/dual-screen-joystick-menu)，接线以 [9 月 27 日冻结表](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/hardware/2026-09-27-双节点台架外部传感器接线冻结.md)为准。下文保留 main 的早期接口/构建说明，不应当作当前台架完整接线或烧录指令。详见 [当前状态](../../docs/项目当前状态.md)。
+
 该固件用于项目既定链路：`STM32 -> ESP8266 -> 本地 MQTT -> IoTDA 网关 -> 华为云`。ESP-01S 不保存华为云设备密钥，也不通过公网明文连接 IoTDA。
 
 ## 接线与供电

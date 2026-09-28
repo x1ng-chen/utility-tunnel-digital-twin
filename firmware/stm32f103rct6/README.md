@@ -1,8 +1,10 @@
 # STM32F103RCT6 双节点台架固件
 
+> **当前台架版本（2026-09-28）**：Node A/B 与双 ESP 已接入 31 路传感器，项目负责人已确认当前范围验收。可烧录源码、当前引脚表及全传感器记录位于 [功能分支](https://github.com/x1ng-chen/utility-tunnel-digital-twin/tree/feature/dual-screen-joystick-menu)，接线以 [9 月 27 日冻结表](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/hardware/2026-09-27-双节点台架外部传感器接线冻结.md)为准。下文保留 main 的早期接口/构建说明，不应当作当前台架完整接线或烧录指令。详见 [当前状态](../../docs/项目当前状态.md)。
+
 当前活动固件是两块 STM32F103RCT6 通过两块 ESP8266-01S 及 MQTT 通信的 Node A / Node B 组合。**不要烧录旧的 DHT11 `bench` 映像。**
 
-## 当前节点与接线
+## 早期双节点接口（历史参考）
 
 | 节点 | 作用 | 已验证接口 |
 |---|---|---|
@@ -15,7 +17,7 @@
 
 依赖：STM32CubeMX 6.18.1、STM32Cube FW_F1 V1.8.7、Arm GNU Toolchain 12.2.1、CMake 3.22+、Ninja。
 
-### CTRL-01 / Node A（当前默认）
+### CTRL-01 / Node A（本分支早期构建）
 
 ```powershell
 cmake --preset NodeA --fresh
