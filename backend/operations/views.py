@@ -28,6 +28,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .authentication import BearerTokenAuthentication, IngestApiKeyAuthentication
+from .ai_assistant import AssistantServiceError, ask_deepseek
 from .command_dispatch import CommandDispatchError, publish_controller_command
 from .connectivity import count_online_assets, mark_assets_connected
 from .models import Alert, Asset, AuditLog, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder, WorkOrderEvent
@@ -35,7 +36,7 @@ from .permissions import AuthenticatedRead, TelemetryPermission
 from .serializers import AdminUserSerializer, AlertSerializer, AssetMutationSerializer, AssetSerializer, AuditSerializer, HardwareBindingMutationSerializer, HardwareBindingSerializer, RegistrationRequestSerializer, ReportExportSerializer, SpatialFeatureMutationSerializer, SpatialFeatureSerializer, TelemetryReadingSerializer, TelemetrySerializer, ThresholdSerializer, TwinModelReleaseSerializer, WorkOrderSerializer, hardware_connectivity
 from .services import actor_name, audit
 from .telemetry_rules import evaluate_threshold
-from .throttling import LoginBurstRateThrottle, LoginRateThrottle, PasswordChangeRateThrottle, PasswordSetupRateThrottle, RegistrationRateThrottle
+from .throttling import AiAssistantRateThrottle, LoginBurstRateThrottle, LoginRateThrottle, PasswordChangeRateThrottle, PasswordSetupRateThrottle, RegistrationRateThrottle
 
 
 def request_id(request) -> str:
@@ -66,6 +67,38 @@ def issue_registration_setup_token(application):
 
 def error_response(code: str, message: str, status_code: int, details=None):
     return Response({'error': code, 'message': message, 'details': details or {}}, status=status_code)
+
+
+class AiAssistantView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [AiAssistantRateThrottle]
+    page_names = {'运行总览', '告警中心', '工单中心', '设备台账', '三维孪生', 'GIS 总览', '数据洞察', '资产配置', '空间配置', '系统配置', '审计追踪', '页面未找到'}
+
+    def post(self, request):
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', '请求内容必须是 JSON 对象。', 400)
+        messages = payload.get('messages')
+        page = payload.get('page', '')
+        if not isinstance(messages, list) or not 1 <= len(messages) <= 12:
+            return error_response('invalid_request', '请提供 1 至 12 条对话消息。', 400)
+        if not isinstance(page, str) or page not in self.page_names | {''}:
+            return error_response('invalid_request', '页面名称无效。', 400)
+        clean_messages = []
+        for item in messages:
+            if not isinstance(item, dict) or item.get('role') not in {'user', 'assistant'}:
+                return error_response('invalid_request', '对话角色无效。', 400)
+            content = item.get('content')
+            if not isinstance(content, str) or not content.strip() or len(content) > 2000:
+                return error_response('invalid_request', '每条消息应为 1 至 2000 字。', 400)
+            clean_messages.append({'role': item['role'], 'content': content.strip()})
+        if clean_messages[-1]['role'] != 'user' or sum(len(item['content']) for item in clean_messages) > 8000:
+            return error_response('invalid_request', '对话长度超出限制，或最后一条不是用户消息。', 400)
+        try:
+            reply = ask_deepseek(clean_messages, page.strip())
+        except AssistantServiceError as exc:
+            return error_response(exc.code, str(exc), exc.status_code)
+        return Response({'reply': reply})
 
 
 def paginated(queryset, serializer_class, request, ordering=('-id',)):

@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import { api } from '../services/api';
+import { useAiAssistantStore } from './aiAssistant';
 import type { Role, User } from '../types';
 
 const userStorageKey = 'ut-vue-user';
@@ -37,6 +38,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(email: string, password: string, role: Role, mode: 'demo' | 'api') {
     loading.value = true;
     error.value = '';
+    useAiAssistantStore().clear();
     try {
       if (mode === 'demo') {
         // A demo session must never inherit an API bearer token from an older session.
@@ -62,6 +64,7 @@ export const useAuthStore = defineStore('auth', () => {
     storage?.removeItem(tokenStorageKey);
     storage?.removeItem(sessionModeKey);
     persist(null);
+    useAiAssistantStore().clear();
   }
 
   async function changePassword(currentPassword: string, newPassword: string) {
@@ -84,6 +87,7 @@ export const useAuthStore = defineStore('auth', () => {
     storage?.removeItem(tokenStorageKey);
     storage?.removeItem(sessionModeKey);
     persist(null);
+    useAiAssistantStore().clear();
     error.value = message;
   }
 
