@@ -2,6 +2,16 @@ import axios, { type InternalAxiosRequestConfig } from 'axios';
 
 export type ControllerAction = 'led_red' | 'led_green' | 'led_blue' | 'led_off' | 'relay_on' | 'relay_off' | 'fan_pwm' | 'fan2_pwm';
 export type AssistantMessage = { role: 'user' | 'assistant'; content: string };
+export type AgentTrace = { tool: string; status: 'ok' | 'rejected'; evidenceId: string; durationMs: number };
+export type AgentEvidence = { id: string; tool: string; status: string; queriedAt: string; data: Record<string, unknown> };
+export type AgentProposal = {
+  kind: 'work_order'; assetCode: string; title: string; description: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent'; requires_confirmation: true;
+};
+export type AgentResponse = {
+  reply: string; queriedAt?: string; mode?: 'tool_verified' | 'explanation_only';
+  traces?: AgentTrace[]; evidence?: AgentEvidence[]; proposals?: AgentProposal[];
+};
 
 const localStorageRef = typeof window !== 'undefined' ? window.localStorage : null;
 const sessionStorageRef = typeof window !== 'undefined' ? window.sessionStorage : null;
@@ -91,7 +101,7 @@ export const api = {
   reviewRegistrationRequest: (id: number, payload: { status: 'approved' | 'rejected'; reviewNote?: string }) => client.patch(`/admin/registration-requests/${id}/`, payload),
   reissueRegistrationSetupToken: (id: number) => client.post(`/admin/registration-requests/${id}/setup-token/`),
   dashboard: () => client.get('/dashboard/'),
-  assistantChat: (messages: AssistantMessage[], page: string) => client.post<{ reply: string }>('/assistant/chat/', { messages, page }, { timeout: 35000 }),
+  assistantChat: (messages: AssistantMessage[], page: string) => client.post<AgentResponse>('/assistant/chat/', { messages, page }, { timeout: 65000 }),
   controllerCommand: (action: ControllerAction, dutyPercent?: number) => client.post('/controllers/CTRL-01/commands/', { action, ...(dutyPercent == null ? {} : { dutyPercent }) }),
   twinModelReadiness: () => client.get('/twin/model-readiness/'),
   twinModels: (params?: Record<string, string | number>) => client.get('/twin/models/', { params }),

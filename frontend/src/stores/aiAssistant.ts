@@ -1,9 +1,11 @@
 import { ref } from 'vue';
 import { defineStore } from 'pinia';
-import { api, type AssistantMessage } from '../services/api';
+import { api, type AssistantMessage, type AgentResponse } from '../services/api';
+
+type AgentMessage = AssistantMessage & Omit<AgentResponse, 'reply'>;
 
 export const useAiAssistantStore = defineStore('aiAssistant', () => {
-  const messages = ref<AssistantMessage[]>([]);
+  const messages = ref<AgentMessage[]>([]);
   const pending = ref(false);
   const error = ref('');
   let revision = 0;
@@ -11,14 +13,18 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
   async function send(question: string, page: string) {
     const content = question.trim();
     if (!content || pending.value) return;
-    const history = [...messages.value.slice(-10), { role: 'user' as const, content }];
+    // Evidence is server-generated and must never be replayed as client tool context.
+    const history = [...messages.value.slice(-10).map(({ role, content }) => ({ role, content })), { role: 'user' as const, content }];
     while (history.reduce((length, item) => length + item.content.length, 0) > 8000) history.splice(0, 2);
     const requestRevision = revision;
     pending.value = true;
     error.value = '';
     try {
       const response = await api.assistantChat(history, page);
-      if (requestRevision === revision) messages.value.push({ role: 'user', content }, { role: 'assistant', content: response.data.reply.slice(0, 2000) });
+      if (requestRevision === revision) {
+        const { reply, ...metadata } = response.data;
+        messages.value.push({ role: 'user', content }, { role: 'assistant', content: reply.slice(0, 2000), ...metadata });
+      }
     } catch (cause: unknown) {
       const failure = cause as { response?: { data?: { message?: string } }; code?: string };
       if (requestRevision === revision) {

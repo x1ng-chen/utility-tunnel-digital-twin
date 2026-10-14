@@ -70,7 +70,7 @@ def error_response(code: str, message: str, status_code: int, details=None):
 
 
 class AiAssistantView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AuthenticatedRead]
     throttle_classes = [AiAssistantRateThrottle]
     page_names = {'运行总览', '告警中心', '工单中心', '设备台账', '三维孪生', 'GIS 总览', '数据洞察', '资产配置', '空间配置', '系统配置', '审计追踪', '页面未找到'}
 
@@ -95,10 +95,16 @@ class AiAssistantView(APIView):
         if clean_messages[-1]['role'] != 'user' or sum(len(item['content']) for item in clean_messages) > 8000:
             return error_response('invalid_request', '对话长度超出限制，或最后一条不是用户消息。', 400)
         try:
-            reply = ask_deepseek(clean_messages, page.strip())
+            result = ask_deepseek(clean_messages, page.strip(), request.user)
         except AssistantServiceError as exc:
+            audit(request.user, 'assistant.failed', 'assistant', detail={'code': exc.code}, request_id=request_id(request))
             return error_response(exc.code, str(exc), exc.status_code)
-        return Response({'reply': reply})
+        # Persist tool trace metadata, not chat content, credentials or sensor dumps.
+        audit(request.user, 'assistant.queried', 'assistant', detail={
+            'page': page, 'mode': result['mode'], 'traces': result['traces'],
+            'proposalCount': len(result['proposals']),
+        }, request_id=request_id(request))
+        return Response(result)
 
 
 def paginated(queryset, serializer_class, request, ordering=('-id',)):
