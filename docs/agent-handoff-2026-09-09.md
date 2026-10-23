@@ -67,7 +67,7 @@
 
 1. `docs/frontend-v36-requirements.md`：最新需求差距矩阵，**未验收项不得删掉充当完成**。
 2. `docs/frontend-rebuild-acceptance.md`：全前端范围与历史验收边界。
-3. `docs/综合管廊数字孪生运维实体样品项目计划书_V3.6_液位监测与水路建模版.docx`：当前已核对的源需求。若存在更新版，先比较差异；以最新版为准，不只读本交接。
+3. [docs/综合管廊数字孪生运维实体样品项目计划书_V3.6_液位监测与水路建模版.docx（历史）](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/529f8c03e0af2e02f7ab26b827d0af43bc638b0a/docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V3.6_%E6%B6%B2%E4%BD%8D%E7%9B%91%E6%B5%8B%E4%B8%8E%E6%B0%B4%E8%B7%AF%E5%BB%BA%E6%A8%A1%E7%89%88.docx)：当前已核对的源需求。若存在更新版，先比较差异；以最新版为准，不只读本交接。
 4. `docs/测试报告.md`、`docs/项目实施日志.md`、`docs/software-platform.md`、`docs/software-acceptance-checklist.md`、`docs/software-quality-gates.md`、`docs/使用手册.md`。
 5. `docs/3D模型接入规范.md`、`docs/三维模型交付规范.md`、`docs/三维模型发布与交付.md`、`docs/实时遥测接入说明.md`、`docs/硬件现状与接入设计.md`。
 6. `tools/e2e/README.md`、`deploy/LOCAL-START.md`、`.github/workflows/` 与实际部署说明。

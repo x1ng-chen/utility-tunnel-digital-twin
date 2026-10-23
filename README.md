@@ -22,6 +22,8 @@
 > [!TIP]
 > 正式工程栈位于 `frontend/`（Vue 3）和 `backend/`（Django + DRF），可独立启动并连接 PostgreSQL；运行说明见 [Vue 3 + Django 标准软件栈](docs/vue-django-stack.md)。
 
+> **仓库清理（2026-10-23）**：主线已移除过期计划书、V01–V05 模型制品及停用蓝牙网关；当前计划、运行模型和质量门禁保留。历史文件及已合并分支的恢复入口见 [清理记录](docs/repository-cleanup-2026-10-23.md)。
+
 ## 目录
 
 - [项目概览](#项目概览)
@@ -252,8 +254,7 @@ utility-tunnel-digital-twin/
 │   └── esp8266-01s/          # ESP-01S UART-MQTT 桥固件
 ├── services/
 │   ├── iotda-gateway/        # 本地 MQTT 到华为云 IoTDA 安全转发
-│   ├── local-mqtt/           # 台架 Mosquitto 配置
-│   └── serial-gateway/       # 已停用的历史蓝牙串口网关（不进入当前链路）
+│   └── local-mqtt/           # 台架 Mosquitto 配置
 ├── deploy/                   # 容器、Nginx、PostgreSQL与恢复资料
 ├── tools/                    # 质量扫描、E2E与文档工具
 ├── .github/workflows/        # 单测、构建、安全扫描与浏览器回归
@@ -410,8 +411,8 @@ chore(deploy): add mosquitto local configuration
 | [当前状态与版本索引](docs/项目当前状态.md) | 2026-09-28 功能、分支、验收与待办核对 |
 | [AI 助手接入](docs/AI助手接入.md) | 功能分支入口、后端配置及数据边界 |
 | [V3.8 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.8_当前软硬件进度与收尾计划版.docx) | 规划基线，后续实测进度以最新验收与状态索引为准 |
-| [V3.4 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.4_当前进度与执行计划版.docx) | 历史 V3.4 执行计划，仅用于追溯 |
-| [V3.3 项目计划书](docs/综合管廊数字孪生运维实体样品项目计划书_V3.3_精简云数据架构版.docx) | 历史需求、ESP8266通信基线、精简云数据架构与视觉智能扩展 |
+| [V3.4 项目计划书](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/529f8c03e0af2e02f7ab26b827d0af43bc638b0a/docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V3.4_%E5%BD%93%E5%89%8D%E8%BF%9B%E5%BA%A6%E4%B8%8E%E6%89%A7%E8%A1%8C%E8%AE%A1%E5%88%92%E7%89%88.docx) | 历史 V3.4 执行计划，仅用于追溯 |
+| [V3.3 项目计划书](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/529f8c03e0af2e02f7ab26b827d0af43bc638b0a/docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E8%BF%90%E7%BB%B4%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V3.3_%E7%B2%BE%E7%AE%80%E4%BA%91%E6%95%B0%E6%8D%AE%E6%9E%B6%E6%9E%84%E7%89%88.docx) | 历史需求、ESP8266通信基线、精简云数据架构与视觉智能扩展 |
 | [硬件现状与接入设计](docs/%E7%A1%AC%E4%BB%B6%E7%8E%B0%E7%8A%B6%E4%B8%8E%E6%8E%A5%E5%85%A5%E8%AE%BE%E8%AE%A1.md) | 实物照片索引、用途、接入边界、待核验项和采购缺口 |
 | [GIS 设备位置模块](docs/GIS%E8%AE%BE%E5%A4%87%E4%BD%8D%E7%BD%AE%E6%A8%A1%E5%9D%97.md) | 实物模块映射、坐标真实性、GeoJSON 审核发布、硬件接口预留、底图配置与降级边界 |
 | [项目实施日志](docs/%E9%A1%B9%E7%9B%AE%E5%AE%9E%E6%96%BD%E6%97%A5%E5%BF%97.md) | 每日任务、实际完成、证据、风险、变更和周度汇总 |
@@ -423,7 +424,7 @@ chore(deploy): add mosquitto local configuration
 | [软件使用手册](docs/%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md) | 本地模式与 API 模式操作说明 |
 | [答辩演示脚本](docs/%E7%AD%94%E8%BE%A9%E6%BC%94%E7%A4%BA%E8%84%9A%E6%9C%AC.md) | 六分钟演示流程与备用方案 |
 | [测试报告](docs/%E6%B5%8B%E8%AF%95%E6%8A%A5%E5%91%8A.md) | 自动化与浏览器验证范围 |
-| [V1.3 项目计划书](docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V1.3.docx) | 历史版本，仅用于追溯 |
+| [V1.3 项目计划书](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/529f8c03e0af2e02f7ab26b827d0af43bc638b0a/docs/%E7%BB%BC%E5%90%88%E7%AE%A1%E5%BB%8A%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E5%AE%9E%E4%BD%93%E6%A0%B7%E5%93%81%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92%E4%B9%A6_V1.3.docx) | 历史版本，仅用于追溯 |
 
 接口、部署、测试和使用手册应在对应模块实施时补充，并与代码版本同步维护。
 

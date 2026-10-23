@@ -2,6 +2,8 @@
 
 > 2026-09-28：当前台架网页已运行用户指定 V13 的导出 GLB，实物映射见 [当前状态](../docs/项目当前状态.md)。运行实现位于功能分支；PR #29 还保留独立的导出/版本切换工作，尚未合并。下文 V07/V08 等为历史阶段说明，不应据此把现场版本判为 V07。
 
+> **清理说明（2026-10-23）**：V01–V05 的过期模型、预览及生成脚本已从主线移除，下文相关历史链接固定到清理前提交。V06（V07 重建输入）、V07 回退版、V08/V09 门禁依赖及 V10–V13 后续模型保留，详见 [清理记录](../docs/repository-cleanup-2026-10-23.md)。
+
 ## 当前设计最终版：V13（2026-09-14）
 
 用户已确认当前 V13 为项目数字孪生模型的设计最终版。归档文件为 `utility-tunnel-annular-v13-candidate.blend` / `.glb`，文件名保留上传时的不可变标识；模型状态以本索引和项目实施日志为准。V13 设计定版不表示实体加工、通水通气通电、网页运行时替换或项目最终验收通过；后续同源导出和浏览器验证已有 PR #29 记录；当前台架 V13 映射以功能分支为准，不能将这些成果推定为默认分支代码已经合并。
@@ -45,11 +47,11 @@ V08 的 LFS 对象已于 2026-09-07 补传并通过独立缓存下载核验；9 
 
 | 版本 | 主题 | 主文件 |
 |---|---|---|
-| V01 | 环形概念基线 | `utility-tunnel-ring-v01.glb` |
-| V02 | 环形验证基线 | `utility-tunnel-ring-v02.glb` |
-| V03 | 矩形方案基线 | `utility-tunnel-rectangular-v03.glb` |
-| V04 | 正式环形 Web 基线 | `utility-tunnel-annular-v04.glb` |
-| V05 | 2026-08-31 最终环形实体与运行时节点 | `utility-tunnel-annular-v05-final.glb` |
+| V01 | 环形概念基线 | [utility-tunnel-ring-v01.glb（历史）](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/529f8c03e0af2e02f7ab26b827d0af43bc638b0a/model/utility-tunnel-ring-v01.glb) |
+| V02 | 环形验证基线 | [utility-tunnel-ring-v02.glb（历史）](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/529f8c03e0af2e02f7ab26b827d0af43bc638b0a/model/utility-tunnel-ring-v02.glb) |
+| V03 | 矩形方案基线 | [utility-tunnel-rectangular-v03.glb（历史）](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/529f8c03e0af2e02f7ab26b827d0af43bc638b0a/model/utility-tunnel-rectangular-v03.glb) |
+| V04 | 正式环形 Web 基线 | [utility-tunnel-annular-v04.glb（历史）](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/529f8c03e0af2e02f7ab26b827d0af43bc638b0a/model/utility-tunnel-annular-v04.glb) |
+| V05 | 2026-08-31 最终环形实体与运行时节点 | [utility-tunnel-annular-v05-final.glb（历史）](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/529f8c03e0af2e02f7ab26b827d0af43bc638b0a/model/utility-tunnel-annular-v05-final.glb) |
 | V06 | 2026-09-01 顶部与侧边完整封闭最终版 | `utility-tunnel-annular-v06-final.glb` |
 | V07 | 2026-09-02 五个分散管路液位测点网页运行时版 | `utility-tunnel-annular-v07-final.glb` |
 | V08 | 2026-09-03 控制区 BT-01 可选视觉模块候选版 | `utility-tunnel-annular-v08-final.glb` |
