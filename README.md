@@ -9,7 +9,7 @@
 
 </div>
 
-> **当前重组与协作基线（2026-10-23）**：[四主控总体方案](docs/four-controller-overall-plan-2026-10-23.md)已确认四块STM32、31路传感器、独立网关与语音两块ESP32-S3、RS-485及长方体概念结构；[协作任务清单](docs/four-controller-collaboration.md)提供认领、依赖和验收入口。详细接线、供电与接口待冻结，**建模暂停**。下文双节点、ESP8266、V13及2026-09-28验收内容保留为历史运行基线，不代表新四节点系统已实现或验收；旧计划中的尺寸、节点数量和排期不覆盖本方案。
+> **当前重组与协作基线（2026-10-24）**：[四主控总体方案](docs/four-controller-overall-plan-2026-10-23.md)已更新为用户提供的700×700×300 mm实体尺寸、四角主控和四角加中央五检测站；业务管道两个进口/两个出口与舱内排风分开设计。[五站布局与报警定位](docs/five-station-layout-700-square.md)明确31路对象映射和五站定位验收，[协作任务清单](docs/four-controller-collaboration.md)提供认领与依赖。**模型已授权继续修订，新模型及其报警定位尚未联调验收。** 下文双节点、ESP8266、V13及2026-09-28验收保留为历史运行基线，不能作为新系统已完成证明。
 
 
 > **历史版本与功能索引（2026-09-28）**：[当前状态与分支索引](docs/项目当前状态.md)汇总软件、31 路传感器、V13、AI 助手及剩余门禁。当前功能代码在 `feature/dual-screen-joystick-menu`；默认分支的文档同步不等于功能代码已合并。
@@ -409,8 +409,9 @@ chore(deploy): add mosquitto local configuration
 
 | 文档 | 说明 |
 | --- | --- |
-| [四主控总体方案（2026-10-23）](docs/four-controller-overall-plan-2026-10-23.md) | 当前重组设计基线、双S3分工、485选型、待冻结事项与验收边界 |
-| [四主控协作任务清单](docs/four-controller-collaboration.md) | 任务认领、依赖、交付物与复核证据；建模暂停 |
+| [四主控总体方案（2026-10-24更新）](docs/four-controller-overall-plan-2026-10-23.md) | 700毫米方形布局、双S3分工、485选型及验收边界 |
+| [五检测站布局与报警定位](docs/five-station-layout-700-square.md) | 四角加中央、31路实物标签与主控归属、三维绑定及五站定位验收 |
+| [四主控协作任务清单](docs/four-controller-collaboration.md) | 任务认领、依赖、交付物与复核证据；模型已授权继续 |
 | [2026-09-28 项目方验收状态](docs/acceptance/2026-09-28-项目方验收状态.md) | 最新项目方验收结论及全部已接入传感器复测状态 |
 | [2026-09-27 Demo 阶段验收快照](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/feature/dual-screen-joystick-menu/docs/acceptance/2026-09-27-Demo阶段验收快照.md) | 历史台架、固件、报警及工程交付边界 |
 | [当前状态与版本索引](docs/项目当前状态.md) | 2026-09-28 功能、分支、验收与待办核对 |
