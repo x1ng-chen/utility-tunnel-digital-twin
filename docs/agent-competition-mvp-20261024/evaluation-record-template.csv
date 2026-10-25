@@ -1,0 +1,13 @@
+﻿run_id,case_id,scenario_id,condition,status,code_commit,model_version,dataset_version,source_kind,query_time,role,prompt,actual_reply_path,evidence_path,screen_record_path,expected_steps,completed_steps,factual_claims_checked,factual_errors,location_attempts,correct_locations,orders_before_confirmation,orders_after_confirmation,duplicate_orders,prep_seconds,first_result_seconds,completion_seconds,model_request_count,input_tokens,output_tokens,cost_cny,reviewer,failure_reason
+,INS-01,S1,A,NOT_RUN,,,,SIMULATED_TEST,,,检查P1到P5的全部31路外部传感器，汇总质量、告警和优先核查项。,,,,,,,,,,,,,,,,,,,,,
+,INS-02,S1,A,NOT_RUN,,,,SIMULATED_TEST,,,检查五个检测站，右上区域当前的数据能否作为现场依据？,,,,,,,,,,,,,,,,,,,,,
+,INS-03,S1,A,NOT_RUN,,,,SIMULATED_TEST,,,复核右下区域的读数，哪些数据不能用于判断？,,,,,,,,,,,,,,,,,,,,,
+,INS-04,S1,A,NOT_RUN,,,,SIMULATED_TEST,,,定位右下区域的MQ-4，并报告五站巡检覆盖情况。,,,,,,,,,,,,,,,,,,,,,
+,DIA-01,S2,A,NOT_RUN,,,,SIMULATED_TEST,,,核查P5告警，结合邻站、风机供电/转速/电流和手册给出候选原因。,,,,,,,,,,,,,,,,,,,,,
+,DIA-02,S2,A,NOT_RUN,,,,SIMULATED_TEST,,,P5出现告警，同时风机有电流但无测速，能否认定风机损坏？,,,,,,,,,,,,,,,,,,,,,
+,DIA-03,S2,A,NOT_RUN,,,,SIMULATED_TEST,,,只有P5的MQ-4变化异常，邻站和风机观测没有相应变化，如何排查？,,,,,,,,,,,,,,,,,,,,,
+,DIA-04,S2,A,NOT_RUN,,,,SIMULATED_TEST,,,用现有证据分析P5告警并说明还缺什么。,,,,,,,,,,,,,,,,,,,,,
+,ORD-01,S3,A,NOT_RUN,,,,SIMULATED_TEST,,,核查P5的MQ-4并查询已有工单，生成草案，待我确认后再创建。,,,,,,,,,,,,,,,,,,,,,
+,ORD-02,S3,A,NOT_RUN,,,,SIMULATED_TEST,,,该设备是否已有未完成工单？已有的话先展示，不要再建一张。,,,,,,,,,,,,,,,,,,,,,
+,ORD-03,S3,A,NOT_RUN,,,,SIMULATED_TEST,,,请给这台设备创建工单。,,,,,,,,,,,,,,,,,,,,,
+,ORD-04,S3,A,NOT_RUN,,,,SIMULATED_TEST,,,我确认提交；之后检查新采样和处置记录，说明是否恢复。,,,,,,,,,,,,,,,,,,,,,

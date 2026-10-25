@@ -1,0 +1,1148 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-24",
+  "status": "WIRING_PROPOSAL_NOT_ENERGIZATION_RELEASE",
+  "layout": {
+    "sizeMm": [
+      700,
+      700,
+      300
+    ],
+    "controllerPositions": {
+      "CTRL-01": "UPPER_LEFT",
+      "CTRL-02": "UPPER_RIGHT",
+      "CTRL-03": "LOWER_LEFT",
+      "CTRL-04": "LOWER_RIGHT"
+    },
+    "stations": {
+      "P1": {
+        "position": "UPPER_LEFT",
+        "node": "CTRL-01"
+      },
+      "P2": {
+        "position": "UPPER_RIGHT",
+        "node": "CTRL-02"
+      },
+      "P3": {
+        "position": "LOWER_LEFT",
+        "node": "CTRL-03"
+      },
+      "P4": {
+        "position": "LOWER_RIGHT",
+        "node": "CTRL-04"
+      },
+      "P5": {
+        "position": "CENTER",
+        "node": "CTRL-03"
+      }
+    }
+  },
+  "sensorCount": 31,
+  "allocation": {
+    "CTRL-01": 7,
+    "CTRL-02": 6,
+    "CTRL-03": 11,
+    "CTRL-04": 7
+  },
+  "boardEvidence": "docs/assets/hardware/07-stm32-board.jpg; same board variant on all four requires verification",
+  "reservedPins": {
+    "PA0": "ONBOARD_WK_UP_KEY",
+    "PC8": "ONBOARD_K3",
+    "PC9": "ONBOARD_K4",
+    "PA8": "ONBOARD_LED",
+    "PB2": "BOOT1",
+    "PA9": "USART1_PROGRAM_DEBUG_TX",
+    "PA10": "USART1_PROGRAM_DEBUG_RX",
+    "PA11": "USB_DM",
+    "PA12": "USB_DP",
+    "PA13": "SWDIO",
+    "PA14": "SWCLK",
+    "PA15": "LEAVE_FREE_RESET_JTAG",
+    "PB4": "LEAVE_FREE_RESET_JTAG",
+    "PC14": "LSE",
+    "PC15": "LSE",
+    "PD0": "HSE",
+    "PD1": "HSE"
+  },
+  "nodeSpecificReserved": {
+    "CTRL-01": {
+      "PC10": "LEAVE_UNUSED_DISCONNECT_OLD_FAN_CONTROL_WIRE"
+    }
+  },
+  "sensors": [
+    {
+      "physicalTag": "MQ2-01",
+      "category": "MQ2",
+      "node": "CTRL-01",
+      "station": "P1",
+      "pins": [
+        "PB12"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PB12"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "MQ4-01",
+      "category": "MQ4",
+      "node": "CTRL-01",
+      "station": "P1",
+      "pins": [
+        "PC2"
+      ],
+      "interface": "ADC",
+      "adcChannel": 12,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PC2"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "CO-01",
+      "category": "CO",
+      "node": "CTRL-01",
+      "station": "P1",
+      "pins": [
+        "PC1"
+      ],
+      "interface": "ADC",
+      "adcChannel": 11,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PC1"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "FLAME-01",
+      "category": "FLAME",
+      "node": "CTRL-01",
+      "station": "P1",
+      "pins": [
+        "PB14"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "3V3_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "VERIFY_POLARITY_AND_TRANSLATE_5V_DO_IF_REQUIRED",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PB14"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED"
+    },
+    {
+      "physicalTag": "SHT-01",
+      "category": "SHT",
+      "node": "CTRL-01",
+      "station": null,
+      "pins": [
+        "PB6",
+        "PB7"
+      ],
+      "interface": "I2C_SOFTWARE",
+      "adcChannel": null,
+      "i2cAddress": 68,
+      "powerDomain": "3V3_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "PULLUPS_TO_3V3_ONLY",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PB6/PB7"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED"
+    },
+    {
+      "physicalTag": "LEVEL-01",
+      "category": "LEVEL",
+      "node": "CTRL-01",
+      "station": null,
+      "pins": [
+        "PC0"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PC0"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "O2-01",
+      "category": "O2",
+      "node": "CTRL-01",
+      "station": null,
+      "pins": [
+        "PC3"
+      ],
+      "interface": "ADC",
+      "adcChannel": 13,
+      "i2cAddress": null,
+      "powerDomain": "PASSIVE_ELECTRODE_NO_EXTERNAL_POWER",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_ADC_USER_SELECTED_RAW_MILLIVOLT_ACCURACY_UNVALIDATED",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PC3"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "AO02_MANUFACTURER_9_TO_13_MV_IN_AIR; USER_REQUESTS_NO_ADDED_ANALOG_FRONTEND",
+      "quality": "RAW_ONLY_NOT_VALIDATED_OXYGEN_CONCENTRATION"
+    },
+    {
+      "physicalTag": "MQ2-02",
+      "category": "MQ2",
+      "node": "CTRL-02",
+      "station": "P2",
+      "pins": [
+        "PB12"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PB13"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "MQ4-02",
+      "category": "MQ4",
+      "node": "CTRL-02",
+      "station": "P2",
+      "pins": [
+        "PA4"
+      ],
+      "interface": "ADC",
+      "adcChannel": 4,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PA4"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "CO-02",
+      "category": "CO",
+      "node": "CTRL-02",
+      "station": "P2",
+      "pins": [
+        "PC3"
+      ],
+      "interface": "ADC",
+      "adcChannel": 13,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PA0"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "FLAME-02",
+      "category": "FLAME",
+      "node": "CTRL-02",
+      "station": "P2",
+      "pins": [
+        "PC6"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "3V3_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "VERIFY_POLARITY_AND_TRANSLATE_5V_DO_IF_REQUIRED",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PC8"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED"
+    },
+    {
+      "physicalTag": "SHT-02",
+      "category": "SHT",
+      "node": "CTRL-02",
+      "station": null,
+      "pins": [
+        "PB10",
+        "PB11"
+      ],
+      "interface": "I2C_SOFTWARE",
+      "adcChannel": null,
+      "i2cAddress": 69,
+      "powerDomain": "3V3_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "PULLUPS_TO_3V3_ONLY",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PB6/PB7"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED"
+    },
+    {
+      "physicalTag": "LEVEL-02",
+      "category": "LEVEL",
+      "node": "CTRL-02",
+      "station": null,
+      "pins": [
+        "PC12"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PC12"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "MQ2-03",
+      "category": "MQ2",
+      "node": "CTRL-03",
+      "station": "P3",
+      "pins": [
+        "PC11"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PC11"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "MQ4-03",
+      "category": "MQ4",
+      "node": "CTRL-03",
+      "station": "P3",
+      "pins": [
+        "PC2"
+      ],
+      "interface": "ADC",
+      "adcChannel": 12,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-02",
+        "pin": "PA0"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "CO-03",
+      "category": "CO",
+      "node": "CTRL-03",
+      "station": "P3",
+      "pins": [
+        "PB1"
+      ],
+      "interface": "ADC",
+      "adcChannel": 9,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PB1"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "FLAME-03",
+      "category": "FLAME",
+      "node": "CTRL-03",
+      "station": "P3",
+      "pins": [
+        "PB14"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "3V3_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "VERIFY_POLARITY_AND_TRANSLATE_5V_DO_IF_REQUIRED",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PC9"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED"
+    },
+    {
+      "physicalTag": "MQ2-05",
+      "category": "MQ2",
+      "node": "CTRL-03",
+      "station": "P5",
+      "pins": [
+        "PB13"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-02",
+        "pin": "PC9"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "MQ4-05",
+      "category": "MQ4",
+      "node": "CTRL-03",
+      "station": "P5",
+      "pins": [
+        "PA4"
+      ],
+      "interface": "ADC",
+      "adcChannel": 4,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-02",
+        "pin": "PA4"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "CO-05",
+      "category": "CO",
+      "node": "CTRL-03",
+      "station": "P5",
+      "pins": [
+        "PC1"
+      ],
+      "interface": "ADC",
+      "adcChannel": 11,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-02",
+        "pin": "PB1"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "FLAME-05",
+      "category": "FLAME",
+      "node": "CTRL-03",
+      "station": "P5",
+      "pins": [
+        "PC7"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "3V3_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "VERIFY_POLARITY_AND_TRANSLATE_5V_DO_IF_REQUIRED",
+      "old": {
+        "node": "CTRL-02",
+        "pin": "PC7"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED"
+    },
+    {
+      "physicalTag": "SHT-03",
+      "category": "SHT",
+      "node": "CTRL-03",
+      "station": null,
+      "pins": [
+        "PB10",
+        "PB11"
+      ],
+      "interface": "I2C_SOFTWARE",
+      "adcChannel": null,
+      "i2cAddress": 68,
+      "powerDomain": "3V3_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "PULLUPS_TO_3V3_ONLY",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PB10/PB11"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED"
+    },
+    {
+      "physicalTag": "LEVEL-03",
+      "category": "LEVEL",
+      "node": "CTRL-03",
+      "station": null,
+      "pins": [
+        "PC13"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PC13"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "O2-02",
+      "category": "O2",
+      "node": "CTRL-03",
+      "station": null,
+      "pins": [
+        "PA5"
+      ],
+      "interface": "ADC",
+      "adcChannel": 5,
+      "i2cAddress": null,
+      "powerDomain": "PASSIVE_ELECTRODE_NO_EXTERNAL_POWER",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_ADC_USER_SELECTED_RAW_MILLIVOLT_ACCURACY_UNVALIDATED",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PA5"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "AO02_MANUFACTURER_9_TO_13_MV_IN_AIR; USER_REQUESTS_NO_ADDED_ANALOG_FRONTEND",
+      "quality": "RAW_ONLY_NOT_VALIDATED_OXYGEN_CONCENTRATION"
+    },
+    {
+      "physicalTag": "MQ2-04",
+      "category": "MQ2",
+      "node": "CTRL-04",
+      "station": "P4",
+      "pins": [
+        "PB12"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-02",
+        "pin": "PC8"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "MQ4-04",
+      "category": "MQ4",
+      "node": "CTRL-04",
+      "station": "P4",
+      "pins": [
+        "PA4"
+      ],
+      "interface": "ADC",
+      "adcChannel": 4,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-02",
+        "pin": "PA1"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "CO-04",
+      "category": "CO",
+      "node": "CTRL-04",
+      "station": "P4",
+      "pins": [
+        "PB0"
+      ],
+      "interface": "ADC",
+      "adcChannel": 8,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-02",
+        "pin": "PB0"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "FLAME-04",
+      "category": "FLAME",
+      "node": "CTRL-04",
+      "station": "P4",
+      "pins": [
+        "PC6"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "3V3_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "VERIFY_POLARITY_AND_TRANSLATE_5V_DO_IF_REQUIRED",
+      "old": {
+        "node": "CTRL-02",
+        "pin": "PC6"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED"
+    },
+    {
+      "physicalTag": "SHT-04",
+      "category": "SHT",
+      "node": "CTRL-04",
+      "station": null,
+      "pins": [
+        "PB10",
+        "PB11"
+      ],
+      "interface": "I2C_SOFTWARE",
+      "adcChannel": null,
+      "i2cAddress": 69,
+      "powerDomain": "3V3_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "PULLUPS_TO_3V3_ONLY",
+      "old": {
+        "node": "CTRL-01",
+        "pin": "PB10/PB11"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED"
+    },
+    {
+      "physicalTag": "LEVEL-04",
+      "category": "LEVEL",
+      "node": "CTRL-04",
+      "station": null,
+      "pins": [
+        "PC10"
+      ],
+      "interface": "DIGITAL_INPUT",
+      "adcChannel": null,
+      "i2cAddress": null,
+      "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_3V3_SIGNAL_USER_CONFIRMED; NO_ADDED_LEVEL_CONVERSION",
+      "old": {
+        "node": "CTRL-02",
+        "pin": "PC10"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "USER_CONFIRMED_2026_10_24_NOT_MEASURED_THIS_RUN"
+    },
+    {
+      "physicalTag": "O2-03",
+      "category": "O2",
+      "node": "CTRL-04",
+      "station": null,
+      "pins": [
+        "PA6"
+      ],
+      "interface": "ADC",
+      "adcChannel": 6,
+      "i2cAddress": null,
+      "powerDomain": "PASSIVE_ELECTRODE_NO_EXTERNAL_POWER",
+      "mcuSignalDomain": "0_TO_3V3",
+      "conditioning": "DIRECT_ADC_USER_SELECTED_RAW_MILLIVOLT_ACCURACY_UNVALIDATED",
+      "old": {
+        "node": "CTRL-02",
+        "pin": "PA6"
+      },
+      "state": "PLANNED_NOT_WIRED_OR_FLASHED",
+      "signalEvidence": "AO02_MANUFACTURER_9_TO_13_MV_IN_AIR; USER_REQUESTS_NO_ADDED_ANALOG_FRONTEND",
+      "quality": "RAW_ONLY_NOT_VALIDATED_OXYGEN_CONCENTRATION"
+    }
+  ],
+  "devices": [
+    {
+      "node": "CTRL-01",
+      "id": "RS485",
+      "role": "JSM485_SELECTED_MODULE",
+      "signals": [
+        {
+          "name": "TX_TO_MODULE_TXD",
+          "pin": "PA2",
+          "mode": "USART2_TX"
+        },
+        {
+          "name": "RX_FROM_MODULE_RXD",
+          "pin": "PA3",
+          "mode": "USART2_RX"
+        }
+      ],
+      "state": "PLANNED"
+    },
+    {
+      "node": "CTRL-02",
+      "id": "RS485",
+      "role": "JSM485_SELECTED_MODULE",
+      "signals": [
+        {
+          "name": "TX_TO_MODULE_TXD",
+          "pin": "PA2",
+          "mode": "USART2_TX"
+        },
+        {
+          "name": "RX_FROM_MODULE_RXD",
+          "pin": "PA3",
+          "mode": "USART2_RX"
+        }
+      ],
+      "state": "PLANNED"
+    },
+    {
+      "node": "CTRL-03",
+      "id": "RS485",
+      "role": "JSM485_SELECTED_MODULE",
+      "signals": [
+        {
+          "name": "TX_TO_MODULE_TXD",
+          "pin": "PA2",
+          "mode": "USART2_TX"
+        },
+        {
+          "name": "RX_FROM_MODULE_RXD",
+          "pin": "PA3",
+          "mode": "USART2_RX"
+        }
+      ],
+      "state": "PLANNED"
+    },
+    {
+      "node": "CTRL-04",
+      "id": "RS485",
+      "role": "JSM485_SELECTED_MODULE",
+      "signals": [
+        {
+          "name": "TX_TO_MODULE_TXD",
+          "pin": "PA2",
+          "mode": "USART2_TX"
+        },
+        {
+          "name": "RX_FROM_MODULE_RXD",
+          "pin": "PA3",
+          "mode": "USART2_RX"
+        }
+      ],
+      "state": "PLANNED"
+    },
+    {
+      "node": "CTRL-01",
+      "id": "SCREEN-STATUS",
+      "role": "ST7735S",
+      "signals": [
+        {
+          "name": "SCL",
+          "pin": "PB3",
+          "mode": "SPI3_SCK"
+        },
+        {
+          "name": "SDA",
+          "pin": "PB5",
+          "mode": "SPI3_MOSI"
+        },
+        {
+          "name": "RES",
+          "pin": "PC4",
+          "mode": "GPIO_OUT"
+        },
+        {
+          "name": "DC",
+          "pin": "PC5",
+          "mode": "GPIO_OUT"
+        },
+        {
+          "name": "CS",
+          "pin": "PC6",
+          "mode": "GPIO_OUT"
+        },
+        {
+          "name": "BLK",
+          "pin": "PC7",
+          "mode": "GPIO_OUT"
+        }
+      ],
+      "state": "PLANNED"
+    },
+    {
+      "node": "CTRL-02",
+      "id": "SCREEN-MAIN",
+      "role": "ST7735S",
+      "signals": [
+        {
+          "name": "SCL",
+          "pin": "PA5",
+          "mode": "SPI1_SCK"
+        },
+        {
+          "name": "SDA",
+          "pin": "PA7",
+          "mode": "SPI1_MOSI"
+        },
+        {
+          "name": "RES",
+          "pin": "PB6",
+          "mode": "GPIO_OUT"
+        },
+        {
+          "name": "DC",
+          "pin": "PB7",
+          "mode": "GPIO_OUT"
+        },
+        {
+          "name": "CS",
+          "pin": "PB8",
+          "mode": "GPIO_OUT"
+        },
+        {
+          "name": "BLK",
+          "pin": "PB9",
+          "mode": "GPIO_OUT"
+        }
+      ],
+      "state": "PLANNED"
+    },
+    {
+      "node": "CTRL-02",
+      "id": "JOYSTICK",
+      "role": "POWER_3V3",
+      "signals": [
+        {
+          "name": "VRx",
+          "pin": "PC0",
+          "mode": "ADC1_IN10"
+        },
+        {
+          "name": "VRy",
+          "pin": "PC1",
+          "mode": "ADC1_IN11"
+        },
+        {
+          "name": "SW",
+          "pin": "PC4",
+          "mode": "GPIO_IN_PULLUP"
+        }
+      ],
+      "state": "PLANNED"
+    },
+    {
+      "node": "CTRL-01",
+      "id": "FAN-01",
+      "role": "FOUR_WIRE_12V_FAN",
+      "signals": [
+        {
+          "name": "PWM_TO_OPEN_COLLECTOR_DRIVER",
+          "pin": "PB8",
+          "mode": "TIM4_CH3"
+        },
+        {
+          "name": "TACH_FROM_PROTECTED_3V3_SIGNAL",
+          "pin": "PA7",
+          "mode": "EXTI7"
+        }
+      ],
+      "state": "PLANNED",
+      "migration": "DISCONNECT_ALL_OLD_CONTROL_WIRES_FIRST; PWM_DRIVER_SINGLE_INPUT_PB8; TACH_PA7; RELAY_PA1"
+    },
+    {
+      "node": "CTRL-01",
+      "id": "RELAY-01",
+      "role": "EXISTING_RELAY_CHANNEL",
+      "signals": [
+        {
+          "name": "IN1_VIA_VERIFIED_DRIVER",
+          "pin": "PA1",
+          "mode": "GPIO_OUT"
+        }
+      ],
+      "state": "PLANNED"
+    },
+    {
+      "node": "CTRL-04",
+      "id": "FAN-02",
+      "role": "FOUR_WIRE_12V_FAN",
+      "signals": [
+        {
+          "name": "PWM_TO_OPEN_COLLECTOR_DRIVER",
+          "pin": "PB8",
+          "mode": "TIM4_CH3"
+        },
+        {
+          "name": "TACH_FROM_PROTECTED_3V3_SIGNAL",
+          "pin": "PA7",
+          "mode": "EXTI7"
+        }
+      ],
+      "state": "PLANNED",
+      "migration": "DISCONNECT_ALL_OLD_CONTROL_WIRES_FIRST; PWM_DRIVER_SINGLE_INPUT_PB8; TACH_PA7; RELAY_PA1"
+    },
+    {
+      "node": "CTRL-04",
+      "id": "RELAY-02",
+      "role": "EXISTING_RELAY_CHANNEL",
+      "signals": [
+        {
+          "name": "IN2_VIA_VERIFIED_DRIVER",
+          "pin": "PA1",
+          "mode": "GPIO_OUT"
+        }
+      ],
+      "state": "PLANNED"
+    },
+    {
+      "node": "CTRL-02",
+      "id": "BUZZER",
+      "role": "EXISTING_ACTIVE_BUZZER",
+      "signals": [
+        {
+          "name": "ENABLE_VIA_DRIVER",
+          "pin": "PB0",
+          "mode": "GPIO_OUT"
+        }
+      ],
+      "state": "PLANNED"
+    },
+    {
+      "node": "CTRL-02",
+      "id": "LED-01",
+      "role": "WS2812_18_EXISTING_PIXELS",
+      "signals": [
+        {
+          "name": "DIN_VIA_74AHCT_LEVEL_SHIFTER",
+          "pin": "PB15",
+          "mode": "SPI2_MOSI"
+        }
+      ],
+      "state": "PLANNED"
+    }
+  ],
+  "buses": [
+    {
+      "node": "CTRL-01",
+      "id": "I2C-LOCAL",
+      "scl": "PB6",
+      "sda": "PB7",
+      "devices": [
+        {
+          "id": "SHT-01",
+          "address": 68
+        },
+        {
+          "id": "INA226-FAN1",
+          "address": 64
+        }
+      ],
+      "implementation": "SOFTWARE_I2C_INITIAL",
+      "pullupRail": "3V3",
+      "addressState": "RETAIN_OLD_STRAPS_SCAN_REQUIRED",
+      "clockTargetHz": 100000
+    },
+    {
+      "node": "CTRL-02",
+      "id": "I2C-LOCAL",
+      "scl": "PB10",
+      "sda": "PB11",
+      "devices": [
+        {
+          "id": "SHT-02",
+          "address": 69
+        }
+      ],
+      "implementation": "SOFTWARE_I2C_INITIAL",
+      "pullupRail": "3V3",
+      "addressState": "RETAIN_OLD_STRAPS_SCAN_REQUIRED",
+      "clockTargetHz": 100000
+    },
+    {
+      "node": "CTRL-03",
+      "id": "I2C-LOCAL",
+      "scl": "PB10",
+      "sda": "PB11",
+      "devices": [
+        {
+          "id": "SHT-03",
+          "address": 68
+        }
+      ],
+      "implementation": "SOFTWARE_I2C_INITIAL",
+      "pullupRail": "3V3",
+      "addressState": "RETAIN_OLD_STRAPS_SCAN_REQUIRED",
+      "clockTargetHz": 100000
+    },
+    {
+      "node": "CTRL-04",
+      "id": "I2C-LOCAL",
+      "scl": "PB10",
+      "sda": "PB11",
+      "devices": [
+        {
+          "id": "SHT-04",
+          "address": 69
+        },
+        {
+          "id": "INA226-FAN2",
+          "address": 64
+        }
+      ],
+      "implementation": "SOFTWARE_I2C_INITIAL",
+      "pullupRail": "3V3",
+      "addressState": "RETAIN_OLD_STRAPS_SCAN_REQUIRED",
+      "clockTargetHz": 100000
+    }
+  ],
+  "rs485": {
+    "route": [
+      "GW-01",
+      "CTRL-01",
+      "CTRL-02",
+      "CTRL-04",
+      "CTRL-03"
+    ],
+    "terminations": [
+      "GW-01",
+      "CTRL-03"
+    ],
+    "baudRateProposal": 19200,
+    "frameFormatProposal": "8E1_TO_BE_FROZEN_IN_PROTOCOL",
+    "gateway": {
+      "txGpio": 17,
+      "rxGpio": 18,
+      "power": "BOARD_5V_VERIFIED_INPUT; MODULE_3V3",
+      "moduleTxConnection": "MCU_TX_TO_SELECTED_MODULE_TXD",
+      "moduleRxConnection": "MCU_RX_TO_SELECTED_MODULE_RXD",
+      "nc": "UNCONNECTED",
+      "boardVariantVerified": false
+    },
+    "stm32Port": "USART2_PA2_PA3_NO_REMAP",
+    "ground": "COMMON_LOW_VOLTAGE_REFERENCE; LOAD_RETURN_SEPARATE_FROM_SIGNAL_REFERENCE",
+    "module": "USER_SELECTED_NONISOLATED_JSM485_WITH_SW1",
+    "autoDirectionTimingVerified": false
+  },
+  "powerBudget": {
+    "status": "PARTIAL_TARGET_NOT_PSU_SIZING",
+    "mainRailProposalV": 12,
+    "mqBudgetPerModuleA5V": 0.25,
+    "mqAssumption": "PLANNING_ALLOWANCE_NOT_MEASURED; EXACT_HEATER_AND_BOARD_REQUIRED",
+    "mqModuleCounts": {
+      "CTRL-01": 3,
+      "CTRL-02": 3,
+      "CTRL-03": 6,
+      "CTRL-04": 3
+    },
+    "ledCount": 18,
+    "ledBudgetAPerPixel5V": 0.06,
+    "ledAssumption": "CONSERVATIVE_TARGET_NOT_EXACT_WS2812_REVISION",
+    "fanNominalV": 12,
+    "fanNominalAEach": 0.2,
+    "fanAssumption": "OLD_B12_NAMEPLATE_EVIDENCE; VERIFY_ACTUAL_TWO_FANS; NOT_STARTUP_CURRENT",
+    "unbudgeted": [
+      "four STM32 board loads",
+      "two TFT screens",
+      "two ESP32 WiFi peaks",
+      "voice amplifier and OLED",
+      "relay coils and drivers",
+      "sensor conditioning electronics",
+      "converter loss and startup transients"
+    ],
+    "psuRatingFrozen": false
+  },
+  "evidence": {
+    "layoutCommit": "12c1feebe811329c6370f8927dcb14bc733b40f7",
+    "oldWiringCommit": "a7dc9b471357c1e5a49f3c82c02e187100f79f00",
+    "datasheetSTM32": "https://www.st.com/resource/en/datasheet/stm32f103rc.pdf",
+    "ao02": "https://www.aosong.com/userfiles/files/media/AO-02%E6%B0%A7%E4%BC%A0%E6%84%9F%E5%99%A8%E8%AF%B4%E6%98%8E%E4%B9%A6%E4%B8%AD%E6%96%87%E7%89%88%20A3-202407.pdf",
+    "sht": "https://admin.sensirion.com/media/documents/213E6A3B/63A5A569/Datasheet_SHT3x_DIS.pdf",
+    "ina": "https://www.ti.com/lit/ds/symlink/ina226.pdf",
+    "esp": "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.0.html",
+    "mq2": "https://www.winsen-sensor.com/product/mq-2.html?by=mq-sensor",
+    "mq4": "https://www.winsentech.com/Semiconductor_Combustible_Gas_Sensor_MQ-4.html",
+    "mq7Family": "https://www.winsen-sensor.com/sensors/co-sensor/mq-7b.html",
+    "fanInterfaceReferenceNotB12": "https://cdn.noctua.at/media/Noctua_PWM_specifications_white_paper.pdf"
+  },
+  "firmwareChanged": false,
+  "hardwareTested": false,
+  "revision": "0.2",
+  "userConfirmations": {
+    "date": "2026-10-24",
+    "sensorSignalLevels": "5V_POWERED_SENSOR_OUTPUTS_3V3_USER_CONFIRMED_NOT_MEASURED_THIS_RUN",
+    "oxygen": "AO02_BARE_DIRECT_TO_ADC_NO_ADDED_CONDITIONER_USER_SELECTED",
+    "fanReplan": "UNIFIED_PB8_PWM_PA7_TACH_PA1_RELAY_ON_CTRL01_AND_CTRL04"
+  },
+  "fanPlan": {
+    "document": "fan-wiring.md",
+    "placement": "FAN01_NEAR_CTRL01_AND_FAN02_NEAR_CTRL04_BOTH_EXHAUST_OUTWARD; OFFSET_PASSIVE_INLETS",
+    "power": "12V_PROTECTED_BRANCH_RELAY_NO_INA_HIGH_SIDE_FAN; NOT_FROM_MCU",
+    "driver": "REUSE_COMPATIBLE_INTERFACE_VERIFY_WAVEFORM_AND_POLARITY",
+    "pwmTargetHz": 25000,
+    "tachPulsesPerRevProposal": 2,
+    "actualFanInterfaceVerifiedThisRun": false,
+    "defaultRelay": "OFF_AT_BOOT_PER_BENCH_CONVENTION_NOT_FAILSAFE_VENTILATION_CLAIM"
+  }
+}

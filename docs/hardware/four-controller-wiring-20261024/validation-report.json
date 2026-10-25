@@ -1,0 +1,359 @@
+{
+  "date": "2026-10-24",
+  "static_resource_check": "PASS",
+  "energization_release": "BLOCKED_PENDING_INTERFACE_AND_POWER_MEASUREMENTS",
+  "firmware_built": false,
+  "hardware_verified": false,
+  "native_erc_run": false,
+  "counts": {
+    "MQ2": 5,
+    "MQ4": 5,
+    "CO": 5,
+    "FLAME": 5,
+    "SHT": 4,
+    "LEVEL": 4,
+    "O2": 3
+  },
+  "allocation": {
+    "CTRL-01": 7,
+    "CTRL-02": 6,
+    "CTRL-03": 11,
+    "CTRL-04": 7
+  },
+  "resource_summary": {
+    "CTRL-01": {
+      "external_sensor_count": 7,
+      "external_adc_channels": 3,
+      "digital_sensor_inputs": 3,
+      "allocated_gpio_count_including_shared_buses": 19
+    },
+    "CTRL-02": {
+      "external_sensor_count": 6,
+      "external_adc_channels": 2,
+      "digital_sensor_inputs": 3,
+      "allocated_gpio_count_including_shared_buses": 20
+    },
+    "CTRL-03": {
+      "external_sensor_count": 11,
+      "external_adc_channels": 5,
+      "digital_sensor_inputs": 5,
+      "allocated_gpio_count_including_shared_buses": 14
+    },
+    "CTRL-04": {
+      "external_sensor_count": 7,
+      "external_adc_channels": 3,
+      "digital_sensor_inputs": 3,
+      "allocated_gpio_count_including_shared_buses": 13
+    }
+  },
+  "gpio_claims": {
+    "CTRL-01": {
+      "PA1": {
+        "owner": "RELAY-01:IN1_VIA_VERIFIED_DRIVER",
+        "mode": "GPIO_OUT"
+      },
+      "PA2": {
+        "owner": "RS485:TX_TO_MODULE_TXD",
+        "mode": "USART2_TX"
+      },
+      "PA3": {
+        "owner": "RS485:RX_FROM_MODULE_RXD",
+        "mode": "USART2_RX"
+      },
+      "PA7": {
+        "owner": "FAN-01:TACH_FROM_PROTECTED_3V3_SIGNAL",
+        "mode": "EXTI7"
+      },
+      "PB12": {
+        "owner": "MQ2-01",
+        "mode": "GPIO_INPUT"
+      },
+      "PB14": {
+        "owner": "FLAME-01",
+        "mode": "GPIO_INPUT"
+      },
+      "PB3": {
+        "owner": "SCREEN-STATUS:SCL",
+        "mode": "SPI3_SCK"
+      },
+      "PB5": {
+        "owner": "SCREEN-STATUS:SDA",
+        "mode": "SPI3_MOSI"
+      },
+      "PB6": {
+        "owner": "I2C-LOCAL:SCL(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB7": {
+        "owner": "I2C-LOCAL:SDA(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB8": {
+        "owner": "FAN-01:PWM_TO_OPEN_COLLECTOR_DRIVER",
+        "mode": "TIM4_CH3"
+      },
+      "PC0": {
+        "owner": "LEVEL-01",
+        "mode": "GPIO_INPUT"
+      },
+      "PC1": {
+        "owner": "CO-01",
+        "mode": "ADC1_IN11"
+      },
+      "PC2": {
+        "owner": "MQ4-01",
+        "mode": "ADC1_IN12"
+      },
+      "PC3": {
+        "owner": "O2-01",
+        "mode": "ADC1_IN13"
+      },
+      "PC4": {
+        "owner": "SCREEN-STATUS:RES",
+        "mode": "GPIO_OUT"
+      },
+      "PC5": {
+        "owner": "SCREEN-STATUS:DC",
+        "mode": "GPIO_OUT"
+      },
+      "PC6": {
+        "owner": "SCREEN-STATUS:CS",
+        "mode": "GPIO_OUT"
+      },
+      "PC7": {
+        "owner": "SCREEN-STATUS:BLK",
+        "mode": "GPIO_OUT"
+      }
+    },
+    "CTRL-02": {
+      "PA2": {
+        "owner": "RS485:TX_TO_MODULE_TXD",
+        "mode": "USART2_TX"
+      },
+      "PA3": {
+        "owner": "RS485:RX_FROM_MODULE_RXD",
+        "mode": "USART2_RX"
+      },
+      "PA4": {
+        "owner": "MQ4-02",
+        "mode": "ADC1_IN4"
+      },
+      "PA5": {
+        "owner": "SCREEN-MAIN:SCL",
+        "mode": "SPI1_SCK"
+      },
+      "PA7": {
+        "owner": "SCREEN-MAIN:SDA",
+        "mode": "SPI1_MOSI"
+      },
+      "PB0": {
+        "owner": "BUZZER:ENABLE_VIA_DRIVER",
+        "mode": "GPIO_OUT"
+      },
+      "PB10": {
+        "owner": "I2C-LOCAL:SCL(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB11": {
+        "owner": "I2C-LOCAL:SDA(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB12": {
+        "owner": "MQ2-02",
+        "mode": "GPIO_INPUT"
+      },
+      "PB15": {
+        "owner": "LED-01:DIN_VIA_74AHCT_LEVEL_SHIFTER",
+        "mode": "SPI2_MOSI"
+      },
+      "PB6": {
+        "owner": "SCREEN-MAIN:RES",
+        "mode": "GPIO_OUT"
+      },
+      "PB7": {
+        "owner": "SCREEN-MAIN:DC",
+        "mode": "GPIO_OUT"
+      },
+      "PB8": {
+        "owner": "SCREEN-MAIN:CS",
+        "mode": "GPIO_OUT"
+      },
+      "PB9": {
+        "owner": "SCREEN-MAIN:BLK",
+        "mode": "GPIO_OUT"
+      },
+      "PC0": {
+        "owner": "JOYSTICK:VRx",
+        "mode": "ADC1_IN10"
+      },
+      "PC1": {
+        "owner": "JOYSTICK:VRy",
+        "mode": "ADC1_IN11"
+      },
+      "PC12": {
+        "owner": "LEVEL-02",
+        "mode": "GPIO_INPUT"
+      },
+      "PC3": {
+        "owner": "CO-02",
+        "mode": "ADC1_IN13"
+      },
+      "PC4": {
+        "owner": "JOYSTICK:SW",
+        "mode": "GPIO_IN_PULLUP"
+      },
+      "PC6": {
+        "owner": "FLAME-02",
+        "mode": "GPIO_INPUT"
+      }
+    },
+    "CTRL-03": {
+      "PA2": {
+        "owner": "RS485:TX_TO_MODULE_TXD",
+        "mode": "USART2_TX"
+      },
+      "PA3": {
+        "owner": "RS485:RX_FROM_MODULE_RXD",
+        "mode": "USART2_RX"
+      },
+      "PA4": {
+        "owner": "MQ4-05",
+        "mode": "ADC1_IN4"
+      },
+      "PA5": {
+        "owner": "O2-02",
+        "mode": "ADC1_IN5"
+      },
+      "PB1": {
+        "owner": "CO-03",
+        "mode": "ADC1_IN9"
+      },
+      "PB10": {
+        "owner": "I2C-LOCAL:SCL(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB11": {
+        "owner": "I2C-LOCAL:SDA(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB13": {
+        "owner": "MQ2-05",
+        "mode": "GPIO_INPUT"
+      },
+      "PB14": {
+        "owner": "FLAME-03",
+        "mode": "GPIO_INPUT"
+      },
+      "PC1": {
+        "owner": "CO-05",
+        "mode": "ADC1_IN11"
+      },
+      "PC11": {
+        "owner": "MQ2-03",
+        "mode": "GPIO_INPUT"
+      },
+      "PC13": {
+        "owner": "LEVEL-03",
+        "mode": "GPIO_INPUT"
+      },
+      "PC2": {
+        "owner": "MQ4-03",
+        "mode": "ADC1_IN12"
+      },
+      "PC7": {
+        "owner": "FLAME-05",
+        "mode": "GPIO_INPUT"
+      }
+    },
+    "CTRL-04": {
+      "PA1": {
+        "owner": "RELAY-02:IN2_VIA_VERIFIED_DRIVER",
+        "mode": "GPIO_OUT"
+      },
+      "PA2": {
+        "owner": "RS485:TX_TO_MODULE_TXD",
+        "mode": "USART2_TX"
+      },
+      "PA3": {
+        "owner": "RS485:RX_FROM_MODULE_RXD",
+        "mode": "USART2_RX"
+      },
+      "PA4": {
+        "owner": "MQ4-04",
+        "mode": "ADC1_IN4"
+      },
+      "PA6": {
+        "owner": "O2-03",
+        "mode": "ADC1_IN6"
+      },
+      "PA7": {
+        "owner": "FAN-02:TACH_FROM_PROTECTED_3V3_SIGNAL",
+        "mode": "EXTI7"
+      },
+      "PB0": {
+        "owner": "CO-04",
+        "mode": "ADC1_IN8"
+      },
+      "PB10": {
+        "owner": "I2C-LOCAL:SCL(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB11": {
+        "owner": "I2C-LOCAL:SDA(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB12": {
+        "owner": "MQ2-04",
+        "mode": "GPIO_INPUT"
+      },
+      "PB8": {
+        "owner": "FAN-02:PWM_TO_OPEN_COLLECTOR_DRIVER",
+        "mode": "TIM4_CH3"
+      },
+      "PC10": {
+        "owner": "LEVEL-04",
+        "mode": "GPIO_INPUT"
+      },
+      "PC6": {
+        "owner": "FLAME-04",
+        "mode": "GPIO_INPUT"
+      }
+    }
+  },
+  "dma_proposal_not_implemented": {
+    "CTRL-01": {
+      "DMA2_CH2": "SPI3_TX",
+      "DMA1_CH1": "ADC1"
+    },
+    "CTRL-02": {
+      "DMA1_CH3": "SPI1_TX",
+      "DMA1_CH5": "SPI2_TX",
+      "DMA1_CH1": "ADC1"
+    },
+    "CTRL-03": {
+      "DMA1_CH1": "ADC1"
+    },
+    "CTRL-04": {
+      "DMA1_CH1": "ADC1"
+    }
+  },
+  "partial_power_targets": {
+    "mq_total_a_at_5v": 3.75,
+    "mq_total_w": 18.75,
+    "led_a_at_5v": 1.08,
+    "led_w": 5.4,
+    "fan_old_nominal_w_not_startup": 4.8,
+    "incomplete_total_do_not_size_psu_from_this": true
+  },
+  "errors": [],
+  "warnings": [
+    "This is a static planning check, not native ERC, a firmware build or hardware validation.",
+    "Board variant, relay interfaces and power capacity remain unverified; 3.3V sensor signal levels are user-confirmed, not measured in this run.",
+    "AO-02 bare sensors are user-directed direct-to-ADC; millivolt resolution and accuracy remain unvalidated.",
+    "Disconnect all old fan control wires before connecting each new PB8/PA7/PA1 set; CTRL-01 PC10 stays unused.",
+    "Selected automatic-direction RS485 modules require timing and reset/recovery tests.",
+    "CTRL-01 PB3 requires disabling JTAG while retaining SWD.",
+    "Keep USART1 interrupt/poll driven on CTRL-02 while WS2812 uses SPI2_TX DMA1_CH5; local I2C remains software-driven without DMA.",
+    "Digital sensor inputs are polled/latched; EXTI lines are not allocated to every input."
+  ]
+}

@@ -1,0 +1,141 @@
+{
+  "status": "PASS",
+  "testType": "ACTUAL_GLB_THREEJS_LOAD_WITH_SYNTHETIC_TELEMETRY",
+  "checkCount": 32,
+  "checks": [
+    {
+      "name": "Every prior node and mesh retains its rest geometry and world transform",
+      "status": "PASS"
+    },
+    {
+      "name": "GLB adds exactly two rotors and no autoplay animation",
+      "status": "PASS"
+    },
+    {
+      "name": "All five station groups survive",
+      "status": "PASS"
+    },
+    {
+      "name": "31 sensor targets remain unique",
+      "status": "PASS"
+    },
+    {
+      "name": "FAN-01: pivot, local axis and six moving children",
+      "status": "PASS"
+    },
+    {
+      "name": "FAN-02: pivot, local axis and six moving children",
+      "status": "PASS"
+    },
+    {
+      "name": "measured RPM starts",
+      "status": "PASS"
+    },
+    {
+      "name": "measured zero stops",
+      "status": "PASS"
+    },
+    {
+      "name": "missing stays unknown",
+      "status": "PASS"
+    },
+    {
+      "name": "stale expires without a new payload",
+      "status": "PASS"
+    },
+    {
+      "name": "future timestamp rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "invalid timestamp rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "bad quality freezes",
+      "status": "PASS"
+    },
+    {
+      "name": "suspect quality freezes",
+      "status": "PASS"
+    },
+    {
+      "name": "negative RPM rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "nonfinite RPM rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "numeric strings rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "wrong units rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "offline is unknown",
+      "status": "PASS"
+    },
+    {
+      "name": "demo source cannot imply live motion",
+      "status": "PASS"
+    },
+    {
+      "name": "fan data cannot drive another asset",
+      "status": "PASS"
+    },
+    {
+      "name": "relay command cannot imply motion",
+      "status": "PASS"
+    },
+    {
+      "name": "newest zero defeats an old running value",
+      "status": "PASS"
+    },
+    {
+      "name": "conflicting same-time RPM is unknown",
+      "status": "PASS"
+    },
+    {
+      "name": "newest bad reading cannot revive old good RPM",
+      "status": "PASS"
+    },
+    {
+      "name": "Production freshness must be supplied explicitly",
+      "status": "PASS"
+    },
+    {
+      "name": "Actual GLB FAN-01 starts while FAN-02 stays stopped; housing remains fixed",
+      "status": "PASS"
+    },
+    {
+      "name": "Zero stops at the current phase without snapping back",
+      "status": "PASS"
+    },
+    {
+      "name": "Restart and FAN-02 can run independently",
+      "status": "PASS"
+    },
+    {
+      "name": "Stale and per-fan offline data freeze without claiming measured stop",
+      "status": "PASS"
+    },
+    {
+      "name": "30 and 60 rendered frames produce the same angle for the same elapsed second",
+      "status": "PASS"
+    },
+    {
+      "name": "Disposed controller cannot retain motion after model replacement",
+      "status": "PASS"
+    }
+  ],
+  "glbSha256": "f4949f4a1d4fd6129e02d3255c445504c331613224580f1db7ed7e4815da93f9",
+  "realHardwareConnected": false,
+  "productionFrontendModified": false,
+  "limitations": [
+    "Synthetic inputs only; no live relay, tachometer, backend, browser rendering or deployment test."
+  ]
+}

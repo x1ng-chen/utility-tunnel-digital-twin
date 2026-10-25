@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import { api } from '../services/api';
+import { useAiAssistantStore } from './aiAssistant';
 import type { Role, User } from '../types';
 
 const userStorageKey = 'ut-vue-user';
@@ -35,6 +36,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function login(email: string, password: string, role: Role, mode: 'demo' | 'api') {
+    useAiAssistantStore().clear();
     loading.value = true;
     error.value = '';
     try {
@@ -58,6 +60,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
+    useAiAssistantStore().clear();
     try { if (storage?.getItem(tokenStorageKey)) await api.logout(); } catch { /* local cleanup still wins */ }
     storage?.removeItem(tokenStorageKey);
     storage?.removeItem(sessionModeKey);
@@ -81,6 +84,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function expireSession(message = '登录状态已过期，请重新登录。') {
+    useAiAssistantStore().clear();
     storage?.removeItem(tokenStorageKey);
     storage?.removeItem(sessionModeKey);
     persist(null);

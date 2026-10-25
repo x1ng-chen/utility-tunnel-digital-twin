@@ -1,4 +1,5 @@
 from django.urls import path
+from .views import AiAssistantView, StationInspectionView
 from .views import AdminRegistrationRequestDetailView, AdminRegistrationRequestListView, AdminRegistrationSetupTokenView, AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, ControllerCommandConfirmationView, ControllerCommandView, DashboardView, HardwareBindingDetailView, HardwareBindingListView, HealthView, InternalConnectivityReconcileView, LoginView, LogoutView, MeView, PasswordChangeView, ReadyView, RegistrationPasswordSetupView, RegistrationRequestView, ReportExportDownloadView, ReportExportView, SpatialFeatureDetailView, SpatialFeatureImportView, SpatialFeatureListView, TelemetryListView, TelemetrySummaryView, ThresholdDetailView, ThresholdListView, TwinModelFileView, TwinModelReadinessView, TwinModelReleaseActivateView, TwinModelReleaseListView, WorkOrderListView, WorkOrderTransitionView
 
 
@@ -18,6 +19,8 @@ urlpatterns = [
     path('admin/registration-requests/<int:pk>/', AdminRegistrationRequestDetailView.as_view()),
     path('admin/registration-requests/<int:pk>/setup-token/', AdminRegistrationSetupTokenView.as_view()),
     path('dashboard/', DashboardView.as_view()),
+    path('assistant/chat/', AiAssistantView.as_view()),
+    path('assistant/inspection/', StationInspectionView.as_view()),
     path('controllers/<str:asset_code>/commands/confirmations/', ControllerCommandConfirmationView.as_view()),
     path('controllers/<str:asset_code>/commands/', ControllerCommandView.as_view()),
     path('twin/model-readiness/', TwinModelReadinessView.as_view()),

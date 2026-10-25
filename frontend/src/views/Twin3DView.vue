@@ -112,6 +112,7 @@ const navigationContext = computed(() => {
   if (source === 'alert' && alertCode) return `已从告警 ${alertCode} 定位到当前设备。`;
   if (source === 'gis') return '已从 GIS 地图定位到当前设备。';
   if (source === 'asset') return '已从设备台账定位到当前设备。';
+  if (source === 'agent') return '已从智能体证据打开设备；请核对当前模型绑定状态，示意位置不代表现场测绘。';
   return '';
 });
 
@@ -261,6 +262,10 @@ async function fullscreen() {
 function statusLabel(state: TwinVisualState) { return twinStateLabel(state); }
 function formatTime(value: string | null | undefined) { return value ? new Date(value).toLocaleString('zh-CN') : '暂无上报'; }
 watch(() => route.query.asset, (code) => { if (typeof code === 'string' && store.assets.some((asset) => asset.code === code)) select(code); });
+watch(() => store.assets.map(a => a.code).join(','), () => {
+  const code = route.query.asset;
+  if (typeof code === 'string' && store.assets.some(a => a.code === code) && selectedCode.value !== code) select(code);
+});
 watch(() => [store.source, store.offline], () => { void refreshModelReadiness(); });
 onMounted(() => {
   finePointer.value = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -290,7 +295,7 @@ onBeforeUnmount(() => {
       <article ref="stage" :class="['twin-stage-panel', { 'twin-fullscreen-active': fullscreenActive }]" @pointerdown.capture="pauseAutoLocate" @wheel.capture.passive="pauseAutoLocate" @keydown.capture="pauseAutoLocate" @pointermove="onStagePointerMove" @pointerdown="onStagePointerDown" @pointerup="onStagePointerUp" @pointerleave="onStagePointerLeave">
         <nav class="twin-preset-hud" aria-label="三维视角预设"><span><Camera />视角预设</span><button v-for="preset in ['总览','电力舱','燃气舱','水浸点']" :key="preset" @click="selectPreset(preset)">{{ preset }}</button></nav>
         <aside class="twin-risk-hud" aria-label="风险设备列表"><strong>风险设备 · {{ riskAssets.length }} 台</strong><button v-for="asset in riskAssets" :key="asset.id" type="button" :aria-pressed="selectedCode === asset.code" :title="asset.name" @click="select(asset.code)"><i :class="resolveTwinVisualState(asset, store.alerts)" /><span>{{ asset.code }}</span><small>{{ asset.name }}</small></button><p v-if="!riskAssets.length">当前无风险设备</p></aside>
-        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" :model-url="activeModelUrl" :model-enabled="modelSource === 'active' || modelSource === 'preview'" @select="select" @model-report="receiveModelReport" />
+        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" :model-url="activeModelUrl" :model-enabled="modelSource === 'active' || modelSource === 'preview'" :fan-feedback="{ telemetry: store.telemetry, bindings: store.hardwareBindings, source: store.source, offline: store.offline }" @select="select" @model-report="receiveModelReport" />
         <div v-if="selectedAsset" class="twin-focus-status" aria-live="polite"><span :class="resolveTwinVisualState(selectedAsset, store.alerts)"><i />{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span><b :title="selectedAsset.name">{{ selectedAssetName }}</b><small>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</small><div v-if="riskAssets.length" class="twin-risk-patrol"><em>{{ riskPatrolLabel }}</em><button type="button" aria-label="巡检上一异常设备" @click="inspectRisk(-1)">← 上一异常</button><button type="button" aria-label="巡检下一异常设备" @click="inspectRisk(1)">下一异常 →</button></div></div>
         <nav class="twin-quick-switch" aria-label="场景内设备切换" @pointerenter="onQuickSwitchPointerMove" @pointerdown.capture="onQuickSwitchPointerDown" @pointermove.capture="onQuickSwitchPointerMove" @pointerup.capture="onQuickSwitchPointerEnd" @pointercancel.capture="onQuickSwitchPointerEnd" @mousedown.stop>
           <div class="twin-quick-switch-tools"><div class="twin-quick-switch-heading"><span>设备快速切换 · {{ visibleAssets.length }}/{{ store.assets.length }}</span><b>{{ selectedAssetName || '请选择设备' }}</b></div><div class="twin-switch-filters" role="group" aria-label="按运行状态筛选设备"><button v-for="filter in filterOptions" :key="filter.value" :class="{ selected: stateFilter === filter.value }" type="button" @pointerdown.stop @click.stop="stateFilter = filter.value">{{ filter.label }}</button></div></div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AiAssistant from './AiAssistant.vue';
 import { computed, nextTick, ref, watch, type Component } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { onKeyStroke, useLocalStorage, useNow } from '@vueuse/core';
@@ -257,6 +258,7 @@ function alertCount(path: string) {
           </section>
         </div>
       </Teleport>
+      <AiAssistant :page-name="currentNav.label" />
     </main>
   </div>
 </template>

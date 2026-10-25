@@ -1,0 +1,49 @@
+{
+  "checked_at": "2026-10-25T12:04:42.235674+00:00",
+  "base_main": "12c1feebe811329c6370f8927dcb14bc733b40f7",
+  "branch": "feat/four-controller-agent-20261025",
+  "purpose": "pre-push integration verification against current remote main",
+  "checks": [
+    {
+      "scope": "backend",
+      "status": "PASS",
+      "test_count": 154,
+      "local_log_name": "backend-tests.log",
+      "sha256": "6ebd7f1f61d085205d882b648824b261b87614e694fcf60cce96078b45a9c7a2"
+    },
+    {
+      "scope": "frontend",
+      "status": "PASS",
+      "test_count": 113,
+      "local_log_name": "frontend-tests-final.log",
+      "sha256": "bb8d0a2f68ea5905c223d8f58284aee1cd26d33b48d58feba8fb72dddbe268ca"
+    },
+    {
+      "scope": "gateway",
+      "status": "PASS",
+      "test_count": 22,
+      "local_log_name": "gateway-tests.log",
+      "sha256": "5ef0fe515a8c2643d1305e2638cba0223af84c82adf7dfac039387e447ae8d5d"
+    },
+    {
+      "scope": "frontend_build",
+      "status": "PASS",
+      "test_count": null,
+      "local_log_name": "frontend-build.log",
+      "sha256": "107db8efea9f8b9676bfa9af15a7ea403c1a83afb2f87b02b88ea2b25a30422b"
+    }
+  ],
+  "preserved": [
+    "WebSocket and ASGI/Daphne",
+    "controller command confirmation",
+    "model-enabled publishing gate",
+    "explicit loopback TLS proxy trust",
+    "existing runtime GLB"
+  ],
+  "model": "Actual V17 GLB supplied to frontend test suite via FAN_MODEL_GLB; simulated measurements only",
+  "paid_model_calls": false,
+  "hardware_acceptance": "NOT_RUN",
+  "public_deployment": "NOT_RUN",
+  "browser_visual_acceptance": "NOT_RUN",
+  "note": "Different test counts from the original local snapshot reflect current main and omit unrelated historical demo/discovery code."
+}

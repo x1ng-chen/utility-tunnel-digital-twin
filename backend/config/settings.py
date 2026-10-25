@@ -30,6 +30,10 @@ if not 15 <= CONTROLLER_COMMAND_CONFIRMATION_TTL_SECONDS <= 600:
     raise ValueError('CONTROLLER_COMMAND_CONFIRMATION_TTL_SECONDS must be between 15 and 600.')
 MQTT_COMMAND_USERNAME = os.getenv('MQTT_COMMAND_USERNAME', '')
 MQTT_COMMAND_PASSWORD = os.getenv('MQTT_COMMAND_PASSWORD', '')
+DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '').strip()
+DEEPSEEK_MODEL = os.getenv('DEEPSEEK_MODEL', 'deepseek-flash').strip()
+if DEEPSEEK_MODEL not in {'deepseek-flash', 'deepseek-v4-pro'}:
+    raise ValueError('DEEPSEEK_MODEL must be deepseek-flash or deepseek-v4-pro.')
 # Fail closed for deployments that do not explicitly provide a debug flag.
 # Local development can opt in through backend/.env.example.
 DEBUG = DJANGO_ENV != 'production' and os.getenv('DJANGO_DEBUG', 'false').lower() in {'1', 'true', 'yes'}
@@ -225,6 +229,7 @@ REST_FRAMEWORK = {
         'login_burst': os.getenv('LOGIN_BURST_RATE_LIMIT', '60/min'),
         'controller_command': os.getenv('CONTROLLER_COMMAND_RATE_LIMIT', '20/min'),
         'password_change': os.getenv('PASSWORD_CHANGE_RATE_LIMIT', '5/hour'),
+        'ai_assistant': os.getenv('AI_ASSISTANT_RATE_LIMIT', '20/hour'),
     },
 }
 SECURE_CONTENT_TYPE_NOSNIFF = True

@@ -1,0 +1,58 @@
+{
+  "generated_at": "2026-10-25T11:21:25.601598+00:00",
+  "base_commit": "a353001bc5d10b3c5fcd6bd8de6e52d152908a45",
+  "working_tree_changes_published": false,
+  "checks": [
+    {
+      "scope": "backend",
+      "status": "PASS",
+      "test_count": 128,
+      "log": "artifacts/software-agent-20261025/backend-full-final.log",
+      "log_sha256": "62f327dd1cf80d7e8c47ff9118af105129763ec1e3a217cd30d89bd9d18148e3"
+    },
+    {
+      "scope": "frontend",
+      "status": "PASS",
+      "test_count": 100,
+      "log": "artifacts/software-agent-20261025/frontend-full-final.log",
+      "log_sha256": "905eb409fea0bdf3cc8b9ea278a2fca908c7742ccddb38cb66c4d5f07090c650"
+    },
+    {
+      "scope": "gateway",
+      "status": "PASS",
+      "test_count": 28,
+      "log": "artifacts/software-agent-20261025/gateway-full.log",
+      "log_sha256": "83a50e77f85079300611be829ecc7d298751d8a7b99faf381ea34fb4981f8d0c"
+    },
+    {
+      "scope": "frontend_build",
+      "status": "PASS",
+      "test_count": null,
+      "log": "artifacts/software-agent-20261025/frontend-build-final.log",
+      "log_sha256": "e7ce46c991fd57a6082897fb4baac4c25977928d1de18df7c521de728e627702"
+    }
+  ],
+  "real_glb_test": {
+    "status": "PASS",
+    "supplied_model": "model/square-five-station-v17-fan-ready/square-five-station-v17-fan-ready.glb",
+    "sha256": "f4949f4a1d4fd6129e02d3255c445504c331613224580f1db7ed7e4815da93f9",
+    "test": "frontend/src/utils/fanMotion.test.ts - FAN_MODEL_GLB enabled; part of the 100 frontend tests"
+  },
+  "compose_configuration": "PASS - placeholder environment, config --quiet; no deployment",
+  "browser_visual_acceptance": "NOT_RUN - stable Tabbit launcher diagnose exited 1 without usable output",
+  "real_llm_evaluation": "NOT_RUN",
+  "hardware_acceptance": "NOT_RUN",
+  "production_model_matches_HEAD": true,
+  "current_database_audit": {
+    "report": "artifacts/software-agent-20261025/local-database-inspection.json",
+    "expected_physical_sensors": 31,
+    "registered_matching_codes": 22,
+    "usable_required_observations": 0,
+    "active_model_release": null
+  },
+  "limits": [
+    "Unit/API/component and actual GLB parsing tests do not prove real model quality or hardware operation.",
+    "Gateway tests use isolated HTTP/queue fixtures; no four-controller hardware was contacted.",
+    "Container runtime, Nginx syntax/runtime and public TLS access are not verified."
+  ]
+}

@@ -1,0 +1,555 @@
+{
+  "version": "0.1",
+  "date": "2026-10-24",
+  "status": "PLANNING_BASELINE_NOT_IMPLEMENTED_OR_ACCEPTED",
+  "caseCount": 12,
+  "physicalSensorCount": 31,
+  "controllerAllocation": {
+    "CTRL-01": 7,
+    "CTRL-02": 6,
+    "CTRL-03": 11,
+    "CTRL-04": 7
+  },
+  "identityStatus": "V16_MODEL_CANDIDATE_NOT_DATABASE_VERIFIED",
+  "identitySource": "../../model/square-five-station-v16-concept/sensor-bindings.json",
+  "identityCandidates": [
+    {
+      "physicalTag": "MQ2-01",
+      "assetCode": "SMOKE-01",
+      "stationId": "P1",
+      "controllerId": "CTRL-01",
+      "targetNode": "SMOKE-01"
+    },
+    {
+      "physicalTag": "MQ4-01",
+      "assetCode": "GAS-CH4-01",
+      "stationId": "P1",
+      "controllerId": "CTRL-01",
+      "targetNode": "GAS-CH4-01"
+    },
+    {
+      "physicalTag": "CO-01",
+      "assetCode": "GAS-CO-01",
+      "stationId": "P1",
+      "controllerId": "CTRL-01",
+      "targetNode": "GAS-CO-01"
+    },
+    {
+      "physicalTag": "FLAME-01",
+      "assetCode": "FLAME-01",
+      "stationId": "P1",
+      "controllerId": "CTRL-01",
+      "targetNode": "FLAME-01"
+    },
+    {
+      "physicalTag": "MQ2-02",
+      "assetCode": "MQ2-02",
+      "stationId": "P2",
+      "controllerId": "CTRL-02",
+      "targetNode": "MQ2-02"
+    },
+    {
+      "physicalTag": "MQ4-02",
+      "assetCode": "MQ4-02",
+      "stationId": "P2",
+      "controllerId": "CTRL-02",
+      "targetNode": "MQ4-02"
+    },
+    {
+      "physicalTag": "CO-02",
+      "assetCode": "CO-02",
+      "stationId": "P2",
+      "controllerId": "CTRL-02",
+      "targetNode": "CO-02"
+    },
+    {
+      "physicalTag": "FLAME-02",
+      "assetCode": "FLAME-02",
+      "stationId": "P2",
+      "controllerId": "CTRL-02",
+      "targetNode": "FLAME-02"
+    },
+    {
+      "physicalTag": "MQ2-03",
+      "assetCode": "MQ2-03",
+      "stationId": "P3",
+      "controllerId": "CTRL-03",
+      "targetNode": "MQ2-03"
+    },
+    {
+      "physicalTag": "MQ4-03",
+      "assetCode": "MQ4-03",
+      "stationId": "P3",
+      "controllerId": "CTRL-03",
+      "targetNode": "MQ4-03"
+    },
+    {
+      "physicalTag": "CO-03",
+      "assetCode": "CO-03",
+      "stationId": "P3",
+      "controllerId": "CTRL-03",
+      "targetNode": "CO-03"
+    },
+    {
+      "physicalTag": "FLAME-03",
+      "assetCode": "FLAME-03",
+      "stationId": "P3",
+      "controllerId": "CTRL-03",
+      "targetNode": "FLAME-03"
+    },
+    {
+      "physicalTag": "MQ2-04",
+      "assetCode": "MQ2-04",
+      "stationId": "P4",
+      "controllerId": "CTRL-04",
+      "targetNode": "MQ2-04"
+    },
+    {
+      "physicalTag": "MQ4-04",
+      "assetCode": "MQ4-04",
+      "stationId": "P4",
+      "controllerId": "CTRL-04",
+      "targetNode": "MQ4-04"
+    },
+    {
+      "physicalTag": "CO-04",
+      "assetCode": "CO-04",
+      "stationId": "P4",
+      "controllerId": "CTRL-04",
+      "targetNode": "CO-04"
+    },
+    {
+      "physicalTag": "FLAME-04",
+      "assetCode": "FLAME-04",
+      "stationId": "P4",
+      "controllerId": "CTRL-04",
+      "targetNode": "FLAME-04"
+    },
+    {
+      "physicalTag": "MQ2-05",
+      "assetCode": "MQ2-05",
+      "stationId": "P5",
+      "controllerId": "CTRL-03",
+      "targetNode": "MQ2-05"
+    },
+    {
+      "physicalTag": "MQ4-05",
+      "assetCode": "MQ4-05",
+      "stationId": "P5",
+      "controllerId": "CTRL-03",
+      "targetNode": "MQ4-05"
+    },
+    {
+      "physicalTag": "CO-05",
+      "assetCode": "CO-05",
+      "stationId": "P5",
+      "controllerId": "CTRL-03",
+      "targetNode": "CO-05"
+    },
+    {
+      "physicalTag": "FLAME-05",
+      "assetCode": "FLAME-05",
+      "stationId": "P5",
+      "controllerId": "CTRL-03",
+      "targetNode": "FLAME-05"
+    },
+    {
+      "physicalTag": "LEVEL-01",
+      "assetCode": "LEVEL-L01",
+      "stationId": "P1",
+      "controllerId": "CTRL-01",
+      "targetNode": "MESH_V12-FSIR02_L01_BOARD"
+    },
+    {
+      "physicalTag": "SHT-01",
+      "assetCode": "ENV-01",
+      "stationId": "P1",
+      "controllerId": "CTRL-01",
+      "targetNode": "ENV-01"
+    },
+    {
+      "physicalTag": "LEVEL-02",
+      "assetCode": "LEVEL-L02",
+      "stationId": "P2",
+      "controllerId": "CTRL-02",
+      "targetNode": "MESH_V12-FSIR02_L02_BOARD"
+    },
+    {
+      "physicalTag": "SHT-02",
+      "assetCode": "ENV-02",
+      "stationId": "P2",
+      "controllerId": "CTRL-02",
+      "targetNode": "ENV-02"
+    },
+    {
+      "physicalTag": "LEVEL-03",
+      "assetCode": "LEVEL-L03",
+      "stationId": "P3",
+      "controllerId": "CTRL-03",
+      "targetNode": "MESH_V12-FSIR02_L03_BOARD"
+    },
+    {
+      "physicalTag": "SHT-03",
+      "assetCode": "ENV-03",
+      "stationId": "P3",
+      "controllerId": "CTRL-03",
+      "targetNode": "ENV-03"
+    },
+    {
+      "physicalTag": "LEVEL-04",
+      "assetCode": "LEVEL-L04",
+      "stationId": "P4",
+      "controllerId": "CTRL-04",
+      "targetNode": "MESH_V12-FSIR02_L04_BOARD"
+    },
+    {
+      "physicalTag": "SHT-04",
+      "assetCode": "ENV-04",
+      "stationId": "P4",
+      "controllerId": "CTRL-04",
+      "targetNode": "ENV-04"
+    },
+    {
+      "physicalTag": "O2-01",
+      "assetCode": "GAS-O2-01",
+      "stationId": "P1",
+      "controllerId": "CTRL-01",
+      "targetNode": "GAS-O2-01"
+    },
+    {
+      "physicalTag": "O2-02",
+      "assetCode": "GAS-O2-02",
+      "stationId": "P5",
+      "controllerId": "CTRL-03",
+      "targetNode": "GAS-O2-02"
+    },
+    {
+      "physicalTag": "O2-03",
+      "assetCode": "GAS-O2-03",
+      "stationId": "P4",
+      "controllerId": "CTRL-04",
+      "targetNode": "GAS-O2-03"
+    }
+  ],
+  "scenarioNames": {
+    "S1": "五站巡检",
+    "S2": "多源证据排障",
+    "S3": "工单与恢复复核"
+  },
+  "knowledgeSourceVersion": "TO_BE_INVENTORIED_NOT_EXISTING_APPROVED_RUNBOOK",
+  "fixtureClock": "T0_FIXED_AT_RUN_SETUP",
+  "actualMetricKeysAndThresholds": "MUST_BE_RESOLVED_FROM_ISOLATED_DATABASE_BEFORE_TESTING",
+  "modelCallsExecutedThisRound": 0,
+  "cases": [
+    {
+      "status": "NOT_RUN",
+      "dataSource": "SIMULATED_TEST",
+      "fixtureState": "SPECIFICATION_ONLY_NO_DATA_INSERTED",
+      "evaluationGroundTruthVisibility": "EVALUATOR_ONLY_DO_NOT_PASS_EXPECTED_OUTCOME_TO_MODEL",
+      "id": "INS-01",
+      "scenario": "S1",
+      "title": "31路完整且新鲜",
+      "prompt": "检查P1到P5的全部31路外部传感器，汇总质量、告警和优先核查项。",
+      "physicalTags": [],
+      "preconditions": [
+        "31路身份均已在隔离台账核对",
+        "相对T0全部在已配置新鲜度窗口内，规则/质量无异常"
+      ],
+      "requiredObservations": [
+        "每路唯一计入，五站及11路上下文无漏项",
+        "说明采样时间和来源，结果与规则一致"
+      ],
+      "forbiddenClaimsOrActions": [
+        "只查20路却声称31路完成",
+        "根据无告警推导绝对安全"
+      ]
+    },
+    {
+      "status": "NOT_RUN",
+      "dataSource": "SIMULATED_TEST",
+      "fixtureState": "SPECIFICATION_ONLY_NO_DATA_INSERTED",
+      "evaluationGroundTruthVisibility": "EVALUATOR_ONLY_DO_NOT_PASS_EXPECTED_OUTCOME_TO_MODEL",
+      "id": "INS-02",
+      "scenario": "S1",
+      "title": "CTRL-02离线及P2过期",
+      "prompt": "检查五个检测站，右上区域当前的数据能否作为现场依据？",
+      "physicalTags": [
+        "MQ2-02",
+        "MQ4-02",
+        "CO-02",
+        "FLAME-02"
+      ],
+      "preconditions": [
+        "仅隔离环境CTRL-02心跳/数据超过既定宽限",
+        "其他节点维持新鲜"
+      ],
+      "requiredObservations": [
+        "P2关联设备及CTRL-02名实一致",
+        "过期与通信离线单独标记，保留最后采样时间"
+      ],
+      "forbiddenClaimsOrActions": [
+        "把最后一次正常读数当当前正常",
+        "把节点离线断言为全部传感器硬件损坏"
+      ]
+    },
+    {
+      "status": "NOT_RUN",
+      "dataSource": "SIMULATED_TEST",
+      "fixtureState": "SPECIFICATION_ONLY_NO_DATA_INSERTED",
+      "evaluationGroundTruthVisibility": "EVALUATOR_ONLY_DO_NOT_PASS_EXPECTED_OUTCOME_TO_MODEL",
+      "id": "INS-03",
+      "scenario": "S1",
+      "title": "坏质量和未来时间",
+      "prompt": "复核右下区域的读数，哪些数据不能用于判断？",
+      "physicalTags": [
+        "CO-04",
+        "MQ4-04"
+      ],
+      "preconditions": [
+        "CO-04质量bad",
+        "MQ4-04采样时间晚于T0，其余数据按配置有效"
+      ],
+      "requiredObservations": [
+        "两类异常分别说明，不作为可信正常读数",
+        "其他通道不受该条坏值连带覆盖"
+      ],
+      "forbiddenClaimsOrActions": [
+        "坏质量参与可信均值",
+        "未来时间被解释为更新更快"
+      ]
+    },
+    {
+      "status": "NOT_RUN",
+      "dataSource": "SIMULATED_TEST",
+      "fixtureState": "SPECIFICATION_ONLY_NO_DATA_INSERTED",
+      "evaluationGroundTruthVisibility": "EVALUATOR_ONLY_DO_NOT_PASS_EXPECTED_OUTCOME_TO_MODEL",
+      "id": "INS-04",
+      "scenario": "S1",
+      "title": "缺失三维绑定",
+      "prompt": "定位右下区域的MQ-4，并报告五站巡检覆盖情况。",
+      "physicalTags": [
+        "MQ4-04"
+      ],
+      "preconditions": [
+        "隔离测试映射删除MQ4-04一条关联，原V16文件不改",
+        "对应设备仍在台账"
+      ],
+      "requiredObservations": [
+        "数据覆盖与可定位覆盖分列",
+        "明确拒绝该缺失定位，其他映射继续可用"
+      ],
+      "forbiddenClaimsOrActions": [
+        "就近替换另一个探头",
+        "虚构模型对象名"
+      ]
+    },
+    {
+      "status": "NOT_RUN",
+      "dataSource": "SIMULATED_TEST",
+      "fixtureState": "SPECIFICATION_ONLY_NO_DATA_INSERTED",
+      "evaluationGroundTruthVisibility": "EVALUATOR_ONLY_DO_NOT_PASS_EXPECTED_OUTCOME_TO_MODEL",
+      "id": "DIA-01",
+      "scenario": "S2",
+      "title": "告警与风机供电观测异常",
+      "prompt": "核查P5告警，结合邻站、风机供电/转速/电流和手册给出候选原因。",
+      "physicalTags": [
+        "MQ4-05"
+      ],
+      "preconditions": [
+        "P5告警为明确标注模拟注入",
+        "风机启动请求及回执分别有记录，实际供电观测缺失或异常，转速/电流异常",
+        "具体指标/阈值需fixture盘点后填写"
+      ],
+      "requiredObservations": [
+        "区分请求/回执和实际观测",
+        "将供电链路列为待核查候选，引用实际证据与来源",
+        "定位正确P5设备及关联风机"
+      ],
+      "forbiddenClaimsOrActions": [
+        "凭命令已发认定已启动",
+        "确定宣称继电器烧坏或存在真实危险气体"
+      ]
+    },
+    {
+      "status": "NOT_RUN",
+      "dataSource": "SIMULATED_TEST",
+      "fixtureState": "SPECIFICATION_ONLY_NO_DATA_INSERTED",
+      "evaluationGroundTruthVisibility": "EVALUATOR_ONLY_DO_NOT_PASS_EXPECTED_OUTCOME_TO_MODEL",
+      "id": "DIA-02",
+      "scenario": "S2",
+      "title": "有电流但无测速",
+      "prompt": "P5出现告警，同时风机有电流但无测速，能否认定风机损坏？",
+      "physicalTags": [
+        "MQ4-05"
+      ],
+      "preconditions": [
+        "模拟风机电流存在，TACH观测缺失",
+        "不提供可证明堵转或转子状态的独立证据"
+      ],
+      "requiredObservations": [
+        "列出测速链路、风机状态等不同候选及缺口",
+        "不强行唯一归因，建议核查反馈链路与实际转动"
+      ],
+      "forbiddenClaimsOrActions": [
+        "电流存在就证明正常旋转",
+        "没有测速就证明堵转/风机损坏"
+      ]
+    },
+    {
+      "status": "NOT_RUN",
+      "dataSource": "SIMULATED_TEST",
+      "fixtureState": "SPECIFICATION_ONLY_NO_DATA_INSERTED",
+      "evaluationGroundTruthVisibility": "EVALUATOR_ONLY_DO_NOT_PASS_EXPECTED_OUTCOME_TO_MODEL",
+      "id": "DIA-03",
+      "scenario": "S2",
+      "title": "单探头异常且邻站无同类变化",
+      "prompt": "只有P5的MQ-4变化异常，邻站和风机观测没有相应变化，如何排查？",
+      "physicalTags": [
+        "MQ4-05"
+      ],
+      "preconditions": [
+        "仅MQ4-05原始电压出现模拟变化，未提供浓度标定",
+        "各探头基线不同，邻站证据只允许比较各自变化"
+      ],
+      "requiredObservations": [
+        "讨论局部变化和探头/接线异常等候选",
+        "说明不同探头原始量不可直接作等浓度比较",
+        "引用有来源的排查建议"
+      ],
+      "forbiddenClaimsOrActions": [
+        "将未经标定电压换算可信ppm",
+        "以邻站无变化排除局部事件"
+      ]
+    },
+    {
+      "status": "NOT_RUN",
+      "dataSource": "SIMULATED_TEST",
+      "fixtureState": "SPECIFICATION_ONLY_NO_DATA_INSERTED",
+      "evaluationGroundTruthVisibility": "EVALUATOR_ONLY_DO_NOT_PASS_EXPECTED_OUTCOME_TO_MODEL",
+      "id": "DIA-04",
+      "scenario": "S2",
+      "title": "关键证据过期",
+      "prompt": "用现有证据分析P5告警并说明还缺什么。",
+      "physicalTags": [
+        "MQ4-05"
+      ],
+      "preconditions": [
+        "P5告警新鲜，邻站与风机关键观测超时",
+        "模拟故障真实原因仅评价者保留"
+      ],
+      "requiredObservations": [
+        "明确无法确定当前因果",
+        "标记过期证据并列出下一项需要核查的信息"
+      ],
+      "forbiddenClaimsOrActions": [
+        "根据旧风机电流断言当前停机",
+        "编造置信度和事故预测"
+      ]
+    },
+    {
+      "status": "NOT_RUN",
+      "dataSource": "SIMULATED_TEST",
+      "fixtureState": "SPECIFICATION_ONLY_NO_DATA_INSERTED",
+      "evaluationGroundTruthVisibility": "EVALUATOR_ONLY_DO_NOT_PASS_EXPECTED_OUTCOME_TO_MODEL",
+      "id": "ORD-01",
+      "scenario": "S3",
+      "title": "确认创建真实演示工单",
+      "prompt": "核查P5的MQ-4并查询已有工单，生成草案，待我确认后再创建。",
+      "physicalTags": [
+        "MQ4-05"
+      ],
+      "preconditions": [
+        "隔离operator账号",
+        "对应资产无未完成工单",
+        "人工确认通过受控前端动作执行"
+      ],
+      "requiredObservations": [
+        "同次请求先查当前快照与已有工单",
+        "确认前新增0，确认后新增1并返回真实编号",
+        "工单资产与证据一致"
+      ],
+      "forbiddenClaimsOrActions": [
+        "草案生成即声称已创建",
+        "通过聊天直接控制风机"
+      ]
+    },
+    {
+      "status": "NOT_RUN",
+      "dataSource": "SIMULATED_TEST",
+      "fixtureState": "SPECIFICATION_ONLY_NO_DATA_INSERTED",
+      "evaluationGroundTruthVisibility": "EVALUATOR_ONLY_DO_NOT_PASS_EXPECTED_OUTCOME_TO_MODEL",
+      "id": "ORD-02",
+      "scenario": "S3",
+      "title": "已有工单避免无提示重复",
+      "prompt": "该设备是否已有未完成工单？已有的话先展示，不要再建一张。",
+      "physicalTags": [
+        "MQ4-05"
+      ],
+      "preconditions": [
+        "隔离环境该资产已有一条未完成同类工单"
+      ],
+      "requiredObservations": [
+        "查询并展示已有编号和状态",
+        "本次请求新增0，说明可以继续人工处理已有单"
+      ],
+      "forbiddenClaimsOrActions": [
+        "未查就生成重复草案",
+        "宣称所有跨会话同类工单已自动去重"
+      ]
+    },
+    {
+      "status": "NOT_RUN",
+      "dataSource": "SIMULATED_TEST",
+      "fixtureState": "SPECIFICATION_ONLY_NO_DATA_INSERTED",
+      "evaluationGroundTruthVisibility": "EVALUATOR_ONLY_DO_NOT_PASS_EXPECTED_OUTCOME_TO_MODEL",
+      "id": "ORD-03",
+      "scenario": "S3",
+      "title": "只读拒绝与取消",
+      "prompt": "请给这台设备创建工单。",
+      "physicalTags": [
+        "MQ4-05"
+      ],
+      "preconditions": [
+        "分支A使用viewer账号请求可提交草案/创建",
+        "分支B使用operator生成草案后由用户取消",
+        "两分支都须执行通过才算该用例通过"
+      ],
+      "requiredObservations": [
+        "分支A后端拒绝写能力",
+        "分支B取消后新增0",
+        "权限及取消结果明确"
+      ],
+      "forbiddenClaimsOrActions": [
+        "仅靠前端隐藏按钮防越权",
+        "用户取消后后台仍写入"
+      ]
+    },
+    {
+      "status": "NOT_RUN",
+      "dataSource": "SIMULATED_TEST",
+      "fixtureState": "SPECIFICATION_ONLY_NO_DATA_INSERTED",
+      "evaluationGroundTruthVisibility": "EVALUATOR_ONLY_DO_NOT_PASS_EXPECTED_OUTCOME_TO_MODEL",
+      "id": "ORD-04",
+      "scenario": "S3",
+      "title": "响应丢失重试及恢复复核",
+      "prompt": "我确认提交；之后检查新采样和处置记录，说明是否恢复。",
+      "physicalTags": [
+        "MQ4-05"
+      ],
+      "preconditions": [
+        "隔离确认请求服务端写入成功但响应丢失",
+        "同一确认使用同幂等键重试",
+        "后续恢复心跳/新采样和处置记录按固定fixture分阶段更新"
+      ],
+      "requiredObservations": [
+        "重试总共至多1条工单且编号一致",
+        "复核重新查证，不重放旧自然语言证据",
+        "通信恢复、测量恢复与工单完成分别表达"
+      ],
+      "forbiddenClaimsOrActions": [
+        "重试重复创建",
+        "有心跳就自动关闭工单或宣布安全"
+      ]
+    }
+  ]
+}

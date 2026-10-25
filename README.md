@@ -1,5 +1,12 @@
 <div align="center">
 
+## 最新软件协作入口（2026-10-25）
+
+[四主控五检测点 Agent 软件实施记录](docs/software-agent-20261025/README.md)提供巡检、排障、工单人工确认/复核、三维定位及网关四主题上行的使用说明与待办。[发布整合验证](docs/software-agent-20261025/publish-integration.json)记录基于当前主线的测试结果。登录数据服务后可从右下角助手进入“五站31路巡检”；该入口不依赖模型密钥。
+
+[V17可编辑模型与独立叶轮合同](model/square-five-station-v17-fan-ready/README.md)随本轮提供，BLEND/GLB通过Git LFS获取，原运行模型保持原状。实际台账身份、四节点固件、语音和公网访问仍需联调，不能把软件测试结果当作整机验收。
+
+
 # 综合管廊数字孪生运维实体样品
 
 [![Plan](https://img.shields.io/badge/plan-V3.8-2E74B5)](https://github.com/x1ng-chen/utility-tunnel-digital-twin/blob/main/docs/综合管廊数字孪生运维实体样品项目计划书_V3.8_当前软硬件进度与收尾计划版.docx)
