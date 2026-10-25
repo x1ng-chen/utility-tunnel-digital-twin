@@ -1,0 +1,16 @@
+{
+  "label": "01-open-and-audit",
+  "tool": "execute_blender_code",
+  "server": {
+    "name": "MCP for Blender",
+    "title": null,
+    "version": "1.29.0",
+    "websiteUrl": null,
+    "icons": null
+  },
+  "isError": false,
+  "texts": [
+    "Code executed successfully: {\"file\": \"D:\\\\shixi\\\\utility-tunnel-digital-twin\\\\model\\\\square-five-station-v16-concept\\\\square-five-station-v16-concept.blend\", \"blender\": \"5.2.2 LTS\", \"rootCounts\": {\"controller\": 4, \"rs485_module\": 5, \"regulator\": 4, \"external_sensor\": 31, \"wet_tray\": 4, \"power_entry\": 1, \"gateway\": 1, \"business_display\": 2, \"relay\": 2, \"power_monitor\": 2, \"joystick\": 1, \"buzzer\": 1, \"led_strip\": 1, \"fan\": 2, \"voice_controller\": 1, \"microphone\": 1, \"amplifier\": 1, \"speaker\": 1, \"voice_display\": 1, \"voice_button\": 1, \"utility_pipe\": 2}, \"ownership\": {\"CTRL-01\": 7, \"CTRL-02\": 6, \"CTRL-03\": 11, \"CTRL-04\": 7}, \"stationParents\": {\"P1\": [\"MQ2-01\", \"MQ4-01\", \"CO-01\", \"FLAME-01\"], \"P2\": [\"MQ2-02\", \"MQ4-02\", \"CO-02\", \"FLAME-02\"], \"P3\": [\"MQ2-03\", \"MQ4-03\", \"CO-03\", \"FLAME-03\"], \"P4\": [\"MQ2-04\", \"MQ4-04\", \"CO-04\", \"FLAME-04\"], \"P5\": [\"MQ2-05\", \"MQ4-05\", \"CO-05\", \"FLAME-05\"]}, \"labelPositions\": {\"P1\": [0.2600000202655792, 0.5850000381469727, 0.14900000393390656], \"P2\": [0.4400000274181366, 0.5850000381469727, 0.14900000393390656], \"P3\": [0.2600000202655792, 0.20500001311302185, 0.14900000393390656], \"P4\": [0.4400000274181366, 0.20500001311302185, 0.14900000393390656], \"P5\": [0.3500000238418579, 0.39500001072883606, 0.14900000393390656]}}\n"
+  ],
+  "images": []
+}

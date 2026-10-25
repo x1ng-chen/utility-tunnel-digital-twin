@@ -1,0 +1,14 @@
+{
+  "revision": "square-five-station-v16-concept",
+  "blender": "5.2.2 LTS",
+  "glb_bytes": 5178764,
+  "glb_nodes": 691,
+  "sha256": "ec480bed8258afafad8aaa441b72c86f67d91fe82e33735baf3c882d6ead2f17",
+  "assets": 69,
+  "sensors": 31,
+  "stations": 5,
+  "modelEditRoute": "LIVE_MCP_execute_blender_code",
+  "baselineCommit": "12c1feebe811329c6370f8927dcb14bc733b40f7",
+  "liveFrontendIntegration": "NOT_EXECUTED",
+  "voiceOpeningsRayCheck": "PASS"
+}

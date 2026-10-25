@@ -1,0 +1,16 @@
+{
+  "label": "03-prepare-and-export-rotors-live",
+  "tool": "execute_blender_code",
+  "server": {
+    "name": "MCP for Blender",
+    "title": null,
+    "version": "1.29.0",
+    "websiteUrl": null,
+    "icons": null
+  },
+  "isError": false,
+  "texts": [
+    "Error executing code: Communication error with Blender: {\"exception_type\": \"RuntimeError\", \"message\": \"Error: Python: Traceback (most recent call last):\\n  File \\\"D:\\\\blender\\\\5.2\\\\scripts\\\\addons_core\\\\io_scene_gltf2\\\\__init__.py\\\", line 1409, in execute\\n    res = gltf2_blender_export.save(context, export_settings)\\n  File \\\"D:\\\\blender\\\\5.2\\\\scripts\\\\addons_core\\\\io_scene_gltf2\\\\blender\\\\exp\\\\export.py\\\", line 23, in save\\n    if bpy.context.active_object is not None:\\n       ^^^^^^^^^^^^^^^^^^^^^^^^^\\nAttributeError: 'Context' object has no attribute 'active_object'\\nLocation: <string>:118\\n\", \"traceback\": \"Traceback (most recent call last):\\n  File \\\"C:\\\\Users\\\\w\\\\AppData\\\\Roaming\\\\Blender Foundation\\\\Blender\\\\5.2\\\\scripts\\\\addons\\\\blender_mcp.py\\\", line 2296, in execute_code\\n    exec(code, namespace)\\n    ~~~~^^^^^^^^^^^^^^^^^\\n  File \\\"<string>\\\", line 118, in <module>\\nRuntimeError: Error: Python: Traceback (most recent call last):\\n  File \\\"D:\\\\blender\\\\5.2\\\\scripts\\\\addons_core\\\\io_scene_gltf2\\\\__init__.py\\\", line 1409, in execute\\n    res = gltf2_blender_export.save(context, export_settings)\\n  File \\\"D:\\\\blender\\\\5.2\\\\scripts\\\\addons_core\\\\io_scene_gltf2\\\\blender\\\\exp\\\\export.py\\\", line 23, in save\\n    if bpy.context.active_object is not None:\\n       ^^^^^^^^^^^^^^^^^^^^^^^^^\\nAttributeError: 'Context' object has no attribute 'active_object'\\nLocation: <string>:118\\n\\n\"}"
+  ],
+  "images": []
+}

@@ -1,0 +1,50 @@
+{
+  "status": "FOR_FUTURE_INTEGRATION_TEST_NOT_EXECUTED_ON_PLATFORM",
+  "fixtures": [
+    {
+      "fixtureId": "SIMULATED-P1",
+      "dataSource": "SIMULATED_NOT_LIVE",
+      "assetCode": "SMOKE-01",
+      "expectedTargetNode": "SMOKE-01",
+      "expectedStationId": "P1",
+      "expectedControllerId": "CTRL-01",
+      "message": "Synthetic mapping fixture only; no actual alarm or telemetry."
+    },
+    {
+      "fixtureId": "SIMULATED-P2",
+      "dataSource": "SIMULATED_NOT_LIVE",
+      "assetCode": "MQ2-02",
+      "expectedTargetNode": "MQ2-02",
+      "expectedStationId": "P2",
+      "expectedControllerId": "CTRL-02",
+      "message": "Synthetic mapping fixture only; no actual alarm or telemetry."
+    },
+    {
+      "fixtureId": "SIMULATED-P3",
+      "dataSource": "SIMULATED_NOT_LIVE",
+      "assetCode": "MQ2-03",
+      "expectedTargetNode": "MQ2-03",
+      "expectedStationId": "P3",
+      "expectedControllerId": "CTRL-03",
+      "message": "Synthetic mapping fixture only; no actual alarm or telemetry."
+    },
+    {
+      "fixtureId": "SIMULATED-P4",
+      "dataSource": "SIMULATED_NOT_LIVE",
+      "assetCode": "MQ2-04",
+      "expectedTargetNode": "MQ2-04",
+      "expectedStationId": "P4",
+      "expectedControllerId": "CTRL-04",
+      "message": "Synthetic mapping fixture only; no actual alarm or telemetry."
+    },
+    {
+      "fixtureId": "SIMULATED-P5",
+      "dataSource": "SIMULATED_NOT_LIVE",
+      "assetCode": "MQ2-05",
+      "expectedTargetNode": "MQ2-05",
+      "expectedStationId": "P5",
+      "expectedControllerId": "CTRL-03",
+      "message": "Synthetic mapping fixture only; no actual alarm or telemetry."
+    }
+  ]
+}

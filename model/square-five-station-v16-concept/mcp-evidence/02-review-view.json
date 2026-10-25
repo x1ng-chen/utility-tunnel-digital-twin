@@ -1,0 +1,16 @@
+{
+  "label": "02-review-view",
+  "tool": "execute_blender_code",
+  "server": {
+    "name": "MCP for Blender",
+    "title": null,
+    "version": "1.29.0",
+    "websiteUrl": null,
+    "icons": null
+  },
+  "isError": false,
+  "texts": [
+    "Code executed successfully: {\"camera\": \"VIEW_TOP\", \"objects\": 690, \"liveEditViaMCP\": true}\n"
+  ],
+  "images": []
+}

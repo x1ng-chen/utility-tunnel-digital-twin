@@ -1,0 +1,16 @@
+{
+  "label": "04-refine-live",
+  "tool": "execute_blender_code",
+  "server": {
+    "name": "MCP for Blender",
+    "title": null,
+    "version": "1.29.0",
+    "websiteUrl": null,
+    "icons": null
+  },
+  "isError": false,
+  "texts": [
+    "Code executed successfully: Info: Applied modifier was not first, result may not be as expected\nInfo: Applied modifier was not first, result may not be as expected\n{\"liveMCPRefinement\": \"DONE\", \"lidOpenings\": [\"microphone\", \"speaker\"], \"voiceButton_mm\": [697.5, 305.0, 160.0], \"controllerLabels\": \"All four moved clear of business displays\"}\n"
+  ],
+  "images": []
+}

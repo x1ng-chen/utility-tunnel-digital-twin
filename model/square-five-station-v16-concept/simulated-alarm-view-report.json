@@ -1,0 +1,33 @@
+{
+  "mode": "SIMULATED_BLENDER_ONLY_NOT_PLATFORM_INTEGRATION",
+  "stations": [
+    {
+      "stationId": "P1",
+      "result": "Code executed successfully: {\"dataSource\": \"SIMULATED_BLENDER_ONLY\", \"assetCode\": \"SMOKE-01\", \"physicalTag\": \"MQ2-01\", \"stationId\": \"P1\", \"controllerId\": \"CTRL-01\", \"targetNode\": \"SMOKE-01\", \"cameraTargetBlender_m\": [0.23500001430511475, 0.562000036239624, 0.15900000929832458], \"otherSensorRootsTinted\": [], \"platformAlarmIntegration\": \"NOT_EXECUTED\"}\n",
+      "image": "previews\\simulated-alarm\\SIMULATED-P1.png"
+    },
+    {
+      "stationId": "P2",
+      "result": "Code executed successfully: {\"dataSource\": \"SIMULATED_BLENDER_ONLY\", \"assetCode\": \"MQ2-02\", \"physicalTag\": \"MQ2-02\", \"stationId\": \"P2\", \"controllerId\": \"CTRL-02\", \"targetNode\": \"MQ2-02\", \"cameraTargetBlender_m\": [0.4150000214576721, 0.562000036239624, 0.15900000929832458], \"otherSensorRootsTinted\": [], \"platformAlarmIntegration\": \"NOT_EXECUTED\"}\n",
+      "image": "previews\\simulated-alarm\\SIMULATED-P2.png"
+    },
+    {
+      "stationId": "P3",
+      "result": "Code executed successfully: {\"dataSource\": \"SIMULATED_BLENDER_ONLY\", \"assetCode\": \"MQ2-03\", \"physicalTag\": \"MQ2-03\", \"stationId\": \"P3\", \"controllerId\": \"CTRL-03\", \"targetNode\": \"MQ2-03\", \"cameraTargetBlender_m\": [0.23500001430511475, 0.18200001120567322, 0.15900000929832458], \"otherSensorRootsTinted\": [], \"platformAlarmIntegration\": \"NOT_EXECUTED\"}\n",
+      "image": "previews\\simulated-alarm\\SIMULATED-P3.png"
+    },
+    {
+      "stationId": "P4",
+      "result": "Code executed successfully: {\"dataSource\": \"SIMULATED_BLENDER_ONLY\", \"assetCode\": \"MQ2-04\", \"physicalTag\": \"MQ2-04\", \"stationId\": \"P4\", \"controllerId\": \"CTRL-04\", \"targetNode\": \"MQ2-04\", \"cameraTargetBlender_m\": [0.4150000214576721, 0.18200001120567322, 0.15900000929832458], \"otherSensorRootsTinted\": [], \"platformAlarmIntegration\": \"NOT_EXECUTED\"}\n",
+      "image": "previews\\simulated-alarm\\SIMULATED-P4.png"
+    },
+    {
+      "stationId": "P5",
+      "result": "Code executed successfully: {\"dataSource\": \"SIMULATED_BLENDER_ONLY\", \"assetCode\": \"MQ2-05\", \"physicalTag\": \"MQ2-05\", \"stationId\": \"P5\", \"controllerId\": \"CTRL-03\", \"targetNode\": \"MQ2-05\", \"cameraTargetBlender_m\": [0.32500001788139343, 0.3720000088214874, 0.15900000929832458], \"otherSensorRootsTinted\": [], \"platformAlarmIntegration\": \"NOT_EXECUTED\"}\n",
+      "image": "previews\\simulated-alarm\\SIMULATED-P5.png"
+    }
+  ],
+  "restoreOutput": [
+    "Code executed successfully: {\"simulationRestored\": true, \"camera\": \"VIEW_OVERALL\", \"noBakedAlarmMaterials\": true}\n"
+  ]
+}

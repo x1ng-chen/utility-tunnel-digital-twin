@@ -1,0 +1,146 @@
+{
+  "revision": "square-five-station-v16-concept",
+  "labelsToggleNode": "STATION_LABELS",
+  "stations": [
+    {
+      "stationId": "P1",
+      "groupNode": "STATION_P1",
+      "controllerId": "CTRL-01",
+      "topViewPosition": "UPPER_LEFT",
+      "focusPositionBlender_m": [
+        0.26,
+        0.54,
+        0.16
+      ],
+      "focusPositionGltf_m": [
+        0.26,
+        0.16,
+        -0.54
+      ],
+      "memberAssetCodes": [
+        "SMOKE-01",
+        "GAS-CH4-01",
+        "GAS-CO-01",
+        "FLAME-01"
+      ],
+      "memberPhysicalTags": [
+        "MQ2-01",
+        "MQ4-01",
+        "CO-01",
+        "FLAME-01"
+      ]
+    },
+    {
+      "stationId": "P2",
+      "groupNode": "STATION_P2",
+      "controllerId": "CTRL-02",
+      "topViewPosition": "UPPER_RIGHT",
+      "focusPositionBlender_m": [
+        0.44,
+        0.54,
+        0.16
+      ],
+      "focusPositionGltf_m": [
+        0.44,
+        0.16,
+        -0.54
+      ],
+      "memberAssetCodes": [
+        "MQ2-02",
+        "MQ4-02",
+        "CO-02",
+        "FLAME-02"
+      ],
+      "memberPhysicalTags": [
+        "MQ2-02",
+        "MQ4-02",
+        "CO-02",
+        "FLAME-02"
+      ]
+    },
+    {
+      "stationId": "P3",
+      "groupNode": "STATION_P3",
+      "controllerId": "CTRL-03",
+      "topViewPosition": "LOWER_LEFT",
+      "focusPositionBlender_m": [
+        0.26,
+        0.16,
+        0.16
+      ],
+      "focusPositionGltf_m": [
+        0.26,
+        0.16,
+        -0.16
+      ],
+      "memberAssetCodes": [
+        "MQ2-03",
+        "MQ4-03",
+        "CO-03",
+        "FLAME-03"
+      ],
+      "memberPhysicalTags": [
+        "MQ2-03",
+        "MQ4-03",
+        "CO-03",
+        "FLAME-03"
+      ]
+    },
+    {
+      "stationId": "P4",
+      "groupNode": "STATION_P4",
+      "controllerId": "CTRL-04",
+      "topViewPosition": "LOWER_RIGHT",
+      "focusPositionBlender_m": [
+        0.44,
+        0.16,
+        0.16
+      ],
+      "focusPositionGltf_m": [
+        0.44,
+        0.16,
+        -0.16
+      ],
+      "memberAssetCodes": [
+        "MQ2-04",
+        "MQ4-04",
+        "CO-04",
+        "FLAME-04"
+      ],
+      "memberPhysicalTags": [
+        "MQ2-04",
+        "MQ4-04",
+        "CO-04",
+        "FLAME-04"
+      ]
+    },
+    {
+      "stationId": "P5",
+      "groupNode": "STATION_P5",
+      "controllerId": "CTRL-03",
+      "topViewPosition": "CENTRE",
+      "focusPositionBlender_m": [
+        0.35,
+        0.35,
+        0.16
+      ],
+      "focusPositionGltf_m": [
+        0.35,
+        0.16,
+        -0.35
+      ],
+      "memberAssetCodes": [
+        "MQ2-05",
+        "MQ4-05",
+        "CO-05",
+        "FLAME-05"
+      ],
+      "memberPhysicalTags": [
+        "MQ2-05",
+        "MQ4-05",
+        "CO-05",
+        "FLAME-05"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "blend": {
+    "status": "PASS",
+    "sensor_count": 31,
+    "station_count": 5,
+    "ownership": {
+      "CTRL-01": 7,
+      "CTRL-02": 6,
+      "CTRL-03": 11,
+      "CTRL-04": 7
+    },
+    "category_counts": {
+      "controller": 4,
+      "rs485_module": 5,
+      "regulator": 4,
+      "external_sensor": 31,
+      "wet_tray": 4,
+      "power_entry": 1,
+      "gateway": 1,
+      "business_display": 2,
+      "relay": 2,
+      "power_monitor": 2,
+      "joystick": 1,
+      "buzzer": 1,
+      "led_strip": 1,
+      "fan": 2,
+      "voice_controller": 1,
+      "microphone": 1,
+      "amplifier": 1,
+      "speaker": 1,
+      "voice_display": 1,
+      "voice_button": 1,
+      "utility_pipe": 2
+    },
+    "identity_continuity_from_v15": true,
+    "all_31_targets_unique_and_resolvable": true,
+    "station_parentage_correct": true,
+    "no_baked_simulated_alarm_materials": true,
+    "primary_body_clashes": [],
+    "dry_support_pipe_clearance_checks": 43,
+    "bounds_mm": [
+      [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      [
+        700.0,
+        700.0,
+        300.0
+      ]
+    ],
+    "fixtures": [
+      {
+        "fixture": "SIMULATED-P1",
+        "status": "MODEL_RESOLUTION_PASS_NOT_PLATFORM_ALARM_TEST"
+      },
+      {
+        "fixture": "SIMULATED-P2",
+        "status": "MODEL_RESOLUTION_PASS_NOT_PLATFORM_ALARM_TEST"
+      },
+      {
+        "fixture": "SIMULATED-P3",
+        "status": "MODEL_RESOLUTION_PASS_NOT_PLATFORM_ALARM_TEST"
+      },
+      {
+        "fixture": "SIMULATED-P4",
+        "status": "MODEL_RESOLUTION_PASS_NOT_PLATFORM_ALARM_TEST"
+      },
+      {
+        "fixture": "SIMULATED-P5",
+        "status": "MODEL_RESOLUTION_PASS_NOT_PLATFORM_ALARM_TEST"
+      }
+    ],
+    "platformAlarmIntegration": "NOT_EXECUTED"
+  },
+  "glb": {
+    "status": "PASS",
+    "sensor_count": 31,
+    "station_count": 5,
+    "ownership": {
+      "CTRL-01": 7,
+      "CTRL-02": 6,
+      "CTRL-03": 11,
+      "CTRL-04": 7
+    },
+    "category_counts": {
+      "controller": 4,
+      "external_sensor": 31,
+      "fan": 2,
+      "power_monitor": 2,
+      "joystick": 1,
+      "power_entry": 1,
+      "buzzer": 1,
+      "business_display": 2,
+      "gateway": 1,
+      "led_strip": 1,
+      "relay": 2,
+      "utility_pipe": 2,
+      "regulator": 4,
+      "rs485_module": 5,
+      "voice_controller": 1,
+      "amplifier": 1,
+      "voice_button": 1,
+      "microphone": 1,
+      "voice_display": 1,
+      "speaker": 1,
+      "wet_tray": 4
+    },
+    "identity_continuity_from_v15": true,
+    "all_31_targets_unique_and_resolvable": true,
+    "station_parentage_correct": true,
+    "no_baked_simulated_alarm_materials": true,
+    "primary_body_clashes": [],
+    "dry_support_pipe_clearance_checks": 43,
+    "bounds_mm": null,
+    "fixtures": [
+      {
+        "fixture": "SIMULATED-P1",
+        "status": "MODEL_RESOLUTION_PASS_NOT_PLATFORM_ALARM_TEST"
+      },
+      {
+        "fixture": "SIMULATED-P2",
+        "status": "MODEL_RESOLUTION_PASS_NOT_PLATFORM_ALARM_TEST"
+      },
+      {
+        "fixture": "SIMULATED-P3",
+        "status": "MODEL_RESOLUTION_PASS_NOT_PLATFORM_ALARM_TEST"
+      },
+      {
+        "fixture": "SIMULATED-P4",
+        "status": "MODEL_RESOLUTION_PASS_NOT_PLATFORM_ALARM_TEST"
+      },
+      {
+        "fixture": "SIMULATED-P5",
+        "status": "MODEL_RESOLUTION_PASS_NOT_PLATFORM_ALARM_TEST"
+      }
+    ],
+    "platformAlarmIntegration": "NOT_EXECUTED"
+  },
+  "protected_inputs_unchanged": true,
+  "limitations": "Concept proxies; no measured installation, electrical, airflow, acoustic, splash or frontend alarm integration approval."
+}
