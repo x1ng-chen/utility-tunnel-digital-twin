@@ -1,0 +1,18 @@
+{
+  "label": "03-top-viewport",
+  "tool": "look",
+  "server": {
+    "name": "MCP for Blender",
+    "title": null,
+    "version": "1.29.0",
+    "websiteUrl": null,
+    "icons": null
+  },
+  "isError": false,
+  "texts": [
+    "Through camera 'VIEW_TOP'. Framed 682 objects, 2.68 x 2.66 x 2.26 m across, centred at [0.34, 0.35, 0.17]."
+  ],
+  "images": [
+    "D:\\shixi\\utility-tunnel-digital-twin\\model\\square-five-station-v16-concept\\mcp-evidence\\03-top-viewport-0.png"
+  ]
+}

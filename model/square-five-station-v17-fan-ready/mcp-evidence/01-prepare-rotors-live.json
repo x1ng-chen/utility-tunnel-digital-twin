@@ -1,0 +1,16 @@
+{
+  "label": "01-prepare-rotors-live",
+  "tool": "execute_blender_code",
+  "server": {
+    "name": "MCP for Blender",
+    "title": null,
+    "version": "1.29.0",
+    "websiteUrl": null,
+    "icons": null
+  },
+  "isError": false,
+  "texts": [
+    "Error executing code: Communication error with Blender: {\"exception_type\": \"AssertionError\", \"message\": \"('Rest pose changed', 'FAN_1_HUB')\", \"traceback\": \"Traceback (most recent call last):\\n  File \\\"C:\\\\Users\\\\w\\\\AppData\\\\Roaming\\\\Blender Foundation\\\\Blender\\\\5.2\\\\scripts\\\\addons\\\\blender_mcp.py\\\", line 2296, in execute_code\\n    exec(code, namespace)\\n    ~~~~^^^^^^^^^^^^^^^^^\\n  File \\\"<string>\\\", line 101, in <module>\\nAssertionError: ('Rest pose changed', 'FAN_1_HUB')\\n\"}"
+  ],
+  "images": []
+}

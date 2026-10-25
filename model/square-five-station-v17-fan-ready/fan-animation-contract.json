@@ -1,0 +1,207 @@
+{
+  "revision": "square-five-station-v17-fan-ready",
+  "status": "MODEL_READY_REAL_DEVICE_INTEGRATION_PENDING",
+  "baselineRevision": "square-five-station-v16-concept",
+  "units": "metres",
+  "fans": [
+    {
+      "assetCode": "FAN-01",
+      "housingNode": "FAN-01",
+      "rotorNode": "FAN-01_ROTOR",
+      "movingNodes": [
+        "FAN_1_HUB",
+        "FAN_1_BLADE_0",
+        "FAN_1_BLADE_72",
+        "FAN_1_BLADE_144",
+        "FAN_1_BLADE_216",
+        "FAN_1_BLADE_288"
+      ],
+      "fixedNodes": [
+        "FAN-01",
+        "FAN_1_GUARD_-18",
+        "FAN_1_GUARD_-9",
+        "FAN_1_GUARD_0",
+        "FAN_1_GUARD_18",
+        "FAN_1_GUARD_9",
+        "FAN_1_MOUNT_-27_-27",
+        "FAN_1_MOUNT_-27_27",
+        "FAN_1_MOUNT_27_-27",
+        "FAN_1_MOUNT_27_27"
+      ],
+      "pivotBlender_m": [
+        0.5300000309944153,
+        0.687000036239624,
+        0.20000000298023224
+      ],
+      "pivotGltf_m": [
+        0.5300000309944153,
+        0.20000000298023224,
+        -0.687000036239624
+      ],
+      "axisBlenderLocal": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "axisBlenderWorld": [
+        0.0,
+        1.0,
+        1.1920928955078125e-07
+      ],
+      "axisGltfLocal": [
+        0,
+        0,
+        -1
+      ],
+      "axisGltfWorld": [
+        0.0,
+        1.1920928955078125e-07,
+        -1.0
+      ],
+      "physicalRotationDirection": "UNVERIFIED",
+      "positiveVisualDirection": "ILLUSTRATIVE_ONLY",
+      "simulation": [
+        {
+          "state": "initial_stop",
+          "fixtureRpm": 0,
+          "angleBefore": 0.0,
+          "angleAfter": 0.0,
+          "moved": false
+        },
+        {
+          "state": "start",
+          "fixtureRpm": 720,
+          "angleBefore": 0.0,
+          "angleAfter": 3.141592653589793,
+          "moved": true
+        },
+        {
+          "state": "stop",
+          "fixtureRpm": 0,
+          "angleBefore": 3.141592653589793,
+          "angleAfter": 3.141592653589793,
+          "moved": false
+        },
+        {
+          "state": "restart",
+          "fixtureRpm": 960,
+          "angleBefore": 3.141592653589793,
+          "angleAfter": 0.0,
+          "moved": true
+        }
+      ]
+    },
+    {
+      "assetCode": "FAN-02",
+      "housingNode": "FAN-02",
+      "rotorNode": "FAN-02_ROTOR",
+      "movingNodes": [
+        "FAN_2_HUB",
+        "FAN_2_BLADE_0",
+        "FAN_2_BLADE_72",
+        "FAN_2_BLADE_144",
+        "FAN_2_BLADE_216",
+        "FAN_2_BLADE_288"
+      ],
+      "fixedNodes": [
+        "FAN-02",
+        "FAN_2_GUARD_-18",
+        "FAN_2_GUARD_-9",
+        "FAN_2_GUARD_0",
+        "FAN_2_GUARD_18",
+        "FAN_2_GUARD_9",
+        "FAN_2_MOUNT_-27_-27",
+        "FAN_2_MOUNT_-27_27",
+        "FAN_2_MOUNT_27_-27",
+        "FAN_2_MOUNT_27_27"
+      ],
+      "pivotBlender_m": [
+        0.1600000113248825,
+        0.013000000268220901,
+        0.20000000298023224
+      ],
+      "pivotGltf_m": [
+        0.1600000113248825,
+        0.20000000298023224,
+        -0.013000000268220901
+      ],
+      "axisBlenderLocal": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "axisBlenderWorld": [
+        0.0,
+        1.0,
+        1.1920928955078125e-07
+      ],
+      "axisGltfLocal": [
+        0,
+        0,
+        -1
+      ],
+      "axisGltfWorld": [
+        0.0,
+        1.1920928955078125e-07,
+        -1.0
+      ],
+      "physicalRotationDirection": "UNVERIFIED",
+      "positiveVisualDirection": "ILLUSTRATIVE_ONLY",
+      "simulation": [
+        {
+          "state": "initial_stop",
+          "fixtureRpm": 0,
+          "angleBefore": 0.0,
+          "angleAfter": 0.0,
+          "moved": false
+        },
+        {
+          "state": "start",
+          "fixtureRpm": 720,
+          "angleBefore": 0.0,
+          "angleAfter": 3.141592653589793,
+          "moved": true
+        },
+        {
+          "state": "stop",
+          "fixtureRpm": 0,
+          "angleBefore": 3.141592653589793,
+          "angleAfter": 3.141592653589793,
+          "moved": false
+        },
+        {
+          "state": "restart",
+          "fixtureRpm": 960,
+          "angleBefore": 3.141592653589793,
+          "angleAfter": 0.0,
+          "moved": true
+        }
+      ]
+    }
+  ],
+  "telemetryContract": {
+    "assetCode": [
+      "FAN-01",
+      "FAN-02"
+    ],
+    "metricKey": "rotational.speed",
+    "unit": "rpm",
+    "qualityRequired": "good",
+    "sourceRequired": "api",
+    "requiredTimestamp": "recordedAt",
+    "freshness": "Configure from real sampling period, transport jitter and clock sync. No hardcoded production timeout.",
+    "running": "fresh good rpm > 0: animate only this rotor",
+    "stopped": "fresh good rpm == 0: stop at current phase",
+    "unknown": "missing, bad, suspect, stale, future, offline or demo data: freeze and label unknown",
+    "commandAck": "Never use relay_on, relay_off, PWM setting or normal/warning asset status as measured motion.",
+    "visualRpmCap": 90,
+    "visualRpmCapEvidence": "Illustrative preview choice, not measured shaft speed. Keep measured rpm visible separately.",
+    "coasting": "Continue while tach reports rpm > 0 after relay-off; a stop command alone is insufficient."
+  },
+  "integrationEvidence": {
+    "existingTelemetryUi": "frontend/src/views/DashboardView.vue uses rotational.speed independently for FAN-01 and FAN-02",
+    "currentTwinScene": "frontend/src/components/TwinScene.vue currently receives assets and alerts, not fan telemetry",
+    "liveHardwareVerifiedThisSession": false,
+    "frontendModified": false
+  }
+}

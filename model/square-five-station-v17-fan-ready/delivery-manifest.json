@@ -1,0 +1,151 @@
+{
+  "revision": "square-five-station-v17-fan-ready",
+  "status": "MODEL_READY_REAL_DEVICE_INTEGRATION_PENDING",
+  "artifacts": [
+    {
+      "path": "asset-map.csv",
+      "sizeBytes": 13579,
+      "sha256": "089571f3858fa518bbf99422d0d6ddf6587678cfde1c8d18b89720914376a3f4"
+    },
+    {
+      "path": "asset-map.json",
+      "sizeBytes": 40222,
+      "sha256": "d117761de5db4cc64c1e770a2176391af447344bc7feda8a66d072f239cb60af"
+    },
+    {
+      "path": "export_fan_rotors.py",
+      "sizeBytes": 2124,
+      "sha256": "ae94534fc68ebc18b63d80b80513b3493de4383e46f3397ff00180b103b27fdf"
+    },
+    {
+      "path": "fan-animation-contract.json",
+      "sizeBytes": 5715,
+      "sha256": "57f999f6bd7723b6a3642599caf942c85ac9bb08fafbac7c61cdb7cd4bea7f77"
+    },
+    {
+      "path": "fan-motion.mjs",
+      "sizeBytes": 3908,
+      "sha256": "712d62fa478e2e11a75d8044854f17192a847c071cb949f8a51e357e281f8805"
+    },
+    {
+      "path": "glb-animation-verification.json",
+      "sizeBytes": 3362,
+      "sha256": "c2029f65662a22412478c5d3c7274d63374ccba76850655b9b0920b427ea19cf"
+    },
+    {
+      "path": "inspect_rotors.py",
+      "sizeBytes": 323,
+      "sha256": "a62fd0ca87ee0ec9a55f0e781b1ba718ac89e1db7d0c4a2ed79a208ac12b72b0"
+    },
+    {
+      "path": "layout-and-hardware-notes-v16.md",
+      "sizeBytes": 11086,
+      "sha256": "189fae0b1d6c86a0de804d2dcb754b44852493cfbff5326fdb09862a8026c8ab"
+    },
+    {
+      "path": "mcp-evidence/01-prepare-rotors-live-server.log",
+      "sizeBytes": 13516,
+      "sha256": "772c1be815dc29d8a704d1653af16f3fb6830281a2c03168565772ea703d1a76"
+    },
+    {
+      "path": "mcp-evidence/01-prepare-rotors-live.json",
+      "sizeBytes": 815,
+      "sha256": "a27e8451fec2fe546c30181c46720b013e5696e48ecacb95f668a1b2ee351dc3"
+    },
+    {
+      "path": "mcp-evidence/02-inspect-pivot-precision-server.log",
+      "sizeBytes": 2550,
+      "sha256": "f6e524e03e6993b5faa7ba934b1ac2cf3cb70d389f8c32e8f3f47aac7ee0ff16"
+    },
+    {
+      "path": "mcp-evidence/02-inspect-pivot-precision.json",
+      "sizeBytes": 6097,
+      "sha256": "fee5ebb90fbe114ecf1389121bc46d1eb99f0f22740f8572fe483e23fd366801"
+    },
+    {
+      "path": "mcp-evidence/03-prepare-and-export-rotors-live-server.log",
+      "sizeBytes": 16721,
+      "sha256": "20877a67a412beccfcb2a6d8ea5a5b7822001e7178a91fdacc2f8ddc117fa40f"
+    },
+    {
+      "path": "mcp-evidence/03-prepare-and-export-rotors-live.json",
+      "sizeBytes": 1840,
+      "sha256": "b5a1f01b89e04356f1862fb1706ac3972f6b3b06804e8a78b3fb31ba4f7f8e24"
+    },
+    {
+      "path": "mcp-evidence/04-prepare-save-rotors-live-server.log",
+      "sizeBytes": 11171,
+      "sha256": "324570f46374211da3ecff9ac024c1844ab26fdea295113b7f0d8faa5e1730bc"
+    },
+    {
+      "path": "mcp-evidence/04-prepare-save-rotors-live.json",
+      "sizeBytes": 2449,
+      "sha256": "990a92207b42ef08581e616967f1b737ee67e445a60249658cd00bf49978f1dd"
+    },
+    {
+      "path": "mcp-evidence/05-export-rotors-live-server.log",
+      "sizeBytes": 4460,
+      "sha256": "000bd6a338c8d93ce38b79f4c62cbfe7c332f1ab6466653757f55a49b5b9562e"
+    },
+    {
+      "path": "mcp-evidence/05-export-rotors-live.json",
+      "sizeBytes": 65401,
+      "sha256": "a1d591d5ae75e768e043513c077d86a090465d7fbfe710a583f6a0458a415aaa"
+    },
+    {
+      "path": "model-readiness-report.json",
+      "sizeBytes": 2221,
+      "sha256": "8fc558d674512e9e00446d7400599291abbbe069dff9d980923a3803d1c37514"
+    },
+    {
+      "path": "native-verification.json",
+      "sizeBytes": 277,
+      "sha256": "56396eca0954ba029e2b8ba8b99e6ca8a64ea363b9432f93c538e9a25e436dad"
+    },
+    {
+      "path": "package_delivery.py",
+      "sizeBytes": 2921,
+      "sha256": "f74d838b3aca887125602cff0ad00a4c36ab6ce1837123b45a6f365184361387"
+    },
+    {
+      "path": "prepare_fan_rotors.py",
+      "sizeBytes": 8505,
+      "sha256": "2279b42aff84eb4ba067734fa547512071761f989da0269d3382ec766fc4dc93"
+    },
+    {
+      "path": "README.md",
+      "sizeBytes": 4482,
+      "sha256": "70179f0d52dcc5234dab7c349687b507f84a349c1082ccc23a66bf694ba59ed9"
+    },
+    {
+      "path": "sensor-bindings.json",
+      "sizeBytes": 25503,
+      "sha256": "4ce94531a77122c0f33d859a9127d047e3b99285a17692b1a61a8a746e2e45c9"
+    },
+    {
+      "path": "square-five-station-v17-fan-ready.blend",
+      "sizeBytes": 12742282,
+      "sha256": "ba475815026cb756f60c66fa7d9fcdffca542fc173e833e94a49375ded686c46"
+    },
+    {
+      "path": "square-five-station-v17-fan-ready.glb",
+      "sizeBytes": 5179160,
+      "sha256": "f4949f4a1d4fd6129e02d3255c445504c331613224580f1db7ed7e4815da93f9"
+    },
+    {
+      "path": "station-focus.json",
+      "sizeBytes": 3109,
+      "sha256": "93c8187c589006f3c869fb75ef8556009f6aea25266f2d628ff621c6a22f195d"
+    },
+    {
+      "path": "verify_glb_fan_motion.mjs",
+      "sizeBytes": 10052,
+      "sha256": "bbe68286e3d07d4edbedf3fb98a6f6727380aafca0cb22401df360217086b130"
+    },
+    {
+      "path": "verify_native.py",
+      "sizeBytes": 1984,
+      "sha256": "c52ca5d6399ad48ff1b81c53378d82e4b0afb483cb7c7c5e18eafcc2d6b0c324"
+    }
+  ]
+}

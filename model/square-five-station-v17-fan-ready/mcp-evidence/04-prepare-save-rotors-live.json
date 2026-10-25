@@ -1,0 +1,16 @@
+{
+  "label": "04-prepare-save-rotors-live",
+  "tool": "execute_blender_code",
+  "server": {
+    "name": "MCP for Blender",
+    "title": null,
+    "version": "1.29.0",
+    "websiteUrl": null,
+    "icons": null
+  },
+  "isError": false,
+  "texts": [
+    "Code executed successfully: Info: Saved as \"square-five-station-v17-fan-ready.blend\"\n{\"revision\": \"square-five-station-v17-fan-ready\", \"editRoute\": \"LIVE_BLENDER_MCP_execute_blender_code\", \"blenderVersion\": \"5.2.2 LTS\", \"modelChecks\": {\"FAN-01\": {\"movingMeshes\": 6, \"fixedObjects\": 10, \"bladeOrbit\": \"PASS\", \"housingGuardsMountsStatic\": \"PASS\", \"startStopRestart\": \"PASS\"}, \"FAN-02\": {\"movingMeshes\": 6, \"fixedObjects\": 10, \"bladeOrbit\": \"PASS\", \"housingGuardsMountsStatic\": \"PASS\", \"startStopRestart\": \"PASS\"}}, \"existingGeometryRestTransformsUnchanged\": true, \"maxRestMatrixElementDelta\": 1.1920928955078125e-07, \"restMatrixTolerance\": 1e-06, \"countsBefore\": {\"objects\": 699, \"meshes\": 555}, \"countsAfter\": {\"objects\": 701, \"meshes\": 555}, \"glbExport\": \"PENDING_SEPARATE_MCP_CALL\", \"protectedFilesBefore\": {\"D:\\\\shixi\\\\utility-tunnel-digital-twin\\\\model\\\\square-five-station-v16-concept\\\\square-five-station-v16-concept.blend\": \"4511f89eb7fc4997feb5bdfefbce6c92c95eedf1386be4e11f467153cb6b8c2b\", \"D:\\\\shixi\\\\utility-tunnel-digital-twin\\\\model\\\\square-five-station-v16-concept\\\\square-five-station-v16-concept.glb\": \"ec480bed8258afafad8aaa441b72c86f67d91fe82e33735baf3c882d6ead2f17\", \"D:\\\\shixi\\\\utility-tunnel-digital-twin\\\\frontend\\\\public\\\\models\\\\utility-tunnel.glb\": \"c9eb987e2ca34329ba0c9e050b28a079b1443a9362b1672e15a533b23555027a\"}, \"protectedFilesAfter\": {\"D:\\\\shixi\\\\utility-tunnel-digital-twin\\\\model\\\\square-five-station-v16-concept\\\\square-five-station-v16-concept.blend\": \"4511f89eb7fc4997feb5bdfefbce6c92c95eedf1386be4e11f467153cb6b8c2b\", \"D:\\\\shixi\\\\utility-tunnel-digital-twin\\\\model\\\\square-five-station-v16-concept\\\\square-five-station-v16-concept.glb\": \"ec480bed8258afafad8aaa441b72c86f67d91fe82e33735baf3c882d6ead2f17\", \"D:\\\\shixi\\\\utility-tunnel-digital-twin\\\\frontend\\\\public\\\\models\\\\utility-tunnel.glb\": \"c9eb987e2ca34329ba0c9e050b28a079b1443a9362b1672e15a533b23555027a\"}, \"realDeviceTelemetryTest\": \"NOT_EXECUTED\", \"frontendIntegration\": \"NOT_EXECUTED\"}\n"
+  ],
+  "images": []
+}
