@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-24",
+  "status": "LOCAL_READ_ONLY_INSPECTION_NOT_RUNTIME_ACCEPTANCE",
+  "files": [
+    {
+      "path": "backend/operations/ai_assistant.py",
+      "sha256": "a370cefe6787c1382f2417d14839b442116674810655c2fa82fc0a9605f88ac7"
+    },
+    {
+      "path": "frontend/src/components/AiAssistant.vue",
+      "sha256": "b3d90ae7acec2b1245f9d85baaed015022ef6a72d3ff1eec3a073a5bfc75d22a"
+    },
+    {
+      "path": "frontend/src/stores/aiAssistant.ts",
+      "sha256": "51f73bbb4d91634d1213f5c63c9c1df7c50f2c001b5d92f315079e2c318b790c"
+    },
+    {
+      "path": "backend/operations/test_ai_agent.py",
+      "sha256": "65f129c07947364b3320c2af4f971e519fab218875ca468c5462601b947a653f"
+    },
+    {
+      "path": "docs/AI智能体验收题集.md",
+      "sha256": "b34a4e900f8999737124eb3f8b9c848a29f4a1cc014080bdd83d3666212f9479"
+    },
+    {
+      "path": "model/square-five-station-v16-concept/sensor-bindings.json",
+      "sha256": "4f85ad3fdef9461438fa25134fc3a7e7a598be853ea02fe7987aabea5be587ee"
+    },
+    {
+      "path": "model/square-five-station-v16-concept/station-focus.json",
+      "sha256": "29c18ff349df58ed8f3a8ab56851bf094395d7ee5c3e9932378f4d30447b629b"
+    },
+    {
+      "path": "model/square-five-station-v16-concept/validation-report.json",
+      "sha256": "f6d1a6f94108f171162910690acdb9c71f1f5a676598a86b5987ac7848c677bb"
+    }
+  ]
+}

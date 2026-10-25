@@ -266,9 +266,12 @@ export function createDjangoForwarder({
     }
   }
 
-  function forward(telemetry, receivedAt = new Date()) {
+  function forward(telemetry, receivedAt = new Date(), sourceDeviceId = deviceId) {
     if (state.stopped) return;
-    const batch = toDjangoBatch(telemetry, { deviceId, receivedAt });
+    if (typeof sourceDeviceId !== 'string' || !/^[a-z0-9-]{1,64}$/i.test(sourceDeviceId)) {
+      throw new Error('Invalid source device identifier.');
+    }
+    const batch = toDjangoBatch(telemetry, { deviceId: sourceDeviceId, receivedAt });
     for (const item of batch.skipped) {
       log.warn(`Django reading skipped (${item.reason}): ${item.assetCode}/${item.metric}`);
     }

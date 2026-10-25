@@ -5,12 +5,14 @@ import { z } from 'zod';
 import { createDeviceCredentials } from './auth.js';
 import { createDjangoForwarder } from './django.js';
 import { addCalculatedOxygenConcentration } from './telemetry.js';
+import { createTelemetryRoutes } from './telemetry-routes.js';
 
 const environment = z.object({
   LOCAL_MQTT_URL: z.string().url().default('mqtt://127.0.0.1:1883'),
   LOCAL_MQTT_USERNAME: z.string().optional(),
   LOCAL_MQTT_PASSWORD: z.string().optional(),
   LOCAL_DEVICE_ID: z.string().regex(/^[a-z0-9-]{1,64}$/i).default('CTRL-01'),
+  LOCAL_DEVICE_IDS: z.string().min(1).optional(),
   IOTDA_ENABLED: z.enum(['true', 'false']).default('true'),
   IOTDA_HOST: z.string().min(4).optional(),
   IOTDA_PORT: z.coerce.number().int().min(1).max(65535).default(8883),
@@ -66,7 +68,7 @@ if (missing.length) {
   throw new Error(`Invalid IoTDA gateway configuration: ${missing.join(', ')}`);
 }
 
-const localTelemetryTopic = `ut/v1/${config.LOCAL_DEVICE_ID}/telemetry`;
+const telemetryRoutes = createTelemetryRoutes(config.LOCAL_DEVICE_IDS ?? config.LOCAL_DEVICE_ID);
 const localCloudCommandTopic = `ut/v1/${config.LOCAL_DEVICE_ID}/cmd/iotda`;
 const cloudMessageUpTopic = `$oc/devices/${config.IOTDA_DEVICE_ID}/sys/messages/up`;
 
@@ -137,13 +139,15 @@ const django = djangoEnabled
   : null;
 
 local.on('connect', () => {
-  local.subscribe(localTelemetryTopic, { qos: 1 }, (error) => {
+  local.subscribe(telemetryRoutes.topics, { qos: 1 }, (error) => {
     if (error) console.error('Local MQTT subscribe failed:', error.message);
-    else console.info(`Local MQTT ready: ${localTelemetryTopic}`);
+    else console.info(`Local MQTT ready: ${telemetryRoutes.topics.join(', ')}`);
   });
 });
 
-local.on('message', (_topic, payload) => {
+local.on('message', (topic, payload) => {
+  const sourceDeviceId = telemetryRoutes.deviceForTopic(topic);
+  if (!sourceDeviceId) return;
   let telemetry;
   try {
     telemetry = addCalculatedOxygenConcentration(telemetrySchema.parse(JSON.parse(payload.toString('utf8'))));
@@ -163,7 +167,7 @@ local.on('message', (_topic, payload) => {
     });
   }
   if (django) {
-    django.forward(telemetry);
+    django.forward(telemetry, new Date(), sourceDeviceId);
   }
 });
 

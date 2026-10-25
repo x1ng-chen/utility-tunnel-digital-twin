@@ -32,7 +32,8 @@ jobs:
 
   browser-e2e:
     name: Vue3 and Django browser regression / ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    # Keep this pinned runner compatible with the pinned Playwright release.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
       fail-fast: false

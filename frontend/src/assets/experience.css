@@ -32,7 +32,7 @@ html[data-route-direction='previous'] .route-enter-from .page-content { transfor
 
 /* Buttons receive a contained energy ripple without changing their semantic behaviour. */
 body.fx-enabled button, body.fx-enabled .primary-button, body.fx-enabled .login-submit, body.fx-enabled .login-switch { position: relative; overflow: hidden; isolation: isolate; }
-body.fx-enabled button::after, body.fx-enabled .primary-button::after, body.fx-enabled .login-submit::after { content: ''; position: absolute; inset: 0; z-index: -1; opacity: 0; background: linear-gradient(110deg, transparent 22%, #fff3 48%, transparent 72%); transform: translateX(-120%); transition: opacity .2s ease; }
+body.fx-enabled button::after, body.fx-enabled .primary-button::after, body.fx-enabled .login-submit::after { content: ''; position: absolute; inset: 0; z-index: -1; opacity: 0; background: linear-gradient(110deg, transparent 22%, #fff3 48%, transparent 72%); background-size: 400% 100%; background-position: 100% 0; transition: opacity .2s ease; }
 body.fx-enabled button:hover::after, body.fx-enabled .primary-button:hover::after, body.fx-enabled .login-submit:hover::after { opacity: 1; animation: button-sheen .8s ease; }
 .interaction-ripple { position: absolute; z-index: -1; left: var(--ripple-x); top: var(--ripple-y); width: 14px; height: 14px; border-radius: 50%; pointer-events: none; background: #ffffff75; transform: translate(-50%, -50%) scale(0); animation: interaction-ripple .66s ease-out forwards; }
 body[data-pointer-mode='interactive'] .experience-cursor .cursor-ring { width: 35px; height: 35px; border-color: #5af0ce; background: #5af0ce10; }
@@ -116,7 +116,8 @@ body.fx-lite .backdrop-grid { animation-duration: 52s; opacity: .07; }
 @keyframes page-reveal { from { opacity: 1; transform: translateY(8px) scale(.996); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes grid-drift { to { transform: perspective(700px) rotateX(58deg) rotateZ(-7deg) translate3d(54px, 54px, 0); } }
 @keyframes orbit { to { transform: rotate(360deg); } }
-@keyframes button-sheen { to { transform: translateX(120%); } }
+/* Move the paint, not the pseudo-element, so decorative sheen cannot enlarge control scroll bounds. */
+@keyframes button-sheen { from { background-position: 100% 0; } to { background-position: 0% 0; } }
 @keyframes interaction-ripple { to { opacity: 0; transform: translate(-50%, -50%) scale(19); } }
 @keyframes surface-sheen { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
 @keyframes brand-breathe { 50% { box-shadow: 0 12px 34px #5483ff79, 0 0 0 5px #7195ff0d; transform: translateY(-1px); } }

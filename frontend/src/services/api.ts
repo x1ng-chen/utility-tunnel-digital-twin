@@ -2,6 +2,25 @@ import axios, { type InternalAxiosRequestConfig } from 'axios';
 
 export type ControllerAction = 'led_red' | 'led_green' | 'led_blue' | 'led_off' | 'relay_on' | 'relay_off' | 'fan_pwm' | 'fan2_pwm';
 
+export type AssistantMessage = { role: 'user' | 'assistant'; content: string };
+export type AgentTrace = { tool: string; status: 'ok' | 'rejected'; evidenceId: string; durationMs: number };
+export type AgentEvidence = { id: string; tool: string; status: string; queriedAt: string; data: Record<string, unknown> };
+export type AgentLocation = {
+  assetCode: string; physicalTag: string; stationId: string; controllerId: string;
+  mappingStatus: string; evidenceId: string;
+};
+export type AgentProposal = {
+  kind: 'work_order'; assetCode: string; title: string; description: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent'; requires_confirmation: true;
+};
+export type AgentResponse = {
+  reply: string; queriedAt?: string; mode?: 'tool_verified' | 'explanation_only';
+  traces?: AgentTrace[]; evidence?: AgentEvidence[]; proposals?: AgentProposal[];
+  locations?: AgentLocation[];
+  inspection?: { evidenceId: string; expected: number; registered: number; usable: number; missingAssetCodes: string[];
+    stations: { stationId: string; expected: number; registered: number; usable: number; alertCount: number }[] } | null;
+};
+
 const localStorageRef = typeof window !== 'undefined' ? window.localStorage : null;
 const sessionStorageRef = typeof window !== 'undefined' ? window.sessionStorage : null;
 const fallbackBaseUrl = typeof window !== 'undefined' && window.location.protocol === 'https:'
@@ -91,6 +110,8 @@ export const api = {
   reissueRegistrationSetupToken: (id: number) => client.post(`/admin/registration-requests/${id}/setup-token/`),
   dashboard: () => client.get('/dashboard/'),
   controllerCommandConfirmation: (action: ControllerAction, dutyPercent?: number) => client.post('/controllers/CTRL-01/commands/confirmations/', { action, ...(dutyPercent == null ? {} : { dutyPercent }) }),
+  assistantChat: (messages: AssistantMessage[], page: string) => client.post<AgentResponse>('/assistant/chat/', { messages, page }, { timeout: 65000 }),
+  stationInspection: (station = 'all') => client.get<AgentResponse>('/assistant/inspection/', { params: { station } }),
   controllerCommand: (action: ControllerAction, confirmationToken: string, dutyPercent?: number) => client.post('/controllers/CTRL-01/commands/', { action, confirmationToken, ...(dutyPercent == null ? {} : { dutyPercent }) }),
   twinModelReadiness: () => client.get('/twin/model-readiness/'),
   twinModels: (params?: Record<string, string | number>) => client.get('/twin/models/', { params }),

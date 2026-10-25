@@ -6,9 +6,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Alert, Asset } from '../types';
 import { cameraFitDistance } from '../utils/cameraFit';
+import { createFanAnimator, type FanFeedbackContext, type FanMotion } from '../utils/fanMotion';
 import { modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
 
-const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string; modelEnabled?: boolean }>();
+const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string; modelEnabled?: boolean; fanFeedback?: FanFeedbackContext }>();
 const emit = defineEmits<{ select: [code: string]; modelReport: [report: TwinModelBindingReport] }>();
 const host = ref<HTMLDivElement>();
 const modelState = ref<'loading' | 'loaded' | 'fallback'>('loading');
@@ -35,6 +36,10 @@ const animatedMaterials = new Map<string, MeshStandardMaterial[]>();
 const modelBoundCodes = new Set<string>();
 const materialBaselines = new WeakMap<MeshStandardMaterial, { color: Color; emissive: Color }>();
 let modelRoot: Object3D | undefined;
+let fanAnimator: ReturnType<typeof createFanAnimator> | undefined;
+let lastFanFrame = 0;
+const fanStates = ref<FanMotion[]>([]);
+let fanUiSignature = '';
 let fallbackSceneRoot: Group | undefined;
 let fallbackAssetRoot: Group | undefined;
 let modelLoadToken = 0;
@@ -193,6 +198,11 @@ function syncSceneAssets() {
 }
 
 function clearLoadedModel() {
+  fanAnimator?.dispose();
+  fanAnimator = undefined;
+  fanStates.value = [];
+  fanUiSignature = '';
+  lastFanFrame = 0;
   window.clearTimeout(modelLoadTimeout);
   const disposableRoots = [modelRoot, fallbackSceneRoot, fallbackAssetRoot].filter(Boolean) as Object3D[];
   const disposedGeometries = new Set<object>();
@@ -398,6 +408,13 @@ function animate(timestamp = 0) {
   const minimumFrameInterval = performanceMode.value === 'reduced' ? 1000 / 30 : 0;
   if (minimumFrameInterval && timestamp - lastRenderedAt < minimumFrameInterval) return;
   lastRenderedAt = timestamp;
+  if (fanAnimator) {
+    const states = fanAnimator.update(props.fanFeedback || { telemetry: [], bindings: [], source: 'demo', offline: true },
+      Date.now(), lastFanFrame ? (timestamp - lastFanFrame) / 1000 : 0);
+    lastFanFrame = timestamp;
+    const signature = JSON.stringify(states);
+    if (signature !== fanUiSignature) { fanStates.value = states; fanUiSignature = signature; }
+  }
   const now = performance.now() / 1000;
   props.assets.forEach((asset) => {
     const materials = animatedMaterials.get(asset.code);
@@ -446,6 +463,7 @@ function loadModel() {
     if (loadToken !== modelLoadToken || !scene) return;
     window.clearTimeout(modelLoadTimeout);
     modelRoot = gltf.scene;
+    fanAnimator = createFanAnimator(modelRoot);
     scene.add(modelRoot);
     publishModelReport('loaded', bindModelAssets(modelRoot));
     modelState.value = 'loaded';
@@ -589,6 +607,11 @@ defineExpose({ resetView, focusAsset, zoomBy, setNavigationMode, reloadModel, mo
   <div class="twin-scene" :data-model-state="modelState">
     <div ref="host" class="twin-canvas" aria-label="综合管廊三维数字孪生场景" role="application" />
     <div class="twin-model-state"><i :class="modelState" /><span>{{ modelMessage }}</span><em v-if="performanceMode === 'reduced'">流畅模式</em></div>
+    <div v-if="fanStates.length" class="twin-fan-feedback" aria-label="独立风机反馈">
+      <span v-for="fan in fanStates" :key="fan.assetCode" :title="fan.reason">
+        {{ fan.assetCode }} · {{ fan.state === 'unknown' ? '反馈未知' : fan.state === 'stopped' ? '0 rpm · 已停止' : `${fan.measuredRpm} rpm` }}
+      </span><small>叶轮转速为示意，数值为反馈值</small>
+    </div>
     <div v-if="modelState === 'loading'" class="twin-model-progress" role="progressbar" aria-label="三维模型加载进度" :aria-valuenow="modelProgress" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${Math.max(modelProgress, 6)}%` }" /></div>
     <div class="twin-camera-controls" role="group" aria-label="三维自由视角控制">
       <button type="button" aria-label="放大三维模型" title="放大" @click="zoomBy(.62)"><ZoomIn /></button>

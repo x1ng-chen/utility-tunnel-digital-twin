@@ -10,6 +10,7 @@ import re
 from secrets import compare_digest, token_urlsafe
 import struct
 from uuid import uuid4
+from time import perf_counter
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
@@ -28,6 +29,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .authentication import BearerTokenAuthentication, IngestApiKeyAuthentication
+from .ai_assistant import AssistantServiceError, ask_deepseek
+from .agent_operations import inspection_summary, location_cards, station_snapshot
+from .throttling import AiAssistantRateThrottle
 from .command_dispatch import CommandDispatchError, publish_controller_command
 from .connectivity import count_online_assets, mark_assets_connected, reconcile_connectivity
 from .models import Alert, Asset, AuditLog, ControllerCommandConfirmation, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder, WorkOrderEvent
@@ -67,6 +71,69 @@ def issue_registration_setup_token(application):
 
 def error_response(code: str, message: str, status_code: int, details=None):
     return Response({'error': code, 'message': message, 'details': details or {}}, status=status_code)
+
+
+class StationInspectionView(APIView):
+    permission_classes = [AuthenticatedRead]
+
+    def get(self, request):
+        if set(request.query_params) - {'station'}:
+            return error_response('invalid_request', '只允许 station 参数。', 400)
+        started = perf_counter()
+        try:
+            result = station_snapshot(request.query_params.get('station', 'all'))
+        except ValueError as exc:
+            return error_response('invalid_request', str(exc), 400)
+        evidence = [{'id': 'E1', 'tool': 'station_snapshot', 'status': 'ok',
+                     'queriedAt': result['queried_at'], 'data': result}]
+        audit(request.user, 'assistant.inspection', 'assistant', detail={
+            'station': result['station_id'], 'expected': result['expected_sensor_count'],
+            'registered': result['registered_sensor_count'],
+        }, request_id=request_id(request))
+        return Response({'reply': f"[E1] 本次巡检覆盖设计清单 {result['expected_sensor_count']} 路，"
+            f"台账存在 {result['registered_sensor_count']} 路，具备所需新鲜良好观测 {result['usable_observation_sensor_count']} 路。"
+            '缺项、离线、质量及模型映射请查看下方证据。布局身份仍需实物核对，观测可用不代表环境安全。',
+            'queriedAt': result['queried_at'], 'mode': 'tool_verified', 'evidence': evidence,
+            'traces': [{'tool': 'station_snapshot', 'status': 'ok', 'evidenceId': 'E1', 'durationMs': round((perf_counter()-started)*1000)}],
+            'proposals': [], 'locations': location_cards(evidence), 'inspection': inspection_summary(evidence)})
+
+
+class AiAssistantView(APIView):
+    permission_classes = [AuthenticatedRead]
+    throttle_classes = [AiAssistantRateThrottle]
+    page_names = {'运行总览', '告警中心', '工单中心', '设备台账', '三维孪生', 'GIS 总览', '数据洞察', '资产配置', '空间配置', '系统配置', '审计追踪', '页面未找到'}
+
+    def post(self, request):
+        payload = object_payload(request)
+        if payload is None:
+            return error_response('invalid_request', '请求内容必须是 JSON 对象。', 400)
+        messages = payload.get('messages')
+        page = payload.get('page', '')
+        if not isinstance(messages, list) or not 1 <= len(messages) <= 12:
+            return error_response('invalid_request', '请提供 1 至 12 条对话消息。', 400)
+        if not isinstance(page, str) or page not in self.page_names | {''}:
+            return error_response('invalid_request', '页面名称无效。', 400)
+        clean_messages = []
+        for item in messages:
+            if not isinstance(item, dict) or item.get('role') not in {'user', 'assistant'}:
+                return error_response('invalid_request', '对话角色无效。', 400)
+            content = item.get('content')
+            if not isinstance(content, str) or not content.strip() or len(content) > 2000:
+                return error_response('invalid_request', '每条消息应为 1 至 2000 字。', 400)
+            clean_messages.append({'role': item['role'], 'content': content.strip()})
+        if clean_messages[-1]['role'] != 'user' or sum(len(item['content']) for item in clean_messages) > 8000:
+            return error_response('invalid_request', '对话长度超出限制，或最后一条不是用户消息。', 400)
+        try:
+            result = ask_deepseek(clean_messages, page.strip(), request.user)
+        except AssistantServiceError as exc:
+            audit(request.user, 'assistant.failed', 'assistant', detail={'code': exc.code}, request_id=request_id(request))
+            return error_response(exc.code, str(exc), exc.status_code)
+        # Persist tool trace metadata, not chat content, credentials or sensor dumps.
+        audit(request.user, 'assistant.queried', 'assistant', detail={
+            'page': page, 'mode': result['mode'], 'traces': result['traces'],
+            'proposalCount': len(result['proposals']),
+        }, request_id=request_id(request))
+        return Response(result)
 
 
 def paginated(queryset, serializer_class, request, ordering=('-id',)):
