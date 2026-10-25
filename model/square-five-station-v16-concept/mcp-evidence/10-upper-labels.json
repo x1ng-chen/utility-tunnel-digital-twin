@@ -1,0 +1,16 @@
+{
+  "label": "10-upper-labels",
+  "tool": "execute_blender_code",
+  "server": {
+    "name": "MCP for Blender",
+    "title": null,
+    "version": "1.29.0",
+    "websiteUrl": null,
+    "icons": null
+  },
+  "isError": false,
+  "texts": [
+    "Code executed successfully: {\"upperControllerLabels\": \"Clear of both TFT and temperature/humidity module projections\", \"newLabelY_mm\": 655}\n"
+  ],
+  "images": []
+}

@@ -1,0 +1,22 @@
+<frozen runpy>:128: RuntimeWarning: 'blender_mcp.server' found in sys.modules after import of package 'blender_mcp', but prior to execution of 'blender_mcp.server'; this may result in unpredictable behaviour
+2026-10-24 02:20:53,970 - BlenderMCPServer - INFO - BlenderMCP server starting up
+2026-10-24 02:20:53,974 - BlenderMCPServer - INFO - Blender addon on disk is current (protocol 14).
+2026-10-24 02:20:53,974 - BlenderMCPServer - INFO - Connected to Blender at 127.0.0.1:9876
+2026-10-24 02:20:53,975 - BlenderMCPServer - INFO - Created new persistent connection to Blender
+2026-10-24 02:20:53,975 - BlenderMCPServer - INFO - Sending command: get_addon_info with params: None
+2026-10-24 02:20:53,975 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-10-24 02:20:53,976 - BlenderMCPServer - INFO - Received complete response (469 bytes)
+2026-10-24 02:20:53,976 - BlenderMCPServer - INFO - Received 469 bytes of data
+2026-10-24 02:20:53,976 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-10-24 02:20:53,976 - BlenderMCPServer - INFO - Blender addon up to date (protocol 14, addon [1, 8], Blender 5.2.2 LTS)
+2026-10-24 02:20:53,976 - BlenderMCPServer - INFO - Successfully connected to Blender on startup
+2026-10-24 02:20:53,980 - mcp.server.lowlevel.server - INFO - Processing request of type CallToolRequest
+2026-10-24 02:20:53,981 - BlenderMCPServer - INFO - MCP client mcp 0.1.0: extensions=[], apps=False, openai_forms=False
+2026-10-24 02:20:53,982 - BlenderMCPServer - INFO - Sending command: execute_code with params: {'code': '"""Run in a separate MCP call after prepare; file-open invalidates the old UI context."""\nimport bpy, json, hashlib, struct\nfrom pathlib import Path\nROOT = Path(\'D:/shixi/utility-tunnel-digital-twin/model/square-five-station-v17-fan-ready\')\nREV = ROOT.name\nassert Path(bpy.data.filepath).resolve() == (ROOT / (REV + \'.blend\')).resolve()\ncontract = json.loads((ROOT / \'fan-animation-contract.json\').read_text(encoding=\'utf-8\'))\nbpy.ops.object.select_all(action=\'DESELECT\')\nfor obj in bpy.context.scene.objects:\n    if obj.type in {\'MESH\', \'CURVE\', \'FONT\', \'EMPTY\'} and not any(c.name == \'99_STUDIO\' for c in obj.users_collection):\n        obj.select_set(True)\nbpy.ops.export_scene.gltf(filepath=str(ROOT / (REV + \'.glb\')), export_format=\'GLB\', use_selection=True,\n    export_extras=True, export_apply=True, export_cameras=False, export_lights=False,\n    export_yup=True, export_animations=False)\nraw = (ROOT / (REV + \'.glb\')).read_bytes()\ngltf = json.loads(raw[20:20 + struct.unpack_from(\'<I\', raw, 12)[0]])\nnames = [o.get(\'name\') for o in gltf[\'nodes\']]\nassert len(names) == len(set(names))\nassert not gltf.get(\'animations\')\nfor fan in contract[\'fans\']:\n    rotor_index = names.index(fan[\'rotorNode\'])\n    rotor_node = gltf[\'nodes\'][rotor_index]\n    assert sorted(names[i] for i in rotor_node[\'children\']) == sorted(fan[\'movingNodes\'])\n    housing = gltf[\'nodes\'][names.index(fan[\'housingNode\'])]\n    assert rotor_index in housing[\'children\']\n    assert all(names.index(n) in housing[\'children\'] for n in fan[\'fixedNodes\'] if n != fan[\'housingNode\'])\nreport = json.loads((ROOT / \'model-readiness-report.json\').read_text(encoding=\'utf-8\'))\nreport.update(glbExport=\'PASS\', glbNodeCount=len(names), glbAnimations=0, glbSha256=hashlib.sha256(raw).hexdigest())\nreport[\'protectedFilesAfter\'] = {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in report[\'protectedFilesBefore\']}\nassert report[\'protectedFilesBefore\'] == report[\'protectedFilesAfter\']\n(ROOT / \'model-readiness-report.json\').write_text(json.dumps(report, ensure_ascii=False, indent=2) + \'\\n\', encoding=\'utf-8\')\nprint(json.dumps(report, ensure_ascii=False))\n'}
+2026-10-24 02:20:53,982 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-10-24 02:20:55,129 - BlenderMCPServer - INFO - Received complete response (65152 bytes)
+2026-10-24 02:20:55,129 - BlenderMCPServer - INFO - Received 65152 bytes of data
+2026-10-24 02:20:55,129 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-10-24 02:20:55,132 - mcp.server.lowlevel.server - INFO - Processing request of type ListToolsRequest
+2026-10-24 02:20:55,135 - BlenderMCPServer - INFO - Disconnecting from Blender on shutdown
+2026-10-24 02:20:55,136 - BlenderMCPServer - INFO - BlenderMCP server shut down

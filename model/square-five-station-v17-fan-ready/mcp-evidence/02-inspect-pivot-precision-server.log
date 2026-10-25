@@ -1,0 +1,22 @@
+<frozen runpy>:128: RuntimeWarning: 'blender_mcp.server' found in sys.modules after import of package 'blender_mcp', but prior to execution of 'blender_mcp.server'; this may result in unpredictable behaviour
+2026-10-24 02:19:09,537 - BlenderMCPServer - INFO - BlenderMCP server starting up
+2026-10-24 02:19:09,540 - BlenderMCPServer - INFO - Blender addon on disk is current (protocol 14).
+2026-10-24 02:19:09,540 - BlenderMCPServer - INFO - Connected to Blender at 127.0.0.1:9876
+2026-10-24 02:19:09,540 - BlenderMCPServer - INFO - Created new persistent connection to Blender
+2026-10-24 02:19:09,540 - BlenderMCPServer - INFO - Sending command: get_addon_info with params: None
+2026-10-24 02:19:09,542 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-10-24 02:19:09,589 - BlenderMCPServer - INFO - Received complete response (469 bytes)
+2026-10-24 02:19:09,589 - BlenderMCPServer - INFO - Received 469 bytes of data
+2026-10-24 02:19:09,589 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-10-24 02:19:09,589 - BlenderMCPServer - INFO - Blender addon up to date (protocol 14, addon [1, 8], Blender 5.2.2 LTS)
+2026-10-24 02:19:09,589 - BlenderMCPServer - INFO - Successfully connected to Blender on startup
+2026-10-24 02:19:09,593 - mcp.server.lowlevel.server - INFO - Processing request of type CallToolRequest
+2026-10-24 02:19:09,593 - BlenderMCPServer - INFO - MCP client mcp 0.1.0: extensions=[], apps=False, openai_forms=False
+2026-10-24 02:19:09,595 - BlenderMCPServer - INFO - Sending command: execute_code with params: {'code': "import bpy,json\nprint(json.dumps({n:{'position':list(bpy.data.objects[n].matrix_world.translation),'matrix':[list(r) for r in bpy.data.objects[n].matrix_world],'local':[list(r) for r in bpy.data.objects[n].matrix_basis]} for n in ['FAN-01','FAN-01_ROTOR','FAN_1_HUB','FAN_1_BLADE_0','FAN-02_ROTOR','FAN_2_HUB']},indent=2))\n"}
+2026-10-24 02:19:09,595 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-10-24 02:19:09,644 - BlenderMCPServer - INFO - Received complete response (5843 bytes)
+2026-10-24 02:19:09,644 - BlenderMCPServer - INFO - Received 5843 bytes of data
+2026-10-24 02:19:09,644 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-10-24 02:19:09,646 - mcp.server.lowlevel.server - INFO - Processing request of type ListToolsRequest
+2026-10-24 02:19:09,649 - BlenderMCPServer - INFO - Disconnecting from Blender on shutdown
+2026-10-24 02:19:09,649 - BlenderMCPServer - INFO - BlenderMCP server shut down

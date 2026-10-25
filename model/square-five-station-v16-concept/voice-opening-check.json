@@ -1,0 +1,11 @@
+{
+  "method": "Evaluated Blender mesh ray tests on lid/wall, grille and button separate",
+  "checks": {
+    "lid_mic_clear": "PASS",
+    "lid_speaker_clear": "PASS",
+    "lid_solid_elsewhere": "PASS",
+    "wall_button_clear": "PASS",
+    "wall_solid_elsewhere": "PASS"
+  },
+  "acousticPerformance": "NOT_TESTED"
+}

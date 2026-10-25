@@ -1,0 +1,16 @@
+{
+  "label": "08-render-front",
+  "tool": "execute_blender_code",
+  "server": {
+    "name": "MCP for Blender",
+    "title": null,
+    "version": "1.29.0",
+    "websiteUrl": null,
+    "icons": null
+  },
+  "isError": false,
+  "texts": [
+    "Code executed successfully: {\"rendered\": \"front\", \"file\": \"D:\\\\shixi\\\\utility-tunnel-digital-twin\\\\model\\\\square-five-station-v16-concept\\\\previews\\\\front.png\", \"route\": \"LIVE_MCP\", \"lidRemovedForCutaway\": false}\n"
+  ],
+  "images": []
+}

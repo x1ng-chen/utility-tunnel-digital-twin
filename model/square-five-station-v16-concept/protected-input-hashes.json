@@ -1,0 +1,27 @@
+[
+  {
+    "Algorithm": "SHA256",
+    "Hash": "C9EB987E2CA34329BA0C9E050B28A079B1443A9362B1672E15A533B23555027A",
+    "Path": "D:\\shixi\\utility-tunnel-digital-twin\\frontend\\public\\models\\utility-tunnel.glb"
+  },
+  {
+    "Algorithm": "SHA256",
+    "Hash": "155F0695D9A68629CF3C1A006ED22967011E909720DB34528272AC81855649A7",
+    "Path": "D:\\shixi\\综合管廊.blend"
+  },
+  {
+    "Algorithm": "SHA256",
+    "Hash": "A89B5D09EA26C5DB5C17ACB72AC920FD9DD37697E009525FA0D81FC442DC8DAB",
+    "Path": "D:\\shixi\\v13-export-from-user.glb"
+  },
+  {
+    "Algorithm": "SHA256",
+    "Hash": "6035633394F282BC43E7E8FE4987AF72F69E1E13115D9B37D7BD1180049EE0D4",
+    "Path": "D:\\shixi\\utility-tunnel-digital-twin\\model\\rectangular-four-zone-v15-concept\\rectangular-four-zone-v15-concept.blend"
+  },
+  {
+    "Algorithm": "SHA256",
+    "Hash": "F54F7FCA86724E28E54B170364118A9AAD94A7129752284EA85771119D7C0328",
+    "Path": "D:\\shixi\\utility-tunnel-digital-twin\\model\\rectangular-four-zone-v15-concept\\rectangular-four-zone-v15-concept.glb"
+  }
+]
