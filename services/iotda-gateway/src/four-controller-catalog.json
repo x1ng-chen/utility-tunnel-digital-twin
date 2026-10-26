@@ -1,0 +1,160 @@
+{
+  "revision": "four-controller-20261026.1",
+  "bindings": [
+    {
+      "assetCode": "SMOKE-01",
+      "controllerId": "CTRL-04",
+      "physicalTag": "MQ2-01"
+    },
+    {
+      "assetCode": "GAS-CH4-01",
+      "controllerId": "CTRL-04",
+      "physicalTag": "MQ4-01"
+    },
+    {
+      "assetCode": "GAS-CO-01",
+      "controllerId": "CTRL-04",
+      "physicalTag": "CO-01"
+    },
+    {
+      "assetCode": "FLAME-01",
+      "controllerId": "CTRL-04",
+      "physicalTag": "FLAME-01"
+    },
+    {
+      "assetCode": "MQ2-02",
+      "controllerId": "CTRL-03",
+      "physicalTag": "MQ2-02"
+    },
+    {
+      "assetCode": "MQ4-02",
+      "controllerId": "CTRL-03",
+      "physicalTag": "MQ4-02"
+    },
+    {
+      "assetCode": "CO-02",
+      "controllerId": "CTRL-03",
+      "physicalTag": "CO-02"
+    },
+    {
+      "assetCode": "FLAME-02",
+      "controllerId": "CTRL-03",
+      "physicalTag": "FLAME-02"
+    },
+    {
+      "assetCode": "MQ2-03",
+      "controllerId": "CTRL-01",
+      "physicalTag": "MQ2-03"
+    },
+    {
+      "assetCode": "MQ4-03",
+      "controllerId": "CTRL-01",
+      "physicalTag": "MQ4-03"
+    },
+    {
+      "assetCode": "CO-03",
+      "controllerId": "CTRL-01",
+      "physicalTag": "CO-03"
+    },
+    {
+      "assetCode": "FLAME-03",
+      "controllerId": "CTRL-01",
+      "physicalTag": "FLAME-03"
+    },
+    {
+      "assetCode": "MQ2-04",
+      "controllerId": "CTRL-02",
+      "physicalTag": "MQ2-04"
+    },
+    {
+      "assetCode": "MQ4-04",
+      "controllerId": "CTRL-02",
+      "physicalTag": "MQ4-04"
+    },
+    {
+      "assetCode": "CO-04",
+      "controllerId": "CTRL-02",
+      "physicalTag": "CO-04"
+    },
+    {
+      "assetCode": "FLAME-04",
+      "controllerId": "CTRL-02",
+      "physicalTag": "FLAME-04"
+    },
+    {
+      "assetCode": "MQ2-05",
+      "controllerId": "CTRL-01",
+      "physicalTag": "MQ2-05"
+    },
+    {
+      "assetCode": "MQ4-05",
+      "controllerId": "CTRL-01",
+      "physicalTag": "MQ4-05"
+    },
+    {
+      "assetCode": "CO-05",
+      "controllerId": "CTRL-01",
+      "physicalTag": "CO-05"
+    },
+    {
+      "assetCode": "FLAME-05",
+      "controllerId": "CTRL-01",
+      "physicalTag": "FLAME-05"
+    },
+    {
+      "assetCode": "LEVEL-L01",
+      "controllerId": "CTRL-04",
+      "physicalTag": "LEVEL-01"
+    },
+    {
+      "assetCode": "ENV-01",
+      "controllerId": "CTRL-04",
+      "physicalTag": "SHT-01"
+    },
+    {
+      "assetCode": "LEVEL-L02",
+      "controllerId": "CTRL-03",
+      "physicalTag": "LEVEL-02"
+    },
+    {
+      "assetCode": "ENV-02",
+      "controllerId": "CTRL-03",
+      "physicalTag": "SHT-02"
+    },
+    {
+      "assetCode": "LEVEL-L03",
+      "controllerId": "CTRL-01",
+      "physicalTag": "LEVEL-03"
+    },
+    {
+      "assetCode": "ENV-03",
+      "controllerId": "CTRL-01",
+      "physicalTag": "SHT-03"
+    },
+    {
+      "assetCode": "LEVEL-L04",
+      "controllerId": "CTRL-02",
+      "physicalTag": "LEVEL-04"
+    },
+    {
+      "assetCode": "ENV-04",
+      "controllerId": "CTRL-02",
+      "physicalTag": "SHT-04"
+    },
+    {
+      "assetCode": "GAS-O2-01",
+      "controllerId": "CTRL-04",
+      "physicalTag": "O2-01"
+    },
+    {
+      "assetCode": "GAS-O2-02",
+      "controllerId": "CTRL-01",
+      "physicalTag": "O2-02"
+    },
+    {
+      "assetCode": "GAS-O2-03",
+      "controllerId": "CTRL-02",
+      "physicalTag": "O2-03"
+    }
+  ]
+}

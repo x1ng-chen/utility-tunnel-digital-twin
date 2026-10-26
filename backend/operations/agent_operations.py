@@ -86,6 +86,8 @@ def snapshots(codes, now=None):
         result['readings'].append({
             'id': row.id, 'metric_key': row.metric_key, 'metric': row.metric, 'value': value,
             'unit': row.unit, 'quality': row.quality, 'sampled_at': row.recorded_at.isoformat(),
+            'observation_kind': row.observation_kind,
+            'observation_note': '已观察并锁存的短时事件，不表示输入此刻仍持续触发。' if row.observation_kind == 'latched_event' else '采样时刻的观测值。',
             'ingested_at': row.ingested_at.isoformat(), 'sample_age_seconds': round(age, 1),
             'freshness': freshness, 'provenance': 'simulated_test' if evaluation_enabled() and demo else 'demo' if demo else 'database_observation',
             'scenario_usable': bool(evaluation_enabled() and demo and value is not None and row.quality == 'good'
@@ -211,7 +213,11 @@ def diagnose_station(station_id):
         'action': c.action, 'command_action': c.detail.get('action'), 'outcome': c.detail.get('outcome'),
         'ack_reason': str(c.detail.get('ackReason', ''))[:200],
         'asset_code': str(c.detail.get('assetCode', ''))[:40],
-        'protocol_version': str(c.detail.get('protocolVersion', ''))[:40]} for c in commands]
+        'protocol_version': str(c.detail.get('protocolVersion', ''))[:40],
+        'command_intent': str(c.detail.get('commandIntent', ''))[:40],
+        'command_value': c.detail.get('commandValue'), 'issued_at_ms': c.detail.get('issuedAtMs'),
+        'manual_lease_ms': c.detail.get('manualLeaseMs'),
+        'physical_state_verified': c.detail.get('physicalStateVerified') is True} for c in commands]
     from .agent_diagnosis import analyze
     diagnosis = analyze(inspection, nearby, fans, command_evidence)
     return {'diagnosis': diagnosis, 'layout_revision': INVENTORY['revision'], 'data_context': data_context(),
@@ -220,7 +226,7 @@ def diagnose_station(station_id):
         'active_alerts': alerts, 'recent_command_audit': command_evidence, 'candidate_causes': candidates,
         'limits': ['近5分钟趋势按同资产、同指标、同单位比较；相关变化不能证明扩散方向或预测事故。',
             'MQ-4/MQ-7 原始值未标定不能横向比较为 ppm；AO-02 裸探头读数不能证明氧气安全。',
-            '现有控制审计可能来自旧版 CTRL-01 双风机协议，不能视作新四节点执行证明。',
+            '仅显式匹配新布局设备、控制器与协议的审计可作为控制意图；旧CTRL-01记录不能证明新节点执行。PWM和供电请求独立，回执只表明输出应用，不代表转动；手动租期到期后不能当作仍有效请求。',
             '命令已发布或已回执均不等于风机在转；候选原因不等于根因。']}
 
 

@@ -44,10 +44,17 @@ jobs:
             cmake -S firmware/rs485-bench/stm32 -B build/rs485-$address -DBENCH_SLAVE_ADDRESS=$address
             cmake --build build/rs485-$address --parallel 2
           done
+      - name: Build all four business controller images
+        run: |
+          for board in 1 2 3 4; do
+            cmake -S firmware/four-controller -B build/four-$board -DBOARD_ID=$board
+            cmake --build build/four-$board --parallel 2
+          done
       - name: Validate deterministic wiring outputs
         run: |
           python3 docs/hardware/four-controller-wiring-20261026/generate_plan.py
           python3 docs/hardware/four-controller-wiring-20261026/validate_wiring.py
+          python3 -m unittest discover -s docs/hardware/four-controller-wiring-20261026 -p 'test_*.py'
           git diff --exit-code -- docs/hardware/four-controller-wiring-20261026/README.md \
             docs/hardware/four-controller-wiring-20261026/wiring-plan.json \
             docs/hardware/four-controller-wiring-20261026/wiring-connections.csv \
@@ -56,7 +63,7 @@ jobs:
         run: node tools/quality-scan.mjs
 
   s3-bench:
-    name: S3 single and dual diagnostic builds
+    name: S3 single, dual and quad diagnostic builds
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -67,5 +74,41 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install platformio==6.1.19
-      - name: Build S3 single and dual pollers (no hardware access)
-        run: python -m platformio run --project-dir firmware/rs485-bench/s3 -e s3_gateway_bench -e s3_gateway_bench_dual
+      - name: Build S3 single, dual and quad pollers (no hardware access)
+        run: python -m platformio run --project-dir firmware/rs485-bench/s3 -e s3_gateway_bench -e s3_gateway_bench_dual -e s3_gateway_bench_quad
+
+  s3-business:
+    name: S3 business offline/network builds and protocol tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          lfs: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - run: python -m pip install platformio==6.1.19
+      - name: Compile offline and network code without credentials or hardware
+        run: >-
+          python -m platformio run --project-dir firmware/four-controller/gateway
+          -e s3_four_gateway -e s3_four_gateway_network_check
+      - name: Check offline diagnostic parsing and identity mapping
+        run: python -m unittest discover -s firmware/four-controller/tests -p 'test_*.py'
+      - name: Execute native C protocol/control and real JSON parser tests
+        run: >-
+          python firmware/four-controller/tests/run_tests.py --native
+          --json-include firmware/four-controller/gateway/.pio/libdeps/s3_four_gateway/ArduinoJson/src
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: services/iotda-gateway/package-lock.json
+      - name: Install platform adapter test dependencies
+        working-directory: services/iotda-gateway
+        run: npm ci
+      - name: Validate actual gateway encoder output through the platform adapter
+        working-directory: services/iotda-gateway
+        env:
+          UT_GATEWAY_FIXTURES: ${{ github.workspace }}/.agent-eval/firmware-fix/gateway-fixtures.json
+        run: node --test test/gateway-encoder.test.js

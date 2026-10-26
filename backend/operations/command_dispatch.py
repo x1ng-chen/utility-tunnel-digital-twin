@@ -1,6 +1,7 @@
 """Bounded MQTT dispatch for explicitly approved controller actions."""
 
 import json
+import re
 import threading
 from typing import Any
 
@@ -14,8 +15,14 @@ class CommandDispatchError(RuntimeError):
 
 def publish_controller_command(command: dict[str, Any]) -> dict[str, Any] | None:
     """Publish one command and return its matching acknowledgement when available."""
-    command_id = command['cmdId']
-    ack_topic = 'ut/v1/CTRL-01/cmd_ack'
+    command_id = command.get('cmdId')
+    if not isinstance(command_id, str) or not re.fullmatch(r'[A-Za-z0-9._:-]{1,80}', command_id):
+        raise CommandDispatchError('Invalid command identifier.')
+    v2 = command.get('schema') == 'ut.command.v2'
+    controller = command.get('controllerId') if v2 else 'CTRL-01'
+    if not isinstance(controller, str) or not re.fullmatch(r'CTRL-0[1-4]', controller):
+        raise CommandDispatchError('Invalid controller target.')
+    ack_topic = f'ut/v1/{controller}/cmd_ack'
     connected = threading.Event()
     subscribed = threading.Event()
     acknowledged = threading.Event()
@@ -37,7 +44,7 @@ def publish_controller_command(command: dict[str, Any]) -> dict[str, Any] | None
         connected.set()
 
     def on_subscribe(_mqtt_client, _userdata, _mid, granted_qos, _properties):
-        if not granted_qos:
+        if not granted_qos or any(getattr(code, 'is_failure', False) or getattr(code, 'value', code) >= 128 for code in granted_qos):
             callback_error.append('broker rejected acknowledgement subscription')
         subscribed.set()
 
@@ -46,7 +53,17 @@ def publish_controller_command(command: dict[str, Any]) -> dict[str, Any] | None
             payload = json.loads(message.payload.decode('utf-8'))
         except (UnicodeDecodeError, json.JSONDecodeError):
             return
-        if isinstance(payload, dict) and payload.get('cmdId') == command_id:
+        if message.topic != ack_topic or getattr(message, 'retain', False):
+            return
+        if v2 and (not isinstance(payload, dict) or payload.get('schema') != 'ut.command-ack.v2'
+                   or payload.get('controllerId') != controller
+                   or not isinstance(payload.get('status'), str)
+                   or payload.get('status') not in {'accepted', 'rejected', 'unknown'}
+                   or not isinstance(payload.get('reason'), str)
+                   or len(payload['reason']) > 160
+                   or payload.get('physicalStateVerified') is not False):
+            return
+        if isinstance(payload, dict) and payload.get('cmdId') == command_id and not received_ack:
             received_ack.append(payload)
             acknowledged.set()
 
@@ -61,7 +78,7 @@ def publish_controller_command(command: dict[str, Any]) -> dict[str, Any] | None
             raise CommandDispatchError(callback_error[0] if callback_error else 'broker connection timed out')
         if not subscribed.wait(timeout) or callback_error:
             raise CommandDispatchError(callback_error[0] if callback_error else 'acknowledgement subscription timed out')
-        info = client.publish('ut/v1/CTRL-01/cmd', json.dumps(command, separators=(',', ':')), qos=1, retain=False)
+        info = client.publish(f'ut/v1/{controller}/cmd', json.dumps(command, separators=(',', ':')), qos=1, retain=False)
         if info.rc != mqtt.MQTT_ERR_SUCCESS:
             raise CommandDispatchError('broker did not accept the command publish')
         info.wait_for_publish(timeout=timeout)

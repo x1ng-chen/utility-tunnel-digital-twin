@@ -901,7 +901,7 @@ class OperationsApiTests(TestCase):
         asset = Asset.objects.create(code='ENV-T2', name='环境节点', zone='UT-ZA', asset_type='环境测点')
         Threshold.objects.create(key='temperature', label='环境温度', warning=28, alarm=32, unit='°C')
         self.auth(self.operator)
-        now = timezone.now()
+        now = timezone.now() - timedelta(seconds=4)
 
         def ingest(event_id, value, seconds):
             return self.client.post('/api/telemetry/', {'readings': [{'eventId': event_id, 'assetCode': asset.code, 'metricKey': 'temperature', 'metric': '环境温度', 'value': value, 'unit': '°C', 'quality': 'good', 'recordedAt': (now + timedelta(seconds=seconds)).isoformat()}]}, format='json')

@@ -1,7 +1,7 @@
 {
-  "date": "2026-10-26",
-  "revision": "0.3",
-  "static_resource_check": "PASS",
+  "date": "2026-10-27",
+  "revision": "0.4",
+  "static_resource_check": "PASS_WITH_DECLARED_PIN_EXCEPTION",
   "physical_modules": 31,
   "allocation": {
     "CTRL-01": 11,
@@ -11,6 +11,10 @@
   },
   "gpio_claims": {
     "CTRL-01": {
+      "PA0": {
+        "owner": "O2-02",
+        "mode": "ADC1_IN0"
+      },
       "PA2": {
         "owner": "RS485:TX_TO_MODULE_TXD",
         "mode": "USART2_TX"
@@ -20,16 +24,24 @@
         "mode": "USART2_RX"
       },
       "PA4": {
-        "owner": "MQ4-05",
+        "owner": "MQ4-03",
         "mode": "ADC1_IN4"
       },
       "PA5": {
-        "owner": "O2-02",
+        "owner": "CO-03",
         "mode": "ADC1_IN5"
       },
+      "PA6": {
+        "owner": "MQ4-05",
+        "mode": "ADC1_IN6"
+      },
+      "PA7": {
+        "owner": "CO-05",
+        "mode": "ADC1_IN7"
+      },
       "PB1": {
-        "owner": "CO-03",
-        "mode": "ADC1_IN9"
+        "owner": "LEVEL-03",
+        "mode": "GPIO_INPUT_POLL"
       },
       "PB10": {
         "owner": "LOCAL-I2C:SCL(shared)",
@@ -38,10 +50,6 @@
       "PB11": {
         "owner": "LOCAL-I2C:SDA(shared)",
         "mode": "SOFTWARE_I2C_OPEN_DRAIN"
-      },
-      "PB13": {
-        "owner": "MQ2-05",
-        "mode": "GPIO_INPUT_POLL"
       },
       "PB14": {
         "owner": "FLAME-03",
@@ -63,29 +71,21 @@
         "owner": "SCREEN-STATUS:DC",
         "mode": "GPIO_OUT"
       },
-      "PB9": {
+      "PB8": {
         "owner": "SCREEN-STATUS:CS",
         "mode": "GPIO_OUT"
       },
-      "PC1": {
-        "owner": "CO-05",
-        "mode": "ADC1_IN11"
-      },
-      "PC11": {
-        "owner": "MQ2-03",
-        "mode": "GPIO_INPUT_POLL"
-      },
-      "PC12": {
+      "PB9": {
         "owner": "SCREEN-STATUS:BLK",
         "mode": "GPIO_OUT"
       },
-      "PC13": {
-        "owner": "LEVEL-03",
+      "PC4": {
+        "owner": "MQ2-03",
         "mode": "GPIO_INPUT_POLL"
       },
-      "PC2": {
-        "owner": "MQ4-03",
-        "mode": "ADC1_IN12"
+      "PC5": {
+        "owner": "MQ2-05",
+        "mode": "GPIO_INPUT_POLL"
       },
       "PC7": {
         "owner": "FLAME-05",
@@ -121,6 +121,10 @@
         "owner": "CO-04",
         "mode": "ADC1_IN8"
       },
+      "PB1": {
+        "owner": "FAN-02:PWM_TO_OPEN_COLLECTOR_DRIVER",
+        "mode": "TIM3_CH4"
+      },
       "PB10": {
         "owner": "LOCAL-I2C:SCL(shared)",
         "mode": "SOFTWARE_I2C_OPEN_DRAIN"
@@ -150,11 +154,11 @@
         "mode": "GPIO_OUT"
       },
       "PB8": {
-        "owner": "FAN-02:PWM_TO_OPEN_COLLECTOR_DRIVER",
-        "mode": "TIM4_CH3"
+        "owner": "SCREEN-MAIN:CS",
+        "mode": "GPIO_OUT"
       },
       "PB9": {
-        "owner": "SCREEN-MAIN:CS",
+        "owner": "SCREEN-MAIN:BLK",
         "mode": "GPIO_OUT"
       },
       "PC0": {
@@ -168,10 +172,6 @@
       "PC10": {
         "owner": "LEVEL-04",
         "mode": "GPIO_INPUT_POLL"
-      },
-      "PC12": {
-        "owner": "SCREEN-MAIN:BLK",
-        "mode": "GPIO_OUT"
       },
       "PC4": {
         "owner": "JOYSTICK:SW",
@@ -306,17 +306,28 @@
     }
   },
   "errors": [],
-  "firmware_built": false,
+  "verification_scope": "SOURCE_AND_STATIC_RESOURCES_ONLY",
+  "declared_unverified_pin_exceptions": [
+    {
+      "node": "CTRL-01",
+      "pin": "PA0",
+      "owner": "O2-02",
+      "reason": "ONBOARD_WKUP_KEY_AND_ADC_LOAD_REQUIRE_BOARD_VERIFICATION",
+      "scope": "SOURCE_ALIGNMENT_ONLY",
+      "hardwareVerified": false
+    }
+  ],
+  "firmware_build_status": "NOT_RUN_BY_STATIC_VALIDATOR",
   "hardware_verified": false,
   "locality": "PASS_PHYSICAL_ZONE_OWNERSHIP_NOT_MEASURED_CABLE_LENGTHS",
   "warnings": [
-    "Static design only; board variants, actual module pin labels, supply margins and electrical interfaces require bench checks.",
+    "Source-aligned design only; board variants, actual module pin labels, supply margins and electrical interfaces require bench checks. CTRL-01 O2-02/PA0 may conflict with an onboard WKUP key.",
     "SCREEN-STATUS on CTRL-01 and SCREEN-MAIN on CTRL-02 require SPI3 and JTAG disabled with SWD retained.",
     "AO-02 remains unpowered raw-millivolt ADC; calibrated oxygen concentration is not validated.",
     "A shared two-channel relay PCB may require one longer harness; no new hardware has been assumed.",
-    "USART1 interrupt/polling; USART2 interrupt initially; software I2C; digital sensor DO polling to avoid EXTI aliasing.",
-    "The previous live database/model/MQTT identities have not been migrated; four-node firmware is not implemented.",
+    "USART1 logging polling; USART2 interrupt RX; software I2C; 1-ms SysTick digital observation and event hold; TACH uses EXTI7.",
+    "Four-node business firmware is source implemented; this validator does not build, flash or verify its physical operation. Legacy database/model identities need explicit migration.",
     "Local protection of P3/P5 cannot operate remote fans/buzzer when gateway coordination is absent."
   ],
-  "plan_sha256": "a023252bb0cfc2b3d60d2d4ca928647d094c2e0f6fe61e9c52927c74272f0250"
+  "plan_sha256": "81ba0a05636327d0f4370a3d1e5f470d742a7735b779fbfea2434afd16fd008c"
 }

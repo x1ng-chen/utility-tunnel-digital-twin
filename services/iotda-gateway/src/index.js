@@ -6,6 +6,7 @@ import { createDeviceCredentials } from './auth.js';
 import { createDjangoForwarder } from './django.js';
 import { addCalculatedOxygenConcentration } from './telemetry.js';
 import { createTelemetryRoutes } from './telemetry-routes.js';
+import { parseTelemetry } from './schemas.js';
 
 const environment = z.object({
   LOCAL_MQTT_URL: z.string().url().default('mqtt://127.0.0.1:1883'),
@@ -26,19 +27,6 @@ const environment = z.object({
   DJANGO_TIMEOUT_MS: z.coerce.number().int().min(500).max(60000).default(5000),
   DJANGO_QUEUE_MAX: z.coerce.number().int().min(1).max(500000).default(43200),
   DJANGO_QUEUE_DB: z.string().min(1).default('./data/iotda-outbox.sqlite'),
-});
-
-const telemetrySchema = z.object({
-  schema: z.literal('ut.telemetry.v1'),
-  seq: z.number().int().nonnegative().optional(),
-  ts: z.string().optional(),
-  readings: z.array(z.object({
-    assetCode: z.string(),
-    metric: z.string(),
-    value: z.number().finite(),
-    unit: z.string(),
-    quality: z.enum(['good', 'suspect', 'bad', 'missing']).default('good'),
-  })).min(1).max(32),
 });
 
 const configResult = environment.safeParse(process.env);
@@ -150,7 +138,7 @@ local.on('message', (topic, payload) => {
   if (!sourceDeviceId) return;
   let telemetry;
   try {
-    telemetry = addCalculatedOxygenConcentration(telemetrySchema.parse(JSON.parse(payload.toString('utf8'))));
+    telemetry = addCalculatedOxygenConcentration(parseTelemetry(payload.toString('utf8'), sourceDeviceId));
   } catch (error) {
     console.warn('Rejected invalid local telemetry:', error instanceof Error ? error.message : error);
     return;

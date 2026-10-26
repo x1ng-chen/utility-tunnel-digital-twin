@@ -51,7 +51,7 @@ export function toDjangoBatch(telemetry, { deviceId = 'CTRL-01', receivedAt = ne
   // Keep the digest compact so the per-reading suffix remains under Django's
   // 80-character eventId contract.
   const frameDigest = createHash('sha256')
-    .update(JSON.stringify({ deviceId, recordedAt, readings: telemetry.readings }))
+    .update(JSON.stringify(telemetry.frameId ? { deviceId, frameId: telemetry.frameId } : { deviceId, recordedAt, readings: telemetry.readings }))
     .digest('hex')
     .slice(0, 24);
   const idBase = `gw:${shortDeviceId(deviceId)}:${frameDigest}`;
@@ -81,7 +81,9 @@ export function toDjangoBatch(telemetry, { deviceId = 'CTRL-01', receivedAt = ne
       value,
       unit: DJANGO_UNIT_MAP[reading.unit] || reading.unit,
       quality: reading.quality || 'good',
-      recordedAt,
+      ...(reading.eventLatched ? { observationKind: 'latched_event' } : {}),
+      recordedAt: telemetry.source === 'four-controller-rtu-v2' && Number.isFinite(reading.sampleAgeMs)
+        ? new Date(new Date(recordedAt).getTime() - reading.sampleAgeMs).toISOString() : recordedAt,
     });
   });
   return { readings, skipped };
@@ -271,6 +273,7 @@ export function createDjangoForwarder({
     if (typeof sourceDeviceId !== 'string' || !/^[a-z0-9-]{1,64}$/i.test(sourceDeviceId)) {
       throw new Error('Invalid source device identifier.');
     }
+    if (telemetry.frameId && !telemetry.ts) receivedAt = outbox.frameReceivedAt(`${sourceDeviceId}:${telemetry.frameId}`, receivedAt);
     const batch = toDjangoBatch(telemetry, { deviceId: sourceDeviceId, receivedAt });
     for (const item of batch.skipped) {
       log.warn(`Django reading skipped (${item.reason}): ${item.assetCode}/${item.metric}`);

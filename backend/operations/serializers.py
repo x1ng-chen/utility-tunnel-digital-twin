@@ -3,6 +3,7 @@ from decimal import Decimal
 from math import isfinite
 import re
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
@@ -233,7 +234,7 @@ class HardwareBindingSerializer(serializers.ModelSerializer):
     def get_heartbeatDueAt(self, obj):
         if not obj.last_heartbeat_at or obj.status != HardwareBinding.Status.CONNECTED:
             return None
-        return obj.last_heartbeat_at + timedelta(seconds=obj.expected_interval_seconds * 3)
+        return obj.last_heartbeat_at + timedelta(seconds=max(settings.DEVICE_OFFLINE_MIN_GRACE_SECONDS, obj.expected_interval_seconds * settings.DEVICE_OFFLINE_GRACE_MULTIPLIER))
 
 
 def hardware_connectivity(binding):
@@ -244,8 +245,9 @@ def hardware_connectivity(binding):
         return 'inactive'
     if binding.status == HardwareBinding.Status.RESERVED or not binding.last_heartbeat_at:
         return 'awaiting_data'
-    grace_seconds = max(1, binding.expected_interval_seconds) * 3
-    return 'online' if timezone.now() <= binding.last_heartbeat_at + timedelta(seconds=grace_seconds) else 'offline'
+    grace_seconds = max(settings.DEVICE_OFFLINE_MIN_GRACE_SECONDS, binding.expected_interval_seconds * settings.DEVICE_OFFLINE_GRACE_MULTIPLIER)
+    now = timezone.now()
+    return 'online' if now - timedelta(seconds=grace_seconds) <= binding.last_heartbeat_at <= now + timedelta(seconds=2) else 'offline'
 
 
 class HardwareBindingMutationSerializer(serializers.ModelSerializer):
@@ -358,6 +360,7 @@ class WorkOrderSerializer(serializers.ModelSerializer):
 
 
 class TelemetrySerializer(serializers.ModelSerializer):
+    observationKind = serializers.CharField(source='observation_kind', read_only=True)
     assetCode = serializers.CharField(source='asset.code', read_only=True)
     eventId = serializers.CharField(source='event_id', allow_null=True, read_only=True)
     metricKey = serializers.CharField(source='metric_key', read_only=True)
@@ -366,10 +369,11 @@ class TelemetrySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Telemetry
-        fields = ['id', 'eventId', 'assetCode', 'metricKey', 'metric', 'value', 'unit', 'quality', 'recordedAt', 'ingestedAt']
+        fields = ['id', 'eventId', 'assetCode', 'metricKey', 'metric', 'value', 'unit', 'quality', 'recordedAt', 'ingestedAt', 'observationKind']
 
 
 class TelemetryReadingSerializer(serializers.Serializer):
+    observationKind = serializers.ChoiceField(choices=Telemetry.ObservationKind.choices, default='sample')
     eventId = serializers.RegexField(r'^[A-Za-z0-9._:-]{1,80}$', max_length=80)
     assetCode = serializers.RegexField(r'^[A-Z0-9][A-Z0-9_-]{1,39}$', max_length=40)
     metricKey = serializers.RegexField(r'^[a-z][a-z0-9_.-]{1,39}$', max_length=40)
@@ -378,6 +382,13 @@ class TelemetryReadingSerializer(serializers.Serializer):
     unit = serializers.CharField(max_length=20)
     quality = serializers.ChoiceField(choices=Telemetry.Quality.choices, default=Telemetry.Quality.GOOD)
     recordedAt = serializers.DateTimeField()
+
+    def validate(self, attrs):
+        if attrs['observationKind'] == 'latched_event' and (
+                attrs['metricKey'] not in {'smoke.alarm', 'flame.alarm', 'level.detected'}
+                or attrs['unit'] != 'bool' or attrs['value'] != 1):
+            raise serializers.ValidationError('A latched event must describe an observed active digital alarm.')
+        return attrs
 
     def validate_value(self, value):
         if not isfinite(value):

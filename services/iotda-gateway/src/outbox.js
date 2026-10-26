@@ -10,6 +10,11 @@ export class Outbox {
     this.db = new DatabaseSync(path);
     if (path !== ':memory:') this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS frame_clock (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        frame_key TEXT NOT NULL UNIQUE,
+        received_at TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS django_outbox (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         batch_json TEXT NOT NULL,
@@ -33,6 +38,16 @@ export class Outbox {
     this.deadLetterSize = this.db.prepare('SELECT COUNT(*) AS count FROM django_dead_letter');
     this.insertDeadLetter = this.db.prepare('INSERT INTO django_dead_letter (original_id, batch_json, received_at, reason) VALUES (?, ?, ?, ?)');
     this.deadLetterRows = this.db.prepare('SELECT id, original_id, batch_json, received_at, reason, dead_lettered_at FROM django_dead_letter ORDER BY id DESC LIMIT ?');
+  }
+
+  frameReceivedAt(key, receivedAt) {
+    this.db.prepare('INSERT OR IGNORE INTO frame_clock(frame_key, received_at) VALUES (?, ?)').run(key, receivedAt.toISOString());
+    const stamp = this.db.prepare('SELECT received_at FROM frame_clock WHERE frame_key = ?').get(key).received_at;
+    const limit = Math.max(1024, this.maxItems * 2);
+    if (Number(this.db.prepare('SELECT COUNT(*) AS n FROM frame_clock').get().n) > limit) {
+      this.db.prepare('DELETE FROM frame_clock WHERE id NOT IN (SELECT id FROM frame_clock ORDER BY id DESC LIMIT ?)').run(limit);
+    }
+    return new Date(stamp);
   }
 
   count() {

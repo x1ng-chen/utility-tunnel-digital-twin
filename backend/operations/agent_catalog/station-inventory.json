@@ -259,7 +259,7 @@
     }
   ],
   "layoutSource": "docs/hardware/four-controller-wiring-20261026/wiring-plan.json",
-  "layoutSourceSha256": "a023252bb0cfc2b3d60d2d4ca928647d094c2e0f6fe61e9c52927c74272f0250",
+  "layoutSourceSha256": "81ba0a05636327d0f4370a3d1e5f470d742a7735b779fbfea2434afd16fd008c",
   "modelNotice": "V17传感器目标保留；模型内主控文字仍为旧编号，不能当作现场主控身份已迁移。",
   "controllerLegacyMeshes": {
     "CTRL-04": "CTRL-01",

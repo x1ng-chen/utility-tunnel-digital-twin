@@ -1,6 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 
-export type ControllerAction = 'led_red' | 'led_green' | 'led_blue' | 'led_off' | 'relay_on' | 'relay_off' | 'fan_pwm' | 'fan2_pwm';
+export type ControllerAction = 'led_red' | 'led_green' | 'led_blue' | 'led_off' | 'relay_on' | 'relay_off' | 'fan_pwm' | 'fan2_pwm' | 'buzzer_on' | 'buzzer_off' | 'auto';
 
 export type AssistantMessage = { role: 'user' | 'assistant'; content: string };
 export type AgentTrace = { tool: string; status: 'ok' | 'rejected'; evidenceId: string; durationMs: number };
@@ -120,11 +120,12 @@ export const api = {
   reviewRegistrationRequest: (id: number, payload: { status: 'approved' | 'rejected'; reviewNote?: string }) => client.patch(`/admin/registration-requests/${id}/`, payload),
   reissueRegistrationSetupToken: (id: number) => client.post(`/admin/registration-requests/${id}/setup-token/`),
   dashboard: () => client.get('/dashboard/'),
-  controllerCommandConfirmation: (action: ControllerAction, dutyPercent?: number) => client.post('/controllers/CTRL-01/commands/confirmations/', { action, ...(dutyPercent == null ? {} : { dutyPercent }) }),
+  controllerCommandCapabilities: () => client.get<{ protocol: string; controlDisabled: boolean; manualLeaseMs: number }>('/controllers/command-capabilities/'),
+  controllerCommandConfirmation: (action: ControllerAction, dutyPercent?: number, controller = 'CTRL-01') => client.post(`/controllers/${controller}/commands/confirmations/`, { action, ...(dutyPercent == null ? {} : { dutyPercent }) }),
   agentContext: () => client.get<{ dataContext: AgentDataContext; layoutVersion: string; modelNotice: string }>('/assistant/context/'),
   assistantChat: (messages: AssistantMessage[], page: string, task?: AgentTask) => client.post<AgentResponse>('/assistant/chat/', { messages, page, ...(task ? { task } : {}) }, { timeout: 65000 }),
   stationInspection: (station = 'all') => client.get<AgentResponse>('/assistant/inspection/', { params: { station } }),
-  controllerCommand: (action: ControllerAction, confirmationToken: string, dutyPercent?: number) => client.post('/controllers/CTRL-01/commands/', { action, confirmationToken, ...(dutyPercent == null ? {} : { dutyPercent }) }),
+  controllerCommand: (action: ControllerAction, confirmationToken: string, dutyPercent?: number, controller = 'CTRL-01') => client.post(`/controllers/${controller}/commands/`, { action, confirmationToken, ...(dutyPercent == null ? {} : { dutyPercent }) }),
   twinModelReadiness: () => client.get('/twin/model-readiness/'),
   twinModels: (params?: Record<string, string | number>) => client.get('/twin/models/', { params }),
   uploadTwinModel: (payload: FormData) => client.post('/twin/models/', payload, { timeout: 60000 }),

@@ -33,7 +33,8 @@ from .ai_assistant import AssistantServiceError, ask_deepseek
 from .agent_operations import inspection_summary, location_cards, station_snapshot
 from .throttling import AiAssistantRateThrottle
 from .command_dispatch import CommandDispatchError, publish_controller_command
-from .connectivity import count_online_assets, mark_assets_connected, reconcile_connectivity
+from .command_policy import LEGACY_ACTIONS, FOUR_ACTIONS, allowed_target, build_command, four_controller_enabled
+from .connectivity import ConnectivityChanges, count_online_assets, mark_assets_connected, reconcile_connectivity
 from .models import Alert, Asset, AuditLog, ControllerCommandConfirmation, HardwareBinding, Profile, RegistrationRequest, ReportExport, SpatialFeature, Telemetry, Threshold, TwinModelRelease, WorkOrder, WorkOrderEvent
 from .permissions import AuthenticatedRead, TelemetryPermission
 from .realtime import publish_alert, publish_alert_by_id, publish_asset, publish_telemetry, publish_work_order
@@ -200,14 +201,15 @@ def is_admin(request) -> bool:
     return role(request) == Profile.Role.ADMINISTRATOR
 
 
-CONTROLLER_ACTIONS = {'led_red', 'led_green', 'led_blue', 'led_off', 'relay_on', 'relay_off', 'fan_pwm', 'fan2_pwm'}
+CONTROLLER_ACTIONS = LEGACY_ACTIONS
 
 
 def controller_command_payload(request):
     """Validate the action shape identically for confirmation and dispatch."""
     payload = object_payload(request)
     action = payload.get('action') if payload else None
-    if action not in CONTROLLER_ACTIONS:
+    supported = CONTROLLER_ACTIONS | ({'buzzer_on', 'buzzer_off', 'auto'} if four_controller_enabled() else set())
+    if not isinstance(action, str) or action not in supported:
         return None, None, error_response('invalid_request', 'Only approved controller actions are available.', 400)
     duty_percent = payload.get('dutyPercent') if payload else None
     if action in {'fan_pwm', 'fan2_pwm'}:
@@ -269,6 +271,7 @@ def telemetry_matches(reading, payload) -> bool:
         and reading.value == payload['value']
         and reading.unit == payload['unit']
         and reading.quality == payload['quality']
+        and reading.observation_kind == payload.get('observationKind', 'sample')
         and reading.recorded_at == payload['recordedAt']
     )
 
@@ -804,6 +807,19 @@ class AdminUserDetailView(APIView):
         return Response(AdminUserSerializer(user).data)
 
 
+class ControllerCommandCapabilitiesView(APIView):
+    permission_classes = [AuthenticatedRead]
+
+    def get(self, request):
+        return Response({
+            'protocol': settings.CONTROLLER_COMMAND_PROTOCOL,
+            'controllers': {key: sorted(value) for key, value in FOUR_ACTIONS.items()} if four_controller_enabled() else {'CTRL-01': sorted(CONTROLLER_ACTIONS)},
+            'manualLeaseMs': 10000,
+            'controlDisabled': evaluation_enabled(),
+            'physicalFeedbackRequired': True,
+        })
+
+
 class ControllerCommandConfirmationView(APIView):
     """Issue a short-lived one-shot approval after an operator confirms intent."""
 
@@ -815,11 +831,13 @@ class ControllerCommandConfirmationView(APIView):
             return error_response('evaluation_control_disabled', '隔离验收环境不允许硬件控制。', 403)
         if not can_write(request):
             return error_response('forbidden', 'Operator permission is required to control equipment.', 403)
-        if asset_code != 'CTRL-01' or not Asset.objects.filter(code=asset_code, is_active=True).exists():
+        if (asset_code not in FOUR_ACTIONS if four_controller_enabled() else asset_code != 'CTRL-01') or not Asset.objects.filter(code=asset_code, is_active=True).exists():
             return error_response('not_found', 'This controller is not configured for platform commands.', 404)
         action, duty_percent, error = controller_command_payload(request)
         if error:
             return error
+        if not allowed_target(asset_code, action):
+            return error_response('invalid_target', 'This action does not belong to the selected controller.', 400)
 
         now = timezone.now()
         # The audit trail retains issuance/dispatch evidence; expired token
@@ -838,6 +856,27 @@ class ControllerCommandConfirmationView(APIView):
         return Response({'confirmationToken': token, 'expiresAt': confirmation.expires_at}, status=201)
 
 
+def controller_command_evidence(controller_id, action, command):
+    """Audit intended output independently of physical feedback and old wiring."""
+    if command['schema'] != 'ut.command.v2':
+        return {'controllerId': controller_id, 'protocolVersion': 'legacy-two-controller-v1',
+                'physicalStateVerified': False}
+    if controller_id in {'CTRL-02', 'CTRL-04'}:
+        asset_code = 'FAN-01' if controller_id == 'CTRL-04' else 'FAN-02'
+        intent = 'fan.pwm' if command['command'] == 'fan' else ('fan.auto' if action == 'auto' else 'fan.power_on' if action == 'relay_on' else 'fan.power_off')
+        assets = [asset_code]
+    elif command['command'] == 'led':
+        asset_code, assets, intent = 'LED-01', ['LED-01'], 'led.set'
+    elif command['command'] == 'buzzer':
+        asset_code, assets, intent = 'BUZZ-01', ['BUZZ-01'], 'buzzer.set'
+    else:
+        asset_code, assets, intent = controller_id, ['LED-01', 'BUZZ-01'], 'outputs.auto'
+    return {'controllerId': controller_id, 'assetCode': asset_code, 'assetCodes': assets,
+            'protocolVersion': 'four-controller-v2', 'commandIntent': intent,
+            'commandValue': command['value'], 'issuedAtMs': command['issuedAtMs'],
+            'manualLeaseMs': command['ttlMs'], 'physicalStateVerified': False}
+
+
 class ControllerCommandView(APIView):
     """Publish a reviewed action only after a fresh one-shot approval."""
 
@@ -849,12 +888,14 @@ class ControllerCommandView(APIView):
             return error_response('evaluation_control_disabled', '隔离验收环境不允许硬件控制。', 403)
         if not can_write(request):
             return error_response('forbidden', 'Operator permission is required to control equipment.', 403)
-        if asset_code != 'CTRL-01':
+        if (asset_code not in FOUR_ACTIONS if four_controller_enabled() else asset_code != 'CTRL-01'):
             return error_response('not_found', 'This controller is not configured for platform commands.', 404)
         payload = object_payload(request)
         action, duty_percent, error = controller_command_payload(request)
         if error:
             return error
+        if not allowed_target(asset_code, action):
+            return error_response('invalid_target', 'This action does not belong to the selected controller.', 400)
         if not Asset.objects.filter(code=asset_code, is_active=True).exists():
             return error_response('not_found', 'The controller asset is not active.', 404)
 
@@ -874,20 +915,14 @@ class ControllerCommandView(APIView):
             confirmation.consumed_at = now
             confirmation.save(update_fields=['consumed_at'])
 
-        command = {
-            'schema': 'ut.command.v1',
-            'cmdId': f'platform-{uuid4().hex[:16]}',
-            'action': action,
-            'ttlMs': 10000,
-        }
-        if action in {'fan_pwm', 'fan2_pwm'}:
-            command['dutyPercent'] = duty_percent
+        command = build_command(asset_code, action, duty_percent, f'platform-{uuid4().hex[:16]}')
+        command_evidence = controller_command_evidence(asset_code, action, command)
         try:
             acknowledgement = publish_controller_command(command)
         except CommandDispatchError as exc:
             audit(request.user, 'controller.command.failed', 'asset', asset_code, {
                 'cmdId': command['cmdId'], 'action': action, 'dutyPercent': duty_percent,
-                'confirmationId': confirmation.pk, 'reason': str(exc),
+                'confirmationId': confirmation.pk, 'reason': str(exc), **command_evidence,
             }, request_id(request))
             return error_response('command_unavailable', 'The local controller command broker is unavailable.', 503)
 
@@ -895,6 +930,7 @@ class ControllerCommandView(APIView):
         audit(request.user, 'controller.command.sent', 'asset', asset_code, {
             'cmdId': command['cmdId'], 'action': action, 'dutyPercent': duty_percent, 'outcome': outcome,
             'ackReason': acknowledgement.get('reason') if acknowledgement else '', 'confirmationId': confirmation.pk,
+            **command_evidence,
         }, request_id(request))
         return Response({
             'cmdId': command['cmdId'],
@@ -1827,7 +1863,22 @@ class TelemetryListView(APIView):
                 # an input error from inside ``atomic`` otherwise commits
                 # earlier writes, which would make an invalid payload look like
                 # a truthful device recovery.
-                connectivity_changes = mark_assets_connected(assets.values(), request.user, request_id(request))
+                connectivity_changes = ConnectivityChanges()
+                observed = {}
+                clock_now = timezone.now()
+                for item in validated:
+                    if item['eventId'] in existing or item['quality'] not in {'good', 'suspect'}:
+                        continue
+                    at = item['recordedAt']
+                    if at > clock_now + timedelta(seconds=2):
+                        continue
+                    at = min(at, clock_now)
+                    observed[item['assetCode']] = max(at, observed.get(item['assetCode'], at))
+                for code, at in observed.items():
+                    change = mark_assets_connected([assets[code]], request.user, request_id(request), now=clock_now, observed_at=at)
+                    connectivity_changes.changed_alert_ids.update(change.changed_alert_ids)
+                    connectivity_changes.changed_asset_ids.update(change.changed_asset_ids)
+                    connectivity_changes.updated_bindings += change.updated_bindings
                 stored = []
                 created_readings = []
                 changed_alert_ids = set(connectivity_changes.changed_alert_ids)
@@ -1850,10 +1901,11 @@ class TelemetryListView(APIView):
                         value=item['value'],
                         unit=item['unit'],
                         quality=item['quality'],
+                        observation_kind=item['observationKind'],
                         recorded_at=item['recordedAt'],
                     )
                     before_asset = (asset.status, asset.last_seen_at)
-                    if asset.last_seen_at is None or item['recordedAt'] > asset.last_seen_at:
+                    if item['quality'] in {'good', 'suspect'} and item['recordedAt'] <= clock_now + timedelta(seconds=2) and (asset.last_seen_at is None or item['recordedAt'] > asset.last_seen_at):
                         asset.last_seen_at = item['recordedAt']
                         asset.save(update_fields=['last_seen_at', 'updated_at'])
                     threshold = thresholds.get(item['metricKey'])

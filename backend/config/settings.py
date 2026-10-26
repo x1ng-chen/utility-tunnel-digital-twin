@@ -28,6 +28,9 @@ if not 0.5 <= MQTT_COMMAND_ACK_TIMEOUT_SECONDS <= 10:
     raise ValueError('MQTT_COMMAND_ACK_TIMEOUT_SECONDS must be between 0.5 and 10.')
 if not 15 <= CONTROLLER_COMMAND_CONFIRMATION_TTL_SECONDS <= 600:
     raise ValueError('CONTROLLER_COMMAND_CONFIRMATION_TTL_SECONDS must be between 15 and 600.')
+CONTROLLER_COMMAND_PROTOCOL = os.getenv('CONTROLLER_COMMAND_PROTOCOL', 'legacy')
+if CONTROLLER_COMMAND_PROTOCOL not in {'legacy', 'four-controller-v2'}:
+    raise ValueError('CONTROLLER_COMMAND_PROTOCOL must be legacy or four-controller-v2.')
 MQTT_COMMAND_USERNAME = os.getenv('MQTT_COMMAND_USERNAME', '')
 MQTT_COMMAND_PASSWORD = os.getenv('MQTT_COMMAND_PASSWORD', '')
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '').strip()
