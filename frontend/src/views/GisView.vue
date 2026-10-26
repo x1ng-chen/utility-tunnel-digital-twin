@@ -204,9 +204,9 @@ onBeforeUnmount(() => {
 
 <style>
 .gis-marker.alarm i {
-  border-color: #ffd0d7;
-  background: #ff4d61;
-  box-shadow: 0 0 0 8px #ff4d6124, 0 0 25px #ff4d61;
+  border-color: var(--ops-danger-line);
+  background: var(--ops-danger);
+  box-shadow: 0 0 0 8px rgba(35, 67, 104, 0.12), 0 0 25px rgba(35, 67, 104, 0.12);
 }
-.gis-module-list button > i.alarm, .gis-legend i.alarm { background: #ff4d61; }
+.gis-module-list button > i.alarm, .gis-legend i.alarm { background: var(--ops-danger-soft); }
 </style>

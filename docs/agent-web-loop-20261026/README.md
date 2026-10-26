@@ -1,6 +1,6 @@
 # 网页Agent闭环：实施与验收入口
 
-2026-10-26，基于main f18d8bf的隔离工作分支。原工作目录、业务数据库、固件与V16/V17交付原件保留。当前软件已实现下列能力；实测结果单独见validation.json，不将自动契约检查当作模型全部事实正确。
+2026-10-26，Agent实现基于main f18d8bf的隔离工作分支，随后整合main a0ef1b1的浅色界面与助手悬浮修复。原工作目录、业务数据库、固件与V16/V17交付原件保留。当前软件已实现下列能力；实测结果单独见validation.json，不将自动契约检查当作模型全部事实正确。最新界面整合范围见[整合说明](UI-INTEGRATION.md)。
 
 ## 已实现
 
@@ -65,7 +65,7 @@ python manage.py evaluate_agent_baseline --settings=config.agent_eval_settings �
 
 供应商工具调用与usage解析依据：[DeepSeek工具调用](https://api-docs.deepseek.com/guides/tool_calls/)、[Chat Completions接口](https://api-docs.deepseek.com/api/create-chat-completion/)，核对日期2026-10-26。没有引入新Agent框架或OpenAI SDK。
 
-## 本轮实际验证（2026-10-26）
+## Agent功能阶段验证（整合前，2026-10-26）
 
 - 后端172项、前端116项通过（含真实V17 GLB）；生产构建通过。
 - 新增3项无头Chromium浏览器回归全部通过，使用真实隔离API、模型和工单接口；模型文字响应为明确标记的桩，不冒充真实模型浏览器验收。
@@ -75,3 +75,7 @@ python manage.py evaluate_agent_baseline --settings=config.agent_eval_settings �
 - 本轮曾发现并修复验收账号未设置登录标识、场景绑定置空顺序、只读角色草案、文字冒充草案、回复截断与验收限流配置问题。日志位于本机artifacts/software-agent-20261025/publish与本隔离目录.agent-eval；未提交凭据、原始聊天日志或运行数据库。
 
 真实模型网页闭环另以显式付费开关运行1次通过：P5排障、MQ4-05草案、取消零新增、确认创建、按真实WO编号只读复核。取得3份实际DeepSeek回复，确认由测试程序点击，不冒充人工操作；没有使用模型响应桩。普通CI默认跳过此付费用例。详细入口、静态种子过期说明和复现命令见[演示操作脚本](DEMO.md)。
+
+## 最新界面整合验证
+
+整合main a0ef1b1后，前端116项、6项浏览器检查与生产构建通过。浏览器覆盖11个业务页、桌面滚动固定、手机/平板输入区、31路定位、工单流程、来源核验失败与只读权限；实际V17 GLB参与验证。付费模型用例本次跳过，后端无代码变化且未重复执行前轮172项。仪表盘和助手均正确标明模拟测试；旧风机控制协议已明确标识，详细记录见[整合说明](UI-INTEGRATION.md)。

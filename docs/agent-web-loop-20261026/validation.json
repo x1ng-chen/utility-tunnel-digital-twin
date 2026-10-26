@@ -2,7 +2,8 @@
   "date": "2026-10-26",
   "baseCommit": "f18d8bf5c667e9df14c9126cf8fe540ed08a0052",
   "backendTests": {
-    "passed": 172
+    "passed": 172,
+    "phase": "agent_implementation_before_ui_integration"
   },
   "frontendTests": {
     "passed": 116,
@@ -17,7 +18,8 @@
       "cancel/confirm/response loss/idempotent retry/returned order review",
       "mobile viewport and viewer write restriction"
     ],
-    "paidCaseSkippedByDefault": true
+    "paidCaseSkippedByDefault": true,
+    "phase": "agent_implementation_before_ui_integration"
   },
   "modelEvaluation": {
     "model": "deepseek-flash",
@@ -123,5 +125,46 @@
     "testWorkOrderCode": "WO-261026-CAC41A"
   },
   "recordedKnownTokensAllGroups": 1497043,
-  "knownTokenScope": "recorded Agent CLI attempts and followups, plain-model baseline and explicit live browser test; missing provider usage remains unknown"
+  "knownTokenScope": "recorded Agent CLI attempts and followups, plain-model baseline and explicit live browser test; missing provider usage remains unknown",
+  "latestValidation": "uiIntegration",
+  "uiIntegration": {
+    "date": "2026-10-26",
+    "mainCommit": "a0ef1b1029062789fa8fe8a1806a032b68c23bc7",
+    "agentParentCommit": "d4b08a6",
+    "frontendTests": {
+      "passed": 116,
+      "actualV17GlbIncluded": true
+    },
+    "productionBuild": "PASS",
+    "browserTests": {
+      "passed": 6,
+      "paidLiveCaseSkipped": 1,
+      "mode": "actual isolated API and V17 GLB; chat responses explicitly stubbed",
+      "coverage": [
+        "31 sensor provenance and five stations plus same-station targets",
+        "cancel/confirm/response loss/idempotent retry/returned work-order review",
+        "viewer write restriction",
+        "viewport-fixed assistant and text contrast; 800x600, 390x844, 390x640 layouts",
+        "source endpoint failure retains unknown provenance",
+        "all 11 business routes, light background and no horizontal overflow"
+      ]
+    },
+    "reports": {
+      "frontend": ".agent-eval/integration-frontend-final.log",
+      "build": ".agent-eval/integration-build-final.log",
+      "browser": ".agent-eval/integration-browser-v2.log"
+    },
+    "initialBrowserAttempt": {
+      "log": ".agent-eval/integration-browser-final.log",
+      "result": "5 passed; 1 navigation test timed out; paid test skipped",
+      "reason": "test assumed anchor links; actual navigation uses buttons; corrected selector and reran all cases"
+    },
+    "backendChanged": false,
+    "backendTestsRerun": false,
+    "firmwareAndModelOriginalsChanged": false,
+    "paidModelCallsThisIntegration": 0,
+    "visualReview": "desktop and mobile screenshots inspected",
+    "legacyControllerWriteProtocolMigrated": false,
+    "originalDirtyCheckoutPreserved": true
+  }
 }

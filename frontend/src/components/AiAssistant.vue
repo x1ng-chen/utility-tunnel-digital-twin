@@ -123,10 +123,10 @@ function onInputKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <button class="ai-assistant-launcher" type="button" :aria-expanded="open" aria-controls="ai-assistant-panel" aria-label="打开 AI 助手" @click="open = !open">
-    <Sparkles /><span>AI 助手</span>
-  </button>
   <Teleport to="body">
+    <button class="ai-assistant-launcher" type="button" :aria-expanded="open" aria-controls="ai-assistant-panel" aria-label="打开 AI 助手" @click="open = !open">
+      <Sparkles /><span>AI 助手</span>
+    </button>
     <section v-if="open" id="ai-assistant-panel" class="ai-assistant-panel" role="dialog" aria-label="AI 助手" @keydown.esc="open = false">
       <header class="ai-assistant-header">
         <span class="ai-assistant-avatar"><Sparkles /></span>

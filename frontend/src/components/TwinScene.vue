@@ -80,10 +80,10 @@ function makeFallbackScene() {
   scene.add(fallbackSceneRoot);
   const corridor = new Group();
   corridor.name = 'TUNNEL_FALLBACK_CORRIDOR';
-  const floor = new Mesh(new BoxGeometry(32, .32, 18), new MeshStandardMaterial({ color: 0x102643, metalness: .5, roughness: .44 }));
+  const floor = new Mesh(new BoxGeometry(32, .32, 18), new MeshStandardMaterial({ color: 0xd5e1ee, metalness: .5, roughness: .44 }));
   floor.position.y = -.2;
   corridor.add(floor);
-  const wallMaterial = new MeshStandardMaterial({ color: 0x173558, metalness: .38, roughness: .56, transparent: true, opacity: .88 });
+  const wallMaterial = new MeshStandardMaterial({ color: 0xc5d5e8, metalness: .38, roughness: .56, transparent: true, opacity: .88 });
   for (const side of [-1, 1]) {
     const wall = new Mesh(new BoxGeometry(32, 5.5, .18), wallMaterial.clone());
     wall.position.set(0, 2.55, side * 8.8);
@@ -118,7 +118,7 @@ function addFallbackAsset(asset: Asset) {
   const group = new Group();
   group.name = asset.mesh || asset.code;
   group.userData.assetCode = asset.code;
-  const box = new Mesh(new BoxGeometry(.72, .72, .72), new MeshStandardMaterial({ color: 0x294a71, metalness: .48, roughness: .25, emissive: 0x000000 }));
+  const box = new Mesh(new BoxGeometry(.72, .72, .72), new MeshStandardMaterial({ color: 0x7898bb, metalness: .48, roughness: .25, emissive: 0x000000 }));
   const beacon = new Mesh(new SphereGeometry(.18, 18, 18), new MeshStandardMaterial({ color: 0xffffff, emissive: 0x4ee7c3, emissiveIntensity: 1.7 }));
   beacon.position.y = .55;
   group.add(box, beacon);
@@ -505,8 +505,8 @@ function reloadModel() {
 onMounted(() => {
   if (!host.value) return;
   scene = new Scene();
-  scene.background = new Color(0x081628);
-  scene.fog = new Fog(0x081628, 22, 55);
+  scene.background = new Color(0xeaf0f8);
+  scene.fog = new Fog(0xeaf0f8, 22, 55);
   camera = new PerspectiveCamera(48, 1, .1, 200);
   const navigatorCapabilities = navigator as Navigator & { deviceMemory?: number };
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -538,8 +538,8 @@ onMounted(() => {
   controls.listenToKeyEvents(window);
   controls.addEventListener('change', publishCameraDistance);
   resetView();
-  scene.add(new HemisphereLight(0x8ba6ff, 0x071021, 2.1));
-  const key = new DirectionalLight(0xb5d5ff, 2.5);
+  scene.add(new HemisphereLight(0xf4f8ff, 0xb5c4d8, 2.1));
+  const key = new DirectionalLight(0xffffff, 2.5);
   key.position.set(10, 16, 10);
   scene.add(key);
   renderer.domElement.addEventListener('pointerdown', onCanvasPointerDown);

@@ -280,7 +280,7 @@ test('全部业务页面通过桌面端布局巡检', async ({ page }) => {
       await expect(page.locator('.gis-marker.alarm').first()).toBeVisible();
       await expect(page.locator('.gis-module-list button > i.alarm').first()).toBeVisible();
       await expect(page.locator('.gis-legend')).toContainText('告警');
-      await expect(page.locator('.gis-marker.alarm i').first()).toHaveCSS('background-color', 'rgb(255, 77, 97)');
+      await expect(page.locator('.gis-marker.alarm i').first()).toHaveCSS('background-color', 'rgb(185, 54, 77)');
     }
     if (route === '/twin-3d') {
       const gap = await page.locator('.twin-stage-panel').evaluate((stage) => {
