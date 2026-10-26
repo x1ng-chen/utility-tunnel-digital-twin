@@ -122,6 +122,8 @@ int main(void)
 #ifndef MINIMAL_485
   if (board_config.has_screen) Screen_Init();
   if (board_config.has_joystick) Joystick_Init();
+  /* 屏幕初始化会改动 GPIOB 配置，重新把 I²C 引脚设回开漏。 */
+  BoardIo_ReinitI2c();
 #endif
 
   {
@@ -161,18 +163,16 @@ int main(void)
           Actuators_SetRelay(alarm ? 1U : 0U);
         }
       }
-      /* 软件 SPI 刷屏较慢，先按 10 秒节奏，避免挡住 Modbus 应答。 */
+      /* 屏幕整屏刷新约 200 ms，比采样慢；1 秒一次避免挡住 Modbus 应答。 */
       {
         static uint32_t last_screen;
-        static uint8_t screen_first = 1U;
         if (board_config.has_screen &&
-            (screen_first || ((uint32_t)(now - last_screen) >= 10000U)))
+            ((uint32_t)(now - last_screen) >= 500U))
         {
           Screen_Update(board_config.id, sequence, now / 1000U,
                         BoardIo_AlarmActive(), BoardIo_Samples(),
                         BoardIo_SampleCount());
           last_screen = now;
-          screen_first = 0U;
         }
       }
       last_sample_at = now;

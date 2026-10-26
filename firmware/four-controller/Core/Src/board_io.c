@@ -24,12 +24,16 @@ static uint8_t sample_count;
 volatile uint8_t BoardIo_I2cScanResult;
 volatile uint8_t BoardIo_ShtDebug;
 volatile uint8_t BoardIo_ShtRaw[6];
+volatile uint8_t BoardIo_I2cIdleSda;
+volatile uint8_t BoardIo_I2cIdleScl;
+volatile uint8_t BoardIo_ShtFoundAddr;
 
 /* ---------- 软件 I2C（沿用旧台架时序，速率不高但足够 SHT30） ---------- */
 
 /* 与旧台架代码一致，每半周期 1 ms，彻底排除时序问题。 */
 static void I2c_Delay(void) { HAL_Delay(1U); }
 
+/* 与旧台架代码一致：两根线都用开漏输出，依赖模块外部上拉。 */
 static void I2c_Sda(GPIO_PinState state)
 {
   HAL_GPIO_WritePin(i2c_bus.port, i2c_bus.sda_pin, state);
@@ -225,7 +229,26 @@ uint8_t BoardIo_AdcRead(uint32_t channel, uint16_t *raw)
   return Adc_ReadRaw(channel, raw);
 }
 
-static uint8_t BoardIo_I2cScan(void)
+void BoardIo_ReinitI2c(void)
+{
+  GPIO_InitTypeDef gpio = {0};
+  gpio.Pin = i2c_bus.scl_pin | i2c_bus.sda_pin;
+  gpio.Mode = GPIO_MODE_OUTPUT_OD;
+  gpio.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(i2c_bus.port, &gpio);
+  HAL_GPIO_WritePin(i2c_bus.port, i2c_bus.scl_pin | i2c_bus.sda_pin, GPIO_PIN_SET);
+}
+
+static uint8_t I2c_Probe(uint8_t address)
+{
+  uint8_t ack;
+  I2c_Start();
+  ack = I2c_WriteByte((uint8_t)(address << 1U));
+  I2c_Stop();
+  return ack;   /* 1 = ACK */
+}
+
+static uint8_t __attribute__((unused)) BoardIo_I2cScan(void)
 {
   uint8_t address;
 
@@ -308,10 +331,10 @@ void BoardIo_Init(void)
   i2c_bus.port = board_config.i2c_port;
   i2c_bus.scl_pin = board_config.i2c_scl;
   i2c_bus.sda_pin = board_config.i2c_sda;
+  /* 与旧台架一致：SCL/SDA 都是开漏输出，空闲写 1 由模块上拉拉高。 */
   gpio.Pin = i2c_bus.scl_pin | i2c_bus.sda_pin;
   gpio.Mode = GPIO_MODE_OUTPUT_OD;
-  gpio.Pull = GPIO_PULLUP;   /* 模块没有上拉时靠内部弱上拉兜底 */
-  gpio.Speed = GPIO_SPEED_FREQ_HIGH;
+  gpio.Speed = GPIO_SPEED_FREQ_LOW;   /* 与旧台架一致 */
   HAL_GPIO_Init(i2c_bus.port, &gpio);
   HAL_GPIO_WritePin(i2c_bus.port, i2c_bus.scl_pin | i2c_bus.sda_pin, GPIO_PIN_SET);
 
@@ -326,16 +349,9 @@ void BoardIo_Init(void)
   if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) Error_Handler();
 
   HAL_Delay(50U);
-  /* 给 SHT3x 发软复位 0x30A2，避免芯片停在上电异常状态。 */
-  I2c_Start();
-  if (I2c_WriteByte(0x88U) == 1U)
-  {
-    (void)I2c_WriteByte(0x30U);
-    (void)I2c_WriteByte(0xA2U);
-  }
-  I2c_Stop();
-  HAL_Delay(10U);
-  BoardIo_I2cScanResult = BoardIo_I2cScan();
+  BoardIo_I2cIdleSda = (HAL_GPIO_ReadPin(i2c_bus.port, i2c_bus.sda_pin) == GPIO_PIN_SET) ? 1U : 0U;
+  BoardIo_I2cIdleScl = (HAL_GPIO_ReadPin(i2c_bus.port, i2c_bus.scl_pin) == GPIO_PIN_SET) ? 1U : 0U;
+  BoardIo_I2cScanResult = 0U;
 }
 
 /* ---------- 采集 ---------- */
@@ -343,6 +359,28 @@ void BoardIo_Init(void)
 void BoardIo_SampleAll(void)
 {
   uint8_t i;
+
+  /* 先读 I2C 温湿度，再读 ADC/GPIO，与旧台架顺序一致。 */
+  for (i = 0U; i < sample_count; ++i)
+  {
+    if (board_config.sensors[i].type == SENSOR_SHT)
+    {
+      SensorSample *out = &samples[i];
+      uint8_t address = board_config.sensors[i].i2c_address;
+      BoardIo_ShtFoundAddr = 0U;
+      if (Sht30_Read(address, out))
+      {
+        BoardIo_ShtFoundAddr = address;
+      }
+      else
+      {
+        uint8_t alternate = (address == 0x44U) ? 0x45U : 0x44U;
+        if (Sht30_Read(alternate, out)) BoardIo_ShtFoundAddr = alternate;
+        else if (I2c_Probe(0x40U)) BoardIo_ShtFoundAddr = 0x40U;
+      }
+    }
+  }
+
   for (i = 0U; i < sample_count; ++i)
   {
     const SensorDef *s = &board_config.sensors[i];
@@ -392,14 +430,7 @@ void BoardIo_SampleAll(void)
         break;
 
       case SENSOR_SHT:
-      {
-        /* 优先用扫描到的地址，失败再试配置地址。 */
-        uint8_t target = ((BoardIo_I2cScanResult >= 0x08U) &&
-                          (BoardIo_I2cScanResult < 0x78U))
-                         ? BoardIo_I2cScanResult : s->i2c_address;
-        (void)Sht30_Read(target, out);
-        break;
-      }
+        break;   /* 已在函数开头优先读取 */
 
       default:
         out->value = 0U;

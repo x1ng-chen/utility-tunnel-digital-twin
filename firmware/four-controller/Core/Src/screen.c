@@ -81,8 +81,7 @@ void Screen_Update(uint8_t board, uint16_t sequence, uint32_t uptime_s,
     }
   }
 
-  ST7735_FillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, LCD_BLACK);
-
+  /* 不整屏刷新：DrawString 自带背景色，逐行覆盖，避免 32 KB 清屏阻塞。 */
   snprintf(line, sizeof line, "CTRL-%u  %s", (unsigned)board, station_name(board));
   ST7735_DrawString(0, 0 * LINE_H, line, LCD_CYAN, LCD_BLACK);
 
@@ -112,13 +111,10 @@ void Screen_Update(uint8_t board, uint16_t sequence, uint32_t uptime_s,
   snprintf(line, sizeof line, "LVL %u  O2 %umV", level, o2_mv);
   ST7735_DrawString(0, 5 * LINE_H, line, LCD_WHITE, LCD_BLACK);
 
-  snprintf(line, sizeof line, "S%u %02X%02X%02X",
-           (unsigned)BoardIo_ShtDebug, (unsigned)BoardIo_ShtRaw[0],
-           (unsigned)BoardIo_ShtRaw[1], (unsigned)BoardIo_ShtRaw[2]);
+  snprintf(line, sizeof line, "ALM %s  %lus", alarm ? "Y" : "N",
+           (unsigned long)uptime_s);
   ST7735_DrawString(0, 6 * LINE_H, line,
                     alarm ? LCD_RED : LCD_GREEN, LCD_BLACK);
-  (void)uptime_s;
-  (void)alarm;
 
   (void)sequence;
 }

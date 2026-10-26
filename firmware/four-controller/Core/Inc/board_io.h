@@ -27,6 +27,13 @@ extern volatile uint8_t BoardIo_I2cScanResult;
 /* SHT 读取失败点：0=成功，1=写地址 NACK，2/3=命令 NACK，4=读地址 NACK，5/6=CRC 错。 */
 extern volatile uint8_t BoardIo_ShtDebug;
 extern volatile uint8_t BoardIo_ShtRaw[6];
+extern volatile uint8_t BoardIo_I2cIdleSda;
+extern volatile uint8_t BoardIo_I2cIdleScl;
+/* 探测到的候选温湿度地址：0x44/0x45/0x40，0 表示都没应答。 */
+extern volatile uint8_t BoardIo_ShtFoundAddr;
+
+/* 屏幕初始化会改动 GPIOB 配置，之后用它重新把 I²C 引脚设回开漏。 */
+void BoardIo_ReinitI2c(void);
 
 /* 供执行器/屏幕等模块共用的本地总线访问。 */
 uint8_t BoardIo_I2cRead16(uint8_t address, uint8_t reg, uint16_t *value);
