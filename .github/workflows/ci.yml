@@ -5,11 +5,13 @@ on:
     branches: [main]
     paths:
       - 'firmware/**'
+      - 'docs/hardware/four-controller-wiring-20261026/**'
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'firmware/**'
+      - 'docs/hardware/four-controller-wiring-20261026/**'
       - '.github/workflows/ci.yml'
 
 permissions:
@@ -32,3 +34,38 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/firmware/stm32f103rct6/cmake/gcc-arm-none-eabi.cmake"
       - name: Build firmware
         run: cmake --build build/firmware --parallel 2
+      - name: Validate protocol isolation and build diagnostic addresses 1 through 4
+        run: |
+          for address in 1 2 3 4; do
+            cc -std=c11 -Wall -Wextra -Werror -DBENCH_ADDRESS=$address \
+              -Ifirmware/rs485-bench/common firmware/rs485-bench/tests/protocol_test.c \
+              -o build/protocol-$address
+            build/protocol-$address
+            cmake -S firmware/rs485-bench/stm32 -B build/rs485-$address -DBENCH_SLAVE_ADDRESS=$address
+            cmake --build build/rs485-$address --parallel 2
+          done
+      - name: Validate deterministic wiring outputs
+        run: |
+          python3 docs/hardware/four-controller-wiring-20261026/generate_plan.py
+          python3 docs/hardware/four-controller-wiring-20261026/validate_wiring.py
+          git diff --exit-code -- docs/hardware/four-controller-wiring-20261026/README.md \
+            docs/hardware/four-controller-wiring-20261026/wiring-plan.json \
+            docs/hardware/four-controller-wiring-20261026/wiring-connections.csv \
+            docs/hardware/four-controller-wiring-20261026/validation-report.json
+      - name: Scan repository safety
+        run: node tools/quality-scan.mjs
+
+  s3-bench:
+    name: S3 single and dual diagnostic builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          lfs: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - run: python -m pip install platformio==6.1.19
+      - name: Build S3 single and dual pollers (no hardware access)
+        run: python -m platformio run --project-dir firmware/rs485-bench/s3 -e s3_gateway_bench -e s3_gateway_bench_dual

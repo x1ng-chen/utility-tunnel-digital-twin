@@ -1,5 +1,9 @@
 <div align="center">
 
+## 最新硬件与485进度（2026-10-26）
+
+[四主控就近引脚表](docs/hardware/four-controller-wiring-20261026/README.md)按左下1、右下2、右上3、左上4编号，双屏在1/2号、摇杆在2号；[全部主控互连](docs/hardware/four-controller-wiring-20261026/INTERCONNECT.md)列出网关→4→3→2→1的线路及终端设置。[诊断固件与验收摘要](firmware/rs485-bench/README.md)记录已完成的S3↔4号短时通信、断线自动恢复和3号单板启动；3/4双从站镜像已构建但尚未写入S3，1/2号及四板总线仍待实施。
+
 ## 最新软件协作入口（2026-10-25）
 
 [四主控五检测点 Agent 软件实施记录](docs/software-agent-20261025/README.md)提供巡检、排障、工单人工确认/复核、三维定位及网关四主题上行的使用说明与待办。[发布整合验证](docs/software-agent-20261025/publish-integration.json)记录基于当前主线的测试结果。登录数据服务后可从右下角助手进入“五站31路巡检”；该入口不依赖模型密钥。

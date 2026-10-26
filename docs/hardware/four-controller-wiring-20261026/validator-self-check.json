@@ -1,0 +1,12 @@
+{
+  "baseline": "PASS",
+  "mutated_invalid_plans_rejected": {
+    "screen_fan_PA7_collision": true,
+    "wrong_adc_channel": true,
+    "wrong_termination": true,
+    "cross_zone_sensor": true,
+    "dma_collision": true,
+    "i2c_address_collision": true
+  },
+  "note": "In-memory checks only; no firmware or hardware operation."
+}

@@ -34,6 +34,9 @@ model/utility-tunnel-annular-v13-candidate.glb filter=lfs diff=lfs merge=lfs -te
 model/previews/v13-*.png filter=lfs diff=lfs merge=lfs -text
 
 # Reviewed model packages retain exact bytes for their SHA256 manifests.
+# Wiring generation and published bench sources use platform-independent LF.
+docs/hardware/four-controller-wiring-20261026/** text eol=lf
+firmware/rs485-bench/** text eol=lf
 model/square-five-station-v16-concept/** -text whitespace=cr-at-eol,-blank-at-eof
 model/square-five-station-v16-concept/**/*.blend filter=lfs diff=lfs merge=lfs -text
 model/square-five-station-v16-concept/**/*.glb filter=lfs diff=lfs merge=lfs -text
