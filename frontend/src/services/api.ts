@@ -13,12 +13,23 @@ export type AgentProposal = {
   kind: 'work_order'; assetCode: string; title: string; description: string;
   priority: 'low' | 'normal' | 'high' | 'urgent'; requires_confirmation: true;
 };
+export type AgentTask = { kind: 'draft'; asset_code: string } | { kind: 'diagnosis' | 'inspection'; station_id: string } | { kind: 'review'; work_order_code: string };
+export type AgentDataContext = { mode: string; label: string; scenarioId?: string | null; seededAt?: string };
+export type AgentRuntime = { requestId?: string; layoutVersion: string; dataContext: AgentDataContext;
+  configuredModel?: string; providerModels: string[]; modelCalls: number; elapsedMs?: number;
+  tokens: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null;
+  tokenUsageComplete?: boolean; cost: number | null };
+export type AgentDiagnosis = { state: string; boundary: string;
+  facts: { assetCode: string; controllerId: string; rpm: number | null; currentA: number | null; supplyV: number | null }[];
+  candidates: { code: string; title: string; support: string[]; counterevidence: string[]; missing: string[]; nextCheck: string; conclusion: string }[];
+  missingEvidence: string[] };
 export type AgentResponse = {
   reply: string; queriedAt?: string; mode?: 'tool_verified' | 'explanation_only';
   traces?: AgentTrace[]; evidence?: AgentEvidence[]; proposals?: AgentProposal[];
   locations?: AgentLocation[];
-  inspection?: { evidenceId: string; expected: number; registered: number; usable: number; missingAssetCodes: string[];
-    stations: { stationId: string; expected: number; registered: number; usable: number; alertCount: number }[] } | null;
+  runtime?: AgentRuntime; diagnosis?: AgentDiagnosis | null;
+  inspection?: { evidenceId: string; expected: number; registered: number; usable: number; scenarioUsable?: number; missingAssetCodes: string[];
+    stations: { stationId: string; expected: number; registered: number; usable: number; scenarioUsable?: number; alertCount: number }[] } | null;
 };
 
 const localStorageRef = typeof window !== 'undefined' ? window.localStorage : null;
@@ -110,7 +121,8 @@ export const api = {
   reissueRegistrationSetupToken: (id: number) => client.post(`/admin/registration-requests/${id}/setup-token/`),
   dashboard: () => client.get('/dashboard/'),
   controllerCommandConfirmation: (action: ControllerAction, dutyPercent?: number) => client.post('/controllers/CTRL-01/commands/confirmations/', { action, ...(dutyPercent == null ? {} : { dutyPercent }) }),
-  assistantChat: (messages: AssistantMessage[], page: string) => client.post<AgentResponse>('/assistant/chat/', { messages, page }, { timeout: 65000 }),
+  agentContext: () => client.get<{ dataContext: AgentDataContext; layoutVersion: string; modelNotice: string }>('/assistant/context/'),
+  assistantChat: (messages: AssistantMessage[], page: string, task?: AgentTask) => client.post<AgentResponse>('/assistant/chat/', { messages, page, ...(task ? { task } : {}) }, { timeout: 65000 }),
   stationInspection: (station = 'all') => client.get<AgentResponse>('/assistant/inspection/', { params: { station } }),
   controllerCommand: (action: ControllerAction, confirmationToken: string, dutyPercent?: number) => client.post('/controllers/CTRL-01/commands/', { action, confirmationToken, ...(dutyPercent == null ? {} : { dutyPercent }) }),
   twinModelReadiness: () => client.get('/twin/model-readiness/'),

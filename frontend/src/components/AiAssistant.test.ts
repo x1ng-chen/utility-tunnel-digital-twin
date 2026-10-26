@@ -15,7 +15,7 @@ describe('agent proposal human confirmation', () => {
   const proposal: AgentProposal = { kind: 'work_order', assetCode: 'CTRL-01', title: '节点通信巡检',
     description: '核对供电与 ESP8266 链路', priority: 'high', requires_confirmation: true };
   beforeEach(() => {
-    vi.restoreAllMocks(); push.mockClear(); sessionStorage.clear(); setActivePinia(createPinia());
+    vi.restoreAllMocks(); vi.spyOn(api, 'agentContext').mockResolvedValue({ data: { dataContext: { mode: 'simulated_test', label: '模拟测试 · 隔离验收库' }, modelNotice: '模型主控文字旧编号' } } as never); push.mockClear(); sessionStorage.clear(); setActivePinia(createPinia());
     const operations = useOperationsStore(); operations.source = 'api'; operations.offline = false;
     useAuthStore().user = { id: 1, email: 'test', displayName: '测试人员', role: 'operator' };
     useAiAssistantStore().messages = [{ role: 'assistant', content: '等待人工确认。', proposals: [{ ...proposal }] }];
@@ -80,4 +80,33 @@ describe('agent proposal human confirmation', () => {
     expect(push).not.toHaveBeenCalled();
     expect(wrapper.get('[role="alert"]').text()).toContain('台账');
   });
+  it('sends the explicit selected station task and shows sandbox provenance', async () => {
+    const chat = vi.spyOn(api, 'assistantChat').mockResolvedValue({ data: { reply: '模拟测试：排查结果' } } as never);
+    await wrapper.get('.ai-assistant-launcher').trigger('click'); await flushPromises();
+    await wrapper.get('[aria-label="选择排障检测点"]').setValue('P2');
+    await wrapper.findAll('.ai-agent-workflow button')[0].trigger('click'); await flushPromises();
+    expect(chat).toHaveBeenCalled();
+    expect(chat.mock.calls[0][2]).toEqual({ kind: 'diagnosis', station_id: 'P2' });
+    expect(wrapper.get('.ai-agent-context').text()).toContain('模拟测试');
+  });
+
+  it('uses the returned work order code for a read-only follow-up', async () => {
+    vi.spyOn(api, 'createWorkOrder').mockResolvedValue({ data: { code: 'WO-RETURNED-123' } } as never);
+    const chat = vi.spyOn(api, 'assistantChat').mockResolvedValue({ data: { reply: '待人工复核' } } as never);
+    await wrapper.get('.ai-assistant-launcher').trigger('click');
+    await wrapper.get('.ai-agent-proposal button').trigger('click');
+    await wrapper.get('.ai-agent-confirm').findAll('button')[1].trigger('click'); await flushPromises();
+    await wrapper.get('.ai-agent-proposal button').trigger('click'); await flushPromises();
+    expect(chat.mock.calls[0][2]).toEqual({ kind: 'review', work_order_code: 'WO-RETURNED-123' });
+  });
+
+  it('cancels a proposal without creating a work order', async () => {
+    const create = vi.spyOn(api, 'createWorkOrder');
+    await wrapper.get('.ai-assistant-launcher').trigger('click');
+    await wrapper.get('.ai-agent-proposal button').trigger('click');
+    await wrapper.get('.ai-agent-confirm').findAll('button')[0].trigger('click');
+    expect(wrapper.find('.ai-agent-confirm').exists()).toBe(false);
+    expect(create).not.toHaveBeenCalled();
+  });
+
 });

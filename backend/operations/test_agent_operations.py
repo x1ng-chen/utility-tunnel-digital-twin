@@ -54,7 +54,7 @@ class StationAgentTests(TestCase):
         self.assertEqual(result['expected_sensor_count'], 31)
         self.assertEqual(result['registered_sensor_count'], 31)
         self.assertEqual(result['usable_observation_sensor_count'], 31)
-        self.assertEqual(result['controller_allocation'], {'CTRL-01': 7, 'CTRL-02': 6, 'CTRL-03': 11, 'CTRL-04': 7})
+        self.assertEqual(result['controller_allocation'], {'CTRL-01': 11, 'CTRL-02': 7, 'CTRL-03': 6, 'CTRL-04': 7})
         self.assertEqual(Telemetry.objects.count(), before)
         self.assertEqual(WorkOrder.objects.count(), 0)
         self.assertEqual(sum(len(i['snapshot']['readings']) for i in result['items']), 35)

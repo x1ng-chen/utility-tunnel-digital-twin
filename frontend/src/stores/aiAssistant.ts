@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 import { defineStore } from 'pinia';
-import { api, type AssistantMessage, type AgentResponse } from '../services/api';
+import { api, type AssistantMessage, type AgentResponse, type AgentTask } from '../services/api';
 
 type AgentMessage = AssistantMessage & Omit<AgentResponse, 'reply'>;
 
@@ -30,7 +30,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     } finally { if (requestRevision === revision) pending.value = false; }
   }
 
-  async function send(question: string, page: string) {
+  async function send(question: string, page: string, task?: AgentTask) {
     const content = question.trim();
     if (!content || pending.value) return;
     // Evidence is server-generated and must never be replayed as client tool context.
@@ -40,7 +40,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     pending.value = true;
     error.value = '';
     try {
-      const response = await api.assistantChat(history, page);
+      const response = await api.assistantChat(history, page, task);
       if (requestRevision === revision) {
         const { reply, ...metadata } = response.data;
         messages.value.push({ role: 'user', content }, { role: 'assistant', content: reply.slice(0, 2000), ...metadata });

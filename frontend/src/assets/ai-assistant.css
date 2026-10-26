@@ -18,3 +18,14 @@
 .ai-agent-location{padding:10px 0;border-bottom:1px solid #29425f}.ai-agent-location b,.ai-agent-location small{display:block;margin-bottom:6px;overflow-wrap:anywhere}
 
 .ai-agent-inspection{margin-top:9px;padding:10px;border:1px solid #345674;border-radius:9px;font-size:11px}.ai-agent-inspection table{width:100%;margin:8px 0;border-collapse:collapse;text-align:left}.ai-agent-inspection th,.ai-agent-inspection td{padding:5px;border-bottom:1px solid #29425f}.ai-agent-inspection small{display:block;line-height:1.5;color:#bad0e8}
+
+.ai-agent-context,.ai-agent-runtime{display:grid;gap:4px;padding:9px 12px;border:1px solid #536179;background:#172331;color:#f1cb85;font-size:11px;overflow-wrap:anywhere}
+.ai-agent-context small,.ai-agent-runtime small{font-size:10px;color:#c0cbd7}
+.ai-agent-workflow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:8px 12px}
+.ai-agent-workflow label{display:grid;grid-template-columns:48px minmax(0,1fr);align-items:center;font-size:11px;color:#adc6de}
+.ai-agent-workflow select,.ai-agent-workflow input{min-width:0;width:100%;height:32px;background:#102138;color:#e2edf7;border:1px solid #41607c;border-radius:4px;padding:3px}
+.ai-agent-workflow button,.ai-agent-proposal span button{min-height:32px;border:1px solid #41607c;border-radius:4px;background:#183957;color:#d2ecff;font-size:11px;padding:4px 8px}
+.ai-agent-diagnosis{padding:8px;border:1px solid #43657b;font-size:11px}.ai-agent-diagnosis article{padding:8px 0;border-bottom:1px solid #355067}.ai-agent-diagnosis p{margin:4px 0}.ai-agent-runtime{margin-top:8px}
+
+.ai-assistant-header,.ai-agent-context,.ai-agent-shortcuts,.ai-agent-workflow,.ai-assistant-compose,.ai-assistant-footnote{flex-shrink:0}.ai-assistant-log{min-height:50px}
+@media(max-width:720px){.ai-assistant-panel.ai-assistant-panel{width:calc(100vw - 16px);height:calc(100dvh - 150px);max-height:710px}.ai-agent-context small{font-size:9px}.ai-agent-context{padding:6px 10px}.ai-agent-workflow{padding:5px 10px;gap:4px}}

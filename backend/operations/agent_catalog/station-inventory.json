@@ -1,5 +1,5 @@
 {
-  "revision": "four-controller-20261025",
+  "revision": "four-controller-20261026.1",
   "status": "planned_identity_requires_hardware_verification",
   "source": "model/square-five-station-v17-fan-ready/sensor-bindings.json",
   "source_sha256": "4ce94531a77122c0f33d859a9127d047e3b99285a17692b1a61a8a746e2e45c9",
@@ -14,7 +14,7 @@
       "physicalTag": "MQ2-01",
       "targetNode": "SMOKE-01",
       "stationId": "P1",
-      "controllerId": "CTRL-01",
+      "controllerId": "CTRL-04",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -22,7 +22,7 @@
       "physicalTag": "MQ4-01",
       "targetNode": "GAS-CH4-01",
       "stationId": "P1",
-      "controllerId": "CTRL-01",
+      "controllerId": "CTRL-04",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -30,7 +30,7 @@
       "physicalTag": "CO-01",
       "targetNode": "GAS-CO-01",
       "stationId": "P1",
-      "controllerId": "CTRL-01",
+      "controllerId": "CTRL-04",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -38,7 +38,7 @@
       "physicalTag": "FLAME-01",
       "targetNode": "FLAME-01",
       "stationId": "P1",
-      "controllerId": "CTRL-01",
+      "controllerId": "CTRL-04",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -46,7 +46,7 @@
       "physicalTag": "MQ2-02",
       "targetNode": "MQ2-02",
       "stationId": "P2",
-      "controllerId": "CTRL-02",
+      "controllerId": "CTRL-03",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -54,7 +54,7 @@
       "physicalTag": "MQ4-02",
       "targetNode": "MQ4-02",
       "stationId": "P2",
-      "controllerId": "CTRL-02",
+      "controllerId": "CTRL-03",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -62,7 +62,7 @@
       "physicalTag": "CO-02",
       "targetNode": "CO-02",
       "stationId": "P2",
-      "controllerId": "CTRL-02",
+      "controllerId": "CTRL-03",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -70,7 +70,7 @@
       "physicalTag": "FLAME-02",
       "targetNode": "FLAME-02",
       "stationId": "P2",
-      "controllerId": "CTRL-02",
+      "controllerId": "CTRL-03",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -78,7 +78,7 @@
       "physicalTag": "MQ2-03",
       "targetNode": "MQ2-03",
       "stationId": "P3",
-      "controllerId": "CTRL-03",
+      "controllerId": "CTRL-01",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -86,7 +86,7 @@
       "physicalTag": "MQ4-03",
       "targetNode": "MQ4-03",
       "stationId": "P3",
-      "controllerId": "CTRL-03",
+      "controllerId": "CTRL-01",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -94,7 +94,7 @@
       "physicalTag": "CO-03",
       "targetNode": "CO-03",
       "stationId": "P3",
-      "controllerId": "CTRL-03",
+      "controllerId": "CTRL-01",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -102,7 +102,7 @@
       "physicalTag": "FLAME-03",
       "targetNode": "FLAME-03",
       "stationId": "P3",
-      "controllerId": "CTRL-03",
+      "controllerId": "CTRL-01",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -110,7 +110,7 @@
       "physicalTag": "MQ2-04",
       "targetNode": "MQ2-04",
       "stationId": "P4",
-      "controllerId": "CTRL-04",
+      "controllerId": "CTRL-02",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -118,7 +118,7 @@
       "physicalTag": "MQ4-04",
       "targetNode": "MQ4-04",
       "stationId": "P4",
-      "controllerId": "CTRL-04",
+      "controllerId": "CTRL-02",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -126,7 +126,7 @@
       "physicalTag": "CO-04",
       "targetNode": "CO-04",
       "stationId": "P4",
-      "controllerId": "CTRL-04",
+      "controllerId": "CTRL-02",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -134,7 +134,7 @@
       "physicalTag": "FLAME-04",
       "targetNode": "FLAME-04",
       "stationId": "P4",
-      "controllerId": "CTRL-04",
+      "controllerId": "CTRL-02",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -142,7 +142,7 @@
       "physicalTag": "MQ2-05",
       "targetNode": "MQ2-05",
       "stationId": "P5",
-      "controllerId": "CTRL-03",
+      "controllerId": "CTRL-01",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -150,7 +150,7 @@
       "physicalTag": "MQ4-05",
       "targetNode": "MQ4-05",
       "stationId": "P5",
-      "controllerId": "CTRL-03",
+      "controllerId": "CTRL-01",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -158,7 +158,7 @@
       "physicalTag": "CO-05",
       "targetNode": "CO-05",
       "stationId": "P5",
-      "controllerId": "CTRL-03",
+      "controllerId": "CTRL-01",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -166,7 +166,7 @@
       "physicalTag": "FLAME-05",
       "targetNode": "FLAME-05",
       "stationId": "P5",
-      "controllerId": "CTRL-03",
+      "controllerId": "CTRL-01",
       "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER"
     },
     {
@@ -174,7 +174,7 @@
       "physicalTag": "LEVEL-01",
       "targetNode": "MESH_V12-FSIR02_L01_BOARD",
       "stationId": "P1",
-      "controllerId": "CTRL-01",
+      "controllerId": "CTRL-04",
       "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER"
     },
     {
@@ -182,7 +182,7 @@
       "physicalTag": "SHT-01",
       "targetNode": "ENV-01",
       "stationId": "P1",
-      "controllerId": "CTRL-01",
+      "controllerId": "CTRL-04",
       "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER"
     },
     {
@@ -190,7 +190,7 @@
       "physicalTag": "LEVEL-02",
       "targetNode": "MESH_V12-FSIR02_L02_BOARD",
       "stationId": "P2",
-      "controllerId": "CTRL-02",
+      "controllerId": "CTRL-03",
       "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER"
     },
     {
@@ -198,7 +198,7 @@
       "physicalTag": "SHT-02",
       "targetNode": "ENV-02",
       "stationId": "P2",
-      "controllerId": "CTRL-02",
+      "controllerId": "CTRL-03",
       "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER"
     },
     {
@@ -206,7 +206,7 @@
       "physicalTag": "LEVEL-03",
       "targetNode": "MESH_V12-FSIR02_L03_BOARD",
       "stationId": "P3",
-      "controllerId": "CTRL-03",
+      "controllerId": "CTRL-01",
       "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER"
     },
     {
@@ -214,7 +214,7 @@
       "physicalTag": "SHT-03",
       "targetNode": "ENV-03",
       "stationId": "P3",
-      "controllerId": "CTRL-03",
+      "controllerId": "CTRL-01",
       "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER"
     },
     {
@@ -222,7 +222,7 @@
       "physicalTag": "LEVEL-04",
       "targetNode": "MESH_V12-FSIR02_L04_BOARD",
       "stationId": "P4",
-      "controllerId": "CTRL-04",
+      "controllerId": "CTRL-02",
       "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER"
     },
     {
@@ -230,7 +230,7 @@
       "physicalTag": "SHT-04",
       "targetNode": "ENV-04",
       "stationId": "P4",
-      "controllerId": "CTRL-04",
+      "controllerId": "CTRL-02",
       "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER"
     },
     {
@@ -238,7 +238,7 @@
       "physicalTag": "O2-01",
       "targetNode": "GAS-O2-01",
       "stationId": "P1",
-      "controllerId": "CTRL-01",
+      "controllerId": "CTRL-04",
       "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER"
     },
     {
@@ -246,7 +246,7 @@
       "physicalTag": "O2-02",
       "targetNode": "GAS-O2-02",
       "stationId": "P5",
-      "controllerId": "CTRL-03",
+      "controllerId": "CTRL-01",
       "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER"
     },
     {
@@ -254,8 +254,21 @@
       "physicalTag": "O2-03",
       "targetNode": "GAS-O2-03",
       "stationId": "P4",
-      "controllerId": "CTRL-04",
+      "controllerId": "CTRL-02",
       "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER"
     }
-  ]
+  ],
+  "layoutSource": "docs/hardware/four-controller-wiring-20261026/wiring-plan.json",
+  "layoutSourceSha256": "a023252bb0cfc2b3d60d2d4ca928647d094c2e0f6fe61e9c52927c74272f0250",
+  "modelNotice": "V17传感器目标保留；模型内主控文字仍为旧编号，不能当作现场主控身份已迁移。",
+  "controllerLegacyMeshes": {
+    "CTRL-04": "CTRL-01",
+    "CTRL-03": "CTRL-02",
+    "CTRL-01": "CTRL-03",
+    "CTRL-02": "CTRL-04"
+  },
+  "fanControllers": {
+    "FAN-01": "CTRL-04",
+    "FAN-02": "CTRL-02"
+  }
 }

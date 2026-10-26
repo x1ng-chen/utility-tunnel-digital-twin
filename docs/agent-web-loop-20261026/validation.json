@@ -1,0 +1,92 @@
+{
+  "date": "2026-10-26",
+  "baseCommit": "f18d8bf5c667e9df14c9126cf8fe540ed08a0052",
+  "backendTests": {
+    "passed": 170
+  },
+  "frontendTests": {
+    "passed": 116,
+    "actualV17GlbIncluded": true
+  },
+  "frontendProductionBuild": "PASS",
+  "browserTests": {
+    "passed": 3,
+    "mode": "headless Chromium; actual sandbox API, actual V17 GLB and work-order API; LLM response stubbed",
+    "coverage": [
+      "five stations and same-station sensor targets",
+      "cancel/confirm/response loss/idempotent retry/returned order review",
+      "mobile viewport and viewer write restriction"
+    ]
+  },
+  "modelEvaluation": {
+    "model": "deepseek-flash",
+    "compositeAutomatedContracts": {
+      "passed": 12,
+      "total": 12
+    },
+    "regressionAutomatedContracts": {
+      "passed": 30,
+      "total": 30
+    },
+    "primaryCasesWithActualModelResponses": 38,
+    "controlledTimeoutCase": "S05; transport failure injected; not a real provider timeout",
+    "serverPermissionRejections": [
+      "ORD-03",
+      "W02",
+      "S04"
+    ],
+    "latestPrimaryKnownTokens": 516690,
+    "primaryLatencyMs": {
+      "n": 38,
+      "p50": 6500.0,
+      "p95NearestRank": 10391
+    },
+    "allAttemptsRecorded": 99,
+    "failedAttemptsRetained": 9,
+    "compositeRecording": ".agent-eval/runs/20261026T103056676638Z.jsonl",
+    "regressionRecordings": [
+      ".agent-eval/runs/20261026T102557046541Z.jsonl",
+      ".agent-eval/runs/20261026T103041486583Z.jsonl"
+    ],
+    "factScoring": "TEAM_HUMAN_REVIEW_NOT_COMPLETED",
+    "cost": null,
+    "costStatus": "requires actual provider billing reconciliation",
+    "allAttemptRecordedKnownTokensIncludingFollowups": 1259345,
+    "failureCountsAreNotAccuracyScores": true,
+    "issuesFixed": [
+      "reply length cutoff now rejected instead of partial success",
+      "text-only proposal cannot complete explicit draft task",
+      "readonly explicit draft refused before model call",
+      "valid rejected-tool citations are failure evidence, invented IDs still rejected",
+      "sandbox throttle configured in actual DRF rates",
+      "equivalent query tools accepted when evidence is present",
+      "model mapping invalidation occurs after valid activation",
+      "sandbox test accounts have login email identifiers"
+    ]
+  },
+  "comparison": {
+    "packets": 12,
+    "groups": [
+      "M",
+      "L",
+      "A"
+    ],
+    "manualGroup": "NOT_RUN",
+    "plainModelGroup": "NOT_RUN; command implemented and dry-run verified",
+    "humanPreparationTime": null,
+    "efficiencyImprovement": null
+  },
+  "unchanged": [
+    "original dirty checkout",
+    "business database",
+    "firmware",
+    "V16/V17 exact-byte packages"
+  ],
+  "notAccepted": [
+    "real hardware end-to-end",
+    "voice",
+    "public deployment",
+    "full natural-language factual accuracy",
+    "human baseline comparison"
+  ]
+}

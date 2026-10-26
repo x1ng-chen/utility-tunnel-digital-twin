@@ -43,6 +43,10 @@ jobs:
             id: operations
             spec: ops.spec.cjs
             timeout: 240000
+          - name: Agent sandbox workflows
+            id: agent
+            spec: agent.spec.cjs
+            timeout: 240000
           - name: Visual layout audit
             id: visual
             spec: visual.spec.cjs
@@ -63,12 +67,21 @@ jobs:
         run: |
           npm ci --prefix frontend
           python -m pip install --require-hashes -r backend/requirements.lock
+      - name: Fetch the real V17 GLB for the Agent sandbox
+        if: matrix.id == 'agent'
+        run: git lfs pull --include="model/square-five-station-v17-fan-ready/*.glb" --exclude=""
       - name: Start isolated test services
         shell: bash
         run: |
           cd backend
-          python manage.py migrate --noinput
-          python manage.py seed_demo
+          if [ "${{ matrix.id }}" = "agent" ]; then
+            export DJANGO_SETTINGS_MODULE=config.agent_eval_settings
+            python manage.py migrate --noinput
+            python manage.py seed_agent_eval --case INS-01 --reset
+          else
+            python manage.py migrate --noinput
+            python manage.py seed_demo
+          fi
           # The browser suite intentionally performs many independent login
           # journeys. Keep production's 10/min default untouched, while giving
           # this isolated CI process a test-only allowance.
@@ -90,6 +103,7 @@ jobs:
         env:
           NODE_PATH: ${{ runner.temp }}/ut-playwright/node_modules
           E2E_WEB_URL: http://127.0.0.1:5173
+          AGENT_E2E: ${{ matrix.id == 'agent' && '1' || '0' }}
         run: |
           "$RUNNER_TEMP/ut-playwright/node_modules/.bin/playwright" test \
             --config "$GITHUB_WORKSPACE/tools/e2e/playwright.config.cjs" \

@@ -9,9 +9,9 @@
     ],
     "sources": [
       {
-        "path": "docs/hardware/four-controller-wiring-20261024/README.md",
-        "sha256": "166c0c329ee4f66d59a9af3c5f195fe310d5b1a6cd8cf47dc64b83af76aaa9be",
-        "version": "2026-10-24",
+        "path": "docs/hardware/four-controller-wiring-20261026/README.md",
+        "sha256": "3154974d10bd330dccb5214eef85b7bc0c747abc770a1150963f861203317b1f",
+        "version": "2026-10-26",
         "kind": "project_internal_snapshot"
       },
       {
@@ -21,8 +21,8 @@
         "kind": "project_internal_snapshot"
       }
     ],
-    "version": "2026-10-25.1",
-    "applicability": "四节点目标架构；实际迁移状态以数据库及实物核验为准",
+    "version": "2026-10-26.1",
+    "applicability": "新编号：左下1、右下2、右上3、左上4；31路11/7/6/7；旧数据库和V17主控标签未自动迁移",
     "approval_status": "internal_guidance_not_approved_field_procedure"
   },
   "offline": {
@@ -31,13 +31,13 @@
       "目标链路为四STM32→RS-485/Modbus RTU→ESP32-S3网关→MQTT→网关服务→Django。另一个ESP32-S3为语音终端。",
       "先区分单个绑定无心跳、单区离线与全区停止更新；没有节点级身份证据时不能仅凭多个传感器离线就断言某主控损坏。",
       "由现场人员逐段检查供电、收发日志、总线顺序、两端终端电阻、地址与串口参数；不得根据未迁移的软件记录假定已完成新接线。",
-      "CTRL-03没有直接风机或蜂鸣器，网关停机后不能声称P3/P5仍能完成跨区联动。恢复后需新采样和接入时间推进，旧缓存不算恢复。"
+      "CTRL-01负责P3/P5，CTRL-03负责P2与蜂鸣器灯带；风机1归CTRL-04、风机2归CTRL-02。网关离线不代表可跨区联动，恢复要核对新采样，旧缓存不算恢复。"
     ],
     "sources": [
       {
-        "path": "docs/hardware/four-controller-wiring-20261024/README.md",
-        "sha256": "166c0c329ee4f66d59a9af3c5f195fe310d5b1a6cd8cf47dc64b83af76aaa9be",
-        "version": "2026-10-24",
+        "path": "docs/hardware/four-controller-wiring-20261026/README.md",
+        "sha256": "3154974d10bd330dccb5214eef85b7bc0c747abc770a1150963f861203317b1f",
+        "version": "2026-10-26",
         "kind": "project_internal_snapshot"
       },
       {
@@ -47,13 +47,14 @@
         "kind": "project_internal_snapshot"
       }
     ],
-    "version": "2026-10-25.1",
-    "applicability": "四节点目标架构；实际迁移状态以数据库及实物核验为准",
+    "version": "2026-10-26.1",
+    "applicability": "新编号：左下1、右下2、右上3、左上4；31路11/7/6/7；旧数据库和V17主控标签未自动迁移",
     "approval_status": "internal_guidance_not_approved_field_procedure"
   },
   "fan": {
     "title": "排风风机多证据诊断",
     "steps": [
+      "按最新布局核对：FAN-01→CTRL-04，FAN-02→CTRL-02。旧CTRL-01双风机控制审计仅为历史记录，不作为新主控动作证据。",
       "先核对每台风机自己的rotational.speed、motor.current、质量、单位与采样时间，不能用另一台风机反馈替代。",
       "命令发布、命令回执、PWM设定与实际转动分别记录。零转速可能是正常停机、无供电、驱动异常、卡滞或TACH采集故障，不能直接断言电机损坏。",
       "电流单位A与mA不能直接混算；缺转速但有电流仍不能证明实际转动。缺现场确认时不设虚构的正常电流范围。",
@@ -61,9 +62,9 @@
     ],
     "sources": [
       {
-        "path": "docs/hardware/four-controller-wiring-20261024/README.md",
-        "sha256": "166c0c329ee4f66d59a9af3c5f195fe310d5b1a6cd8cf47dc64b83af76aaa9be",
-        "version": "2026-10-24",
+        "path": "docs/hardware/four-controller-wiring-20261026/README.md",
+        "sha256": "3154974d10bd330dccb5214eef85b7bc0c747abc770a1150963f861203317b1f",
+        "version": "2026-10-26",
         "kind": "project_internal_snapshot"
       },
       {
@@ -73,8 +74,8 @@
         "kind": "project_internal_snapshot"
       }
     ],
-    "version": "2026-10-25.1",
-    "applicability": "四节点目标架构；实际迁移状态以数据库及实物核验为准",
+    "version": "2026-10-26.1",
+    "applicability": "新编号：左下1、右下2、右上3、左上4；31路11/7/6/7；旧数据库和V17主控标签未自动迁移",
     "approval_status": "internal_guidance_not_approved_field_procedure"
   },
   "alarm": {
@@ -93,8 +94,8 @@
         "kind": "project_internal_snapshot"
       }
     ],
-    "version": "2026-10-25.1",
-    "applicability": "四节点目标架构；实际迁移状态以数据库及实物核验为准",
+    "version": "2026-10-26.1",
+    "applicability": "新编号：左下1、右下2、右上3、左上4；31路11/7/6/7；旧数据库和V17主控标签未自动迁移",
     "approval_status": "internal_guidance_not_approved_field_procedure"
   }
 }
