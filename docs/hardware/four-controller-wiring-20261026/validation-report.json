@@ -1,0 +1,322 @@
+{
+  "date": "2026-10-26",
+  "revision": "0.3",
+  "static_resource_check": "PASS",
+  "physical_modules": 31,
+  "allocation": {
+    "CTRL-01": 11,
+    "CTRL-02": 7,
+    "CTRL-03": 6,
+    "CTRL-04": 7
+  },
+  "gpio_claims": {
+    "CTRL-01": {
+      "PA2": {
+        "owner": "RS485:TX_TO_MODULE_TXD",
+        "mode": "USART2_TX"
+      },
+      "PA3": {
+        "owner": "RS485:RX_FROM_MODULE_RXD",
+        "mode": "USART2_RX"
+      },
+      "PA4": {
+        "owner": "MQ4-05",
+        "mode": "ADC1_IN4"
+      },
+      "PA5": {
+        "owner": "O2-02",
+        "mode": "ADC1_IN5"
+      },
+      "PB1": {
+        "owner": "CO-03",
+        "mode": "ADC1_IN9"
+      },
+      "PB10": {
+        "owner": "LOCAL-I2C:SCL(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB11": {
+        "owner": "LOCAL-I2C:SDA(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB13": {
+        "owner": "MQ2-05",
+        "mode": "GPIO_INPUT_POLL"
+      },
+      "PB14": {
+        "owner": "FLAME-03",
+        "mode": "GPIO_INPUT_POLL"
+      },
+      "PB3": {
+        "owner": "SCREEN-STATUS:SCL",
+        "mode": "SPI3_SCK"
+      },
+      "PB5": {
+        "owner": "SCREEN-STATUS:SDA",
+        "mode": "SPI3_MOSI"
+      },
+      "PB6": {
+        "owner": "SCREEN-STATUS:RES",
+        "mode": "GPIO_OUT"
+      },
+      "PB7": {
+        "owner": "SCREEN-STATUS:DC",
+        "mode": "GPIO_OUT"
+      },
+      "PB9": {
+        "owner": "SCREEN-STATUS:CS",
+        "mode": "GPIO_OUT"
+      },
+      "PC1": {
+        "owner": "CO-05",
+        "mode": "ADC1_IN11"
+      },
+      "PC11": {
+        "owner": "MQ2-03",
+        "mode": "GPIO_INPUT_POLL"
+      },
+      "PC12": {
+        "owner": "SCREEN-STATUS:BLK",
+        "mode": "GPIO_OUT"
+      },
+      "PC13": {
+        "owner": "LEVEL-03",
+        "mode": "GPIO_INPUT_POLL"
+      },
+      "PC2": {
+        "owner": "MQ4-03",
+        "mode": "ADC1_IN12"
+      },
+      "PC7": {
+        "owner": "FLAME-05",
+        "mode": "GPIO_INPUT_POLL"
+      }
+    },
+    "CTRL-02": {
+      "PA1": {
+        "owner": "RELAY-02:IN2_VIA_VERIFIED_DRIVER",
+        "mode": "GPIO_OUT"
+      },
+      "PA2": {
+        "owner": "RS485:TX_TO_MODULE_TXD",
+        "mode": "USART2_TX"
+      },
+      "PA3": {
+        "owner": "RS485:RX_FROM_MODULE_RXD",
+        "mode": "USART2_RX"
+      },
+      "PA4": {
+        "owner": "MQ4-04",
+        "mode": "ADC1_IN4"
+      },
+      "PA6": {
+        "owner": "O2-03",
+        "mode": "ADC1_IN6"
+      },
+      "PA7": {
+        "owner": "FAN-02:TACH_FROM_PROTECTED_3V3_SIGNAL",
+        "mode": "EXTI7"
+      },
+      "PB0": {
+        "owner": "CO-04",
+        "mode": "ADC1_IN8"
+      },
+      "PB10": {
+        "owner": "LOCAL-I2C:SCL(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB11": {
+        "owner": "LOCAL-I2C:SDA(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB12": {
+        "owner": "MQ2-04",
+        "mode": "GPIO_INPUT_POLL"
+      },
+      "PB3": {
+        "owner": "SCREEN-MAIN:SCL",
+        "mode": "SPI3_SCK"
+      },
+      "PB5": {
+        "owner": "SCREEN-MAIN:SDA",
+        "mode": "SPI3_MOSI"
+      },
+      "PB6": {
+        "owner": "SCREEN-MAIN:RES",
+        "mode": "GPIO_OUT"
+      },
+      "PB7": {
+        "owner": "SCREEN-MAIN:DC",
+        "mode": "GPIO_OUT"
+      },
+      "PB8": {
+        "owner": "FAN-02:PWM_TO_OPEN_COLLECTOR_DRIVER",
+        "mode": "TIM4_CH3"
+      },
+      "PB9": {
+        "owner": "SCREEN-MAIN:CS",
+        "mode": "GPIO_OUT"
+      },
+      "PC0": {
+        "owner": "JOYSTICK:VRx",
+        "mode": "ADC1_IN10"
+      },
+      "PC1": {
+        "owner": "JOYSTICK:VRy",
+        "mode": "ADC1_IN11"
+      },
+      "PC10": {
+        "owner": "LEVEL-04",
+        "mode": "GPIO_INPUT_POLL"
+      },
+      "PC12": {
+        "owner": "SCREEN-MAIN:BLK",
+        "mode": "GPIO_OUT"
+      },
+      "PC4": {
+        "owner": "JOYSTICK:SW",
+        "mode": "GPIO_IN_PULLUP"
+      },
+      "PC6": {
+        "owner": "FLAME-04",
+        "mode": "GPIO_INPUT_POLL"
+      }
+    },
+    "CTRL-03": {
+      "PA2": {
+        "owner": "RS485:TX_TO_MODULE_TXD",
+        "mode": "USART2_TX"
+      },
+      "PA3": {
+        "owner": "RS485:RX_FROM_MODULE_RXD",
+        "mode": "USART2_RX"
+      },
+      "PA4": {
+        "owner": "MQ4-02",
+        "mode": "ADC1_IN4"
+      },
+      "PB0": {
+        "owner": "BUZZER:ENABLE_VIA_DRIVER",
+        "mode": "GPIO_OUT"
+      },
+      "PB10": {
+        "owner": "LOCAL-I2C:SCL(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB11": {
+        "owner": "LOCAL-I2C:SDA(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB12": {
+        "owner": "MQ2-02",
+        "mode": "GPIO_INPUT_POLL"
+      },
+      "PB15": {
+        "owner": "LED-01:DIN_VIA_74AHCT_LEVEL_SHIFTER",
+        "mode": "SPI2_MOSI"
+      },
+      "PC12": {
+        "owner": "LEVEL-02",
+        "mode": "GPIO_INPUT_POLL"
+      },
+      "PC3": {
+        "owner": "CO-02",
+        "mode": "ADC1_IN13"
+      },
+      "PC6": {
+        "owner": "FLAME-02",
+        "mode": "GPIO_INPUT_POLL"
+      }
+    },
+    "CTRL-04": {
+      "PA1": {
+        "owner": "RELAY-01:IN1_VIA_VERIFIED_DRIVER",
+        "mode": "GPIO_OUT"
+      },
+      "PA2": {
+        "owner": "RS485:TX_TO_MODULE_TXD",
+        "mode": "USART2_TX"
+      },
+      "PA3": {
+        "owner": "RS485:RX_FROM_MODULE_RXD",
+        "mode": "USART2_RX"
+      },
+      "PA7": {
+        "owner": "FAN-01:TACH_FROM_PROTECTED_3V3_SIGNAL",
+        "mode": "EXTI7"
+      },
+      "PB12": {
+        "owner": "MQ2-01",
+        "mode": "GPIO_INPUT_POLL"
+      },
+      "PB14": {
+        "owner": "FLAME-01",
+        "mode": "GPIO_INPUT_POLL"
+      },
+      "PB6": {
+        "owner": "LOCAL-I2C:SCL(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB7": {
+        "owner": "LOCAL-I2C:SDA(shared)",
+        "mode": "SOFTWARE_I2C_OPEN_DRAIN"
+      },
+      "PB8": {
+        "owner": "FAN-01:PWM_TO_OPEN_COLLECTOR_DRIVER",
+        "mode": "TIM4_CH3"
+      },
+      "PC0": {
+        "owner": "LEVEL-01",
+        "mode": "GPIO_INPUT_POLL"
+      },
+      "PC1": {
+        "owner": "CO-01",
+        "mode": "ADC1_IN11"
+      },
+      "PC2": {
+        "owner": "MQ4-01",
+        "mode": "ADC1_IN12"
+      },
+      "PC3": {
+        "owner": "O2-01",
+        "mode": "ADC1_IN13"
+      }
+    }
+  },
+  "resource_summary": {
+    "CTRL-01": {
+      "allocated_gpio": 20,
+      "external_adc_channels": 5,
+      "joystick_adc_channels": 0
+    },
+    "CTRL-02": {
+      "allocated_gpio": 22,
+      "external_adc_channels": 3,
+      "joystick_adc_channels": 2
+    },
+    "CTRL-03": {
+      "allocated_gpio": 11,
+      "external_adc_channels": 2,
+      "joystick_adc_channels": 0
+    },
+    "CTRL-04": {
+      "allocated_gpio": 13,
+      "external_adc_channels": 3,
+      "joystick_adc_channels": 0
+    }
+  },
+  "errors": [],
+  "firmware_built": false,
+  "hardware_verified": false,
+  "locality": "PASS_PHYSICAL_ZONE_OWNERSHIP_NOT_MEASURED_CABLE_LENGTHS",
+  "warnings": [
+    "Static design only; board variants, actual module pin labels, supply margins and electrical interfaces require bench checks.",
+    "SCREEN-STATUS on CTRL-01 and SCREEN-MAIN on CTRL-02 require SPI3 and JTAG disabled with SWD retained.",
+    "AO-02 remains unpowered raw-millivolt ADC; calibrated oxygen concentration is not validated.",
+    "A shared two-channel relay PCB may require one longer harness; no new hardware has been assumed.",
+    "USART1 interrupt/polling; USART2 interrupt initially; software I2C; digital sensor DO polling to avoid EXTI aliasing.",
+    "The previous live database/model/MQTT identities have not been migrated; four-node firmware is not implemented.",
+    "Local protection of P3/P5 cannot operate remote fans/buzzer when gateway coordination is absent."
+  ],
+  "plan_sha256": "a023252bb0cfc2b3d60d2d4ca928647d094c2e0f6fe61e9c52927c74272f0250"
+}

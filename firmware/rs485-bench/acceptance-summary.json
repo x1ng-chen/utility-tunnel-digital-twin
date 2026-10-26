@@ -1,0 +1,207 @@
+{
+  "date": "2026-10-26",
+  "evidence_policy": "Structured readings and hashes only. local-evidence paths refer to operator-retained original files, not GitHub downloads.",
+  "reports": {
+    "rs485-acceptance.json": {
+      "recorded_at": "2026-10-26T06:43:54.610370+00:00",
+      "scope": "S3 master to physical CTRL-04, two auto-direction RS485 modules, 19200 8E1; diagnostic register reads only",
+      "initial_capture": {
+        "log": "s3-first-runtime.log",
+        "captured_successes": 35,
+        "captured_failures": 0,
+        "first": {
+          "poll": 7,
+          "uptime_s": 993,
+          "requests": 7,
+          "crc_errors": 0,
+          "ok": 7
+        },
+        "last": {
+          "poll": 41,
+          "uptime_s": 1027,
+          "requests": 41,
+          "crc_errors": 0,
+          "ok": 41
+        }
+      },
+      "stm_initial": {
+        "log": "ctrl04-first-bus-runtime.log",
+        "samples": 7,
+        "first": {
+          "uptime_ms": 996590,
+          "requests": 10,
+          "crc_errors": 0,
+          "uart_errors": 674,
+          "overruns": 0
+        },
+        "last": {
+          "uptime_ms": 1026644,
+          "requests": 40,
+          "crc_errors": 0,
+          "uart_errors": 674,
+          "overruns": 0
+        },
+        "uart_error_delta_inside_capture": 0
+      },
+      "after_s3_readback_and_rts_reset": {
+        "log": "s3-after-readback-reset.log",
+        "captured_successes": 12,
+        "captured_failures": 0,
+        "first": {
+          "poll": 11,
+          "uptime_s": 1064,
+          "requests": 72,
+          "crc_errors": 0,
+          "ok": 11
+        },
+        "last": {
+          "poll": 22,
+          "uptime_s": 1075,
+          "requests": 83,
+          "crc_errors": 0,
+          "ok": 22
+        }
+      },
+      "stm_after_s3_reset": {
+        "log": "ctrl04-after-s3-reset.log",
+        "samples": 2,
+        "first": {
+          "uptime_ms": 1066716,
+          "requests": 74,
+          "crc_errors": 0,
+          "uart_errors": 675,
+          "overruns": 0
+        },
+        "last": {
+          "uptime_ms": 1071725,
+          "requests": 79,
+          "crc_errors": 0,
+          "uart_errors": 675,
+          "overruns": 0
+        },
+        "uart_error_delta_inside_capture": 0
+      },
+      "result": "PASS_SHORT_BENCH_AND_S3_RESET_RECOVERY",
+      "limits": [
+        "No physical cable disconnect/reconnect test.",
+        "No STM32 cold power-cycle test or four-node test.",
+        "UART cumulative errors were already 674 before diagnostic polling; 675 observed after S3 readback/reset window; each captured normal run had no increase. Exact cause of transition error not established.",
+        "Not a sensor, actuator or production Modbus contract acceptance."
+      ]
+    },
+    "disconnect-01-acceptance.json": {
+      "recorded_at": "2026-10-26T06:53:49.869767+00:00",
+      "result": "PASS_PHYSICAL_DISCONNECT_RECONNECT_AUTOMATIC_RECOVERY",
+      "user_action": "User instructed to open only A/B, leave GND/USB power and RST unchanged, wait then reconnect; user reported completion. Exact physical action timestamps were not measured.",
+      "scope": "One S3 master and CTRL-04; no other slaves or actuators",
+      "captured_polls": 200,
+      "runs": [
+        {
+          "state": "OK",
+          "first_poll": 336,
+          "last_poll": 363,
+          "count": 28
+        },
+        {
+          "state": "FAIL",
+          "first_poll": 364,
+          "last_poll": 364,
+          "count": 1
+        },
+        {
+          "state": "OK",
+          "first_poll": 365,
+          "last_poll": 459,
+          "count": 95
+        },
+        {
+          "state": "FAIL",
+          "first_poll": 460,
+          "last_poll": 489,
+          "count": 30
+        },
+        {
+          "state": "OK",
+          "first_poll": 490,
+          "last_poll": 535,
+          "count": 46
+        }
+      ],
+      "longest_timeout_run": {
+        "state": "FAIL",
+        "first_poll": 460,
+        "last_poll": 489,
+        "count": 30
+      },
+      "post_reconnect_consecutive_successes": 46,
+      "post_reconnect_first": {
+        "state": "OK",
+        "poll": 490,
+        "uptime_s": 1544,
+        "requests": 520,
+        "slave_crc_errors": 0,
+        "ok": 459
+      },
+      "post_reconnect_last": {
+        "state": "OK",
+        "poll": 535,
+        "uptime_s": 1589,
+        "requests": 565,
+        "slave_crc_errors": 0,
+        "ok": 504
+      },
+      "restart_observation": "No observed restart: gateway poll counter continuous and STM32 uptime increases; requests pause then continue.",
+      "stm32_samples": 40,
+      "stm32_requests_plateau": 519,
+      "crc_errors": 0,
+      "uart_errors_before": 675,
+      "uart_errors_after": 675,
+      "overruns": 0,
+      "unattributed_timeout": {
+        "poll": 364,
+        "count": 1,
+        "note": "Separate from main poll460-489 interruption. Cannot attribute to cable manipulation or software from current evidence; keep as unresolved intermittent loss."
+      },
+      "logs": [
+        {
+          "path": "artifacts\\rs485-bench-20261026\\s3-disconnect-01.log",
+          "sha256": "33491594bbcdb0100d8a7c5c055027e02881b3332da8c0c13552f8843a1b3be2"
+        },
+        {
+          "path": "artifacts\\rs485-bench-20261026\\ctrl04-disconnect-01.log",
+          "sha256": "900b50f64bcf8b3cfe56907ae00cda53ff4796985cbf0a51b7c6df000d3bd5b5"
+        }
+      ],
+      "not_tested": [
+        "STM32 cold power cycle",
+        "four-node bus",
+        "full sensor/actuator load",
+        "long-term loss-free operation"
+      ]
+    },
+    "ctrl03-boot-acceptance.json": {
+      "result": "PASS_CTRL03_NORMAL_BOOT_ONLY",
+      "node": "CTRL-03",
+      "first_status": [
+        15023,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last_status": [
+        20031,
+        0,
+        0,
+        0,
+        0
+      ],
+      "log": "artifacts\\rs485-bench-20261026\\ctrl03-after-physical-reset.log",
+      "log_sha256": "3b188e35e4536d1233b8abbf0e06cb1ce6353cdbef172df110accab44fb6b684",
+      "not_tested": [
+        "CTRL03 on shared RS485 bus",
+        "S3 dual-slave runtime"
+      ]
+    }
+  }
+}

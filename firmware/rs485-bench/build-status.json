@@ -1,0 +1,101 @@
+{
+  "date": "2026-10-26",
+  "publication_scope": "Source, wiring and structured acceptance summary; raw logs, flash backups and build images retained locally.",
+  "nodes": {
+    "CTRL-04": {
+      "build": "PASS",
+      "image": {
+        "bytes": 8996,
+        "sha256": "2fec73c30b2c893651e677eec319fc37ccd11f54873b8ee0918bc56cc43d5233"
+      },
+      "original_flash_backup": {
+        "bytes": 262144,
+        "sha256": "b7b0b518f15f3e7ae53d3368f0deca39746d7d2c12b0fd4d2df5996663d4be28"
+      },
+      "programmer_verify": "PASS",
+      "independent_readback": "SHA256_MATCH",
+      "runtime": "PASS: diagnostic requests advance, CRC/overrun zero; UART cumulative errors 674 then 675 around S3 readback/reset, no increase during normal captured runs",
+      "hardware_protocol_self_test": "PASS: all 6 boot self-check cases on physical STM32"
+    },
+    "CTRL-03": {
+      "build": "PASS",
+      "image": {
+        "bytes": 9188,
+        "sha256": "3ba1465af1c5c0424892ab5e163e5c4424cd7ac2d3f01087f76e5b1c32286bb4"
+      },
+      "original_flash_backup": {
+        "bytes": 262144,
+        "sha256": "6b6f973cae1bbc14583882437987a9f501f59b6fb6cd2bcad467f5e739aa1184"
+      },
+      "programmer_verify": "PASS",
+      "independent_readback": "SHA256_MATCH",
+      "runtime": "PASS: observed CTRL03_BENCH with advancing uptime after user normal-boot reset",
+      "hardware_protocol_self_test": "PASS: 9 cases; reached periodic status after boot gate"
+    }
+  },
+  "s3_running": {
+    "target": "ESP32-S3 rev0.2; detected 16MB quad Flash / 8MB PSRAM",
+    "build": "PASS",
+    "flashed": true,
+    "runtime": "PASS single-slave CTRL04 bench",
+    "original_flash_backup": {
+      "bytes": 16777216,
+      "sha256": "91100b6d66762cb1a3189fc58dc4707f3e59252484b86f0309ed4f375d3e9d3f"
+    },
+    "programmer_verify": "PASS: all four image hashes verified",
+    "independent_readback": "PASS: bootloader/partition/boot_app0/application bytes match",
+    "images": [
+      {
+        "bytes": 265600,
+        "sha256": "53fbc17d77179558d9b83dfc03e4e6911c0ce7508c7d45ebbe2d53ccc1d8351e"
+      },
+      {
+        "bytes": 15104,
+        "sha256": "2a71d69b471e20c2bac7fb469f3c6a807b3ebee780e348e5889db0da849ca363"
+      },
+      {
+        "bytes": 3072,
+        "sha256": "bd0f7954aca2ef7d925ee21aaa1f3dc8822d1d6ce5cbbd26a135e5886bfff6ce"
+      }
+    ]
+  },
+  "s3_dual_prepared": {
+    "build": "PASS",
+    "poll_addresses": [
+      4,
+      3
+    ],
+    "flashed": false,
+    "hardware_tested": false,
+    "images": [
+      {
+        "bytes": 265856,
+        "sha256": "7b798ab70d698a92deec1f56bd65e30aa282e368cd7ac8b2cc3a0326679ae477"
+      },
+      {
+        "bytes": 15104,
+        "sha256": "2a71d69b471e20c2bac7fb469f3c6a807b3ebee780e348e5889db0da849ca363"
+      },
+      {
+        "bytes": 3072,
+        "sha256": "bd0f7954aca2ef7d925ee21aaa1f3dc8822d1d6ce5cbbd26a135e5886bfff6ce"
+      }
+    ]
+  },
+  "current_source_sha256": {
+    "common/bench_protocol.h": "503b75c6c3131f95d9f870a24a866812e9993891f309af3bc40c12352b060e45",
+    "stm32/main.c": "7fc80df59cec485e6070219b01aae74916db8ca610cd9c6861f4ddae6eba5365",
+    "stm32/CMakeLists.txt": "1d05a63a603dfa8101f5ccbb0a2b403dcd2694e507551478d27779ba3b77d2ce",
+    "s3/src/main.cpp": "876f7ac0670f49b0574cb678aa6b12ea0fc209330df5a96092476911a6692125",
+    "s3/platformio.ini": "0f1c070bf0b6f7b6c181eb3b4fb4c7f049477f8985bdeb7675542097270de640"
+  },
+  "acceptance": "acceptance-summary.json",
+  "not_completed": [
+    "Addresses 1/2 not flashed",
+    "Three/four-slave shared bus not tested",
+    "Four-controller production telemetry/control firmware not implemented",
+    "Complete physical interconnection not yet confirmed",
+    "STM32 cold-start, full-load and long-duration tests pending"
+  ],
+  "provenance_note": "CTRL04 and the running S3 were tested with the preserved six-case single-slave baseline. Current source has nine checks and configurable addressing; CTRL03 runs that extension. The source extension does not imply it was flashed to CTRL04 or S3."
+}
