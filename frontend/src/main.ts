@@ -8,5 +8,6 @@ import './assets/twin-links.css';
 import './assets/priority-upgrades.css';
 import './assets/tactical.css';
 import './assets/command-center.css';
+import './assets/light-theme.css';
 
 createApp(App).use(createPinia()).use(router).mount('#app');

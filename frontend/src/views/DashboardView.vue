@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Download, Fan, Lightbulb, RefreshCw, TrendingUp } from 'lucide-vue-next';
+import { Activity, ArrowUpRight, Box, ClipboardCheck, Clock3, Download, Fan, History, Lightbulb, Power, RefreshCw, ScanLine, Server, ShieldAlert, ShieldCheck } from 'lucide-vue-next';
 import AppShell from '../components/AppShell.vue';
+import '../assets/dashboard-polish.css';
 import DashboardSignal from '../components/DashboardSignal.vue';
 import { api, type ControllerAction } from '../services/api';
 import { useAuthStore } from '../stores/auth';
@@ -94,38 +95,120 @@ async function confirmControllerCommand() {
 }
 </script>
 
+
 <template>
-  <AppShell>
-    <section class="hero">
-      <div><span class="eyebrow light">CONTROL ROOM · LIVE FEED</span><h1>运行，一眼掌握</h1><p>集中掌握综合管廊运行状态，所有关键操作均记录审计。</p><p v-if="store.lastSyncedAt">最近同步：{{ new Date(store.lastSyncedAt).toLocaleString('zh-CN') }}</p><p v-if="reportError" class="inline-message error-message" role="alert">{{ reportError }}</p></div>
-      <div class="section-actions"><button class="primary-button compact-button" :disabled="store.loading" @click="sync"><RefreshCw />{{ store.loading ? '同步中…' : '刷新数据' }}</button><button class="primary-button" :disabled="exporting" @click="report"><Download />{{ exporting ? '正在生成…' : '导出运行快照' }}</button></div>
-    </section>
-    <section class="metric-grid">
-      <article class="metric-card accent-blue" data-index="01"><span>在线设备 <TrendingUp /></span><strong>{{ store.dashboard.assets.online }}<small>/ {{ store.dashboard.assets.total }}</small></strong><em>按约定上报周期判定</em></article>
-      <article class="metric-card accent-mint" data-index="02">
-        <span>环境健康度 <TrendingUp /></span>
-        <strong>{{ store.dashboard.assets.online > 0 ? store.dashboard.health.value : '--' }}<small v-if="store.dashboard.assets.online > 0">%</small></strong>
-        <em>{{ store.dashboard.assets.online === 0 ? '无在线设备，暂无法判断' : store.dashboard.assets.online < store.dashboard.assets.total ? '部分设备离线，请结合告警核查' : '依据已上报数据计算，请结合告警核查' }}</em>
-      </article>
-      <article class="metric-card accent-amber" data-index="03"><span>待确认事件 <TrendingUp /></span><strong>{{ String(store.openAlerts).padStart(2, '0') }}<small>项</small></strong><em>需关注</em></article>
-      <article class="metric-card accent-violet" data-index="04"><span>进行中工单 <TrendingUp /></span><strong>{{ String(store.activeOrders).padStart(2, '0') }}<small>项</small></strong><em v-if="store.dashboard.workOrderSla?.overdue">{{ store.dashboard.workOrderSla.overdue }} 项已超时，优先处置</em><em v-else-if="store.dashboard.workOrderSla?.dueSoon">{{ store.dashboard.workOrderSla.dueSoon }} 项将在 4 小时内到期</em><em v-else>处理时限正常</em></article>
-    </section>
-    <section class="dashboard-grid">
-      <article class="panel twin-panel">
-        <div class="panel-head"><div><span class="eyebrow">TWIN PULSE</span><h2>管廊实时态势</h2></div><RouterLink to="/twin-3d">进入三维孪生 →</RouterLink></div>
-        <div class="tunnel-map">
-          <div class="map-grid" /><div class="map-track track-one" /><div class="map-track track-two" />
-          <RouterLink v-for="asset in mapAssets" :key="asset.id" class="map-node" :class="asset.visualState" :to="{ path: '/twin-3d', query: { asset: asset.code } }" :aria-label="`查看${asset.name}：${twinStateLabel(asset.visualState)}`" :style="{ left: `${asset.position.x}%`, top: `${asset.position.y}%` }"><i /><span>{{ asset.code }}</span></RouterLink>
-          <div class="map-legend"><span v-for="state in mapStates" :key="state"><i :class="state" />{{ twinStateLabel(state) }} {{ mapAssets.filter((item) => item.visualState === state).length }}</span></div>
+  <AppShell class="dashboard-shell">
+    <div class="dashboard-workspace">
+      <section class="hero dashboard-heading">
+        <div>
+          <div class="dashboard-context"><span class="context-line" />综合管廊运维工作台</div>
+          <h1>运行，一眼掌握</h1>
+          <p>从现场感知到处置闭环，让每一项运行状态都有据可查。</p>
         </div>
-        <p class="map-disclaimer">位置示意，不代表真实坐标；状态与三维告警一致，在线数量请查看上方统计。点击设备可定位三维模型。</p>
-      </article>
-      <DashboardSignal :selected="store.dashboard.telemetry" :samples="store.telemetry" :offline="signalOffline" :threshold="signalThreshold" />
-    </section>
-    <section class="dashboard-grid lower-grid"><article class="panel activity-panel"><div class="panel-head"><div><span class="eyebrow">ACTIVITY STREAM</span><h2>最新运行动态</h2></div><RouterLink to="/audit">审计追踪 →</RouterLink></div><div v-for="item in store.audit.slice(0, 4)" :key="item.id" class="activity-item"><i /><time>{{ new Date(item.occurredAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time><div><b>{{ presentAudit(item).title }}</b><p>{{ presentAudit(item).description }}</p></div></div><div v-if="!store.audit.length" class="empty-state">当前暂无审计记录。</div></article><article class="panel control-panel"><div class="panel-head"><div><span class="eyebrow">CTRL-01 · MQTT</span><h2>双风机控制</h2></div><Fan /></div><p>两台风机共用继电器总使能，转速与电流独立采集，PWM 可分别调节。每次下发都需二次确认，确认凭据仅可使用一次。</p><div class="fan-live-grid"><div><b>FAN-01</b><strong>{{ fanValue(fanLive.fan1.rpm?.value) }}<small> RPM</small></strong><span>{{ fanValue(fanLive.fan1.current?.value, 2) }} mA · {{ fanValue(fanLive.fan1.power?.value, 3) }} W</span></div><div><b>FAN-02</b><strong>{{ fanValue(fanLive.fan2.rpm?.value) }}<small> RPM</small></strong><span>{{ fanValue(fanLive.fan2.current?.value, 2) }} mA · {{ fanValue(fanLive.fan2.power?.value, 3) }} W</span></div></div><span class="control-group-title"><Fan />共用电源</span><div class="fan-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_on')">{{ commandSending ? '下发中…' : '启动风扇（10秒）' }}</button><button class="stop-action" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_off')">立即停止</button></div><span class="control-group-title"><Fan />风机 1 转速</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 100)">100%</button></div><span class="control-group-title"><Fan />风机 2 转速</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 100)">100%</button></div><span class="control-group-title"><Lightbulb />灯带联调</span><div class="lighting-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_blue')">蓝色</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_green')">绿色</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_red')">红色</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_off')">熄灭</button></div><small v-if="!canControlEquipment">请使用在线 API 模式并以运维员或管理员身份登录。</small><b v-if="commandResult" class="command-ok">{{ commandResult }}</b><b v-if="commandError" class="command-error">{{ commandError }}</b></article></section>
+        <div class="section-actions">
+          <button class="primary-button compact-button refresh-button" :disabled="store.loading" @click="sync"><RefreshCw :class="{ 'is-refreshing': store.loading }" aria-hidden="true" />{{ store.loading ? '同步中…' : '刷新数据' }}</button>
+          <button class="primary-button snapshot-button" :disabled="exporting" @click="report"><Download aria-hidden="true" />{{ exporting ? '正在生成…' : '导出运行快照' }}</button>
+        </div>
+      </section>
+      <div class="dashboard-data-bar">
+        <span class="data-availability" :class="{ 'has-data': store.source === 'api' && store.dashboard.assets.online > 0 && !store.offline }"><i />{{ store.source !== 'api' ? '演示数据，仅供界面预览' : store.offline ? '数据服务暂不可用' : store.dashboard.assets.online > 0 ? '现场设备有在线数据' : '等待现场设备接入' }}</span>
+        <span class="dashboard-sync-time"><Clock3 aria-hidden="true" />{{ store.lastSyncedAt ? '最近同步 ' + new Date(store.lastSyncedAt).toLocaleString('zh-CN') : '尚未完成数据同步' }}</span>
+      </div>
+      <p v-if="reportError" class="inline-message error-message dashboard-error" role="alert">{{ reportError }}</p>
+
+      <section class="metric-grid dashboard-metrics" aria-label="关键运行指标">
+        <article class="metric-card">
+          <div class="metric-top"><span>在线设备</span><span class="metric-icon"><Server aria-hidden="true" /></span></div>
+          <strong>{{ store.dashboard.assets.online }}<small>/ {{ store.dashboard.assets.total }}</small></strong>
+          <em><span class="metric-dot" :class="{ online: store.source === 'api' && !store.offline && store.dashboard.assets.online > 0 }" />按约定上报周期判定</em>
+        </article>
+        <article class="metric-card">
+          <div class="metric-top"><span>环境健康度</span><span class="metric-icon"><Activity aria-hidden="true" /></span></div>
+          <strong>{{ store.dashboard.assets.online > 0 ? store.dashboard.health.value : '--' }}<small v-if="store.dashboard.assets.online > 0">%</small></strong>
+          <em>{{ store.dashboard.assets.online === 0 ? '暂无在线设备，等待评估' : store.dashboard.assets.online < store.dashboard.assets.total ? '部分设备离线，请结合告警核查' : '依据已上报数据计算，请结合告警核查' }}</em>
+        </article>
+        <article class="metric-card metric-attention">
+          <div class="metric-top"><span>待确认事件</span><span class="metric-icon"><ShieldAlert aria-hidden="true" /></span></div>
+          <strong>{{ String(store.openAlerts).padStart(2, '0') }}<small>项</small></strong>
+          <em>{{ store.offline ? '保留最近同步的事件数量' : store.openAlerts ? '存在待处理事件，请及时核查' : '当前无待确认事件' }}</em>
+        </article>
+        <article class="metric-card">
+          <div class="metric-top"><span>进行中工单</span><span class="metric-icon"><ClipboardCheck aria-hidden="true" /></span></div>
+          <strong>{{ String(store.activeOrders).padStart(2, '0') }}<small>项</small></strong>
+          <em v-if="store.dashboard.workOrderSla?.overdue" class="metric-overdue">{{ store.dashboard.workOrderSla.overdue }} 项已超时，优先处置</em>
+          <em v-else-if="store.dashboard.workOrderSla?.dueSoon">{{ store.dashboard.workOrderSla.dueSoon }} 项将在 4 小时内到期</em>
+          <em v-else>{{ store.offline ? '保留最近同步的工单数量' : store.activeOrders ? '处理时限正常' : '当前无进行中工单' }}</em>
+        </article>
+      </section>
+
+      <section class="dashboard-grid dashboard-overview">
+        <article class="panel twin-panel">
+          <header class="panel-head">
+            <div class="panel-title"><span class="panel-symbol"><Box aria-hidden="true" /></span><div><h2>管廊实时态势</h2><p>设备状态与告警位置概览</p></div></div>
+            <RouterLink to="/twin-3d">三维孪生<ArrowUpRight aria-hidden="true" /></RouterLink>
+          </header>
+          <div class="tunnel-map" :class="{ 'map-awaiting': !mapAssets.length }">
+            <div class="map-grid" aria-hidden="true" />
+            <svg class="tunnel-blueprint" viewBox="0 0 640 300" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+              <path class="blueprint-chamber" d="M105 55H535V245H105Z" />
+              <path class="blueprint-inner" d="M130 80H510V220H130Z" />
+              <path class="blueprint-pipe" d="M35 115H225V185H605M35 145H195V215H605" />
+              <path class="blueprint-service" d="M320 30V270M80 150H560" />
+              <path class="blueprint-mark" d="M95 45H115M105 35V55M525 45H545M535 35V55M95 255H115M105 245V265M525 255H545M535 245V265" />
+            </svg>
+            <div class="map-caption"><span>设备位置示意</span><small>状态随数据更新</small></div>
+            <div v-if="!mapAssets.length" class="map-empty" role="status">
+              <span class="map-empty-symbol"><ScanLine aria-hidden="true" /></span>
+              <strong>等待设备接入</strong>
+              <p>完成台账与遥测接入后，设备状态将在这里呈现。</p>
+              <RouterLink to="/assets">查看设备台账<ArrowUpRight aria-hidden="true" /></RouterLink>
+            </div>
+            <RouterLink v-for="asset in mapAssets" :key="asset.id" class="map-node" :class="asset.visualState" :to="{ path: '/twin-3d', query: { asset: asset.code } }" :aria-label="`查看${asset.name}：${twinStateLabel(asset.visualState)}`" :style="{ left: `${asset.position.x}%`, top: `${asset.position.y}%` }"><i /><span>{{ asset.code }}</span></RouterLink>
+          </div>
+          <div class="map-legend"><span v-for="state in mapStates" :key="state"><i :class="state" />{{ twinStateLabel(state) }}<b>{{ mapAssets.filter((item) => item.visualState === state).length }}</b></span></div>
+          <p class="map-disclaimer">位置仅作示意，不代表真实坐标。点击设备可进入三维定位；在线数量以上方统计为准。</p>
+        </article>
+        <DashboardSignal theme="light" :selected="store.dashboard.telemetry" :samples="store.telemetry" :offline="signalOffline" :threshold="signalThreshold" />
+      </section>
+
+      <section class="dashboard-grid lower-grid dashboard-operations">
+        <article class="panel activity-panel">
+          <header class="panel-head">
+            <div class="panel-title"><span class="panel-symbol"><History aria-hidden="true" /></span><div><h2>最新运行动态</h2><p>关键操作与处置记录</p></div></div>
+            <RouterLink to="/audit">全部记录<ArrowUpRight aria-hidden="true" /></RouterLink>
+          </header>
+          <div class="activity-timeline">
+            <div v-for="item in store.audit.slice(0, 4)" :key="item.id" class="activity-item">
+              <i aria-hidden="true" /><time>{{ new Date(item.occurredAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time>
+              <div><b>{{ presentAudit(item).title }}</b><p>{{ presentAudit(item).description }}</p></div>
+            </div>
+            <div v-if="!store.audit.length" class="dashboard-empty"><History aria-hidden="true" /><strong>暂无运行动态</strong><p>登录、配置与运维操作完成后，记录会出现在这里。</p></div>
+          </div>
+          <footer class="activity-footer"><ShieldCheck aria-hidden="true" />关键操作全程留痕，可追溯、可复核</footer>
+        </article>
+        <article class="panel control-panel">
+          <header class="panel-head">
+            <div class="panel-title"><span class="panel-symbol"><Fan aria-hidden="true" /></span><div><h2>双风机控制</h2><p>独立转速调节 · 共用电源使能</p></div></div>
+            <span class="control-confirm-tag"><ShieldCheck aria-hidden="true" />二次确认</span>
+          </header>
+          <div class="control-body">
+            <div class="fan-live-grid">
+              <div class="fan-unit"><div class="fan-unit-heading"><span class="fan-device-icon"><Fan aria-hidden="true" /></span><b>FAN-01</b><small>风机 1</small></div><strong>{{ fanValue(fanLive.fan1.rpm?.value) }}<small> RPM</small></strong><span class="fan-electrical">{{ fanValue(fanLive.fan1.current?.value, 2) }} mA<span>·</span>{{ fanValue(fanLive.fan1.power?.value, 3) }} W</span><span class="control-group-title">转速设定</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 100)">100%</button></div></div>
+              <div class="fan-unit"><div class="fan-unit-heading"><span class="fan-device-icon"><Fan aria-hidden="true" /></span><b>FAN-02</b><small>风机 2</small></div><strong>{{ fanValue(fanLive.fan2.rpm?.value) }}<small> RPM</small></strong><span class="fan-electrical">{{ fanValue(fanLive.fan2.current?.value, 2) }} mA<span>·</span>{{ fanValue(fanLive.fan2.power?.value, 3) }} W</span><span class="control-group-title">转速设定</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 100)">100%</button></div></div>
+            </div>
+            <div class="shared-power"><span class="control-group-title"><Power aria-hidden="true" />共用电源</span><div class="fan-actions"><button class="fan-start-action" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_on')"><Power aria-hidden="true" />{{ commandSending ? '下发中…' : '启动风扇（10秒）' }}</button><button class="stop-action" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_off')">立即停止</button></div></div>
+            <div class="lighting-row"><span class="control-group-title"><Lightbulb aria-hidden="true" />灯带联调</span><div class="lighting-actions"><button class="light-blue" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_blue')">蓝色</button><button class="light-green" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_green')">绿色</button><button class="light-red" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_red')">红色</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_off')">熄灭</button></div></div>
+            <p class="control-note">两台风机共用继电器，转速与电流独立采集。所有命令均需二次确认，以设备回执核查执行结果。</p>
+            <small v-if="!canControlEquipment" class="control-access-note">请使用在线 API 模式并以运维员或管理员身份登录。</small>
+            <p v-if="commandResult" class="command-ok" role="status">{{ commandResult }}</p><p v-if="commandError" class="command-error" role="alert">{{ commandError }}</p>
+          </div>
+        </article>
+      </section>
+      <footer class="dashboard-footer"><span>综合管廊数字孪生运维平台</span><span><ShieldCheck aria-hidden="true" />感知 · 处置 · 复核 · 归档</span></footer>
+    </div>
     <div v-if="pendingCommand" class="command-confirmation-mask" role="presentation" @click.self="cancelControllerCommand">
       <section class="command-confirmation" role="dialog" aria-modal="true" aria-labelledby="command-confirmation-title">
-        <span class="eyebrow">安全控制确认</span><h2 id="command-confirmation-title">确认下发设备命令</h2>
+        <span class="confirmation-symbol"><ShieldCheck aria-hidden="true" /></span><h2 id="command-confirmation-title">确认下发设备命令</h2>
         <p>即将向 <strong>CTRL-01</strong> 下发：<strong>{{ commandLabel(pendingCommand.action, pendingCommand.dutyPercent) }}</strong>。</p>
         <p>系统会签发 2 分钟内有效且只能使用一次的确认凭据；若通信超时，不会自动重发。</p>
         <div><button type="button" :disabled="commandSending" @click="cancelControllerCommand">取消</button><button type="button" class="confirm-command" :disabled="commandSending" @click="confirmControllerCommand">{{ commandSending ? '正在下发…' : '确认并下发' }}</button></div>
@@ -133,28 +216,3 @@ async function confirmControllerCommand() {
     </div>
   </AppShell>
 </template>
-
-<style scoped>
-.map-node { text-decoration: none; }
-.command-confirmation-mask { position: fixed; z-index: 12100; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(0, 0, 0, .72); }
-.command-confirmation { width: min(480px, 100%); padding: 24px; border: 1px solid var(--ops-signal); background: var(--ops-bg-deep); box-shadow: 16px 16px 0 rgba(0, 0, 0, .55); }
-.command-confirmation h2 { margin: 10px 0 16px; font-size: 24px; }
-.command-confirmation p { color: var(--ops-muted); line-height: 1.7; }
-.command-confirmation p strong { color: var(--ops-text); }
-.command-confirmation > div { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
-.command-confirmation button { min-height: 42px; padding: 0 16px; border: 1px solid var(--ops-line); color: var(--ops-text); background: transparent; }
-.command-confirmation .confirm-command { border-color: var(--ops-danger); color: #fff; background: var(--ops-danger); }
-.map-node:focus-visible { outline: 2px solid var(--ops-signal); outline-offset: 5px; z-index: 3; }
-.map-node.alarm i, .map-legend i.alarm { background: #ff526e; box-shadow: 0 0 0 5px #ff526e22; }
-.map-node.unknown i, .map-legend i.unknown { background: #8191a7; box-shadow: 0 0 0 5px #8191a722; }
-.map-legend { flex-wrap: wrap; gap: 10px; }
-.map-disclaimer { padding: 0 20px 15px; color: var(--ops-muted); font-size: 11px; line-height: 1.7; }
-@media (max-width: 600px) {
-  .tunnel-map { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 10px; height: auto; min-height: 0; padding: 18px 12px; }
-  .tunnel-map .map-grid, .tunnel-map .map-track, .tunnel-map::after { display: none; }
-  .tunnel-map .map-node { position: relative; inset: auto !important; display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 44px; padding: 10px; border: 1px solid var(--ops-line); transform: none !important; animation: none; }
-  .tunnel-map .map-node i { flex-shrink: 0; }
-  .tunnel-map .map-node span { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
-  .tunnel-map .map-legend { grid-column: 1 / -1; position: static; margin-top: 8px; }
-}
-</style>
