@@ -175,3 +175,23 @@ class AgentWebLoopTests(TestCase):
             'task': {'kind': 'draft', 'asset_code': 'MQ4-05'}}, format='json')
         self.assertEqual(response.status_code, 403)
         mocked.assert_not_called()
+
+    @override_settings(AGENT_EVALUATION_MODE=True)
+    def test_issue_counts_are_distinct_physical_sensors_not_alert_plus_metric_rows(self):
+        Telemetry.objects.filter(asset__code='MQ4-05').update(quality='bad')
+        Telemetry.objects.filter(asset__code='CO-05').update(recorded_at=self.now+timedelta(minutes=1))
+        Alert.objects.create(code='SIM-COUNT', asset=Asset.objects.get(code='MQ4-05'), title='模拟', detail='模拟',
+            severity='warning', category='test', opened_at=self.now)
+        report = station_snapshot()
+        self.assertEqual(report['data_issue_sensor_count'], 2)
+        self.assertEqual(report['station_facts']['P5']['data_issue_sensor_count'], 2)
+        self.assertEqual(set(report['station_facts']['P5']['data_issue_asset_codes']), {'MQ4-05', 'CO-05'})
+        self.assertEqual(report['station_facts']['P5']['alert_asset_codes'], ['MQ4-05'])
+
+    def test_online_is_not_recovery_without_history(self):
+        from .agent_operations import review_work_order
+        from .models import WorkOrder
+        WorkOrder.objects.create(code='WO-NO-HISTORY', asset=Asset.objects.get(code='MQ4-05'),
+            created_by=self.user, title='复核')
+        review = review_work_order('WO-NO-HISTORY')
+        self.assertEqual(review['communication_review'], 'current_state_only_no_prior_outage_evidence')

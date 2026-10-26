@@ -85,3 +85,49 @@ test('窄屏保持来源、任务入口和输入区域可用；查看者不可�
   const logHeight = await page.locator('.ai-assistant-log').evaluate(el => el.clientHeight);
   expect(logHeight).toBeGreaterThan(50);
 });
+
+test('真实模型网页闭环（显式付费开关，需先重置独立验收库）', async ({ page }) => {
+  test.skip(process.env.AGENT_LIVE_E2E !== '1', 'Paid calls require AGENT_LIVE_E2E=1; ordinary CI skips this case.');
+  test.setTimeout(180000);
+  const records = [];
+  let writes = 0;
+  page.on('request', request => {
+    if (request.url().endsWith('/api/work-orders/') && request.method() === 'POST') writes++;
+  });
+  async function chat(click) {
+    const pending = page.waitForResponse(response => response.url().endsWith('/api/assistant/chat/')
+      && response.request().method() === 'POST', { timeout: 65000 });
+    await click();
+    const response = await pending;
+    const body = await response.json();
+    records.push({ task: response.request().postDataJSON().task, httpStatus: response.status(), response: body });
+    expect(response.status()).toBe(200);
+    expect(body.runtime.providerModels.length).toBeGreaterThan(0);
+    expect(body.reply).toContain('模拟测试');
+    return body;
+  }
+  try {
+    await login(page);
+    await page.getByRole('button', { name: '五站31路巡检', exact: true }).click();
+    await expect(page.locator('.ai-agent-inspection')).toContainText('模拟场景观测可用 31/31');
+    await page.getByLabel('选择排障检测点').selectOption('P5');
+    await chat(() => page.getByRole('button', { name: '排查检测点', exact: true }).click());
+    await page.getByLabel('选择草案设备').selectOption('MQ4-05');
+    const draft = await chat(() => page.getByRole('button', { name: '生成处置草案', exact: true }).click());
+    expect(draft.proposals).toHaveLength(1);
+    expect(draft.proposals[0].assetCode).toBe('MQ4-05');
+    expect(writes).toBe(0);
+    await page.getByRole('button', { name: '审阅并确认创建', exact: true }).click();
+    await page.getByRole('button', { name: '取消', exact: true }).click();
+    expect(writes).toBe(0);
+    await page.getByRole('button', { name: '审阅并确认创建', exact: true }).click();
+    await page.getByRole('button', { name: '确认创建', exact: true }).click();
+    await expect(page.locator('.ai-agent-proposal')).toContainText('已创建：');
+    expect(writes).toBe(1);
+    await chat(() => page.getByRole('button', { name: '复核这张工单', exact: true }).click());
+    expect(records.at(-1).task.work_order_code).toMatch(/^WO-/);
+  } finally {
+    fs.writeFileSync(path.resolve(__dirname, `../../.agent-eval/browser-live-${Date.now()}.json`),
+      JSON.stringify({ confirmation: 'TEST_PROGRAM_CLICK_NOT_HUMAN', naturalLanguageFactReview: 'PENDING', records }, null, 2));
+  }
+});

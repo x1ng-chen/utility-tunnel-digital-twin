@@ -28,8 +28,8 @@ export type AgentResponse = {
   traces?: AgentTrace[]; evidence?: AgentEvidence[]; proposals?: AgentProposal[];
   locations?: AgentLocation[];
   runtime?: AgentRuntime; diagnosis?: AgentDiagnosis | null;
-  inspection?: { evidenceId: string; expected: number; registered: number; usable: number; scenarioUsable?: number; missingAssetCodes: string[];
-    stations: { stationId: string; expected: number; registered: number; usable: number; scenarioUsable?: number; alertCount: number }[] } | null;
+  inspection?: { evidenceId: string; expected: number; registered: number; usable: number; scenarioUsable?: number; dataIssueSensorCount?: number; missingAssetCodes: string[];
+    stations: { stationId: string; expected: number; registered: number; usable: number; scenarioUsable?: number; dataIssueSensorCount?: number; alertCount: number }[] } | null;
 };
 
 const localStorageRef = typeof window !== 'undefined' ? window.localStorage : null;

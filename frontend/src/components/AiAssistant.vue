@@ -163,6 +163,7 @@ function onInputKeydown(event: KeyboardEvent) {
           <div v-if="message.inspection" class="ai-agent-inspection">
             <strong>[{{ message.inspection.evidenceId }}] 传感器巡检 · 所需观测可用 {{ message.inspection.usable }}/{{ message.inspection.expected }}</strong>
             <small v-if="message.runtime?.dataContext.mode === 'simulated_test'">模拟场景观测可用 {{ message.inspection.scenarioUsable ?? 0 }}/{{ message.inspection.expected }}；不计入现场可用数</small>
+            <small v-if="message.inspection.dataIssueSensorCount != null">输入质量/时间/接入异常：{{ message.inspection.dataIssueSensorCount }}个物理模块（去重）；告警另列</small>
             <table><thead><tr><th>检测点</th><th>台账/设计</th><th>{{ message.runtime?.dataContext.mode === 'simulated_test' ? '现场/场景可用' : '观测可用' }}</th><th>活动告警</th></tr></thead>
               <tbody><tr v-for="station in message.inspection.stations" :key="station.stationId">
                 <td>{{ station.stationId }}</td><td>{{ station.registered }}/{{ station.expected }}</td>

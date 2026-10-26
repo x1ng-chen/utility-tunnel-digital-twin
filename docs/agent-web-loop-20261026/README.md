@@ -57,7 +57,7 @@ python manage.py evaluate_agent_baseline --settings=config.agent_eval_settings �
 
 ## 接口兼容与验证
 
-保留POST /api/assistant/chat/、GET /api/assistant/inspection/与既有工单接口。新增只读GET /api/assistant/context/返回来源、布局与模型旧标签提示。chat可选task：draft+asset_code、diagnosis/inspection+station_id、review+work_order_code；严格校验字段与目标格式，客户端不能启用测试模式。原自由聊天仍可使用，明确任务会限制可调用工具并检查目标资产。响应新增runtime、diagnosis和integrity；inspection新增scenarioUsable，原usable语义不变。
+保留POST /api/assistant/chat/、GET /api/assistant/inspection/与既有工单接口。新增只读GET /api/assistant/context/返回来源、布局与模型旧标签提示。chat可选task：draft+asset_code、diagnosis/inspection+station_id、review+work_order_code；严格校验字段与目标格式，客户端不能启用测试模式。原自由聊天仍可使用，明确任务会限制可调用工具并检查目标资产。响应新增runtime、diagnosis和integrity；inspection新增scenarioUsable及去重后的dataIssueSensorCount，原usable语义不变；工具快照增加station_facts，工单复核明确当前在线与历史恢复证据分开。
 
 自动测试包括生产与验收来源隔离、重置拒绝、映射、四类排障、无效引用、截断回复、草案完成性、权限、确认/取消及幂等。浏览器回归使用真实隔离API/工单/V17模型和明确标记的模型响应桩；真实DeepSeek效果另行记录，CI不调用付费服务。
 
@@ -67,9 +67,11 @@ python manage.py evaluate_agent_baseline --settings=config.agent_eval_settings �
 
 ## 本轮实际验证（2026-10-26）
 
-- 后端170项、前端116项通过（含真实V17 GLB）；生产构建通过。
+- 后端172项、前端116项通过（含真实V17 GLB）；生产构建通过。
 - 新增3项无头Chromium浏览器回归全部通过，使用真实隔离API、模型和工单接口；模型文字响应为明确标记的桩，不冒充真实模型浏览器验收。
 - 12个复合场景及30题回归的自动契约已完成。38题实际取得DeepSeek回复，3题由服务端权限拒绝且不调用模型，S05为受控超时注入。D03/A01采用等价查询工具的两题在修正规则后单独复测，原记录保留。
-- 42题的逐句事实评分仍待团队复核，自动契约成绩不能写成“模型准确率100%”。M人工与L普通模型对照尚未执行；已导出12份冻结证据包、空白记录表并实现显式启动的普通模型基线命令。
-- 共保留99条模型/权限/故障用例尝试记录，包含9条当时判为失败或阻塞的记录；其中既有软件问题也有评测器误判，不把该计数当模型错误率。早期截断试验与每轮原始输出保留，不只保留成功案例。汇总Token包括已知返回用量，费用仍需供应商账单核对。
+- 42题的逐句事实评分仍待团队复核，自动契约成绩不能写成“模型准确率100%”。M人工未执行；L普通模型已实际生成12份同源冻结证据包的回答，评分待完成，不能据此报告效率提升。开发Agent复核实际回复发现并修正了计数、主控归属、模拟下发推断和通信恢复等问题，六场景及后续两次定向复测原件保留，详见[事实复核记录](FACT-REVIEW.md)。
+- 共保留107条模型/权限/故障用例尝试记录，包含9条当时判为失败或阻塞的记录；其中既有软件问题也有评测器误判，不把该计数当模型错误率。早期截断试验与每轮原始输出保留，不只保留成功案例。汇总Token包括已知返回用量，费用仍需供应商账单核对。
 - 本轮曾发现并修复验收账号未设置登录标识、场景绑定置空顺序、只读角色草案、文字冒充草案、回复截断与验收限流配置问题。日志位于本机artifacts/software-agent-20261025/publish与本隔离目录.agent-eval；未提交凭据、原始聊天日志或运行数据库。
+
+真实模型网页闭环另以显式付费开关运行1次通过：P5排障、MQ4-05草案、取消零新增、确认创建、按真实WO编号只读复核。取得3份实际DeepSeek回复，确认由测试程序点击，不冒充人工操作；没有使用模型响应桩。普通CI默认跳过此付费用例。详细入口、静态种子过期说明和复现命令见[演示操作脚本](DEMO.md)。

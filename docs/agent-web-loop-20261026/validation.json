@@ -2,7 +2,7 @@
   "date": "2026-10-26",
   "baseCommit": "f18d8bf5c667e9df14c9126cf8fe540ed08a0052",
   "backendTests": {
-    "passed": 170
+    "passed": 172
   },
   "frontendTests": {
     "passed": 116,
@@ -16,7 +16,8 @@
       "five stations and same-station sensor targets",
       "cancel/confirm/response loss/idempotent retry/returned order review",
       "mobile viewport and viewer write restriction"
-    ]
+    ],
+    "paidCaseSkippedByDefault": true
   },
   "modelEvaluation": {
     "model": "deepseek-flash",
@@ -41,7 +42,7 @@
       "p50": 6500.0,
       "p95NearestRank": 10391
     },
-    "allAttemptsRecorded": 99,
+    "allAttemptsRecorded": 107,
     "failedAttemptsRetained": 9,
     "compositeRecording": ".agent-eval/runs/20261026T103056676638Z.jsonl",
     "regressionRecordings": [
@@ -51,7 +52,7 @@
     "factScoring": "TEAM_HUMAN_REVIEW_NOT_COMPLETED",
     "cost": null,
     "costStatus": "requires actual provider billing reconciliation",
-    "allAttemptRecordedKnownTokensIncludingFollowups": 1259345,
+    "allAttemptRecordedKnownTokensIncludingFollowups": 1343108,
     "failureCountsAreNotAccuracyScores": true,
     "issuesFixed": [
       "reply length cutoff now rejected instead of partial success",
@@ -61,8 +62,23 @@
       "sandbox throttle configured in actual DRF rates",
       "equivalent query tools accepted when evidence is present",
       "model mapping invalidation occurs after valid activation",
-      "sandbox test accounts have login email identifiers"
-    ]
+      "sandbox test accounts have login email identifiers",
+      "unique physical-sensor issue counts separate data issues from active alerts",
+      "current online heartbeat does not prove communication recovery",
+      "explicit RS-485 topology, sensor ownership and calibration scope in model context"
+    ],
+    "agentAssistedFactReview": {
+      "status": "KNOWN_ISSUES_RECHECKED_NOT_FULL_HUMAN_SCORING",
+      "report": "FACT-REVIEW.md",
+      "sixCaseRecheck": ".agent-eval/runs/20261026T113931044961Z.jsonl",
+      "followups": [
+        ".agent-eval/runs/20261026T114244539208Z.jsonl",
+        ".agent-eval/runs/20261026T114453368151Z.jsonl"
+      ],
+      "attempts": 8,
+      "automatedContractsPassed": 8,
+      "naturalLanguageFullyVerified": false
+    }
   },
   "comparison": {
     "packets": 12,
@@ -72,9 +88,15 @@
       "A"
     ],
     "manualGroup": "NOT_RUN",
-    "plainModelGroup": "NOT_RUN; command implemented and dry-run verified",
+    "plainModelGroup": "12_ACTUAL_RESPONSES_RECORDED_REVIEW_PENDING",
     "humanPreparationTime": null,
-    "efficiencyImprovement": null
+    "efficiencyImprovement": null,
+    "plainModelRecording": ".agent-eval/runs/20261026T103056676638Z.comparison/20261026T113503811319Z-L.jsonl",
+    "plainModelRecordedKnownTokens": 116506,
+    "notAnEndToEndEfficiencyTrial": true,
+    "plainModelFinishReasons": {
+      "stop": 12
+    }
   },
   "unchanged": [
     "original dirty checkout",
@@ -88,5 +110,18 @@
     "public deployment",
     "full natural-language factual accuracy",
     "human baseline comparison"
-  ]
+  ],
+  "liveBrowserTest": {
+    "passed": 1,
+    "mode": "headless Chromium; actual DeepSeek, sandbox API and work-order interface",
+    "confirmation": "TEST_PROGRAM_CLICK_NOT_HUMAN",
+    "actualModelResponses": 3,
+    "modelCalls": 7,
+    "recordedKnownTokens": 37429,
+    "recording": ".agent-eval/browser-live-1793015431998.json",
+    "factScoring": "PENDING",
+    "testWorkOrderCode": "WO-261026-CAC41A"
+  },
+  "recordedKnownTokensAllGroups": 1497043,
+  "knownTokenScope": "recorded Agent CLI attempts and followups, plain-model baseline and explicit live browser test; missing provider usage remains unknown"
 }

@@ -136,7 +136,17 @@ def station_snapshot(station_id='all'):
             and snapshot['metric_count'] <= snapshot['limit'])
         scenario_usable = bool(evaluation_enabled() and relevant_readings and not missing_metrics and not unit_issues
             and all(r['scenario_usable'] for r in relevant_readings) and snapshot['metric_count'] <= snapshot['limit'])
-        items.append({**binding, 'identity_status': 'planned_hardware_binding_unverified',
+        data_issues = []
+        if not asset: data_issues.append('asset_missing')
+        if snapshot and snapshot['connection']['state'] != 'online': data_issues.append('connection_' + snapshot['connection']['state'])
+        if missing_metrics: data_issues.append('missing_required_metrics')
+        if unit_issues: data_issues.append('wrong_unit')
+        if any(r['quality'] != 'good' for r in relevant_readings): data_issues.append('bad_or_suspect_quality')
+        for state in ('stale', 'future_timestamp', 'unknown'):
+            if any(r['freshness'] == state for r in relevant_readings): data_issues.append('sample_' + state)
+        if any(parse_datetime(r['ingested_at']) > now for r in relevant_readings): data_issues.append('ingest_future_timestamp')
+        if snapshot and snapshot['metric_count'] > snapshot['limit']: data_issues.append('metric_limit_exceeded')
+        items.append({**binding, 'data_issues': data_issues, 'identity_status': 'planned_hardware_binding_unverified',
             'scenario_observations_usable': scenario_usable, 'registry_present': asset is not None, 'mapping_status': mapping,
             'missing_metric_groups': missing_metrics,
             'unit_issues': unit_issues,
@@ -150,12 +160,19 @@ def station_snapshot(station_id='all'):
         'usable_observation_sensor_count': sum(i['observation_state'] == 'usable_observations' for i in items),
         'data_context': data_context(), 'model_notice': INVENTORY['modelNotice'],
         'scenario_usable_sensor_count': sum(i['scenario_observations_usable'] for i in items),
+        'data_issue_sensor_count': sum(bool(i['data_issues']) for i in items),
+        'station_facts': {station: {'physical_sensor_count': len(group),
+            'data_issue_sensor_count': sum(bool(i['data_issues']) for i in group),
+            'data_issue_asset_codes': [i['assetCode'] for i in group if i['data_issues']],
+            'alert_asset_codes': [i['assetCode'] for i in group if i['active_alerts']],
+            'controller_ids': sorted({i['controllerId'] for i in group})}
+            for station in STATIONS if (group := [i for i in items if i['stationId'] == station])},
         'controller_allocation': dict(Counter(b['controllerId'] for b in bindings)),
         'controllers': {code: observed.get(code) for code in controller_codes},
         'stations': {s: [b['physicalTag'] for b in bindings if b['stationId'] == s] for s in STATIONS
             if any(b['stationId'] == s for b in bindings)},
         'active_model_version': release.version if release else None, 'items': items,
-        'boundary': '31路身份来自已确认布局；台账、模型和硬件绑定分别核验。可用观测不代表传感器已标定或环境安全。'}
+        'boundary': '31路身份来自已确认布局；台账、模型和硬件绑定分别核验。可用观测不代表传感器已标定或环境安全。未标定本身不使良好、时间与单位正常的原始读数失效；原始量趋势与浓度/环境安全判断分别核验。'}
 
 
 def diagnose_station(station_id):
@@ -252,7 +269,10 @@ def review_work_order(code):
     alerts = Alert.objects.filter(asset=order.asset, status__in=['open', 'acknowledged'])
     return {'work_order_code': order.code, 'asset_code': order.asset.code, 'status': order.status,
         'work_order_updated_at': order.updated_at.isoformat(), 'queried_at': now.isoformat(),
-        'communication': snapshot['connection'], 'latest_measurements': snapshot,
+        'communication': snapshot['connection'],
+        'communication_review': 'current_state_only_no_prior_outage_evidence',
+        'communication_boundary': '只有当前心跳状态，无历史离线至在线轨迹，不能据此断言通信已经恢复。',
+        'latest_measurements': snapshot,
         'data_context': data_context(),
         'measurement_review': ('new_scenario_observations' if evaluation_enabled() else 'new_usable_observations') if readings and len(post_review) == len(readings)
             and snapshot['metric_count'] <= snapshot['limit'] else 'insufficient_new_evidence',
@@ -293,12 +313,13 @@ def inspection_summary(evidence):
         report = entry['data'].get('station', entry['data'])
         return {'evidenceId': entry['id'], 'expected': report['expected_sensor_count'],
             'registered': report['registered_sensor_count'], 'usable': report['usable_observation_sensor_count'],
-            'scenarioUsable': report['scenario_usable_sensor_count'],
+            'scenarioUsable': report['scenario_usable_sensor_count'], 'dataIssueSensorCount': report['data_issue_sensor_count'],
             'missingAssetCodes': [i['assetCode'] for i in report['items'] if not i['registry_present']],
             'stations': [{'stationId': station, 'expected': len(items),
                 'registered': sum(i['registry_present'] for i in items),
                 'usable': sum(i['observation_state'] == 'usable_observations' for i in items),
                 'scenarioUsable': sum(i['scenario_observations_usable'] for i in items),
+                'dataIssueSensorCount': sum(bool(i['data_issues']) for i in items),
                 'alertCount': sum(len(i['active_alerts']) for i in items)}
                 for station in STATIONS if (items := [i for i in report['items'] if i['stationId'] == station])]}
     return None
