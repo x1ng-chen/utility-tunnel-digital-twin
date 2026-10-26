@@ -93,5 +93,5 @@ function formatTime(value?: string | null) {
 </template>
 
 <style scoped>
-.asset-history-link{width:100%;margin-top:10px;padding:9px 11px;border:1px solid #35597e;background:#102943;color:#b8cde6;text-align:left}.asset-history-link:hover,.asset-history-link:focus-visible{border-color:#5d8dca;background:#183b60;color:#fff;outline:0}
+.asset-history-link{width:100%;margin-top:10px;padding:9px 11px;border:1px solid var(--ops-line);background:var(--ops-panel);color:var(--ops-muted);text-align:left}.asset-history-link:hover,.asset-history-link:focus-visible{border-color:var(--ops-signal);background:var(--ops-raised);color:var(--ops-text);outline:0}
 </style>

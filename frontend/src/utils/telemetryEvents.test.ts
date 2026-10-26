@@ -21,11 +21,11 @@ describe('independent telemetry event markers', () => {
           { name: 'B', type: 'line', data: [[time - 60000, 22], [time + 60000, 23]] },
           telemetryEventSeries([event]),
         ] });
-      expect(chart.renderToSVGString()).toContain('stroke="#ff7289"');
+      expect(chart.renderToSVGString()).toContain('stroke="#b93451"');
       chart.dispatchAction({ type: 'legendUnSelect', name: 'A' });
-      expect(chart.renderToSVGString()).toContain('stroke="#ff7289"');
+      expect(chart.renderToSVGString()).toContain('stroke="#b93451"');
       chart.setOption({ series: [{ id: 'historical-alert-events', markLine: { data: [] } }] });
-      expect(chart.renderToSVGString()).not.toContain('stroke="#ff7289"');
+      expect(chart.renderToSVGString()).not.toContain('stroke="#b93451"');
     } finally { chart.dispose(); }
   });
 });

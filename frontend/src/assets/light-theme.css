@@ -1,0 +1,74 @@
+/* Shared light palette for every route and body-level dialog. */
+:root {
+  color-scheme: light;
+  --ops-bg: #f2f6fb; --ops-bg-deep: #f8fafc; --ops-panel: #ffffff;
+  --ops-panel-strong: #f4f7fc; --ops-raised: #eef3fa;
+  --ops-line: #d8e2ee; --ops-line-soft: #e5ebf3;
+  --ops-text: #1c3049; --ops-muted: #53657b; --ops-dim: #64748b;
+  --ops-signal: #1766c3; --ops-signal-rgb: 23,102,195; --ops-accent: #1766c3;
+  --ops-on-signal: #ffffff; --ops-signal-soft: #eaf3ff;
+  --ops-ok: #167451; --ops-ok-soft: #eff8f3; --ops-ok-line: #b6d8c8;
+  --ops-warn: #915200; --ops-warn-soft: #fff7e9; --ops-warn-line: #e7cfaa;
+  --ops-danger: #b9364d; --ops-danger-soft: #fff1f3; --ops-danger-line: #e6b2bc;
+  font-family: "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+}
+html, body, #app { background: var(--ops-bg); color: var(--ops-text); }
+::selection { color: var(--ops-on-signal); background: var(--ops-signal); }
+.app-shell .command-sidebar { background: var(--ops-bg-deep) !important; }
+.app-shell .command-nav .nav-item { margin-block: 3px; border-radius: 7px !important; color: #405977 !important; }
+.app-shell .command-nav .nav-item:hover { color: #154f91 !important; background: #edf3fc !important; }
+.app-shell .command-nav .nav-item.active { color: #17599f !important; background: #e5effc !important; box-shadow: none !important; }
+.app-shell .nav-group h2 { color: #576c84; letter-spacing: .04em; }
+.app-shell .nav-group h2::before, .app-shell .nav-group h2::after { content: none; }
+.app-shell .sidebar-system-state i { box-shadow: none; }
+.app-shell .command-topbar { grid-template-columns: minmax(140px,1fr) minmax(180px,300px) auto; gap: 16px; background: var(--ops-panel) !important; }
+.app-shell .topbar-actions .status-pill { white-space: nowrap; font-family: inherit; font-size: 11px; line-height: 1.4; }
+.app-shell .status-pill.online { color: var(--ops-ok) !important; }
+.app-shell .status-pill.pending { color: var(--ops-warn) !important; }
+.app-shell .status-pill.offline { color: var(--ops-muted) !important; }
+.app-shell .critical-ticker { background: var(--ops-danger-soft); color: #912b40; }
+.app-shell .critical-ticker button { color: #fff; background: var(--ops-danger); }
+.app-shell .offline-banner { background: var(--ops-warn-soft); }
+.app-shell .panel, .app-shell .table-panel, .app-shell .settings-panel,
+.app-shell .asset-card, .app-shell .create-order-panel, .app-shell .kanban-column,
+.app-shell .telemetry-filters, .app-shell .insight-metrics article { border-radius: 10px !important; }
+.app-shell .panel-head, .app-shell .table-head, .app-shell .settings-head { background: var(--ops-bg-deep) !important; }
+.app-shell .table-row:hover { background: var(--ops-signal-soft) !important; }
+html input, html select, html textarea { background: var(--ops-bg-deep) !important; color: var(--ops-text) !important; border-color: var(--ops-line) !important; }
+html input::placeholder, html textarea::placeholder { color: var(--ops-dim); }
+html .primary-button, html .login-submit { background: var(--ops-signal) !important; color: var(--ops-on-signal) !important; border-color: var(--ops-signal) !important; border-radius: 6px !important; }
+html .primary-button:hover:not(:disabled), html .login-submit:hover:not(:disabled) { background: #1155a5 !important; color: #fff !important; }
+html .outline-button, html .compact-button, html .text-button { border-radius: 6px !important; }
+html .command-panel { border: 1px solid #c6d7eb; border-radius: 12px; background: #fff; box-shadow: 0 20px 80px #23436826; }
+html .command-panel header { background: var(--ops-bg-deep); }
+html .command-panel > button:hover { background: var(--ops-signal-soft); color: #154f91; }
+html .command-panel > button:hover small { color: #405977; }
+html .ai-assistant-launcher { border-color: var(--ops-signal); background: var(--ops-signal); color: #fff; box-shadow: 0 6px 20px #245a9d26; }
+html .ai-assistant-panel { border-color: #c6d7eb; background: #fff; box-shadow: 0 16px 60px #23436826; color: var(--ops-text); }
+html .command-login .login-frame { background: #fff !important; box-shadow: 0 16px 60px #23436812 !important; }
+html .command-login .login-card, html .command-login .signal-card { border-radius: 10px !important; background: var(--ops-bg-deep) !important; }
+html .command-login .login-card input, html .command-login .login-card select { background: #fff !important; }
+html .command-login .login-grid { opacity: .3 !important; }
+html .command-login .login-scanline { opacity: .15; }
+html .command-login .form-error { color: var(--ops-danger); background: var(--ops-danger-soft); }
+html .command-login .form-success { color: var(--ops-ok); background: var(--ops-ok-soft); }
+html .operation-notice { border-radius: 10px !important; background: var(--ops-panel) !important; color: var(--ops-text); box-shadow: 0 12px 36px #23436820 !important; }
+html .leaflet-container { background: #edf3fa !important; }
+html .gis-map .leaflet-tile-pane { filter: none; }
+html .leaflet-control-zoom a, html .leaflet-control-attribution { background: #fff !important; color: var(--ops-muted) !important; }
+html .ops-modal-mask, html .command-mask { background: rgba(28,48,73,.44); }
+html .ops-tabs button.active { color: #fff; }
+@media (max-width:1280px) {
+  .app-shell .command-topbar { grid-template-columns: minmax(120px,1fr) 40px auto; }
+  .app-shell .global-search { width: 40px !important; justify-content: center; padding: 0; }
+  .app-shell .global-search > span, .app-shell .global-search kbd { display: none; }
+}
+@media (max-width:1100px) { .app-shell .topbar-actions .status-pill:nth-of-type(2) { display: none; } }
+@media (max-width:820px) {
+  .app-shell .command-topbar { grid-template-columns: minmax(0,1fr) 36px auto; gap: 8px; }
+  .app-shell .global-search { width: 36px !important; }
+}
+
+/* Keep foregrounds readable on filled icons and remove the old glass wash. */
+html .operation-notice .notice-icon { color: var(--ops-on-signal); }
+html .command-login .login-card::before { content: none; }

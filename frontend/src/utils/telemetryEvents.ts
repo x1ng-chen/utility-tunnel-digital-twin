@@ -9,7 +9,7 @@ export function telemetryEventSeries(events: Alert[]) {
       symbol: 'none', silent: true, label: { show: false },
       data: events.filter(event => Number.isFinite(Date.parse(event.openedAt))).map(event => ({
         name: event.code, xAxis: Date.parse(event.openedAt),
-        lineStyle: { color: event.severity === 'critical' ? '#ff7289' : '#f2b064', type: 'dashed' as const },
+        lineStyle: { color: event.severity === 'critical' ? '#b93451' : '#915200', type: 'dashed' as const },
       })),
     },
   };
