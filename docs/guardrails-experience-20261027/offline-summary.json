@@ -2,13 +2,13 @@
   "scope": "DETERMINISTIC_CONTRACT_AND_STUB_ORCHESTRATION_NOT_MODEL_ABILITY",
   "executionMode": "EXPLICIT_OFFLINE_STUB",
   "rows": 100,
-  "codeFingerprint": "9760033952915b3f3ea4e6d545369a55aee42d282e87bc92c71e6fbf678c50a2",
+  "codeFingerprint": "4a1bb20d1ff388266eb9c2b7923360e426f39fabc2d41b2a1b6f544471295f20",
   "guardVersion": "2026-10-27.1",
   "training": {
     "dataset": "TRAINING_FAN_MISSING_ONLY_NOT_J01_J25",
-    "runId": "8dc2e465-ed5a-4b15-abfc-1769107ab4a1",
+    "runId": "4c193eec-7774-454f-a0f2-d86bd62a14fb",
     "experienceId": "ff12b5aa-f71a-4eab-bc64-fb927055d894",
-    "observationHash": "b1a0004ce1ebe7fd15941aeaa152468331a29f6149408cab7990a04e2f9eac7a",
+    "observationHash": "cfc2cb188dfe0f9db14712f06547e6185a429d0c15030648687fb96722a4211a",
     "approval": "SIMULATED_ADMINISTRATOR_NOT_HUMAN",
     "independentHumanReview": false
   },
@@ -28,7 +28,7 @@
         "boundaryCases": 1,
         "legalTasksCompleted": 12,
         "fixtureChecksPassed": 25,
-        "stubElapsedMedianMs": 93,
+        "stubElapsedMedianMs": 79,
         "loadedExperienceCounts": [
           0
         ]
@@ -47,7 +47,7 @@
         "boundaryCases": 1,
         "legalTasksCompleted": 12,
         "fixtureChecksPassed": 25,
-        "stubElapsedMedianMs": 203,
+        "stubElapsedMedianMs": 172,
         "loadedExperienceCounts": [
           0
         ]
@@ -68,7 +68,7 @@
         "boundaryCases": 1,
         "legalTasksCompleted": 12,
         "fixtureChecksPassed": 25,
-        "stubElapsedMedianMs": 79,
+        "stubElapsedMedianMs": 94,
         "loadedExperienceCounts": [
           0,
           1
@@ -88,7 +88,7 @@
         "boundaryCases": 1,
         "legalTasksCompleted": 12,
         "fixtureChecksPassed": 25,
-        "stubElapsedMedianMs": 156,
+        "stubElapsedMedianMs": 157,
         "loadedExperienceCounts": [
           0,
           1
@@ -103,5 +103,5 @@
   "actualMemoryBenefit": null,
   "tokens": null,
   "billVerifiedCost": null,
-  "archiveSha256": "0717cf96f695a38996d2b97d91383abcb0ef5c619c8ac525a4cc344dbe4a18d6"
+  "archiveSha256": "a7a332c738de49dea4772bc6600a9c2232debaef20114866b0caaf0a17c66fe0"
 }

@@ -97,7 +97,9 @@ class ExperienceTests(TestCase):
         self.assertEqual(new.status,'candidate');item.refresh_from_db();self.assertEqual(item.status,'approved')
         self.approve(new);item.refresh_from_db();self.assertEqual(item.status,'retired')
         with self.assertRaises(RuntimeError): self.approve(sibling)
-        new.refresh_from_db();transition(self.admin,new.pk,{'action':'retire','revision':new.revision})
+        new.refresh_from_db()
+        with self.assertRaises(ValueError): transition(self.user,new.pk,{'action':'revise','revision':new.revision,'lesson':item.lesson})
+        transition(self.admin,new.pk,{'action':'retire','revision':new.revision})
         self.assertEqual(matching(run.snapshot,run.input,self.other)['items'],[])
     def test_M07_malicious_lessons_and_private_sentinels_do_not_leak(self):
         item,run=self.candidate()

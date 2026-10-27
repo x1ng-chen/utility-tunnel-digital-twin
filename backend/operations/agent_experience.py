@@ -156,6 +156,8 @@ def transition(user,pk,payload):
         candidate,_=ReviewExperience.objects.get_or_create(owner=item.owner,source_run=item.source_run,content_hash=hash_content(fields),
             defaults={**fields,'parent':item,'source_refs':item.source_refs,
                 'audit':[{'action':'new_candidate_revision','actor':user.pk,'at':timezone.now().isoformat()}]})
+        if candidate.status!='candidate' or candidate.parent_id!=item.pk:
+            raise ValueError('相同内容已属于其它版本；未生成新候选，请在最新条目上修订。')
         return candidate
     if not admin: raise PermissionError('只有管理员可以批准、驳回或退役。')
     expected={'approve':('candidate','approved'),'reject':('candidate','rejected'),'retire':('approved','retired')}
