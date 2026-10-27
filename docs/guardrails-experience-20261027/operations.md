@@ -7,8 +7,8 @@
 Windows本地现有包：
 
 ```powershell
-python deploy/agent-demo/manage_demo.py backup
 python deploy/agent-demo/manage_demo.py stop
+python deploy/agent-demo/manage_demo.py backup
 python deploy/agent-demo/manage_demo.py start --no-paid-model
 # 或 .\deploy\agent-demo\manage-demo.ps1 -Action start -NoPaidModel
 ```

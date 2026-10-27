@@ -212,7 +212,7 @@ jobs:
           assert Asset.objects.count() > 0;
           actor = User.objects.order_by('id').first();
           ReportExport.objects.create(report_type='daily', file_name='ci-policy.csv', requested_by=actor);
-          client = APIClient();
+          client = APIClient(HTTP_HOST='localhost');
           login = client.post('/api/auth/login/', {'email': 'operator@example.com', 'password': 'demo-password-2026'}, format='json', HTTP_HOST='localhost');
           assert login.status_code == 200, login.content;
           client.credentials(HTTP_AUTHORIZATION='Bearer ' + login.json()['accessToken']);
