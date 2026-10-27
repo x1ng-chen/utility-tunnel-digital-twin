@@ -21,7 +21,7 @@ def require_evaluation_database():
 
 def data_context():
     if not evaluation_enabled():
-        return {'mode': 'database_observation', 'label': '数据库观测；现场状态需核验', 'scenarioId': None}
+        return {'mode': 'database_observation', 'label': '数据库观测；现场状态需核验', 'scenarioId': None,'demoControlsAvailable':False}
     scenario = {}
     try:
         path = Path(settings.AGENT_EVAL_ROOT) / 'scenario.json'
@@ -37,7 +37,8 @@ def data_context():
             scenario={'caseId':session.case_id,'seededAt':None}
             generation=str(session.generation)
     return {'mode': 'simulated_test', 'label': '模拟测试 · 隔离验收库，非现场实时',
-            'scenarioId': scenario.get('caseId'), 'seededAt': scenario.get('seededAt'),'generation':generation}
+            'scenarioId': scenario.get('caseId'), 'seededAt': scenario.get('seededAt'),'generation':generation,
+            'demoControlsAvailable':bool(getattr(settings,'AGENT_DEMO_MODE',False))}
 
 
 def observation_valid(reading):

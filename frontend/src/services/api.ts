@@ -14,7 +14,7 @@ export type AgentProposal = {
   priority: 'low' | 'normal' | 'high' | 'urgent'; requires_confirmation: true;
 };
 export type AgentTask = { kind: 'draft'; asset_code: string } | { kind: 'diagnosis' | 'inspection'; station_id: string } | { kind: 'review'; work_order_code: string };
-export type AgentDataContext = { mode: string; label: string; scenarioId?: string | null; seededAt?: string };
+export type AgentDataContext = { mode: string; label: string; scenarioId?: string | null; seededAt?: string; demoControlsAvailable?: boolean };
 export type AgentRuntime = { requestId?: string; layoutVersion: string; dataContext: AgentDataContext;
   configuredModel?: string; providerModels: string[]; modelCalls: number; elapsedMs?: number;
   tokens: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null;

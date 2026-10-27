@@ -9,9 +9,9 @@ vi.mock('../components/AppShell.vue',()=>({default:{template:'<div><slot /></div
 describe('persistent Agent workbench',()=>{
  let wrapper:ReturnType<typeof mount>;
  beforeEach(()=>{
-  vi.restoreAllMocks();setActivePinia(createPinia());
+  vi.restoreAllMocks();sessionStorage.clear();sessionStorage.setItem('ut-django-token','TEST_STUB');setActivePinia(createPinia());
   useAuthStore().user={id:1,email:'operator',displayName:'operator',role:'operator'};
-  vi.spyOn(api,'agentContext').mockResolvedValue({data:{dataContext:{label:'模拟测试 · 隔离库'},modelNotice:'旧模型文字'}} as never);
+  vi.spyOn(api,'agentContext').mockResolvedValue({data:{dataContext:{label:'模拟测试 · 隔离库',demoControlsAvailable:true},modelNotice:'旧模型文字'}} as never);
   vi.spyOn(api,'demoSession').mockResolvedValue({data:{session:{phase:0,running:false,tick:10},cases:['INS-01']}} as never);
   vi.spyOn(api,'agentRuns').mockResolvedValue({data:[]} as never);
  });

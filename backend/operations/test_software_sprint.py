@@ -33,6 +33,15 @@ def completion(messages,deadline,final_round,**kwargs):
 
 
 class CostTests(SimpleTestCase):
+    @override_settings(DEEPSEEK_API_KEY='TEST_STUB')
+    def test_provider_balance_error_is_explicit_without_paid_call(self):
+        from urllib.error import HTTPError
+        import time
+        from .ai_assistant import _completion,AssistantServiceError
+        with patch('operations.ai_assistant.urlopen',side_effect=HTTPError('https://api.deepseek.com',402,'Payment Required',{},None)):
+            with self.assertRaises(AssistantServiceError) as raised: _completion([],time.monotonic()+10,True)
+        self.assertEqual(raised.exception.code,'assistant_insufficient_balance')
+
     def test_exact_two_fans_and_tariff_boundary(self):
         p=example(); p['tariffs']=[{'start':p['start'],'end':'2026-10-27T00:00:30Z','price':1},
             {'start':'2026-10-27T00:00:30Z','end':p['end'],'price':2}]

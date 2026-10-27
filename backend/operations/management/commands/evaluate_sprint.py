@@ -94,4 +94,7 @@ class Command(BaseCommand):
                 with destination.open('a',encoding='utf-8') as f: f.write(json.dumps(clean(record),ensure_ascii=False)+'\n')
                 self.stdout.write(json.dumps({'case':entry['id'],'mode':mode,'status':record['status'],
                     'error':record.get('run',{}).get('error'),'modelCalls':record.get('run',{}).get('runtime',{}).get('modelCalls')},ensure_ascii=False))
+                calls=record.get('run',{}).get('runtime',{}).get('calls',[])
+                if any(c.get('providerHttpStatus') in {401,402,403} for c in calls):
+                    raise CommandError('Provider account/authentication unavailable; batch stopped, remaining arms NOT_RUN. Recorded responses retained: '+str(destination))
         self.stdout.write(str(destination))

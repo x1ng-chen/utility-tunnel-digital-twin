@@ -104,8 +104,11 @@ async function calculate() {
   } catch (cause) { fail(cause); }
 }
 onMounted(async () => {
-  try { const { data } = await api.agentContext(); sourceLabel.value = data.dataContext.label; modelNotice.value = data.modelNotice; } catch { /* unknown provenance stays visible */ }
-  try { const { data } = await api.demoSession(); session.value = data.session; cases.value = data.cases; } catch { /* endpoint intentionally absent outside sandbox */ }
+  if (!sessionStorage.getItem('ut-django-token')) { sourceLabel.value='当前为界面演示，请登录服务后使用运维任务。'; return; }
+  try {
+    const { data } = await api.agentContext(); sourceLabel.value = data.dataContext.label; modelNotice.value = data.modelNotice;
+    if (data.dataContext.demoControlsAvailable) { const demo=await api.demoSession(); session.value=demo.data.session; cases.value=demo.data.cases; }
+  } catch { /* unknown provenance stays visible */ }
   try { history.value = (await api.agentRuns()).data; if (history.value[0]) { run.value = history.value[0]; if (active.value) void poll(); } } catch (cause) { fail(cause); }
 });
 onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
@@ -113,7 +116,7 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
 
 <template>
   <AppShell>
-    <main class="agent-workbench">
+    <div class="agent-workbench">
       <header><span>可追溯运维</span><h1>多Agent工作台</h1><p>取证、诊断、复核，以及经过人工确认的仿真处置。</p></header>
       <aside class="source" role="status"><strong>{{ sourceLabel }}</strong><p>{{ modelNotice }}</p></aside>
       <p v-if="error" role="alert" class="error">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
@@ -156,7 +159,7 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
         <dl v-if="cost"><dt>已覆盖电量 kWh</dt><dd>{{ cost.knownKwh }}</dd><dt>电费 元</dt><dd>{{ cost.electricityCost ?? '缺少完整功率或电价，无法计算' }}</dd><dt>工时当量 元</dt><dd>{{ cost.laborEquivalentCost }}</dd><dt>模型费用</dt><dd>待实际账单核对</dd><dt>未知风机采样时长 秒</dt><dd>{{ cost.unknownFanSeconds }}</dd><dt>观测转动时长 秒</dt><dd>{{ cost.runtimeSeconds }}</dd><dt>观测启停上升次数</dt><dd>{{ cost.startsObserved }}（不推断缺失区间）</dd></dl>
         <div v-if="cost?.roi"><p>参数化情景，未证明实际收益；净收益敏感性为±50%的假设。</p><pre>{{ JSON.stringify(cost.roi, null, 2) }}</pre></div>
       </section>
-    </main>
+    </div>
   </AppShell>
 </template>
 

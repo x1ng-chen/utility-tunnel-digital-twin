@@ -15,6 +15,7 @@ const pages = [
   ['/work-orders', '工单中心', '工单中心'],
   ['/assets', '设备台账', '设备台账'],
   ['/twin-3d', '三维孪生中心', '三维孪生'],
+  ['/agent-workbench', '多Agent工作台', '智能运维'],
   ['/gis', 'GIS 空间运维总览', 'GIS 总览'],
   ['/telemetry', '数据洞察', '数据洞察'],
   ['/asset-admin', '资产主数据', '资产配置'],

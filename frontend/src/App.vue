@@ -17,6 +17,7 @@ let isolatedDemo = false;
 const noticeTone = computed(() => /暂不可用|失败|过期|错误|离线/.test(operations.notice) ? 'warning' : 'success');
 watch(() => auth.isAuthenticated, (isAuthenticated) => {
   if (!isAuthenticated) {
+    isolatedDemo = false;
     if (liveTimer) window.clearInterval(liveTimer);
     liveTimer = undefined;
     operations.stopRealtime();
@@ -32,10 +33,13 @@ watch(() => operations.noticeRevision, () => {
 });
 function startLiveRefresh() {
   if (liveTimer || !auth.isAuthenticated) return;
+  if (window.sessionStorage.getItem('ut-django-token')) {
+    void api.agentContext().then(({ data }) => { isolatedDemo = data.dataContext.mode === 'simulated_test'; }).catch(() => { isolatedDemo = false; });
+  }
   operations.startRealtime();
   liveTimer = window.setInterval(() => {
-    // WebSocket is primary. REST is a bounded recovery path for a disconnected
-    // stream, not a disguised two-second polling implementation.
+    // Production uses WebSocket with REST recovery; the separate-process
+    // local simulator explicitly uses bounded REST refresh.
     if (document.visibilityState === 'visible' && (isolatedDemo || operations.realtimeState !== 'connected')) void operations.refreshLive();
   }, 2000);
 }
@@ -45,7 +49,6 @@ function handleVisibility() {
 onMounted(() => {
   // The explicit local simulator writes through a separate process. Its
   // in-memory channel layer is not the API process's WebSocket layer.
-  void api.agentContext().then(({ data }) => { isolatedDemo = data.dataContext.mode === 'simulated_test'; }).catch(() => { isolatedDemo = false; });
   document.addEventListener('visibilitychange', handleVisibility);
   if (auth.isAuthenticated) {
     void operations.refresh('api');

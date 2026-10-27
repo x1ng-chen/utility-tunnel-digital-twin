@@ -240,6 +240,8 @@ def _completion(messages, deadline, final_round, task=None, context=None, availa
         message['_provider'] = {'model': body.get('model'), 'usage': body.get('usage'), 'finishReason': body['choices'][0].get('finish_reason')}
         return message
     except HTTPError as exc:
+        if exc.code==402:
+            raise AssistantServiceError('assistant_insufficient_balance','模型账户余额不足，本次任务未完成；请补充额度后重试。',503) from exc
         raise AssistantServiceError('assistant_rate_limited' if exc.code == 429 else 'assistant_upstream_error',
                                     '模型服务暂时不可用，请稍后重试。', 429 if exc.code == 429 else 502) from exc
     except (URLError, TimeoutError) as exc:
