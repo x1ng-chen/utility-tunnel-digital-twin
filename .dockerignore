@@ -10,5 +10,9 @@
 **/.env.*
 !**/.env.example
 deploy/postgres/backups
-firmware
+.agent-demo
+.agent-eval
+.agent-eval-sprint
+.agent-knowledge
+artifacts
 docs/assets

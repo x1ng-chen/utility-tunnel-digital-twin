@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "date": "2026-10-26",
-  "status": "STATIC_PIN_PROPOSAL_NOT_FIRMWARE_OR_HARDWARE_ACCEPTANCE",
+  "date": "2026-10-27",
+  "status": "SOURCE_ALIGNED_NOT_PHYSICAL_ACCEPTANCE",
   "layout": {
     "sizeMm": [
       700,
@@ -441,7 +441,7 @@
       "node": "CTRL-01",
       "station": "P3",
       "pins": [
-        "PC11"
+        "PC4"
       ],
       "interface": "DIGITAL_INPUT",
       "adcChannel": null,
@@ -461,7 +461,8 @@
           "PC11"
         ]
       },
-      "localZone": "LOWER_LEFT"
+      "localZone": "LOWER_LEFT",
+      "pinRevision": "MATCH_REVIEWED_FOUR_CONTROLLER_SOURCE_NOT_BENCH_ACCEPTANCE"
     },
     {
       "physicalTag": "MQ4-03",
@@ -469,10 +470,10 @@
       "node": "CTRL-01",
       "station": "P3",
       "pins": [
-        "PC2"
+        "PA4"
       ],
       "interface": "ADC",
-      "adcChannel": 12,
+      "adcChannel": 4,
       "i2cAddress": null,
       "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
       "mcuSignalDomain": "0_TO_3V3",
@@ -489,7 +490,8 @@
           "PC2"
         ]
       },
-      "localZone": "LOWER_LEFT"
+      "localZone": "LOWER_LEFT",
+      "pinRevision": "MATCH_REVIEWED_FOUR_CONTROLLER_SOURCE_NOT_BENCH_ACCEPTANCE"
     },
     {
       "physicalTag": "CO-03",
@@ -497,10 +499,10 @@
       "node": "CTRL-01",
       "station": "P3",
       "pins": [
-        "PB1"
+        "PA5"
       ],
       "interface": "ADC",
-      "adcChannel": 9,
+      "adcChannel": 5,
       "i2cAddress": null,
       "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
       "mcuSignalDomain": "0_TO_3V3",
@@ -517,7 +519,8 @@
           "PB1"
         ]
       },
-      "localZone": "LOWER_LEFT"
+      "localZone": "LOWER_LEFT",
+      "pinRevision": "MATCH_REVIEWED_FOUR_CONTROLLER_SOURCE_NOT_BENCH_ACCEPTANCE"
     },
     {
       "physicalTag": "FLAME-03",
@@ -552,7 +555,7 @@
       "node": "CTRL-01",
       "station": "P5",
       "pins": [
-        "PB13"
+        "PC5"
       ],
       "interface": "DIGITAL_INPUT",
       "adcChannel": null,
@@ -572,7 +575,8 @@
           "PB13"
         ]
       },
-      "localZone": "LOWER_LEFT"
+      "localZone": "LOWER_LEFT",
+      "pinRevision": "MATCH_REVIEWED_FOUR_CONTROLLER_SOURCE_NOT_BENCH_ACCEPTANCE"
     },
     {
       "physicalTag": "MQ4-05",
@@ -580,10 +584,10 @@
       "node": "CTRL-01",
       "station": "P5",
       "pins": [
-        "PA4"
+        "PA6"
       ],
       "interface": "ADC",
-      "adcChannel": 4,
+      "adcChannel": 6,
       "i2cAddress": null,
       "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
       "mcuSignalDomain": "0_TO_3V3",
@@ -600,7 +604,8 @@
           "PA4"
         ]
       },
-      "localZone": "LOWER_LEFT"
+      "localZone": "LOWER_LEFT",
+      "pinRevision": "MATCH_REVIEWED_FOUR_CONTROLLER_SOURCE_NOT_BENCH_ACCEPTANCE"
     },
     {
       "physicalTag": "CO-05",
@@ -608,10 +613,10 @@
       "node": "CTRL-01",
       "station": "P5",
       "pins": [
-        "PC1"
+        "PA7"
       ],
       "interface": "ADC",
-      "adcChannel": 11,
+      "adcChannel": 7,
       "i2cAddress": null,
       "powerDomain": "5V_ZONE_TARGET_VERIFY_MODULE",
       "mcuSignalDomain": "0_TO_3V3",
@@ -628,7 +633,8 @@
           "PC1"
         ]
       },
-      "localZone": "LOWER_LEFT"
+      "localZone": "LOWER_LEFT",
+      "pinRevision": "MATCH_REVIEWED_FOUR_CONTROLLER_SOURCE_NOT_BENCH_ACCEPTANCE"
     },
     {
       "physicalTag": "FLAME-05",
@@ -692,7 +698,7 @@
       "node": "CTRL-01",
       "station": null,
       "pins": [
-        "PC13"
+        "PB1"
       ],
       "interface": "DIGITAL_INPUT",
       "adcChannel": null,
@@ -712,7 +718,8 @@
           "PC13"
         ]
       },
-      "localZone": "LOWER_LEFT"
+      "localZone": "LOWER_LEFT",
+      "pinRevision": "MATCH_REVIEWED_FOUR_CONTROLLER_SOURCE_NOT_BENCH_ACCEPTANCE"
     },
     {
       "physicalTag": "O2-02",
@@ -720,10 +727,10 @@
       "node": "CTRL-01",
       "station": null,
       "pins": [
-        "PA5"
+        "PA0"
       ],
       "interface": "ADC",
-      "adcChannel": 5,
+      "adcChannel": 0,
       "i2cAddress": null,
       "powerDomain": "PASSIVE_ELECTRODE_NO_EXTERNAL_POWER",
       "mcuSignalDomain": "0_TO_3V3",
@@ -741,7 +748,8 @@
           "PA5"
         ]
       },
-      "localZone": "LOWER_LEFT"
+      "localZone": "LOWER_LEFT",
+      "pinRevision": "MATCH_REVIEWED_FOUR_CONTROLLER_SOURCE_NOT_BENCH_ACCEPTANCE"
     },
     {
       "physicalTag": "MQ2-04",
@@ -1105,12 +1113,12 @@
         },
         {
           "name": "CS",
-          "pin": "PB9",
+          "pin": "PB8",
           "mode": "GPIO_OUT"
         },
         {
           "name": "BLK",
-          "pin": "PC12",
+          "pin": "PB9",
           "mode": "GPIO_OUT"
         }
       ],
@@ -1181,12 +1189,12 @@
         },
         {
           "name": "CS",
-          "pin": "PB9",
+          "pin": "PB8",
           "mode": "GPIO_OUT"
         },
         {
           "name": "BLK",
-          "pin": "PC12",
+          "pin": "PB9",
           "mode": "GPIO_OUT"
         }
       ],
@@ -1340,8 +1348,8 @@
       "signals": [
         {
           "name": "PWM_TO_OPEN_COLLECTOR_DRIVER",
-          "pin": "PB8",
-          "mode": "TIM4_CH3"
+          "pin": "PB1",
+          "mode": "TIM3_CH4"
         },
         {
           "name": "TACH_FROM_PROTECTED_3V3_SIGNAL",
@@ -1592,14 +1600,14 @@
     "datasheetPinTable": "DS5792 Rev13 Table8: PB3 SPI3_SCK; PB5 SPI3_MOSI; PA7 TIM3_CH2/ADC1_IN7 or EXTI7 GPIO",
     "halJtagMacro": "firmware/stm32f103rct6/Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_gpio_ex.h: __HAL_AFIO_REMAP_SWJ_NOJTAG"
   },
-  "firmwareChanged": false,
+  "firmwareChanged": true,
   "hardwareTested": false,
-  "revision": "0.3",
+  "revision": "0.4",
   "userConfirmations": {
     "date": "2026-10-24",
     "sensorSignalLevels": "5V_POWERED_SENSOR_OUTPUTS_3V3_USER_CONFIRMED_NOT_MEASURED_THIS_RUN",
     "oxygen": "AO02_BARE_DIRECT_TO_ADC_NO_ADDED_CONDITIONER_USER_SELECTED",
-    "fanReplan": "RETAIN_PHYSICAL_FANS_AND_PB8_PWM_PA7_TACH_PA1_RELAY; NEW_NODES_CTRL04_AND_CTRL02",
+    "fanReplan": "UNIFIED_PB8_PWM_PA7_TACH_PA1_RELAY_ON_CTRL01_AND_CTRL04",
     "layoutDate": "2026-10-26",
     "layout": "LOWER_LEFT_1_LOWER_RIGHT_2_UPPER_RIGHT_3_UPPER_LEFT_4; SCREENS_ON_1_AND_2",
     "locality": "MINIMIZE_CROSS_ZONE_WIRING_USE_NEAREST_CONTROLLER"
@@ -1633,11 +1641,16 @@
     "modelChanged": false,
     "note": "New CTRL codes identify the proposed physical numbering only; retain legacy asset tags and migrate explicitly."
   },
+  "sourceReconciliation": {
+    "reviewedCommit": "17d6e8037cfc3f9baa44e69e5780956870b148f3",
+    "fan2Pwm": "CTRL02_PB1_TIM3_CH4_SOURCE_VS_EARLIER_PB8_PLAN",
+    "physicalWiringVerified": false
+  },
   "implementationDefaults": {
     "joystickNode": "CTRL-02",
     "mainScreenNode": "CTRL-02",
     "statusScreenNode": "CTRL-01",
-    "sensorPinsUnchangedWithinPhysicalZones": true,
+    "sensorPinsUnchangedWithinPhysicalZones": false,
     "buzzerAndLedNode": "CTRL-03",
     "mainScreenDoesNotOwnRemoteOutputs": true
   },
@@ -1682,8 +1695,36 @@
   "locality": {
     "rule": "KEEP_PHYSICAL_SENSOR_ZONES; NO_REMOTE_GPIO_ADC_I2C_SCREEN_WIRES",
     "centerStation": "P5_TO_LOWER_LEFT_CTRL01_SINGLE_LOCAL_HARNESS",
-    "remoteActions": "LOCAL_OUTPUT_OWNER_EXECUTES_ADDRESSED_REQUESTS_VIA_GATEWAY_NOT_IMPLEMENTED",
+    "remoteActions": "LOCAL_OUTPUT_OWNER_EXECUTES_V2_ADDRESSED_GATEWAY_REQUESTS_SOURCE_IMPLEMENTED_NOT_BENCH_ACCEPTED",
     "relayPcb": "REUSE_EXISTING; IF_SHARED_DUAL_CHANNEL_BOARD_ONE_LONGER_CONTROL_OR_LOAD_HARNESS_MAY_BE_UNAVOIDABLE",
     "lengthsMeasured": false
-  }
+  },
+  "reservedPinExceptions": [
+    {
+      "node": "CTRL-01",
+      "pin": "PA0",
+      "owner": "O2-02",
+      "reason": "ONBOARD_WKUP_KEY_AND_ADC_LOAD_REQUIRE_BOARD_VERIFICATION",
+      "scope": "SOURCE_ALIGNMENT_ONLY",
+      "hardwareVerified": false
+    }
+  ],
+  "pinSource": {
+    "path": "firmware/four-controller/Core/Src/board_config.c",
+    "sha256": "0f86625ceb077c77370e1cb59b153cb07dcb7c216a53397008d3b43e884c5144",
+    "hashPolicy": "UTF8_BYTES_WITH_CRLF_NORMALIZED_TO_LF",
+    "supplementalSources": [
+      "firmware/four-controller/Core/Src/actuators.c",
+      "firmware/four-controller/Core/Inc/st7735.h"
+    ],
+    "evidenceBoundary": "SOURCE_MAPPING_NOT_CONTINUITY_OR_ELECTRICAL_VERIFICATION"
+  },
+  "dmaActive": [
+    {
+      "node": "CTRL-03",
+      "channel": "DMA1_CH5",
+      "request": "SPI2_TX"
+    }
+  ],
+  "digitalCapture": "SYSTICK_1MS_DEBOUNCE_AND_OBSERVED_EVENT_HOLD; NOT_ARBITRARY_SHORT_PULSE_CAPTURE"
 }

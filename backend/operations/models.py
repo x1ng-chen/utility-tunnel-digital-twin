@@ -265,6 +265,11 @@ class Telemetry(models.Model):
         BAD = 'bad', '异常'
         MISSING = 'missing', '缺失'
 
+    class ObservationKind(models.TextChoices):
+        SAMPLE = 'sample', '即时采样'
+        LATCHED_EVENT = 'latched_event', '已观察事件锁存'
+
+    observation_kind = models.CharField(max_length=20, choices=ObservationKind.choices, default=ObservationKind.SAMPLE)
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='telemetry')
     event_id = models.CharField(max_length=80, unique=True, null=True, blank=True, editable=False)
     metric_key = models.CharField(max_length=40, blank=True)
@@ -430,6 +435,9 @@ class AuditLog(models.Model):
     class Meta:
         ordering = ['-occurred_at']
         indexes = [models.Index(fields=['action', '-occurred_at'], name='audit_action_time_idx')]
+
+
+from .sprint_models import AgentRun, DemoSession, SimulatedAction  # noqa: E402,F401
 
 
 class ReportExport(models.Model):

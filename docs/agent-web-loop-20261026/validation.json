@@ -1,0 +1,170 @@
+{
+  "date": "2026-10-26",
+  "baseCommit": "f18d8bf5c667e9df14c9126cf8fe540ed08a0052",
+  "backendTests": {
+    "passed": 172,
+    "phase": "agent_implementation_before_ui_integration"
+  },
+  "frontendTests": {
+    "passed": 116,
+    "actualV17GlbIncluded": true
+  },
+  "frontendProductionBuild": "PASS",
+  "browserTests": {
+    "passed": 3,
+    "mode": "headless Chromium; actual sandbox API, actual V17 GLB and work-order API; LLM response stubbed",
+    "coverage": [
+      "five stations and same-station sensor targets",
+      "cancel/confirm/response loss/idempotent retry/returned order review",
+      "mobile viewport and viewer write restriction"
+    ],
+    "paidCaseSkippedByDefault": true,
+    "phase": "agent_implementation_before_ui_integration"
+  },
+  "modelEvaluation": {
+    "model": "deepseek-flash",
+    "compositeAutomatedContracts": {
+      "passed": 12,
+      "total": 12
+    },
+    "regressionAutomatedContracts": {
+      "passed": 30,
+      "total": 30
+    },
+    "primaryCasesWithActualModelResponses": 38,
+    "controlledTimeoutCase": "S05; transport failure injected; not a real provider timeout",
+    "serverPermissionRejections": [
+      "ORD-03",
+      "W02",
+      "S04"
+    ],
+    "latestPrimaryKnownTokens": 516690,
+    "primaryLatencyMs": {
+      "n": 38,
+      "p50": 6500.0,
+      "p95NearestRank": 10391
+    },
+    "allAttemptsRecorded": 107,
+    "failedAttemptsRetained": 9,
+    "compositeRecording": ".agent-eval/runs/20261026T103056676638Z.jsonl",
+    "regressionRecordings": [
+      ".agent-eval/runs/20261026T102557046541Z.jsonl",
+      ".agent-eval/runs/20261026T103041486583Z.jsonl"
+    ],
+    "factScoring": "TEAM_HUMAN_REVIEW_NOT_COMPLETED",
+    "cost": null,
+    "costStatus": "requires actual provider billing reconciliation",
+    "allAttemptRecordedKnownTokensIncludingFollowups": 1343108,
+    "failureCountsAreNotAccuracyScores": true,
+    "issuesFixed": [
+      "reply length cutoff now rejected instead of partial success",
+      "text-only proposal cannot complete explicit draft task",
+      "readonly explicit draft refused before model call",
+      "valid rejected-tool citations are failure evidence, invented IDs still rejected",
+      "sandbox throttle configured in actual DRF rates",
+      "equivalent query tools accepted when evidence is present",
+      "model mapping invalidation occurs after valid activation",
+      "sandbox test accounts have login email identifiers",
+      "unique physical-sensor issue counts separate data issues from active alerts",
+      "current online heartbeat does not prove communication recovery",
+      "explicit RS-485 topology, sensor ownership and calibration scope in model context"
+    ],
+    "agentAssistedFactReview": {
+      "status": "KNOWN_ISSUES_RECHECKED_NOT_FULL_HUMAN_SCORING",
+      "report": "FACT-REVIEW.md",
+      "sixCaseRecheck": ".agent-eval/runs/20261026T113931044961Z.jsonl",
+      "followups": [
+        ".agent-eval/runs/20261026T114244539208Z.jsonl",
+        ".agent-eval/runs/20261026T114453368151Z.jsonl"
+      ],
+      "attempts": 8,
+      "automatedContractsPassed": 8,
+      "naturalLanguageFullyVerified": false
+    }
+  },
+  "comparison": {
+    "packets": 12,
+    "groups": [
+      "M",
+      "L",
+      "A"
+    ],
+    "manualGroup": "NOT_RUN",
+    "plainModelGroup": "12_ACTUAL_RESPONSES_RECORDED_REVIEW_PENDING",
+    "humanPreparationTime": null,
+    "efficiencyImprovement": null,
+    "plainModelRecording": ".agent-eval/runs/20261026T103056676638Z.comparison/20261026T113503811319Z-L.jsonl",
+    "plainModelRecordedKnownTokens": 116506,
+    "notAnEndToEndEfficiencyTrial": true,
+    "plainModelFinishReasons": {
+      "stop": 12
+    }
+  },
+  "unchanged": [
+    "original dirty checkout",
+    "business database",
+    "firmware",
+    "V16/V17 exact-byte packages"
+  ],
+  "notAccepted": [
+    "real hardware end-to-end",
+    "voice",
+    "public deployment",
+    "full natural-language factual accuracy",
+    "human baseline comparison"
+  ],
+  "liveBrowserTest": {
+    "passed": 1,
+    "mode": "headless Chromium; actual DeepSeek, sandbox API and work-order interface",
+    "confirmation": "TEST_PROGRAM_CLICK_NOT_HUMAN",
+    "actualModelResponses": 3,
+    "modelCalls": 7,
+    "recordedKnownTokens": 37429,
+    "recording": ".agent-eval/browser-live-1793015431998.json",
+    "factScoring": "PENDING",
+    "testWorkOrderCode": "WO-261026-CAC41A"
+  },
+  "recordedKnownTokensAllGroups": 1497043,
+  "knownTokenScope": "recorded Agent CLI attempts and followups, plain-model baseline and explicit live browser test; missing provider usage remains unknown",
+  "latestValidation": "uiIntegration",
+  "uiIntegration": {
+    "date": "2026-10-26",
+    "mainCommit": "a0ef1b1029062789fa8fe8a1806a032b68c23bc7",
+    "agentParentCommit": "d4b08a6",
+    "frontendTests": {
+      "passed": 116,
+      "actualV17GlbIncluded": true
+    },
+    "productionBuild": "PASS",
+    "browserTests": {
+      "passed": 6,
+      "paidLiveCaseSkipped": 1,
+      "mode": "actual isolated API and V17 GLB; chat responses explicitly stubbed",
+      "coverage": [
+        "31 sensor provenance and five stations plus same-station targets",
+        "cancel/confirm/response loss/idempotent retry/returned work-order review",
+        "viewer write restriction",
+        "viewport-fixed assistant and text contrast; 800x600, 390x844, 390x640 layouts",
+        "source endpoint failure retains unknown provenance",
+        "all 11 business routes, light background and no horizontal overflow"
+      ]
+    },
+    "reports": {
+      "frontend": ".agent-eval/integration-frontend-final.log",
+      "build": ".agent-eval/integration-build-final.log",
+      "browser": ".agent-eval/integration-browser-v2.log"
+    },
+    "initialBrowserAttempt": {
+      "log": ".agent-eval/integration-browser-final.log",
+      "result": "5 passed; 1 navigation test timed out; paid test skipped",
+      "reason": "test assumed anchor links; actual navigation uses buttons; corrected selector and reran all cases"
+    },
+    "backendChanged": false,
+    "backendTestsRerun": false,
+    "firmwareAndModelOriginalsChanged": false,
+    "paidModelCallsThisIntegration": 0,
+    "visualReview": "desktop and mobile screenshots inspected",
+    "legacyControllerWriteProtocolMigrated": false,
+    "originalDirtyCheckoutPreserved": true
+  }
+}

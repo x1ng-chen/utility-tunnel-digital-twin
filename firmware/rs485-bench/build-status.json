@@ -97,5 +97,35 @@
     "Complete physical interconnection not yet confirmed",
     "STM32 cold-start, full-load and long-duration tests pending"
   ],
-  "provenance_note": "CTRL04 and the running S3 were tested with the preserved six-case single-slave baseline. Current source has nine checks and configurable addressing; CTRL03 runs that extension. The source extension does not imply it was flashed to CTRL04 or S3."
+  "provenance_note": "CTRL04 and the running S3 were tested with the preserved six-case single-slave baseline. Current source has nine checks and configurable addressing; CTRL03 runs that extension. The source extension does not imply it was flashed to CTRL04 or S3.",
+  "quad_prepared_20261026": {
+    "build": "PASS",
+    "toolchain": "arm-none-eabi-gcc 14.2.1 (PlatformIO toolchain-gccarmnoneeabi 1.14.2)",
+    "stm32_images": {
+      "CTRL-01": {
+        "bytes": 8960,
+        "sha256": "be073195a20bbf00ba5aec2ca5f7c6fcb417606cafabaf1188cec0a91904b429"
+      },
+      "CTRL-02": {
+        "bytes": 8964,
+        "sha256": "80c7208c522edad6294ce165226efd784e1e01cf33b63ee7825d29bc081b6fa3"
+      },
+      "CTRL-03": {
+        "bytes": 8960,
+        "sha256": "232e96d88d12bf0df1f87498ef2c3c7170f4ad48166f73ed9735f916aa54e465"
+      },
+      "CTRL-04": {
+        "bytes": 8960,
+        "sha256": "b7c11ddec41b0ec4679e968a591bc2760c0bfe9aa10e3647042ab29618096e90"
+      }
+    },
+    "s3_quad_image": {
+      "bytes": 265872,
+      "sha256": "98814e05d40dcb9cf94449c4fa30880cf7847b050bd15bc0b14005281f3a9ea0"
+    },
+    "protocol_tests": "PASS: BENCH_ADDRESS 1-4 with MinGW gcc (9 self-check cases each)",
+    "flashed": false,
+    "hardware_tested": false,
+    "note": "Rebuilt locally with GCC 14.2.1; byte sizes and SHA256 differ from the earlier images recorded above because the compiler version changed. The CTRL-03/04 boards currently run the older flashed images; this rebuild does not imply they were reflashed."
+  }
 }

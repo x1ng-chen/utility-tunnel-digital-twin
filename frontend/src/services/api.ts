@@ -1,6 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 
-export type ControllerAction = 'led_red' | 'led_green' | 'led_blue' | 'led_off' | 'relay_on' | 'relay_off' | 'fan_pwm' | 'fan2_pwm';
+export type ControllerAction = 'led_red' | 'led_green' | 'led_blue' | 'led_off' | 'relay_on' | 'relay_off' | 'fan_pwm' | 'fan2_pwm' | 'buzzer_on' | 'buzzer_off' | 'auto';
 
 export type AssistantMessage = { role: 'user' | 'assistant'; content: string };
 export type AgentTrace = { tool: string; status: 'ok' | 'rejected'; evidenceId: string; durationMs: number };
@@ -13,12 +13,23 @@ export type AgentProposal = {
   kind: 'work_order'; assetCode: string; title: string; description: string;
   priority: 'low' | 'normal' | 'high' | 'urgent'; requires_confirmation: true;
 };
+export type AgentTask = { kind: 'draft'; asset_code: string } | { kind: 'diagnosis' | 'inspection'; station_id: string } | { kind: 'review'; work_order_code: string };
+export type AgentDataContext = { mode: string; label: string; scenarioId?: string | null; seededAt?: string; demoControlsAvailable?: boolean };
+export type AgentRuntime = { requestId?: string; layoutVersion: string; dataContext: AgentDataContext;
+  configuredModel?: string; providerModels: string[]; modelCalls: number; elapsedMs?: number;
+  tokens: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null;
+  tokenUsageComplete?: boolean; cost: number | null };
+export type AgentDiagnosis = { state: string; boundary: string;
+  facts: { assetCode: string; controllerId: string; rpm: number | null; currentA: number | null; supplyV: number | null }[];
+  candidates: { code: string; title: string; support: string[]; counterevidence: string[]; missing: string[]; nextCheck: string; conclusion: string }[];
+  missingEvidence: string[] };
 export type AgentResponse = {
   reply: string; queriedAt?: string; mode?: 'tool_verified' | 'explanation_only';
   traces?: AgentTrace[]; evidence?: AgentEvidence[]; proposals?: AgentProposal[];
   locations?: AgentLocation[];
-  inspection?: { evidenceId: string; expected: number; registered: number; usable: number; missingAssetCodes: string[];
-    stations: { stationId: string; expected: number; registered: number; usable: number; alertCount: number }[] } | null;
+  runtime?: AgentRuntime; diagnosis?: AgentDiagnosis | null;
+  inspection?: { evidenceId: string; expected: number; registered: number; usable: number; scenarioUsable?: number; dataIssueSensorCount?: number; missingAssetCodes: string[];
+    stations: { stationId: string; expected: number; registered: number; usable: number; scenarioUsable?: number; dataIssueSensorCount?: number; alertCount: number }[] } | null;
 };
 
 const localStorageRef = typeof window !== 'undefined' ? window.localStorage : null;
@@ -97,6 +108,18 @@ client.interceptors.response.use(undefined, async (error) => {
 });
 
 export const api = {
+  agentRuns: () => client.get('/assistant/runs/'),
+  createAgentRun: (payload: Record<string, unknown>, key: string) => client.post('/assistant/runs/', payload, { headers: { 'Idempotency-Key': key } }),
+  agentRun: (id: string) => client.get(`/assistant/runs/${id}/`),
+  cancelAgentRun: (id: string) => client.post(`/assistant/runs/${id}/`, { action: 'cancel' }),
+  exportAgentRun: (id: string, format: string) => client.get(`/assistant/runs/${id}/export/`, { params: { export_format: format }, responseType: 'blob' }),
+  searchKnowledge: (q: string, history = false) => client.get('/assistant/knowledge/', { params: { q, history: history ? '1' : '0' } }),
+  demoSession: () => client.get('/assistant/demo/session/'),
+  demoControl: (action: string, caseId?: string) => client.post('/assistant/demo/session/', { action, ...(caseId ? { caseId } : {}) }),
+  proposeDemoCommand: (runId: string, proposalIndex: number) => client.post('/assistant/demo/commands/', { runId, proposalIndex }),
+  confirmDemoCommand: (id: string, action: 'confirm' | 'cancel') => client.post(`/assistant/demo/commands/${id}/`, { action }),
+  costExample: () => client.get('/assistant/cost-estimates/'),
+  estimateCost: (payload: Record<string, unknown>) => client.post('/assistant/cost-estimates/', payload),
   login: (payload: { email: string; password: string }) => client.post('/auth/login/', payload),
   requestRegistration: (payload: { account: string; displayName: string; role: 'operator' | 'viewer' }) => client.post('/auth/registration-requests/', payload),
   setupRegistrationPassword: (token: string, password: string) => client.post('/auth/registration-requests/setup/', { token, password }),
@@ -109,10 +132,12 @@ export const api = {
   reviewRegistrationRequest: (id: number, payload: { status: 'approved' | 'rejected'; reviewNote?: string }) => client.patch(`/admin/registration-requests/${id}/`, payload),
   reissueRegistrationSetupToken: (id: number) => client.post(`/admin/registration-requests/${id}/setup-token/`),
   dashboard: () => client.get('/dashboard/'),
-  controllerCommandConfirmation: (action: ControllerAction, dutyPercent?: number) => client.post('/controllers/CTRL-01/commands/confirmations/', { action, ...(dutyPercent == null ? {} : { dutyPercent }) }),
-  assistantChat: (messages: AssistantMessage[], page: string) => client.post<AgentResponse>('/assistant/chat/', { messages, page }, { timeout: 65000 }),
+  controllerCommandCapabilities: () => client.get<{ protocol: string; controlDisabled: boolean; manualLeaseMs: number }>('/controllers/command-capabilities/'),
+  controllerCommandConfirmation: (action: ControllerAction, dutyPercent?: number, controller = 'CTRL-01') => client.post(`/controllers/${controller}/commands/confirmations/`, { action, ...(dutyPercent == null ? {} : { dutyPercent }) }),
+  agentContext: () => client.get<{ dataContext: AgentDataContext; layoutVersion: string; modelNotice: string }>('/assistant/context/'),
+  assistantChat: (messages: AssistantMessage[], page: string, task?: AgentTask) => client.post<AgentResponse>('/assistant/chat/', { messages, page, ...(task ? { task } : {}) }, { timeout: 65000 }),
   stationInspection: (station = 'all') => client.get<AgentResponse>('/assistant/inspection/', { params: { station } }),
-  controllerCommand: (action: ControllerAction, confirmationToken: string, dutyPercent?: number) => client.post('/controllers/CTRL-01/commands/', { action, confirmationToken, ...(dutyPercent == null ? {} : { dutyPercent }) }),
+  controllerCommand: (action: ControllerAction, confirmationToken: string, dutyPercent?: number, controller = 'CTRL-01') => client.post(`/controllers/${controller}/commands/`, { action, confirmationToken, ...(dutyPercent == null ? {} : { dutyPercent }) }),
   twinModelReadiness: () => client.get('/twin/model-readiness/'),
   twinModels: (params?: Record<string, string | number>) => client.get('/twin/models/', { params }),
   uploadTwinModel: (payload: FormData) => client.post('/twin/models/', payload, { timeout: 60000 }),

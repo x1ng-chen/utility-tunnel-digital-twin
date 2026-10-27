@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 secrets.*
+!firmware/four-controller/gateway/include/secrets.example.h
 private.*
 firmware/esp8266-01s/include/secrets.h
 
@@ -74,3 +75,9 @@ firmware/**/*.bin
 firmware/**/*.hex
 firmware/**/*.map
 firmware/**/compile_commands.json
+
+# Local Agent acceptance DB, users and model transcripts
+.agent-eval/
+.agent-demo/
+.agent-knowledge/
+.agent-eval-sprint/

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { useNow } from '@vueuse/core';
+import { feedbackValue, outputOwner } from '../utils/controllerControls';
 import { Activity, ArrowUpRight, Box, ClipboardCheck, Clock3, Download, Fan, History, Lightbulb, Power, RefreshCw, ScanLine, Server, ShieldAlert, ShieldCheck } from 'lucide-vue-next';
 import AppShell from '../components/AppShell.vue';
 import '../assets/dashboard-polish.css';
 import DashboardSignal from '../components/DashboardSignal.vue';
-import { api, type ControllerAction } from '../services/api';
+import { api, type AgentDataContext, type ControllerAction } from '../services/api';
 import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
 import { presentAudit } from '../utils/audit';
@@ -12,6 +14,32 @@ import { resolveTwinVisualState, twinStateLabel, type TwinVisualState } from '..
 
 const store = useOperationsStore();
 const auth = useAuthStore();
+const clock = useNow({ interval: 1000 });
+const dataContext = ref<AgentDataContext | null>(null);
+const commandProtocol = ref('unknown');
+const controlDisabled = ref(true);
+const fourController = computed(() => commandProtocol.value === 'four-controller-v2');
+watch(() => store.source, async (source, _, onCleanup) => {
+  let outdated = false;
+  onCleanup(() => { outdated = true; });
+  dataContext.value = null;
+  commandProtocol.value = 'unknown';controlDisabled.value = true;
+  if (source === 'api') {
+    try {
+      const { data } = await api.agentContext();
+      if (!outdated) dataContext.value = data.dataContext;
+      const capability = await api.controllerCommandCapabilities();
+      if (!outdated) { commandProtocol.value = capability.data.protocol;controlDisabled.value = capability.data.controlDisabled; }
+    } catch { /* Unknown provenance must not become a claim of live hardware data. */ }
+  }
+}, { immediate: true });
+const dataAvailability = computed(() => {
+  if (store.source !== 'api') return '演示数据，仅供界面预览';
+  if (dataContext.value?.mode === 'simulated_test') return store.offline ? '模拟测试 · 数据服务暂不可用' : dataContext.value.label;
+  if (store.offline) return '数据服务暂不可用，保留最近记录';
+  if (!dataContext.value) return '平台记录；数据来源待核实';
+  return store.dashboard.assets.online > 0 ? '平台存在在线记录；现场状态需核验' : '暂无在线记录，等待设备上报';
+});
 const mapAssets = computed(() => store.assets.map((asset) => ({ ...asset, visualState: resolveTwinVisualState(asset, store.alerts) })));
 const mapStates: TwinVisualState[] = ['alarm', 'warning', 'normal', 'unknown'];
 const signalOffline = computed(() => store.offline || store.dashboard.assets.online === 0 || store.assets.find((item) => item.code === store.dashboard.telemetry?.assetCode)?.status === 'offline');
@@ -21,8 +49,8 @@ const exporting = ref(false);
 const commandError = ref('');
 const commandResult = ref('');
 const commandSending = ref(false);
-const pendingCommand = ref<{ action: ControllerAction; dutyPercent?: number } | null>(null);
-const canControlEquipment = computed(() => store.source === 'api' && !store.offline && ['operator', 'administrator'].includes(auth.user?.role || ''));
+const pendingCommand = ref<{ action: ControllerAction; dutyPercent?: number; controller: string } | null>(null);
+const canControlEquipment = computed(() => store.source === 'api' && !store.offline && !controlDisabled.value && ['operator', 'administrator'].includes(auth.user?.role || ''));
 const fanLive = computed(() => {
   const latest = (assetCode: string, metricKey: string) => store.telemetry
     .filter((item) => item.assetCode === assetCode && (item.metricKey === metricKey || item.metric === metricKey))
@@ -33,9 +61,6 @@ const fanLive = computed(() => {
   };
 });
 
-function fanValue(value: number | undefined, digits = 0) {
-  return value == null ? '—' : value.toFixed(digits);
-}
 
 async function sync() {
   reportError.value = '';
@@ -56,16 +81,18 @@ async function report() {
 }
 
 const commandLabel = (action: ControllerAction, dutyPercent?: number) => ({
-  relay_on: '启动风扇（10 秒）', relay_off: '立即停止风扇',
-  fan_pwm: `设置风机 1 转速为 ${dutyPercent}%`, fan2_pwm: `设置风机 2 转速为 ${dutyPercent}%`,
+  relay_on: '接通风机供电（最长10秒）', relay_off: '断开风机供电',
+  fan_pwm: `设置风机 1 PWM 为 ${dutyPercent}%（最长10秒）`, fan2_pwm: `设置风机 2 PWM 为 ${dutyPercent}%（最长10秒）`,
+  buzzer_on: '开启蜂鸣器（10秒）', buzzer_off: '关闭蜂鸣器', auto: '恢复本地自动模式',
   led_blue: '切换灯带为蓝色', led_green: '切换灯带为绿色', led_red: '切换灯带为红色', led_off: '关闭灯带',
 }[action]);
 
-function requestControllerCommand(action: ControllerAction, dutyPercent?: number) {
+function requestControllerCommand(action: ControllerAction, dutyPercent?: number, target?: string) {
   if (!canControlEquipment.value || commandSending.value) return;
   commandError.value = '';
   commandResult.value = '';
-  pendingCommand.value = { action, dutyPercent };
+  const controller = outputOwner(action, commandProtocol.value, target);
+  pendingCommand.value = { action, dutyPercent, controller };
 }
 
 function cancelControllerCommand() {
@@ -79,12 +106,13 @@ async function confirmControllerCommand() {
   commandResult.value = '';
   commandSending.value = true;
   try {
-    const confirmation = await api.controllerCommandConfirmation(pending.action, pending.dutyPercent);
-    const response = await api.controllerCommand(pending.action, confirmation.data.confirmationToken, pending.dutyPercent);
+    const confirmation = await api.controllerCommandConfirmation(pending.action, pending.dutyPercent, pending.controller);
+    const response = await api.controllerCommand(pending.action, confirmation.data.confirmationToken, pending.dutyPercent, pending.controller);
     const ack = response.data.ack as { status?: string; reason?: string } | null;
     commandResult.value = ack?.status === 'accepted'
-      ? `设备已确认：${ack.reason || pending.action}`
-      : '命令已交给 MQTT，等待设备回执。';
+      ? (fourController.value ? '控制器已应用输出；是否运转仍需核对新鲜测速及供电反馈。手动设置最长保持10秒。' : `设备已确认：${ack.reason || pending.action}`)
+      : ack?.status === 'rejected' ? `控制器拒绝命令：${ack.reason || '请检查本地保护与参数'}`
+      : '执行结果未知；请先检查反馈，系统不会自动重发。';
     pendingCommand.value = null;
     await store.refresh('api');
   } catch (cause) {
@@ -111,7 +139,7 @@ async function confirmControllerCommand() {
         </div>
       </section>
       <div class="dashboard-data-bar">
-        <span class="data-availability" :class="{ 'has-data': store.source === 'api' && store.dashboard.assets.online > 0 && !store.offline }"><i />{{ store.source !== 'api' ? '演示数据，仅供界面预览' : store.offline ? '数据服务暂不可用' : store.dashboard.assets.online > 0 ? '现场设备有在线数据' : '等待现场设备接入' }}</span>
+        <span class="data-availability" :class="{ 'has-data': dataContext?.mode === 'database_observation' && store.dashboard.assets.online > 0 && !store.offline }"><i />{{ dataAvailability }}</span>
         <span class="dashboard-sync-time"><Clock3 aria-hidden="true" />{{ store.lastSyncedAt ? '最近同步 ' + new Date(store.lastSyncedAt).toLocaleString('zh-CN') : '尚未完成数据同步' }}</span>
       </div>
       <p v-if="reportError" class="inline-message error-message dashboard-error" role="alert">{{ reportError }}</p>
@@ -188,17 +216,23 @@ async function confirmControllerCommand() {
         </article>
         <article class="panel control-panel">
           <header class="panel-head">
-            <div class="panel-title"><span class="panel-symbol"><Fan aria-hidden="true" /></span><div><h2>双风机控制</h2><p>独立转速调节 · 共用电源使能</p></div></div>
+            <div class="panel-title"><span class="panel-symbol"><Fan aria-hidden="true" /></span><div><h2>双风机控制</h2><p>{{ fourController ? 'FAN-01 → CTRL-04 · FAN-02 → CTRL-02' : (commandProtocol === 'legacy' ? '旧协议联调 · CTRL-01' : '控制配置待加载') }}</p></div></div>
             <span class="control-confirm-tag"><ShieldCheck aria-hidden="true" />二次确认</span>
           </header>
           <div class="control-body">
             <div class="fan-live-grid">
-              <div class="fan-unit"><div class="fan-unit-heading"><span class="fan-device-icon"><Fan aria-hidden="true" /></span><b>FAN-01</b><small>风机 1</small></div><strong>{{ fanValue(fanLive.fan1.rpm?.value) }}<small> RPM</small></strong><span class="fan-electrical">{{ fanValue(fanLive.fan1.current?.value, 2) }} mA<span>·</span>{{ fanValue(fanLive.fan1.power?.value, 3) }} W</span><span class="control-group-title">转速设定</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 100)">100%</button></div></div>
-              <div class="fan-unit"><div class="fan-unit-heading"><span class="fan-device-icon"><Fan aria-hidden="true" /></span><b>FAN-02</b><small>风机 2</small></div><strong>{{ fanValue(fanLive.fan2.rpm?.value) }}<small> RPM</small></strong><span class="fan-electrical">{{ fanValue(fanLive.fan2.current?.value, 2) }} mA<span>·</span>{{ fanValue(fanLive.fan2.power?.value, 3) }} W</span><span class="control-group-title">转速设定</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 100)">100%</button></div></div>
+              <div class="fan-unit"><div class="fan-unit-heading"><span class="fan-device-icon"><Fan aria-hidden="true" /></span><b>FAN-01</b><small>风机 1</small></div><strong>{{ feedbackValue(fanLive.fan1.rpm, clock.getTime()) }}<small> RPM</small></strong><span class="fan-electrical">{{ feedbackValue(fanLive.fan1.current, clock.getTime(), 2) }} mA<span>·</span>{{ feedbackValue(fanLive.fan1.power, clock.getTime(), 3) }} W</span><span class="control-group-title">PWM设定</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan_pwm', 100)">100%</button></div></div>
+              <div class="fan-unit"><div class="fan-unit-heading"><span class="fan-device-icon"><Fan aria-hidden="true" /></span><b>FAN-02</b><small>风机 2</small></div><strong>{{ feedbackValue(fanLive.fan2.rpm, clock.getTime()) }}<small> RPM</small></strong><span class="fan-electrical">{{ feedbackValue(fanLive.fan2.current, clock.getTime(), 2) }} mA<span>·</span>{{ feedbackValue(fanLive.fan2.power, clock.getTime(), 3) }} W</span><span class="control-group-title">PWM设定</span><div class="fan-actions fan-speed-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 30)">30%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 60)">60%</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('fan2_pwm', 100)">100%</button></div></div>
             </div>
-            <div class="shared-power"><span class="control-group-title"><Power aria-hidden="true" />共用电源</span><div class="fan-actions"><button class="fan-start-action" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_on')"><Power aria-hidden="true" />{{ commandSending ? '下发中…' : '启动风扇（10秒）' }}</button><button class="stop-action" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_off')">立即停止</button></div></div>
+            <div v-if="!fourController" class="shared-power"><span class="control-group-title"><Power aria-hidden="true" />共用电源</span><div class="fan-actions"><button class="fan-start-action" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_on')"><Power aria-hidden="true" />{{ commandSending ? '下发中…' : '启动风扇（10秒）' }}</button><button class="stop-action" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_off')">立即停止</button></div></div>
+            <div v-if="fourController" class="shared-power">
+              <div v-for="fan in [{ code: 'FAN-01', controller: 'CTRL-04' }, { code: 'FAN-02', controller: 'CTRL-02' }]" :key="fan.code">
+                <span class="control-group-title">{{ fan.code }} · {{ fan.controller }} 独立供电</span>
+                <div class="fan-actions"><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_on', undefined, fan.controller)">供电10秒</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('relay_off', undefined, fan.controller)">断开供电</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('auto', undefined, fan.controller)">恢复自动</button></div>
+              </div>
+            </div>
             <div class="lighting-row"><span class="control-group-title"><Lightbulb aria-hidden="true" />灯带联调</span><div class="lighting-actions"><button class="light-blue" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_blue')">蓝色</button><button class="light-green" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_green')">绿色</button><button class="light-red" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_red')">红色</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_off')">熄灭</button></div></div>
-            <p class="control-note">两台风机共用继电器，转速与电流独立采集。所有命令均需二次确认，以设备回执核查执行结果。</p>
+            <p class="control-note">{{ fourController ? '每台风机独立供电与PWM；手动输出最长10秒，本地报警优先。回执不能代替运行反馈；带*为未核实或待标定读数，缺失或过期显示—。' : '旧 CTRL-01 协议：仅用于旧系统联调。部署四节点固件后，需启用服务端四节点协议配置。' }}</p>
             <small v-if="!canControlEquipment" class="control-access-note">请使用在线 API 模式并以运维员或管理员身份登录。</small>
             <p v-if="commandResult" class="command-ok" role="status">{{ commandResult }}</p><p v-if="commandError" class="command-error" role="alert">{{ commandError }}</p>
           </div>
@@ -209,7 +243,7 @@ async function confirmControllerCommand() {
     <div v-if="pendingCommand" class="command-confirmation-mask" role="presentation" @click.self="cancelControllerCommand">
       <section class="command-confirmation" role="dialog" aria-modal="true" aria-labelledby="command-confirmation-title">
         <span class="confirmation-symbol"><ShieldCheck aria-hidden="true" /></span><h2 id="command-confirmation-title">确认下发设备命令</h2>
-        <p>即将向 <strong>CTRL-01</strong> 下发：<strong>{{ commandLabel(pendingCommand.action, pendingCommand.dutyPercent) }}</strong>。</p>
+        <p>即将向 <strong>{{ pendingCommand.controller }}</strong> 下发：<strong>{{ commandLabel(pendingCommand.action, pendingCommand.dutyPercent) }}</strong>。</p>
         <p>系统会签发 2 分钟内有效且只能使用一次的确认凭据；若通信超时，不会自动重发。</p>
         <div><button type="button" :disabled="commandSending" @click="cancelControllerCommand">取消</button><button type="button" class="confirm-command" :disabled="commandSending" @click="confirmControllerCommand">{{ commandSending ? '正在下发…' : '确认并下发' }}</button></div>
       </section>

@@ -15,6 +15,7 @@ from django.db.models.functions import RowNumber
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
+from .agent_context import data_context, evaluation_enabled, observation_valid
 from .connectivity import binding_is_online
 from .models import Alert, Asset, AuditLog, HardwareBinding, Telemetry, TwinModelRelease, WorkOrder
 
@@ -32,7 +33,7 @@ METRIC_UNITS = {
     'oxygen.voltage': {'mv'}, 'temperature': {'°c', 'c', 'degc'}, 'humidity': {'%rh', '%'},
 }
 assert len(BINDINGS) == len({b['assetCode'] for b in BINDINGS}) == len({b['physicalTag'] for b in BINDINGS}) == 31
-assert Counter(b['controllerId'] for b in BINDINGS) == {'CTRL-01': 7, 'CTRL-02': 6, 'CTRL-03': 11, 'CTRL-04': 7}
+assert Counter(b['controllerId'] for b in BINDINGS) == {'CTRL-01': 11, 'CTRL-02': 7, 'CTRL-03': 6, 'CTRL-04': 7}
 
 
 def connection(asset, now):
@@ -80,14 +81,18 @@ def snapshots(codes, now=None):
         age = (now - row.recorded_at).total_seconds()
         limit = result['connection']['freshness_limit_seconds']
         freshness = 'future_timestamp' if age < 0 else ('unknown' if limit is None else 'fresh' if age <= limit else 'stale')
-        demo = bool(row.event_id and row.event_id.lower().startswith(('demo:', 'simulation:', 'fixture:')))
+        demo = bool(row.event_id and row.event_id.lower().startswith(('demo:', 'simulation:', 'fixture:', 'replay:')))
         value = row.value if math.isfinite(row.value) else None
         result['readings'].append({
             'id': row.id, 'metric_key': row.metric_key, 'metric': row.metric, 'value': value,
             'unit': row.unit, 'quality': row.quality, 'sampled_at': row.recorded_at.isoformat(),
+            'observation_kind': row.observation_kind,
+            'observation_note': '已观察并锁存的短时事件，不表示输入此刻仍持续触发。' if row.observation_kind == 'latched_event' else '采样时刻的观测值。',
             'ingested_at': row.ingested_at.isoformat(), 'sample_age_seconds': round(age, 1),
-            'freshness': freshness, 'provenance': 'demo' if demo else 'database_observation',
-            'usable': bool(value is not None and row.quality == 'good' and freshness == 'fresh'
+            'freshness': freshness, 'provenance': 'simulated_test' if evaluation_enabled() and demo else 'demo' if demo else 'database_observation',
+            'scenario_usable': bool(evaluation_enabled() and demo and value is not None and row.quality == 'good'
+                and freshness == 'fresh' and row.ingested_at <= now and result['connection']['state'] == 'online'),
+            'usable': bool(not evaluation_enabled() and value is not None and row.quality == 'good' and freshness == 'fresh'
                 and row.ingested_at <= now and not demo and result['connection']['state'] == 'online'),
         })
     return results
@@ -131,8 +136,20 @@ def station_snapshot(station_id='all'):
         # A physical sensor can produce multiple metrics. Count devices, never metric rows.
         usable = bool(relevant_readings and not missing_metrics and not unit_issues and all(r['usable'] for r in relevant_readings)
             and snapshot['metric_count'] <= snapshot['limit'])
-        items.append({**binding, 'identity_status': 'planned_hardware_binding_unverified',
-            'registry_present': asset is not None, 'mapping_status': mapping,
+        scenario_usable = bool(evaluation_enabled() and relevant_readings and not missing_metrics and not unit_issues
+            and all(r['scenario_usable'] for r in relevant_readings) and snapshot['metric_count'] <= snapshot['limit'])
+        data_issues = []
+        if not asset: data_issues.append('asset_missing')
+        if snapshot and snapshot['connection']['state'] != 'online': data_issues.append('connection_' + snapshot['connection']['state'])
+        if missing_metrics: data_issues.append('missing_required_metrics')
+        if unit_issues: data_issues.append('wrong_unit')
+        if any(r['quality'] != 'good' for r in relevant_readings): data_issues.append('bad_or_suspect_quality')
+        for state in ('stale', 'future_timestamp', 'unknown'):
+            if any(r['freshness'] == state for r in relevant_readings): data_issues.append('sample_' + state)
+        if any(parse_datetime(r['ingested_at']) > now for r in relevant_readings): data_issues.append('ingest_future_timestamp')
+        if snapshot and snapshot['metric_count'] > snapshot['limit']: data_issues.append('metric_limit_exceeded')
+        items.append({**binding, 'data_issues': data_issues, 'identity_status': 'planned_hardware_binding_unverified',
+            'scenario_observations_usable': scenario_usable, 'registry_present': asset is not None, 'mapping_status': mapping,
             'missing_metric_groups': missing_metrics,
             'unit_issues': unit_issues,
             'current_mesh': mesh or None, 'observation_state': 'usable_observations' if usable else 'needs_verification',
@@ -143,12 +160,21 @@ def station_snapshot(station_id='all'):
     return {'revision': INVENTORY['revision'], 'queried_at': now.isoformat(), 'station_id': station_id,
         'expected_sensor_count': len(bindings), 'registered_sensor_count': sum(code in observed for code in sensor_codes),
         'usable_observation_sensor_count': sum(i['observation_state'] == 'usable_observations' for i in items),
+        'data_context': data_context(), 'model_notice': INVENTORY['modelNotice'],
+        'scenario_usable_sensor_count': sum(i['scenario_observations_usable'] for i in items),
+        'data_issue_sensor_count': sum(bool(i['data_issues']) for i in items),
+        'station_facts': {station: {'physical_sensor_count': len(group),
+            'data_issue_sensor_count': sum(bool(i['data_issues']) for i in group),
+            'data_issue_asset_codes': [i['assetCode'] for i in group if i['data_issues']],
+            'alert_asset_codes': [i['assetCode'] for i in group if i['active_alerts']],
+            'controller_ids': sorted({i['controllerId'] for i in group})}
+            for station in STATIONS if (group := [i for i in items if i['stationId'] == station])},
         'controller_allocation': dict(Counter(b['controllerId'] for b in bindings)),
         'controllers': {code: observed.get(code) for code in controller_codes},
         'stations': {s: [b['physicalTag'] for b in bindings if b['stationId'] == s] for s in STATIONS
             if any(b['stationId'] == s for b in bindings)},
         'active_model_version': release.version if release else None, 'items': items,
-        'boundary': '31路身份来自已确认布局；台账、模型和硬件绑定分别核验。可用观测不代表传感器已标定或环境安全。'}
+        'boundary': '31路身份来自已确认布局；台账、模型和硬件绑定分别核验。可用观测不代表传感器已标定或环境安全。未标定本身不使良好、时间与单位正常的原始读数失效；原始量趋势与浓度/环境安全判断分别核验。'}
 
 
 def diagnose_station(station_id):
@@ -163,8 +189,8 @@ def diagnose_station(station_id):
         readings = (fans.get(code) or {}).get('readings', [])
         rpm = next((r for r in readings if r['metric_key'] == 'rotational.speed'), None)
         current = next((r for r in readings if r['metric_key'] == 'motor.current'), None)
-        valid_rpm = rpm and rpm['usable'] and rpm['unit'].strip().lower() == 'rpm' and rpm['value'] >= 0
-        valid_current = current and current['usable'] and current['unit'] in {'mA', 'A'} and current['value'] >= 0
+        valid_rpm = rpm and observation_valid(rpm) and rpm['unit'].strip().lower() == 'rpm' and rpm['value'] >= 0
+        valid_current = current and observation_valid(current) and current['unit'] in {'mA', 'A'} and current['value'] >= 0
         if not valid_rpm:
             candidates.append({'asset_code': code, 'candidate': '转速反馈缺失或不可用',
                 'reason': '缺少新鲜、良好且单位为 rpm 的独立反馈，不能判断实际转动。',
@@ -180,18 +206,27 @@ def diagnose_station(station_id):
     alerts = list(Alert.objects.filter(asset__code__in=all_primary_codes, status__in=['open', 'acknowledged'])
         .values('code', 'asset__code', 'rule_key', 'severity', 'opened_at').order_by('-opened_at')[:30])
     commands = list(AuditLog.objects.filter(action__in=['controller.command.sent', 'controller.command.failed'],
-        resource_type='asset', resource_id__in=['CTRL-01', 'CTRL-04'], occurred_at__gte=now-timedelta(minutes=10))
+        resource_type='asset', resource_id__in=['CTRL-01', 'CTRL-02', 'CTRL-03', 'CTRL-04'], occurred_at__gte=now-timedelta(minutes=10))
         .order_by('-occurred_at')[:6])
     # Only expose established audit fields. Never pass tokens, arbitrary request bodies, or hidden endpoints.
     command_evidence = [{'controller': c.resource_id, 'recorded_at': c.occurred_at.isoformat(),
         'action': c.action, 'command_action': c.detail.get('action'), 'outcome': c.detail.get('outcome'),
-        'ack_reason': str(c.detail.get('ackReason', ''))[:200]} for c in commands]
-    return {'station': inspection, 'neighbor_latest_observations': nearby, 'fans': fans,
+        'ack_reason': str(c.detail.get('ackReason', ''))[:200],
+        'asset_code': str(c.detail.get('assetCode', ''))[:40],
+        'protocol_version': str(c.detail.get('protocolVersion', ''))[:40],
+        'command_intent': str(c.detail.get('commandIntent', ''))[:40],
+        'command_value': c.detail.get('commandValue'), 'issued_at_ms': c.detail.get('issuedAtMs'),
+        'manual_lease_ms': c.detail.get('manualLeaseMs'),
+        'physical_state_verified': c.detail.get('physicalStateVerified') is True} for c in commands]
+    from .agent_diagnosis import analyze
+    diagnosis = analyze(inspection, nearby, fans, command_evidence)
+    return {'diagnosis': diagnosis, 'layout_revision': INVENTORY['revision'], 'data_context': data_context(),
+        'station': inspection, 'neighbor_latest_observations': nearby, 'fans': fans,
         'neighbor_trends': primary_trends(all_primary_codes, now),
         'active_alerts': alerts, 'recent_command_audit': command_evidence, 'candidate_causes': candidates,
         'limits': ['近5分钟趋势按同资产、同指标、同单位比较；相关变化不能证明扩散方向或预测事故。',
             'MQ-4/MQ-7 原始值未标定不能横向比较为 ppm；AO-02 裸探头读数不能证明氧气安全。',
-            '现有控制审计可能来自旧版 CTRL-01 双风机协议，不能视作新四节点执行证明。',
+            '仅显式匹配新布局设备、控制器与协议的审计可作为控制意图；旧CTRL-01记录不能证明新节点执行。PWM和供电请求独立，回执只表明输出应用，不代表转动；手动租期到期后不能当作仍有效请求。',
             '命令已发布或已回执均不等于风机在转；候选原因不等于根因。']}
 
 
@@ -201,8 +236,11 @@ def primary_trends(codes, now):
         metric_key__in=['smoke.alarm', 'methane.raw', 'co.raw', 'flame.alarm'],
         unit__in=['adc', 'ADC', 'bool'], quality='good',
         recorded_at__gte=now-timedelta(minutes=5), recorded_at__lte=now, ingested_at__lte=now)
-    for prefix in ('demo:', 'simulation:', 'fixture:'):
-        rows = rows.exclude(event_id__istartswith=prefix)
+    if evaluation_enabled():
+        rows = rows.filter(event_id__istartswith='simulation:')
+    else:
+        for prefix in ('demo:', 'simulation:', 'fixture:', 'replay:'):
+            rows = rows.exclude(event_id__istartswith=prefix)
     rows = rows.annotate(sample_ordinal=Window(RowNumber(), partition_by=[F('asset_id')],
         order_by=[F('recorded_at').desc(), F('id').desc()])).filter(sample_ordinal__lte=60).select_related('asset')
     groups = {}
@@ -211,7 +249,7 @@ def primary_trends(codes, now):
             continue
         group = groups.setdefault((row.asset.code, row.metric_key, row.unit), [])
         group.append(row)
-    return {'window_minutes': 5, 'sample_limit_per_asset': 60, 'scope': 'bounded_good_non_demo_observations',
+    return {'window_minutes': 5, 'sample_limit_per_asset': 60, 'scope': 'simulated_test' if evaluation_enabled() else 'bounded_good_non_demo_observations',
         'items': [{'asset_code': code, 'metric_key': metric, 'unit': unit, 'count': len(values),
             'from': values[0].recorded_at.isoformat(), 'to': values[-1].recorded_at.isoformat(),
             'first': values[0].value, 'last': values[-1].value,
@@ -233,12 +271,16 @@ def review_work_order(code):
     now = timezone.now()
     snapshot = snapshots([order.asset.code], now)[order.asset.code]
     readings = snapshot['readings']
-    post_review = [r for r in readings if r['usable'] and parse_datetime(r['sampled_at']) > order.updated_at]
+    post_review = [r for r in readings if observation_valid(r) and parse_datetime(r['sampled_at']) > order.updated_at]
     alerts = Alert.objects.filter(asset=order.asset, status__in=['open', 'acknowledged'])
     return {'work_order_code': order.code, 'asset_code': order.asset.code, 'status': order.status,
         'work_order_updated_at': order.updated_at.isoformat(), 'queried_at': now.isoformat(),
-        'communication': snapshot['connection'], 'latest_measurements': snapshot,
-        'measurement_review': 'new_usable_observations' if readings and len(post_review) == len(readings)
+        'communication': snapshot['connection'],
+        'communication_review': 'current_state_only_no_prior_outage_evidence',
+        'communication_boundary': '只有当前心跳状态，无历史离线至在线轨迹，不能据此断言通信已经恢复。',
+        'latest_measurements': snapshot,
+        'data_context': data_context(),
+        'measurement_review': ('new_scenario_observations' if evaluation_enabled() else 'new_usable_observations') if readings and len(post_review) == len(readings)
             and snapshot['metric_count'] <= snapshot['limit'] else 'insufficient_new_evidence',
         'active_alert_count': alerts.count(),
         'active_alert_codes': list(alerts.order_by('code').values_list('code', flat=True)[:15]),
@@ -255,7 +297,7 @@ def location_cards(evidence):
             continue
         data = item['data']
         inspection = data.get('station', data)
-        if item['tool'] in {'station_snapshot', 'diagnose_station'}:
+        if item['tool'] in {'station_snapshot', 'diagnose_station', 'collect_station_evidence'}:
             for sensor in inspection.get('items', []):
                 if sensor['registry_present']:
                     cards[sensor['assetCode']] = {'assetCode': sensor['assetCode'], 'stationId': sensor['stationId'],
@@ -277,10 +319,13 @@ def inspection_summary(evidence):
         report = entry['data'].get('station', entry['data'])
         return {'evidenceId': entry['id'], 'expected': report['expected_sensor_count'],
             'registered': report['registered_sensor_count'], 'usable': report['usable_observation_sensor_count'],
+            'scenarioUsable': report['scenario_usable_sensor_count'], 'dataIssueSensorCount': report['data_issue_sensor_count'],
             'missingAssetCodes': [i['assetCode'] for i in report['items'] if not i['registry_present']],
             'stations': [{'stationId': station, 'expected': len(items),
                 'registered': sum(i['registry_present'] for i in items),
                 'usable': sum(i['observation_state'] == 'usable_observations' for i in items),
+                'scenarioUsable': sum(i['scenario_observations_usable'] for i in items),
+                'dataIssueSensorCount': sum(bool(i['data_issues']) for i in items),
                 'alertCount': sum(len(i['active_alerts']) for i in items)}
                 for station in STATIONS if (items := [i for i in report['items'] if i['stationId'] == station])]}
     return None

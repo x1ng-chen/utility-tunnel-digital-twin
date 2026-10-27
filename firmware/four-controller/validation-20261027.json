@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-27",
+  "generatedAtUtc": "2026-10-26T16:59:38.451293+00:00",
+  "status": "SOFTWARE_CHECKED_HARDWARE_NOT_RUN",
+  "reviewedFirmwareCommit": "17d6e8037cfc3f9baa44e69e5780956870b148f3",
+  "integrationBase": "7ae4fd2836a2c4b5cfc2ab947c218722a092e12a",
+  "physicalSensors": 31,
+  "physicalAllocation": [
+    11,
+    7,
+    6,
+    7
+  ],
+  "telemetryMetrics": 54,
+  "images": [
+    {
+      "target": "CTRL-01",
+      "boardId": 1,
+      "flashBytes": 23804,
+      "ramBytes": 8192,
+      "binaryBytes": 23804,
+      "binarySha256": "fa9a6dd96d0eb9fdf55507c8a5ae6905ea8252c1b6ff53c48e7feb36339997cd",
+      "build": "PASS"
+    },
+    {
+      "target": "CTRL-02",
+      "boardId": 2,
+      "flashBytes": 23680,
+      "ramBytes": 8192,
+      "binaryBytes": 23680,
+      "binarySha256": "24a9920bea3d3b850002f7ed961660b754434d51a615b43f883a1f95011e8d55",
+      "build": "PASS"
+    },
+    {
+      "target": "CTRL-03",
+      "boardId": 3,
+      "flashBytes": 23652,
+      "ramBytes": 8192,
+      "binaryBytes": 23652,
+      "binarySha256": "80de67d0cb27e27648d241c4f84a2aa0455997bff3d1066431ddd9284906f8a3",
+      "build": "PASS"
+    },
+    {
+      "target": "CTRL-04",
+      "boardId": 4,
+      "flashBytes": 23680,
+      "ramBytes": 8192,
+      "binaryBytes": 23680,
+      "binarySha256": "4c6aeb159bd1903b8e53db3df502964365df9c0e3235ed28589ce1e749905815",
+      "build": "PASS"
+    },
+    {
+      "target": "s3_four_gateway",
+      "binaryBytes": 276544,
+      "binarySha256": "b45362976cff7fe260d36904c80c197ae0faf3b1e6c7cb1890a4eb7349cffc8b",
+      "build": "PASS",
+      "credentials": "NONE",
+      "networkConnected": false
+    },
+    {
+      "target": "s3_four_gateway_network_check",
+      "binaryBytes": 735744,
+      "binarySha256": "81fa74152215f3d18fdb90d1e99c17a03e04f8e21c2ccdcf2f50d64beb03436e",
+      "build": "PASS",
+      "credentials": "PUBLIC_COMPILE_PLACEHOLDERS_ONLY",
+      "networkConnected": false
+    }
+  ],
+  "tests": {
+    "backend": {
+      "passed": 200,
+      "failed": 0
+    },
+    "frontend": {
+      "passed": 125,
+      "failed": 0,
+      "productionBuild": "PASS"
+    },
+    "gatewayAdapter": {
+      "passed": 34,
+      "failed": 0,
+      "skipped": 0,
+      "actualCppEncoderFixturesIncluded": true
+    },
+    "firmwarePortableLogic": {
+      "mode": "ARM machine-code emulation (portable logic only)",
+      "assertions": 774,
+      "failures": 0,
+      "suites": [
+        {
+          "checks": 423,
+          "failures": 0,
+          "firstLine": 0,
+          "groups": 6,
+          "suite": "core",
+          "executable": ".agent-eval\\firmware-fix\\core.elf",
+          "sha256": "74ec56ac867c71d348bdad50bee3b612f09c83f5f130dd150a6ee04ec76ff2ca"
+        },
+        {
+          "checks": 187,
+          "failures": 0,
+          "firstLine": 0,
+          "groups": 63,
+          "suite": "command_json",
+          "executable": ".agent-eval\\firmware-fix\\command_json.elf",
+          "sha256": "be580d2f64e51911b8745b8d47bb72f1b0c8607d04c650ca42dd1cec30afcb9b"
+        },
+        {
+          "checks": 164,
+          "failures": 0,
+          "firstLine": 0,
+          "groups": 5,
+          "suite": "telemetry",
+          "executable": ".agent-eval\\firmware-fix\\telemetry.elf",
+          "sha256": "0bd3e63d8c50afa5fb8d1949989d968c79fde5fb1f76dec4aa6c19665325dd5e"
+        }
+      ]
+    },
+    "diagnosticAndIdentity": {
+      "passed": 3,
+      "failed": 0
+    },
+    "wiringValidator": {
+      "passed": 14,
+      "failed": 0,
+      "status": "PASS_WITH_DECLARED_PIN_EXCEPTION"
+    },
+    "qualityScan": "PASS",
+    "migrationDrift": "NO_CHANGES_DETECTED"
+  },
+  "sourceHashPolicy": "SHA256_UTF8_BYTES_WITH_CRLF_NORMALIZED_TO_LF",
+  "sourceSha256": {
+    ".github/workflows/ci.yml": "962fa0da3f1d70978693fe0fb93724b149b10f22df415f135362b86f3b006af9",
+    "backend/operations/agent_diagnosis.py": "999daed33bd27227e969a4269af29329f0decfd6e8a5cb59d0a64e372a3e16f8",
+    "backend/operations/agent_operations.py": "858bd6ad0e7f1f835e8a952e60faabe5d664f8af455cc8c65353d96e83250191",
+    "backend/operations/command_dispatch.py": "6ef3199f69565b1b938e3c157061e636d76b162dd8387b991d5225c73172c928",
+    "backend/operations/command_policy.py": "e13ede1971448efb6025202cf28272ed067f0b6a5e3c67747f06b9b53942cbe0",
+    "backend/operations/connectivity.py": "1e02dacfc640a6130177351f518cc6dea91c6533826c44c96b63fb7dcf89dd5b",
+    "backend/operations/models.py": "61251dff0cae14f036f8151e00c86009aa9263d622fdb90a5d2828e88df2abff",
+    "backend/operations/serializers.py": "706437505938e1803e3275f3f32c1f3272f1be31a2429e574450fa85f528eb07",
+    "backend/operations/telemetry_rules.py": "da7e611ec8a0adf8be5afe786c0437bf0315cc8f4ad05939eaafd6790de6585c",
+    "backend/operations/views.py": "84bc7f450c8e2fb0923c1973728c49e7e3757d7311b19be991e483f7549a4ffa",
+    "firmware/four-controller/CMakeLists.txt": "83275cd15fd4d24ca8dbd789a174f4dedc2d149a4d1ab365091e3e6088c02f6c",
+    "firmware/four-controller/common/digital.h": "b9259e73d05aeea2c04fcd3eba47137a6788f1d13c727cfc4d85ffc335efeccb",
+    "firmware/four-controller/common/interaction.h": "cd653a086c97fdddf82c96e5a47de8154dbe0ee3c47e2215d2bf89933daa1c51",
+    "firmware/four-controller/common/measurements.h": "e3249761f1f908a77b5dce5d093f712eeb7954f8033024bf1c2a712511724c4c",
+    "firmware/four-controller/common/protocol.h": "8510cfbf4a96253b783a1b30b8eef659d34135257098b98137e22b45401e67ef",
+    "firmware/four-controller/common/snapshot.h": "c152fb9820d1f89b1c416bf531eb97a89d8b1b09cf8308a836867ad95315d202",
+    "firmware/four-controller/Core/Inc/actuators.h": "97d1158905a9644d609e83da559443e67594fa6ca3d24cc75c841e1782bb6309",
+    "firmware/four-controller/Core/Inc/board_config.h": "ba71897b700d3db0c5df282d9d66ab1a91e2a505b13f42c28d1300309259ba16",
+    "firmware/four-controller/Core/Inc/board_io.h": "1b848363c3b24937d957afd06fbcafc5a8f33dce9cd5b7e51f0ea5c71d4315aa",
+    "firmware/four-controller/Core/Inc/joystick.h": "8a629d79b93778868cec8ad13c500a8773c1ef6b5ff0f11af8860ca543bb3e8c",
+    "firmware/four-controller/Core/Inc/menu.h": "c46d5a7f7f0ee4fe50d9d54b679ebc0a869269cd51cad16052b9fe7e46caea6a",
+    "firmware/four-controller/Core/Inc/modbus_slave.h": "99b59cc978dfd94dd90b8fdcbd94174e4cc109f63e370eb84646ec6ac616a35d",
+    "firmware/four-controller/Core/Inc/screen.h": "7e8123089509684d8b46e7f35c4cd6bcf6146b1d6ffcc650c6fb864e6184cf4b",
+    "firmware/four-controller/Core/Inc/st7735.h": "fd67bf13e9019ffa1d0eb01c2f49da513064f51da512ff7192154db4945de970",
+    "firmware/four-controller/Core/Inc/st7735_font.h": "4398b7ea52e3e59063d81b993d14a104d1bdce402270c9a1248b77aac69e9328",
+    "firmware/four-controller/Core/Src/actuators.c": "964e206aa28b90220b1be7d49a4883b072475d772d061561b49477f403122e1f",
+    "firmware/four-controller/Core/Src/board_config.c": "0f86625ceb077c77370e1cb59b153cb07dcb7c216a53397008d3b43e884c5144",
+    "firmware/four-controller/Core/Src/board_io.c": "6076f76d544a486cca837a1905518bc154af3824bf63787f2e896a1b811ba430",
+    "firmware/four-controller/Core/Src/joystick.c": "96a402b3af93f51d5097efe478979dbc371fd09a31f6b5b0fd02985092002b78",
+    "firmware/four-controller/Core/Src/main.c": "4a41e5ef38f4241aa15573018fbe1086f19675dd82e042b4d73524e641f4761d",
+    "firmware/four-controller/Core/Src/menu.c": "4ccbcd55137633698c263aa159d11c0486e6c142d0ad4e55c26f40300cf146fa",
+    "firmware/four-controller/Core/Src/modbus_slave.c": "099ace28346d5dff79bb2c563258343d49917d072c730beaea1a061e056af800",
+    "firmware/four-controller/Core/Src/screen.c": "fc3d0ef65fbcd10337361e026a5b4f69d60f40c62375b1f297acf8679610a869",
+    "firmware/four-controller/Core/Src/st7735.c": "21683effa8fa335cb012f020e3c2f6cff47534637b866b52a647fb9d1891fabe",
+    "firmware/four-controller/gateway/include/command_json.h": "1684f7616e26df59e3a0360df6388d4a3bca20b3ed2660295ab2dd81c158ffce",
+    "firmware/four-controller/gateway/include/command_ledger.h": "e4277bfa6f653b3a91253238cb896a57e4d21ebcc3bf0a2df2fa8b23083676ca",
+    "firmware/four-controller/gateway/include/device_map.h": "e9e497afb92d972788b24577abb1367714adfa154cbb8a641651582a32e752b0",
+    "firmware/four-controller/gateway/include/secrets.example.h": "6f5c20e3d1448d6285124abc48943afe4c1d0d4429eb660956bdec67e6702a58",
+    "firmware/four-controller/gateway/include/telemetry_encode.h": "823f6f626a2e5526dc71e6aa02ba1e2523f82c0fdc058be010e4817dacf3c0af",
+    "firmware/four-controller/gateway/platformio.ini": "a266a9b600bb3c127a1bf9345878fdc3e7777d93a9369bad0d451c607910942c",
+    "firmware/four-controller/gateway/src/main.cpp": "35e2e1131038ac87d43460f60cb7b9bfbb8141e57d973d042cd8fb1a73ee1ea3",
+    "firmware/four-controller/tests/arm-test.ld": "5c077be3e314f98588fd44dd2ae602f158f3b1e2268da005ca4a4cdd21e968f6",
+    "firmware/four-controller/tests/run_tests.py": "bda6777e077f297c0e8d603be8763ece5e3a8f50a93d4a70a3e30ca205e564ea",
+    "firmware/four-controller/tests/test_command_json.cpp": "7f88cd228f8975b037efb4ebd4a49eeec4a8c6d8a9062852ee6ddc3bf3b3f516",
+    "firmware/four-controller/tests/test_core.c": "5afa26d43332eeb2b02775f9c7d22a2e793f6e8327d8aaeac196d268df0710de",
+    "firmware/four-controller/tests/test_diagnostics.py": "c0599f2a9e0fd3c4cdc6f0f6d6ec3607e27882d6e800b8157875a510ce4dd71e",
+    "firmware/four-controller/tests/test_support.h": "687f5e4305c9c6646a05002c158cae170ef3d5c952f9e57b8783a1543538bf45",
+    "firmware/four-controller/tests/test_telemetry.cpp": "3d2f93230febb4baa03f394adb379de5e3527a7f2b38a16bc0c2bb3ea028aa3c",
+    "firmware/four-controller/verify_sensors.py": "929d5b1c1edd51fb56056ba148c25c7c28e74181a870723c2ec5a3b8d4a91262",
+    "frontend/src/services/api.ts": "1177ad46a006f07bcc5e9189ab7b5ac7b8a4c06d638f512dead7de8cfddcc7f8",
+    "frontend/src/utils/controllerControls.ts": "88b2eb08e58c6a35d8d0b33fb6ce80b5decb0b00e5ef7d717be52760ae1c800c",
+    "frontend/src/views/DashboardView.vue": "599198d8ed13da1799766e3d7f0e40550e8f0fba4c9187eba06d25dd8e79077d",
+    "services/iotda-gateway/src/auth.js": "1b179063d4e2dfb02e542cb5f4f364fae146ab3a0fdbb09cfdf69f31d026c128",
+    "services/iotda-gateway/src/django.js": "92874a90c5147713ed3ec873df121c1df736be82279a2d8b33df4dbbad3b8254",
+    "services/iotda-gateway/src/four-controller-catalog.json": "1acdc71f0f1b6a447711a198e850c5985ac08f4c48dab6e575622ee8f3526743",
+    "services/iotda-gateway/src/index.js": "b9c0bac501b75094e730f7fc58bcd2b0948087b2d5715ccee125f72f11595929",
+    "services/iotda-gateway/src/node-a-to-node-b-relay.js": "2704c7179f5bad753962e069f560ea825984c6af4b1471cf3386bff6c9a349d7",
+    "services/iotda-gateway/src/outbox.js": "b8103a320f75bc87c2b746ff844228a353f6891ca3f2e733ccc3400feb312822",
+    "services/iotda-gateway/src/schemas.js": "e613f9b4cbffe4d6ea049c2a48276d8594844f7625ed7719e55bfe9ec60c8aa0",
+    "services/iotda-gateway/src/telemetry-routes.js": "275f15445ef81c9b2d70a02990832c1c70d6404e10e82ceebc4517ab2898db11",
+    "services/iotda-gateway/src/telemetry.js": "e30a12e4e9f20dee23f1278159e463d63a59eff34d106f9bd1703972f28fd3ef"
+  },
+  "notRun": [
+    "MCU flashing, power-up and UART/RS485 traffic on real boards",
+    "Real Wi-Fi/MQTT hardware operation, NVS power-loss behavior and worst-case timing",
+    "Pin continuity/PA0-WKUP loading, 3.3V levels, fan PWM polarity/PPR and INA shunt calibration",
+    "Paid model evaluation, Xiaozhi hardware and public deployment"
+  ],
+  "unchanged": [
+    "V16/V17 model assets",
+    "Original dirty business worktree",
+    "Existing business database"
+  ]
+}

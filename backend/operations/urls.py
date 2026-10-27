@@ -1,9 +1,16 @@
 from django.urls import path
-from .views import AiAssistantView, StationInspectionView
+from django.conf import settings
+from .sprint_views import RunList, RunDetail, RunExport, KnowledgeSearch, CostEstimate, DemoSessionView, DemoCommands, DemoCommandDetail
+from .views import AiAssistantView, StationInspectionView, AgentContextView, ControllerCommandCapabilitiesView
 from .views import AdminRegistrationRequestDetailView, AdminRegistrationRequestListView, AdminRegistrationSetupTokenView, AdminUserDetailView, AdminUserListView, AlertAcknowledgeView, AlertListView, AlertWorkOrderView, AssetDetailView, AssetListView, AuditListView, ControllerCommandConfirmationView, ControllerCommandView, DashboardView, HardwareBindingDetailView, HardwareBindingListView, HealthView, InternalConnectivityReconcileView, LoginView, LogoutView, MeView, PasswordChangeView, ReadyView, RegistrationPasswordSetupView, RegistrationRequestView, ReportExportDownloadView, ReportExportView, SpatialFeatureDetailView, SpatialFeatureImportView, SpatialFeatureListView, TelemetryListView, TelemetrySummaryView, ThresholdDetailView, ThresholdListView, TwinModelFileView, TwinModelReadinessView, TwinModelReleaseActivateView, TwinModelReleaseListView, WorkOrderListView, WorkOrderTransitionView
 
 
 urlpatterns = [
+    path('assistant/runs/', RunList.as_view()),
+    path('assistant/runs/<uuid:pk>/', RunDetail.as_view()),
+    path('assistant/runs/<uuid:pk>/export/', RunExport.as_view()),
+    path('assistant/knowledge/', KnowledgeSearch.as_view()),
+    path('assistant/cost-estimates/', CostEstimate.as_view()),
     path('health/', HealthView.as_view()),
     path('ready/', ReadyView.as_view()),
     path('internal/connectivity/reconcile/', InternalConnectivityReconcileView.as_view()),
@@ -20,7 +27,9 @@ urlpatterns = [
     path('admin/registration-requests/<int:pk>/setup-token/', AdminRegistrationSetupTokenView.as_view()),
     path('dashboard/', DashboardView.as_view()),
     path('assistant/chat/', AiAssistantView.as_view()),
+    path('assistant/context/', AgentContextView.as_view()),
     path('assistant/inspection/', StationInspectionView.as_view()),
+    path('controllers/command-capabilities/', ControllerCommandCapabilitiesView.as_view()),
     path('controllers/<str:asset_code>/commands/confirmations/', ControllerCommandConfirmationView.as_view()),
     path('controllers/<str:asset_code>/commands/', ControllerCommandView.as_view()),
     path('twin/model-readiness/', TwinModelReadinessView.as_view()),
@@ -47,3 +56,8 @@ urlpatterns = [
     path('report-exports/', ReportExportView.as_view()),
     path('report-exports/<int:pk>/download/', ReportExportDownloadView.as_view()),
 ]
+
+if getattr(settings, 'AGENT_DEMO_MODE', False) and not settings.IS_PRODUCTION:
+    urlpatterns += [path('assistant/demo/session/', DemoSessionView.as_view()),
+        path('assistant/demo/commands/', DemoCommands.as_view()),
+        path('assistant/demo/commands/<uuid:pk>/', DemoCommandDetail.as_view())]

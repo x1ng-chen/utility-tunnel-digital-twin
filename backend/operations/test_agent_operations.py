@@ -54,7 +54,7 @@ class StationAgentTests(TestCase):
         self.assertEqual(result['expected_sensor_count'], 31)
         self.assertEqual(result['registered_sensor_count'], 31)
         self.assertEqual(result['usable_observation_sensor_count'], 31)
-        self.assertEqual(result['controller_allocation'], {'CTRL-01': 7, 'CTRL-02': 6, 'CTRL-03': 11, 'CTRL-04': 7})
+        self.assertEqual(result['controller_allocation'], {'CTRL-01': 11, 'CTRL-02': 7, 'CTRL-03': 6, 'CTRL-04': 7})
         self.assertEqual(Telemetry.objects.count(), before)
         self.assertEqual(WorkOrder.objects.count(), 0)
         self.assertEqual(sum(len(i['snapshot']['readings']) for i in result['items']), 35)
@@ -152,9 +152,14 @@ class StationAgentTests(TestCase):
     def test_recovery_requires_new_measurements_and_never_closes(self):
         order = self.order()
         self.assertEqual(review_work_order(order.code)['measurement_review'], 'insufficient_new_evidence')
-        now = timezone.now()
-        Telemetry.objects.filter(asset=order.asset).update(recorded_at=now)
-        result = review_work_order(order.code)
+        # Use explicit distinct instants: Windows clock resolution can make an
+        # immediate timezone.now() equal order.updated_at, which is not new evidence.
+        sampled_at = order.updated_at + timedelta(seconds=1)
+        Telemetry.objects.create(asset=order.asset, metric_key='methane.raw', metric='methane.raw',
+            value=0, unit='adc', quality='good', recorded_at=sampled_at,
+            ingested_at=sampled_at + timedelta(milliseconds=10))
+        with patch('operations.agent_operations.timezone.now', return_value=sampled_at + timedelta(seconds=1)):
+            result = review_work_order(order.code)
         self.assertEqual(result['measurement_review'], 'new_usable_observations')
         self.assertTrue(result['human_review_required'])
         self.assertFalse(result['work_order_changed'])

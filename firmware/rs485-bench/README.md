@@ -1,8 +1,8 @@
-# 4号板与S3：独立RS-485诊断固件
+# 四主控与S3：独立RS-485诊断固件
 
-> 最新扩展：已准备地址3镜像和S3双从站轮询程序；实施状态见[3号扩展记录](CTRL03-EXTENSION.md)。下文单地址4的结果属于已验证基线，不代表双从站已通过。
+> 最新扩展（2026-10-26）：1～4号从站镜像和S3四从站轮询环境`quad`已构建；实施步骤见[四板验收清单](FOUR-NODE-ACCEPTANCE.md)。单地址4与3/4双从站的既有实测结果继续作为已验证基线，不代表四从站或四节点业务固件已通过。
 
-**发布时状态：4号链路与断线恢复已实测；3号单板启动已实测；S3的3/4双从站轮询仅完成构建；1/2号尚未烧录，完整四板主干尚未确认接完。** 不因诊断地址可配置1～4，就宣称四节点业务固件或总线已验收。
+**当前状态：4号链路与断线恢复已实测；3号单板启动已实测；S3的3/4双从站和1～4四从站镜像均已构建；1/2号尚未烧录；四从站镜像尚未烧录；完整四板主干尚未确认接完。** 不因诊断地址可配置1～4，就宣称四节点业务固件或总线已验收。
 
 [验收摘要](acceptance-summary.json)包含计数、结论和原日志SHA256；[状态与产物指纹](build-status.json)区分当前源码、已测试旧镜像和未烧录的新镜像。下文`artifacts/`及摘要中的`local-evidence/`均为操作者本地保存位置，原始日志、芯片UID、Flash备份、配置与构建二进制不随源码发布；这些摘要不能替代独立的现场复验。
 
@@ -29,29 +29,60 @@ STM32诊断时只用内部HSI 8MHz，避免依赖未知外部晶振；UART实际
 | 5/6 | 合法请求累计次数，高/低16位 |
 | 7 | CRC错误累计计数的低16位 |
 
-寄存器不是真实传感器数据，不上传遥测平台。重启后启动秒数与计数复位，不把它们当作UTC或持久序号。S3每秒读取一次、等待最多300ms；可忽略本机请求回显，但只有签名、地址、长度、版本和CRC都正确的回复才打印`RS485_OK`。超时/畸形回复打印`RS485_FAIL`及收到的十六进制字节，不伪造成功。
+寄存器不是真实传感器数据，不上传遥测平台。重启后启动秒数与计数复位，不把它们当作UTC或持久序号。S3按配置的间隔读取、等待最多300ms；可忽略本机请求回显，但只有签名、地址、长度、版本和CRC都正确的回复才打印`RS485_OK`。超时/畸形回复打印`RS485_FAIL`及收到的十六进制字节，不伪造成功。
+
+## 轮询模式
+
+S3用编译期位图`BENCH_POLL_MASK`选择从站，bit0～bit3分别对应1～4号：
+
+| 环境 | MASK | 轮询地址 | 单站间隔 |
+| --- | ---: | --- | ---: |
+| `s3_gateway_bench` | 8 | 4号（单站） | 1000 ms |
+| `s3_gateway_bench_dual` | 12 | 4、3号 | 500 ms |
+| `s3_gateway_bench_quad` | 15 | 4、3、2、1号 | 500 ms |
+
+扫描顺序固定为4→3→2→1，与主干`GW-01 → 4号 → 3号 → 2号 → 1号`一致。每个从站独立累计polls、successes、timeouts、malformed；某一站超时不影响其他站继续轮询。四站一轮约2秒，日志行带`slave=`和`node_poll=`用于区分。MASK只改变轮询集合，不改变协议、寄存器或从站固件。
 
 ## 构建
 
-从仓库根目录执行，使用现有Arm GNU GCC、CMake、Ninja和HAL/CMSIS：
+从仓库根目录执行，使用Arm GNU GCC、CMake、Ninja和HAL/CMSIS：
 
 ```powershell
-cmake -S firmware/rs485-bench/stm32 -B firmware/rs485-bench/build/stm32 -G Ninja
-# 上一步成功后再执行
-cmake --build firmware/rs485-bench/build/stm32
-python -X utf8 -m platformio run --project-dir firmware/rs485-bench/s3 -e s3_gateway_bench
+# 从站镜像：把 N 换成 1～4
+cmake -S firmware/rs485-bench/stm32 -B firmware/rs485-bench/build/stm32-N -G Ninja -DBENCH_SLAVE_ADDRESS=N
+cmake --build firmware/rs485-bench/build/stm32-N
+# S3轮询镜像：按单站/双站/四站选择环境
+python -X utf8 -m platformio run --project-dir firmware/rs485-bench/s3 -e s3_gateway_bench_quad
 ```
 
-STM32输出为`build/stm32/rs485_ctrl04_bench.bin`及ELF，链接地址0x08000000、Flash256KB、RAM48KB。S3输出在`s3/.pio/build/s3_gateway_bench/`，采用锁定的PlatformIO espressif32 6.13.0与Arduino，按板上N16R8标记暂设16MB Flash、不启用PSRAM。写入前须由esptool实读芯片/Flash确认，不单靠外壳容量标记。不得把S3的应用BIN单独写到0地址；使用PlatformIO的完整上传步骤。
+STM32输出为`build/stm32-N/rs485_ctrl0N_bench.bin`及ELF，链接地址0x08000000、Flash256KB、RAM48KB。S3输出在`s3/.pio/build/<环境名>/`，采用锁定的PlatformIO espressif32 6.13.0与Arduino，按板上N16R8标记暂设16MB Flash、不启用PSRAM。写入前须由esptool实读芯片/Flash确认，不单靠外壳容量标记。不得把S3的应用BIN单独写到0地址；使用PlatformIO的完整上传步骤。
 
-## USB、跳线与烧录
+## ST-Link（SWD）与 S3 烧录
 
-1. 先分别连接4号板的“ISP下载”USB、S3的“UART”Type-C，记录本次枚举的COM口与设备身份；两板均用USB供电时断开其他外接电源。
-2. 当前照片没有可靠展示BOOT0/BOOT1跳帽电平位置。STM32串口ISP要求BOOT0=1、BOOT1=0后按RST；根据0/1/H/L及板卡电路选择跳帽，不能仅凭向上/向下猜，不短接3.3V与GND。WK-UP不是下载键。
-3. 正确镜像构建成功并记录SHA256、读出设备ID和旧镜像备份后，通过本次确认的串口写STM32到0x08000000并校验。写操作由代理核对目标后执行，不把示例COM当作实际端口。
-4. 完成后STM32恢复BOOT0=0、BOOT1=0，按RST进入应用。保持BOOT0=1不会执行刚写入的应用。
-5. S3无STM32式BOOT跳帽。正常USB串口下载可自动进下载模式；仅在握手失败且目标已确认时，按住BOOT、点RST后松BOOT。不要先擦除整片Flash或更改eFuse。
-6. S3旧镜像同样先按实际Flash容量备份；随后通过本次确认的UART口上传并检查校验结果。烧录期间设备复位不等于总线故障。
+本团队用 ST-Link 通过 SWD 下载 STM32；串口 ISP 保留为备选。
+
+**SWD 接线**：`SWDIO → PA13`、`SWCLK → PA14`、`GND → 板GND`。目标板已用 USB 供电时不要再接 ST-Link 的 3.3V，避免双电源。BOOT0/BOOT1 保持 0/0，SWD 不依赖跳帽。
+
+1. 四块板一次接一块 ST-Link；连接后先读芯片 ID（STM32F103RC 为 `0x414`）与 Flash 容量（256 KB），核对板号，不沿用旧 COM 或旧连接。
+2. 完整备份原 Flash，记录 SHA256；确认镜像与板号一致（1～4 号对应不同 `BENCH_ADDRESS`）。
+3. 写入 `0x08000000` 并校验，例如：
+
+```powershell
+STM32_Programmer_CLI -c port=SWD -w build/rs485-1/rs485_ctrl01_bench.bin 0x08000000 -v
+```
+
+OpenOCD 等价命令：
+
+```powershell
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg -c "program build/rs485-1/rs485_ctrl01_bench.bin 0x08000000 verify reset exit"
+```
+
+4. 烧录会复位目标板；已接在同一条 485 总线上时，其他站短暂超时属正常，烧完再开始正式采集。
+5. 用 USART1（PA9/PA10，115200 8N1）看启动日志；ST-Link 不提供业务日志。
+
+**串口 ISP 备选**：BOOT0=1、BOOT1=0，按 RST 进入 ISP，用本次枚举的 COM 口写 `0x08000000`；完成后恢复 BOOT0=0、BOOT1=0 再复位。不要把示例 COM 当作实际端口。
+
+**S3**：无 STM32 式 BOOT 跳帽。正常 USB 串口下载可自动进下载模式；仅在握手失败且目标已确认时，按住 BOOT、点 RST 后松 BOOT。不要先擦除整片 Flash 或更改 eFuse。旧镜像先按实际 Flash 容量备份，再通过本次确认的 UART 口上传并检查校验结果。烧录期间设备复位不等于总线故障。
 
 ## 验证与恢复
 

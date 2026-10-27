@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Optional
 from uuid import uuid4
 
+from django.conf import settings
 from django.utils import timezone
 
 from .models import Alert, Asset, Telemetry, Threshold
@@ -21,9 +23,25 @@ def evaluate_threshold(reading: Telemetry, threshold: Threshold, actor, request_
     """Apply one deterministic threshold rule while the caller holds the asset lock."""
     if reading.quality != Telemetry.Quality.GOOD:
         return RuleResult('skipped_quality')
+    now = timezone.now()
+    binding = getattr(reading.asset, 'hardware_binding', None)
+    # A configured endpoint defines its observation window. Unbound sources
+    # retain the Agent's 60-second default; history is stored but cannot update
+    # current alarms. Two seconds is the explicit maximum clock-skew allowance.
+    fresh_seconds = max(settings.DEVICE_OFFLINE_MIN_GRACE_SECONDS,
+                        binding.expected_interval_seconds * settings.DEVICE_OFFLINE_GRACE_MULTIPLIER) if binding else 60
+    earliest, latest = now-timedelta(seconds=fresh_seconds), now+timedelta(seconds=2)
+    if reading.recorded_at > latest:
+        return RuleResult('skipped_future')
+    if reading.recorded_at < earliest:
+        return RuleResult('skipped_expired')
     if Telemetry.objects.filter(
         asset=reading.asset,
         metric_key=threshold.key,
+        quality=Telemetry.Quality.GOOD,
+        unit=threshold.unit,
+        recorded_at__gte=earliest,
+        recorded_at__lte=latest,
         recorded_at__gt=reading.recorded_at,
     ).exclude(pk=reading.pk).exists():
         return RuleResult('skipped_stale')
@@ -40,6 +58,9 @@ def evaluate_threshold(reading: Telemetry, threshold: Threshold, actor, request_
         f'{threshold.label} current value {reading.value:g}{reading.unit}; '
         f'warning {threshold.warning:g}{threshold.unit}, alarm {threshold.alarm:g}{threshold.unit}.'
     )
+
+    if reading.observation_kind == 'latched_event':
+        detail = f'已观察事件锁存，观测时间 {reading.recorded_at.isoformat()}；不表示输入此刻仍持续触发。' + detail
 
     if breached and active:
         previous_severity = active.severity

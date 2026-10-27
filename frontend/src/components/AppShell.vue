@@ -75,6 +75,7 @@ const primaryNav: NavItem[] = [
   { path: '/work-orders', icon: ClipboardCheck, label: '工单中心', description: '派发、执行与复核' },
   { path: '/assets', icon: Server, label: '设备台账', description: '资产状态与维护记录' },
   { path: '/twin-3d', icon: Box, label: '三维孪生', description: '实体模型与告警定位' },
+  { path: '/agent-workbench', icon: Box, label: '智能运维', description: '取证、诊断与复核工作流' },
   { path: '/gis', icon: Map, label: 'GIS 总览', description: '空间位置与区域态势' },
   { path: '/telemetry', icon: Activity, label: '数据洞察', description: '遥测趋势与数据质量' },
 ];

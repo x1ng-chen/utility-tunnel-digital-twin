@@ -7,6 +7,7 @@ const AO02_TYPICAL_AIR_MILLIVOLTS = 11;
  * Raw ADC and voltage readings remain in the frame for traceability.
  */
 export function addCalculatedOxygenConcentration(telemetry) {
+  if (telemetry.rawOnly || telemetry.source === 'four-controller-rtu-v2') return telemetry;
   const voltageReading = telemetry.readings.find((reading) =>
     reading.assetCode === 'GAS-01' && reading.metric === 'oxygen.voltage' && reading.unit === 'mV');
   const alreadyEstimated = telemetry.readings.some((reading) =>

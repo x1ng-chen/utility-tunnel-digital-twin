@@ -47,3 +47,6 @@ model/square-five-station-v17-fan-ready/**/*.blend filter=lfs diff=lfs merge=lfs
 model/square-five-station-v17-fan-ready/**/*.glb filter=lfs diff=lfs merge=lfs -text
 model/square-five-station-v17-fan-ready/**/*.png filter=lfs diff=lfs merge=lfs -text
 model/square-five-station-v17-fan-ready/**/*.zip filter=lfs diff=lfs merge=lfs -text
+
+# Business source and executable protocol fixtures use stable line endings.
+firmware/four-controller/** text eol=lf

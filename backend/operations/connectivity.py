@@ -25,7 +25,7 @@ def binding_is_online(binding: HardwareBinding, now=None) -> bool:
         settings.DEVICE_OFFLINE_MIN_GRACE_SECONDS,
         binding.expected_interval_seconds * settings.DEVICE_OFFLINE_GRACE_MULTIPLIER,
     )
-    return observed_at >= now - timedelta(seconds=grace_seconds)
+    return now - timedelta(seconds=grace_seconds) <= observed_at <= now + timedelta(seconds=2)
 
 
 def count_online_assets(now=None) -> int:
@@ -85,18 +85,28 @@ def schedule_connectivity_realtime_events(alert_ids, asset_ids) -> None:
     transaction.on_commit(publish_committed_changes)
 
 
-def mark_assets_connected(assets, actor, request_id='', now=None) -> ConnectivityChanges:
-    """Record receipt-time heartbeats and clear stale communication alerts."""
+def mark_assets_connected(assets, actor, request_id='', now=None, observed_at=None) -> ConnectivityChanges:
+    """Record a validated observation timestamp and clear stale communication alerts."""
     now = now or timezone.now()
+    observed_at = observed_at or now
     asset_ids = [asset.pk for asset in assets]
     bindings = HardwareBinding.objects.select_for_update(of=('self',)).select_related('asset').filter(
         asset_id__in=asset_ids,
     ).exclude(status=HardwareBinding.Status.INACTIVE)
     changes = ConnectivityChanges()
     for binding in bindings:
+        grace_seconds = max(settings.DEVICE_OFFLINE_MIN_GRACE_SECONDS,
+                            binding.expected_interval_seconds * settings.DEVICE_OFFLINE_GRACE_MULTIPLIER)
+        if not now - timedelta(seconds=grace_seconds) <= observed_at <= now + timedelta(seconds=2):
+            continue
+        # A replay can neither renew receipt time nor move a valid heartbeat
+        # backwards. A legacy future-poisoned heartbeat can recover on new data.
+        if (binding.last_heartbeat_at and binding.last_heartbeat_at <= now + timedelta(seconds=2)
+                and binding.last_heartbeat_at > observed_at):
+            continue
         before_status = binding.asset.status
         binding.status = HardwareBinding.Status.CONNECTED
-        binding.last_heartbeat_at = now
+        binding.last_heartbeat_at = min(observed_at, now)
         binding.save(update_fields=['status', 'last_heartbeat_at', 'updated_at'])
         active = Alert.objects.select_for_update().filter(
             asset=binding.asset,
@@ -106,7 +116,7 @@ def mark_assets_connected(assets, actor, request_id='', now=None) -> Connectivit
         if active:
             active.status = Alert.Status.RESOLVED
             active.resolved_at = now
-            active.detail = f'设备于 {now.isoformat()} 恢复上报。'
+            active.detail = f'设备于 {now.isoformat()} 恢复上报；有效观测时间 {observed_at.isoformat()}。'
             active.save(update_fields=['status', 'resolved_at', 'detail'])
             audit(actor, 'alert.connectivity_resolved', 'alert', active.pk, {'assetCode': binding.asset.code}, request_id)
             changes.changed_alert_ids.add(active.pk)

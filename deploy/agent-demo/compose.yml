@@ -1,0 +1,36 @@
+name: tunnel-agent-local-demo
+x-api: &api
+  build:
+    context: ../..
+    dockerfile: deploy/agent-demo/Dockerfile.api
+    args: {INSTALL_RAG: "${INSTALL_RAG:-0}"}
+  env_file: ../../.agent-demo/.env
+  volumes:
+    - demo-data:/app/.agent-demo
+    - ../../.agent-knowledge:/app/.agent-knowledge:ro
+services:
+  init:
+    <<: *api
+    command: ["sh","-c","python manage.py migrate --noinput && python manage.py run_agent_demo --initialize --once"]
+  api:
+    <<: *api
+    depends_on:
+      init: {condition: service_completed_successfully}
+  sampler:
+    <<: *api
+    command: ["python","manage.py","run_agent_demo"]
+    depends_on:
+      init: {condition: service_completed_successfully}
+  worker:
+    <<: *api
+    command: ["python","manage.py","run_agent_worker","--warm-knowledge"]
+    depends_on:
+      init: {condition: service_completed_successfully}
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/agent-demo/Dockerfile.web
+    ports: ["127.0.0.1:5187:80"]
+    depends_on: [api]
+volumes:
+  demo-data:

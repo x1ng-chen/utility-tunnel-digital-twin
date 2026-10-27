@@ -1,0 +1,38 @@
+#ifndef UT_DEVICE_MAP_H
+#define UT_DEVICE_MAP_H
+// Generated from the versioned Agent inventory; checked by verify_contract.py.
+struct UtDevice { const char *asset,*metric,*unit;unsigned char board; };
+static constexpr UtDevice UT_DEVICES[32]={ {"","","",0},
+  {"SMOKE-01","smoke.alarm","bool",4},
+  {"GAS-CH4-01","methane.raw","adc",4},
+  {"GAS-CO-01","co.raw","adc",4},
+  {"FLAME-01","flame.alarm","bool",4},
+  {"MQ2-02","smoke.alarm","bool",3},
+  {"MQ4-02","methane.raw","adc",3},
+  {"CO-02","co.raw","adc",3},
+  {"FLAME-02","flame.alarm","bool",3},
+  {"MQ2-03","smoke.alarm","bool",1},
+  {"MQ4-03","methane.raw","adc",1},
+  {"CO-03","co.raw","adc",1},
+  {"FLAME-03","flame.alarm","bool",1},
+  {"MQ2-04","smoke.alarm","bool",2},
+  {"MQ4-04","methane.raw","adc",2},
+  {"CO-04","co.raw","adc",2},
+  {"FLAME-04","flame.alarm","bool",2},
+  {"MQ2-05","smoke.alarm","bool",1},
+  {"MQ4-05","methane.raw","adc",1},
+  {"CO-05","co.raw","adc",1},
+  {"FLAME-05","flame.alarm","bool",1},
+  {"ENV-01","temperature","degC",4},
+  {"ENV-02","temperature","degC",3},
+  {"ENV-03","temperature","degC",1},
+  {"ENV-04","temperature","degC",2},
+  {"LEVEL-L01","level.detected","bool",4},
+  {"LEVEL-L02","level.detected","bool",3},
+  {"LEVEL-L03","level.detected","bool",1},
+  {"LEVEL-L04","level.detected","bool",2},
+  {"GAS-O2-01","oxygen.raw","adc",4},
+  {"GAS-O2-02","oxygen.raw","adc",1},
+  {"GAS-O2-03","oxygen.raw","adc",2},
+};
+#endif

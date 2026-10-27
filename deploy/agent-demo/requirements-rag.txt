@@ -1,0 +1,6 @@
+# Optional local CPU inference. Base backend lock remains unchanged.
+sentence-transformers==6.2.0
+numpy==2.5.4
+torch==2.14.1
+transformers==5.21.0
+huggingface-hub==2.3.0

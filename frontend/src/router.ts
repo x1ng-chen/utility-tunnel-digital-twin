@@ -18,6 +18,7 @@ const router = createRouter({
     { path: '/work-orders', component: () => import('./views/WorkOrdersView.vue') },
     { path: '/assets', component: () => import('./views/AssetsView.vue') },
     { path: '/twin-3d', component: () => import('./views/Twin3DView.vue') },
+    { path: '/agent-workbench', component: () => import('./views/AgentWorkbenchView.vue') },
     { path: '/asset-admin', component: () => import('./views/AssetAdminView.vue'), meta: { roles: ['administrator'] } },
     { path: '/gis', component: () => import('./views/GisView.vue') },
     { path: '/gis-admin', component: () => import('./views/GisAdminView.vue'), meta: { roles: ['administrator'] } },

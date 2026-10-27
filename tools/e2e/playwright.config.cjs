@@ -3,7 +3,7 @@ const executablePath = process.env.E2E_CHROMIUM_PATH;
 
 module.exports = defineConfig({
   testDir: __dirname,
-  testMatch: ['ops.spec.cjs', 'visual.spec.cjs'],
+  testMatch: ['ops.spec.cjs', 'visual.spec.cjs', 'agent.spec.cjs'],
   fullyParallel: false,
   workers: 1,
   retries: 0,
