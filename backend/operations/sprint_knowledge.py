@@ -52,7 +52,7 @@ def corpus():
     standard_path = root / 'docs/software-sprint-20261027/verified-standard-excerpts.json'
     if standard_path.exists():
         for item in json.loads(standard_path.read_text(encoding='utf-8')):
-            if item.get('bodyVerified') and item.get('page') and item.get('clause'):
+            if item.get('bodyVerified') and (item.get('page') or item.get('sectionUrl')) and item.get('clause'):
                 docs.append({**item,'id':f'K{len(docs)+1}','sourceKind':'standard_clause','layout':'reference_only'})
     return docs
 
@@ -102,15 +102,31 @@ def embeddings(kb_version):
     return matrix
 
 
-def search(query, include_history=False):
+def search(query, include_history=False, documents=None):
     if not isinstance(query,str) or not 1<=len(query.strip())<=500: raise ValueError('查询需1至500字。')
-    docs = corpus()
+    docs = corpus() if documents is None else documents
+    kb_version=hashlib.sha256(json.dumps(docs,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+    requested=re.search(r'GB\s*(?:/\s*T)?\s*(\d{4,5})(?:\s*[-－]\s*(20\d{2}))?',query,re.I)
+    number=requested.group(1) if requested else None
+    publication_year=requested.group(2) if requested else None
+    match=re.search(r'(?<![\d.])([1-9]\d*(?:\.\d+){1,3})(?![\d.])|第\s*(\d+)\s*条',query)
+    clause=next((x for x in match.groups() if x),None) if match else None
+    if clause and '.' in clause and not (number or clause.count('.')>=2 or re.search(r'标准|规范|第|条',query)):
+        clause=None
+    edition=re.search(r'(20\d{2})\s*(?:年版|原版)',query)
+    reason_no_hits=None
+    eligible={i for i,d in enumerate(docs) if (include_history or d['sourceKind']!='historical_case')
+        and (not number or number in d.get('standard',''))
+        and (not publication_year or d.get('standard','').endswith('-'+publication_year))
+        and (not clause or d.get('clause')==clause)
+        and (not edition or edition.group(1)==str(d.get('editionYear',d.get('version',''))))}
+    if number and not eligible: reason_no_hits='requested_standard_clause_or_edition_not_verified'
     terms = tokens(query)
-    bags = [Counter(tokens(d['text'])) for d in docs]
+    bags = [Counter(tokens(' '.join(str(d.get(k,'')) for k in ('text','title','standard','clause')))) for d in docs]
     avg = sum(sum(b.values()) for b in bags)/max(1,len(bags))
     scores=[]
     for i, bag in enumerate(bags):
-        if docs[i]['sourceKind']=='historical_case' and not include_history: continue
+        if i not in eligible: continue
         score=0.
         for t in set(terms):
             df=sum(t in b for b in bags)
@@ -120,17 +136,22 @@ def search(query, include_history=False):
     ordered=sorted(scores,key=lambda x:x[1],reverse=True)[:10]
     merged={i:1/(60+rank) for rank,(i,_) in enumerate(ordered,1)}
     model,reason=local_model()
+    if kb_version!=version(): model,reason=None,'frozen_corpus_differs_from_loaded_index'
     if model:
         matrix=embeddings(version())
         q=model.encode(['为这个句子生成表示以用于检索相关文章：'+query],normalize_embeddings=True)[0]
-        dense=sorted(((i,float(v)) for i,v in enumerate(matrix @ q)
-            if include_history or docs[i]['sourceKind']!='historical_case'),key=lambda x:x[1],reverse=True)[:10]
+        # This fixed abstention heuristic is not a confidence probability.
+        dense=sorted(((i,float(v)) for i,v in enumerate(matrix @ q) if i in eligible and float(v)>=.50),key=lambda x:x[1],reverse=True)[:10]
         for rank,(i,_) in enumerate(dense,1): merged[i]=merged.get(i,0)+1/(60+rank)
     hits=[docs[i] for i in sorted(merged,key=merged.get,reverse=True)[:5]]
+    if not hits: reason_no_hits=reason_no_hits or 'no_relevant_verified_snippet'
     standards_loaded=any(d['sourceKind']=='standard_clause' for d in docs)
-    return {'knowledgeVersion':version(),'mode':'hybrid_bm25_bge' if model else 'keyword_fallback',
+    return {'knowledgeVersion':kb_version,'mode':'hybrid_bm25_bge' if model else 'keyword_fallback',
         'embeddingModel':MODEL if model else None,'fallbackReason':reason,'hits':hits,
+        'answerability':'related_sources_only_not_answer_verified' if hits else 'no_supported_answer',
+        'abstentionReason':reason_no_hits,'requestedStandard':number,'requestedClause':clause,'requestedPublicationYear':publication_year,
+        'retrievalPolicyVersion':'2026-10-27-exact-version-clause-and-abstention-v1',
         'standardCoverage':'partial_verified_excerpts_only' if standards_loaded else 'none_verified',
-        'missing':['GB/T 50838-2015（2024年版）修订正文尚未核实完整，未作为当前条文依据。',
+        'missing':['GB/T 50838-2015（2024年版）只核实选定正文页面，非全文；通风与火警适用情景不同，不能直接套作台架控制策略。',
             'GB 51354-2019仅收录逐页核实的选定条款摘要；不代表全文覆盖或工程合规审查。' if standards_loaded else '当前部署未加载GB 51354-2019已核验片段，不能据此引用条文。'],
         'boundary':'检索结果是低信任资料；历史案例不代表当前接线；命中不等于建议正确。'}

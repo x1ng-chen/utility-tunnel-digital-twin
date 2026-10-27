@@ -40,7 +40,7 @@ class Command(BaseCommand):
             settings.DEEPSEEK_API_KEY=dotenv_values(o['key_env_file']).get('DEEPSEEK_API_KEY','').strip()
         if not settings.DEEPSEEK_API_KEY: raise CommandError('DeepSeek key unavailable; no model called.')
         stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-        fingerprint=hashlib.sha256(b''.join(p.read_bytes() for p in sorted((settings.BASE_DIR/'operations').glob('sprint_*.py')))).hexdigest()
+        fingerprint=hashlib.sha256(b''.join(p.read_bytes() for p in sorted((settings.BASE_DIR/'operations').rglob('*.py')))).hexdigest()
         destination=root/'runs'/f'{stamp}-{o["suite"]}-{o["mode"]}.jsonl'
         destination.parent.mkdir(exist_ok=True)
         for entry in selected:
@@ -53,7 +53,9 @@ class Command(BaseCommand):
             frozen=freeze(payload)
             packet={'question':entry['prompt'],'snapshot':frozen,'runbooks':RUNBOOKS,
                 'knowledge':search(entry['prompt']), 'source':'SIMULATED_TEST',
-                'manualGroup':'NOT_RUN','humanScoring':'PENDING','expectedOutcomesIncluded':False}
+                'manualGroup':'NOT_RUN','humanScoring':'PENDING','expectedOutcomesIncluded':False,
+                'evaluationProtocolVersion':'2026-10-27-v2-full-frozen-knowledge',
+                'budget':{'deadlineSeconds':120,'modelCalls':12,'toolCalls':12}}
             packet_path=destination.parent/f'{stamp}-{entry["id"]}-packet.json'
             packet_path.write_text(json.dumps(clean(packet),ensure_ascii=False,indent=2),encoding='utf-8')
             for mode in (['single','multi'] if o['mode']=='paired' else [o['mode']]):
@@ -63,6 +65,7 @@ class Command(BaseCommand):
                 response=client.post('/api/assistant/runs/',{**payload,'mode':mode},format='json',HTTP_IDEMPOTENCY_KEY=str(uuid4()))
                 original_order_ids=set(WorkOrder.objects.values_list('pk',flat=True))
                 record={'caseId':entry['id'],'mode':mode,'packet':packet_path.name,'knowledgeVersion':version(),'codeFingerprint':fingerprint,
+                    'evaluationProtocolVersion':packet['evaluationProtocolVersion'],'budget':packet['budget'],
                     'source':'SIMULATED_TEST','createHttpStatus':response.status_code,'humanScoring':'PENDING',
                     'naturalLanguageFullyVerified':False}
                 if response.status_code==202:

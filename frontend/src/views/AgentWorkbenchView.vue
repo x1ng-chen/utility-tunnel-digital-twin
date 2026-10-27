@@ -34,7 +34,7 @@ const inspected = computed(() => {
   return ((station?.data as Json | undefined)?.station as Json | undefined) || null;
 });
 const roles: Record<string, string> = { evidence: '取证Agent', diagnosis: '诊断Agent', review: '复核Agent', single: '单Agent基线' };
-const outcomes:Record<string,string>={reviewed:'已独立复核',observed:'已取得巡检证据',single_agent_unreviewed:'单Agent结果，未经独立复核',unresolved_review:'复核意见尚未解决',existing_work_order:'已有工单，未重复生成',no_confirmable_draft:'未形成可确认工单',no_confirmable_action:'未形成可确认动作'};
+const outcomes:Record<string,string>={incomplete:'任务未完成，已有证据保留',reviewed:'已独立复核',observed:'已取得巡检证据',single_agent_unreviewed:'单Agent结果，未经独立复核',unresolved_review:'复核意见尚未解决',existing_work_order:'已有工单，未重复生成',no_confirmable_draft:'未形成可确认工单',no_confirmable_action:'未形成可确认动作'};
 let timer: ReturnType<typeof setTimeout> | undefined;
 let alive = true;
 function fail(cause: unknown) { error.value = (cause as { response?: { data?: { message?: string } } }).response?.data?.message || '操作失败，请检查服务与权限。'; }
@@ -138,7 +138,7 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
       <section v-if="run" class="panel"><h2>任务 {{ run.id.slice(0, 8) }} · {{ run.status }}</h2><p v-if="run.error" role="alert">{{ run.error }}</p>
         <p>模型调用 {{ run.runtime.modelCalls ?? 0 }} · 工具调用 {{ run.runtime.toolCalls ?? 0 }} · 耗时 {{ run.runtime.elapsedMs ?? 0 }} ms · Token {{ run.runtime.tokens?.total_tokens ?? '未知' }} {{ run.runtime.tokenUsageComplete === false ? '（用量可能不完整）' : '' }}</p>
         <ol class="timeline"><li v-for="(step, index) in run.steps" :key="index"><h3>{{ roles[step.role] || step.role }}</h3><small>{{ step.startedAt }}</small>
-          <p>{{ step.output?.summary || '正在执行实际查询与模型调用…' }}</p><details><summary>本阶段证据和调用记录</summary><pre>{{ JSON.stringify(step, null, 2) }}</pre></details></li></ol>
+            <p>{{ step.output?.summary || (active ? '正在执行实际查询与模型调用…' : '本阶段未完成，已有调用记录保留。') }}</p><details><summary>本阶段证据和调用记录</summary><pre>{{ JSON.stringify(step, null, 2) }}</pre></details></li></ol>
         <h3 v-if="run.result.reply">本次结论</h3><p v-if="run.result.taskOutcome">任务结果：{{ outcomes[run.result.taskOutcome] || run.result.taskOutcome }}</p><p>{{ run.result.reply }}</p><p v-if="run.result.review">复核：{{ run.result.review.decision }} · {{ run.result.review.summary }}。复核通过不等于现场验收或全部事实正确。</p>
         <details v-if="run.result.evidence?.length"><summary>查看原始证据</summary><pre>{{ JSON.stringify(run.result.evidence, null, 2) }}</pre></details>
         <section v-if="inspected"><h3>本轮取证覆盖</h3><p>预期 {{ inspected.expected_sensor_count }} 个物理模块 · 已登记 {{ inspected.registered_sensor_count }} · 场景观测可用 {{ inspected.scenario_usable_sensor_count }} · 数据异常 {{ inspected.data_issue_sensor_count }}。场景可用不代表现场实测。</p><div class="sensor-table"><table><thead><tr><th>检测站</th><th>设备</th><th>主控</th><th>观测状态／缺项</th><th>三维绑定</th></tr></thead><tbody><tr v-for="sensor in (inspected.items as Json[] || [])" :key="String(sensor.assetCode)"><td>{{ sensor.stationId }}</td><td>{{ sensor.assetCode }}</td><td>{{ sensor.controllerId }}</td><td>{{ sensor.observation_state }} {{ sensor.data_issues }}</td><td>{{ sensor.mapping_status }}</td></tr></tbody></table></div></section>

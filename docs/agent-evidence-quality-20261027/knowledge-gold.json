@@ -1,0 +1,22 @@
+[
+ {"id":"K01","query":"运维信息管理系统应如何建设","clause":"3.4.1","standard":"51354"},
+ {"id":"K02","query":"运维信息采集整理统计分析应用","clause":"3.4.3","standard":"51354"},
+ {"id":"K03","query":"设备台账应急记录技术档案","clause":"3.4.6","standard":"51354"},
+ {"id":"K04","query":"通风状态故障监测运行模式外部温湿度","clause":"5.3.2","standard":"51354"},
+ {"id":"K05","query":"通风巡检每月至少一次","clause":"5.3.3","standard":"51354"},
+ {"id":"K06","query":"监控接收气体报警显示关联联动信息","clause":"5.6.2","standard":"51354"},
+ {"id":"K07","query":"GB/T50838-2015（2024年版）7.2.1通风方式","clause":"7.2.1","standard":"50838"},
+ {"id":"K08","query":"GB/T50838-2015（2024年版）7.2.2通风量计算","clause":"7.2.2","standard":"50838"},
+ {"id":"K09","query":"天然气舱风机选型防爆节能环保","clause":"7.2.5","standard":"50838"},
+ {"id":"K10","query":"GB/T50838-2015第7.5.3条联动反馈","clause":"7.5.3","standard":"50838"},
+ {"id":"K11","query":"GB/T50838第7.5.4条环境设备状态监控","clause":"7.5.4","standard":"50838"},
+ {"id":"K12","query":"确认火灾后着火及相邻分区通风设备应怎样处理","clause":"7.5.7","standard":"50838"},
+ {"id":"K13","query":"天然气浓度超过上限事故段相邻分区通风联动","clause":"7.5.8","standard":"50838"},
+ {"id":"K14","query":"GB/T50838第7.5.9条地理信息系统","clause":"7.5.9","standard":"50838"},
+ {"id":"K15","query":"统一管理平台信息集成可靠性容错易维护扩展","clause":"7.5.10","standard":"50838"},
+ {"id":"K16","query":"GB50838不存在的第999条","noAnswer":true},
+ {"id":"K17","query":"GB/T50838-2015（2015年版）7.5.7","noAnswer":true},
+ {"id":"K18","query":"GB/T50838-2015（2030年版）7.5.7","noAnswer":true},
+ {"id":"K19","query":"GB99999-2026第1条","noAnswer":true},
+ {"id":"K20","query":"zxqv-93828471","noAnswer":true}
+]

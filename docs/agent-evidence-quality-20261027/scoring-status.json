@@ -1,0 +1,106 @@
+{
+  "scope": "entered_ratings_only_no_inferred_human_or_accuracy_scores",
+  "pendingRows": 36,
+  "independentHumanRatings": 0,
+  "groups": {},
+  "pairEligibility": [
+    {
+      "caseId": "INS-01",
+      "eligible": false,
+      "reasons": [
+        "budget_missing_or_different"
+      ]
+    },
+    {
+      "caseId": "INS-02",
+      "eligible": false,
+      "reasons": [
+        "budget_missing_or_different"
+      ]
+    },
+    {
+      "caseId": "INS-03",
+      "eligible": false,
+      "reasons": [
+        "budget_missing_or_different"
+      ]
+    },
+    {
+      "caseId": "INS-04",
+      "eligible": false,
+      "reasons": [
+        "budget_missing_or_different"
+      ]
+    },
+    {
+      "caseId": "DIA-01",
+      "eligible": false,
+      "reasons": [
+        "budget_missing_or_different"
+      ]
+    },
+    {
+      "caseId": "DIA-02",
+      "eligible": false,
+      "reasons": [
+        "budget_missing_or_different"
+      ]
+    },
+    {
+      "caseId": "DIA-03",
+      "eligible": false,
+      "reasons": [
+        "budget_missing_or_different"
+      ]
+    },
+    {
+      "caseId": "DIA-04",
+      "eligible": false,
+      "reasons": [
+        "budget_missing_or_different"
+      ]
+    },
+    {
+      "caseId": "ORD-01",
+      "eligible": false,
+      "reasons": [
+        "budget_missing_or_different"
+      ]
+    },
+    {
+      "caseId": "ORD-02",
+      "eligible": false,
+      "reasons": [
+        "budget_missing_or_different"
+      ]
+    },
+    {
+      "caseId": "ORD-03",
+      "eligible": false,
+      "reasons": [
+        "budget_missing_or_different",
+        "actualModels_missing_or_different",
+        "not_two_model_runs"
+      ]
+    },
+    {
+      "caseId": "ORD-04",
+      "eligible": false,
+      "reasons": [
+        "budget_missing_or_different"
+      ]
+    }
+  ],
+  "eligiblePairs": 0,
+  "humanGroup": "NOT_RUN",
+  "humanFactAccuracy": null,
+  "metric": "per_rating_dimension_mean_0_to_2_not_binary_accuracy",
+  "claimedImprovementPercent": null,
+  "newPaidRequests": 0,
+  "limitations": [
+    "组名遮蔽不保证无法从回答推断分组。",
+    "评分耗时不是人工解决任务耗时。",
+    "普通模型无工具，不能把闭环执行能力差异等同诊断智力提升。",
+    "旧记录未记预算，不自动认定为可量化配对。"
+  ]
+}

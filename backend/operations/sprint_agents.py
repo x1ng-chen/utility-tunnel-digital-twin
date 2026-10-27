@@ -13,7 +13,7 @@ from .agent_operations import INVENTORY, station_snapshot, snapshots, diagnose_s
 from .agent_runbooks import RUNBOOKS
 from .models import Asset, Telemetry, WorkOrder
 from .sprint_models import AgentRun
-from .sprint_knowledge import search, version as knowledge_version
+from .sprint_knowledge import search, corpus as knowledge_corpus, version as knowledge_version
 
 READ = {'station_snapshot','asset_snapshot','telemetry_trend','active_work_orders','collect_station_evidence','review_work_order','runtime_overview','open_alerts'}
 ROLES = {'evidence':READ, 'diagnosis':{'lookup_runbook','knowledge_search','propose_control','draft_work_order','cost_estimate'},
@@ -33,7 +33,7 @@ SYSTEM = '''你是综合管廊运维协作流程中的一个独立角色。总�
 设计基线：31个物理模块、五站、四主控11/7/6/7，P1归CTRL-04、P2归CTRL-03、P3/P5归CTRL-01、P4归CTRL-02；FAN-01归CTRL-04，FAN-02归CTRL-02。P5无温湿度模块，无水泵。模型旧文字不代表当前清单冲突，绑定要看服务器核验结果。
 只依据工具实际返回的固定快照，分别说明采样时间、单位、质量、来源和缺项。模拟库usable=false表示非现场来源，应检查scenario_usable，不可据此认定采集故障。未标定ADC只能比较原始量，不能给可信ppm、氧浓度、人员进入结论或唯一根因。
 命令意图、模拟发送、模拟回执、输出、RPM是不同证据；simulated_requested从未下发硬件。回执不清除告警，新有效测量才可支持恢复；当前在线不自动证明恢复过程。工单待人工确认，恢复复核不自动结单。STM32通过USART/RS-485连S3，不是以太网设备；传感器接本地ADC/DO/I2C。
-证据引用必须真实存在。evidence_ids只能包含status=ok的E编号；K编号可用于正文规程引用，不能混入evidence_ids。rejected工具只能证明失败，不能当测量。旧双节点案例不代表当前接线，标准片段只支持适用范围内的建议。
+证据引用必须真实存在。evidence_ids只能包含status=ok的E编号；K编号可用于正文规程引用，不能混入evidence_ids。正文提及rejected调用时须在rejection_ids数组列出其编号，只能证明失败，不能当测量。旧双节点案例不代表当前接线，标准片段只支持适用范围内的建议。
 候选原因需要支持、反证、缺失信息和下一项检查。资料不足就明确不足，独立复核通过也不代表现场验收或全部自然语言正确。'''
 
 
@@ -52,20 +52,26 @@ def freeze(payload):
     codes=list(Asset.objects.filter(is_active=True).values_list('code',flat=True))
     station=payload.get('station_id','P5')
     data={'capturedAt':now.isoformat(),'layoutVersion':INVENTORY['revision'],'source':data_context(),
-        'knowledgeVersion':knowledge_version(),'inspection':station_snapshot('all'),
+        'knowledgeVersion':knowledge_version(),'knowledgeCorpus':knowledge_corpus(),'inspection':station_snapshot('all'),
         'assets':snapshots(codes,now),'stationEvidence':raw(diagnose_station(station if station!='all' else 'P5')),
         'orders':[{'code':w.code,'assetCode':w.asset.code,'status':w.status,'title':w.title} for w in
-            WorkOrder.objects.select_related('asset').exclude(status__in=['completed','cancelled'])[:80]],
+            WorkOrder.objects.select_related('asset').exclude(status__in=['completed','cancelled'])[:81]],
         'ledger':list(Telemetry.objects.filter(recorded_at__gte=now-timedelta(hours=1),recorded_at__lte=now)
-            .order_by('-recorded_at','-id').values('asset__code','metric_key','value','unit','quality','recorded_at')[:2000]),
+            .order_by('-recorded_at','-id').values('asset__code','metric_key','value','unit','quality','recorded_at')[:2001]),
         'ledgerLimit':2000}
+    data['ledgerTruncated']=len(data['ledger'])>2000
+    data['ledger']=data['ledger'][:2000]
+    data['ordersTruncated']=len(data['orders'])>80
+    data['orders']=data['orders'][:80]
     if payload.get('kind')=='review': data['workOrderReview']=review_work_order(payload['work_order_code'])
     previous=AgentRun.objects.filter(pk=payload.get('previous_run_id')).first() if payload.get('previous_run_id') else None
     if previous:
         data['previousSnapshot']={'hash':previous.snapshot.get('sha256'),'capturedAt':previous.snapshot.get('capturedAt'),
             'changedAssets':[c for c,v in data['assets'].items() if clean(v)!=previous.snapshot.get('assets',{}).get(c)]}
     from .models import Alert
-    data['alerts']=list(Alert.objects.exclude(status__in=['resolved','closed']).values('code','asset__code','severity','title','detail','status','opened_at')[:100])
+    data['alerts']=list(Alert.objects.exclude(status__in=['resolved','closed']).values('code','asset__code','severity','title','detail','status','opened_at')[:101])
+    data['alertsTruncated']=len(data['alerts'])>100
+    data['alerts']=data['alerts'][:100]
     data=clean(data)
     from django.conf import settings
     if getattr(settings, 'AGENT_DEMO_MODE', False):
@@ -86,6 +92,7 @@ class Workflow:
         self.checked_orders=set()
         self.knowledge_ids=set()
         self.handbook_checked=False
+        self.runbooks=set()
         self.format_repairs=0
         self.stats={'modelCalls':0,'toolCalls':0,'calls':[],'elapsedMs':0,'tokens':None,'cost':None}
         self.started=time.monotonic()
@@ -112,9 +119,17 @@ class Workflow:
             return {'layout':INVENTORY,'assets':list(s['assets']),'inspection':s['inspection'],'source':s['source']}
         if name=='open_alerts':
             code=args.get('asset_code')
-            return {'items':[a for a in s['alerts'] if not code or a['asset__code']==code],'source':s['source'],'limit':100}
+            return {'items':[a for a in s['alerts'] if not code or a['asset__code']==code],'source':s['source'],'limit':100,
+                'truncated':s.get('alertsTruncated',False),'boundary':'截断清单未见目标，不证明该目标无活动告警。'}
         if name=='collect_station_evidence':
-            self.seen_assets.update(s['assets'])
+            def observed(value):
+                if isinstance(value,dict):
+                    for key in ('assetCode','asset_code'):
+                        if isinstance(value.get(key),str) and value[key] in s['assets']: self.seen_assets.add(value[key])
+                    for child in value.values(): observed(child)
+                elif isinstance(value,list):
+                    for child in value: observed(child)
+            observed(s['stationEvidence'])
             return s['stationEvidence']
         if name=='review_work_order':
             if args['work_order_code']!=self.run.input.get('work_order_code') or 'workOrderReview' not in s:
@@ -130,37 +145,49 @@ class Workflow:
         if name=='station_snapshot':
             if args.get('station_id','all') not in {'all',self.run.input.get('station_id','P5')}:
                 raise ValueError('检测点超出本次任务。')
-            self.seen_assets.update(s['assets'])
-            return s['inspection'] if args.get('station_id','all')=='all' else s['stationEvidence']['station']
+            result=s['inspection'] if args.get('station_id','all')=='all' else s['stationEvidence']['station']
+            self.seen_assets.update(i['assetCode'] for i in result.get('items',[]) if i.get('registry_present'))
+            return result
         if name=='asset_snapshot':
             code=args['asset_code']
-            if code not in s['assets']: raise ValueError('设备不存在。')
+            if code not in s['assets']:
+                return {'asset_code':code,'exists':False,'readings':[],'source':s['source'],
+                    'boundary':'目标不在冻结资产清单中；这是查询未命中，不证明目标已注册、在线或已有测量。'}
             self.seen_assets.add(code)
             return s['assets'][code]
         if name=='active_work_orders':
             code=args.get('asset_code')
             if code: self.checked_orders.add(code)
-            return {'items':[w for w in s['orders'] if not code or w['assetCode']==code],'limit':80}
+            return {'items':[w for w in s['orders'] if not code or w['assetCode']==code],'limit':80,
+                'truncated':s.get('ordersTruncated',False),'boundary':'截断时未命中不能证明不存在目标工单。'}
         if name=='telemetry_trend':
             start=timezone.datetime.fromisoformat(s['capturedAt'])-timedelta(minutes=args['minutes'])
             return {'source':'frozen_ledger','limit':s['ledgerLimit'],'items':[r for r in s['ledger']
                 if r['asset__code']==args['asset_code'] and r['metric_key']==args['metric_key']
                 and timezone.datetime.fromisoformat(r['recorded_at'])>=start],
-                'boundary':'按单位和质量分别分析；原始量不是ppm。'}
+                'requestedStart':start.isoformat(),'snapshotEnd':s['capturedAt'],
+                'ledgerTruncated':s.get('ledgerTruncated',False),
+                'availableEarliest':min((r['recorded_at'] for r in s['ledger']),default=None),
+                'boundary':'共享快照最多2000条，截断时不能声称覆盖完整窗口；按单位和质量分别分析，原始量不是ppm。'}
         if name=='lookup_runbook':
+            item=RUNBOOKS[args['topic']]
             self.handbook_checked=True
-            return {'topic':args['topic'],**RUNBOOKS[args['topic']]}
+            self.runbooks.add(args['topic'])
+            return {'topic':args['topic'],**item}
         if name=='knowledge_search':
-            result=search(args['query'],args.get('include_history',False))
+            result=search(args['query'],args.get('include_history',False),documents=s.get('knowledgeCorpus'))
             self.knowledge_ids.update(x['id'] for x in result['hits'])
-            self.handbook_checked=True
+            self.handbook_checked=self.handbook_checked or any(
+                h['sourceKind'] in {'internal_guidance','current_layout'} and h.get('layout')==s.get('layoutVersion')
+                or h['sourceKind']=='standard_clause' and h.get('bodyVerified') for h in result['hits'])
             return result
         if name=='propose_control':
             if not self.can_write: raise ValueError('只读角色不能提出动作。')
             if not self.handbook_checked or args['asset_code'] not in self.seen_assets:
                 raise ValueError('动作建议需先取得目标证据和手册。')
             requested=self.run.input.get('control_request')
-            if requested and args!=requested: raise ValueError('动作与用户明确请求不一致。')
+            if not requested or args!=requested: raise ValueError('动作与用户明确请求不一致或未请求动作。')
+            if 'fan' not in self.runbooks: raise ValueError('动作必须先读取当前风机手册；外部标准不能直接成为执行策略。')
             if args['intent']=='power' and args['value'] not in {0,1}: raise ValueError('供电值仅允许0或1。')
             if len(self.controls)>=2: raise ValueError('每次任务最多2个仿真动作。')
             item={**args,'controllerId':INVENTORY['fanControllers'][args['asset_code']],
@@ -169,6 +196,7 @@ class Workflow:
             return {'state':'proposed_not_executed',**item}
         if name=='draft_work_order':
             code=args['asset_code']
+            if s.get('ordersTruncated'): raise ValueError('工单清单截断，不能证明目标没有已有工单；需取得覆盖目标的完整清单，当前拒绝新增草案。')
             if self.run.input.get('kind')=='draft' and code!=self.run.input.get('asset_code'):
                 raise ValueError('草案目标与明确任务不一致。')
             if not self.can_write or code not in self.seen_assets or code not in self.checked_orders or not self.handbook_checked:
@@ -187,6 +215,7 @@ class Workflow:
         self.run.steps.append(step)
         self.save()
         schema='输出JSON对象：summary字符串、evidence_ids证据编号数组、missing数组。'
+        schema+=' 可选facts数组中的数值事实必须含asset_code、metric_key、value有限数字、unit、evidence_id，且引用的实际工具结果中须包含该读数；不要用手册引用替代观测。'
         if role in {'diagnosis','single'}:
             schema+=' 增加candidates数组、next_checks数组、request_evidence字符串（不需补查时为空）。动作和工单只能调用工具提出，不能声称已执行。'
         if role=='review':
@@ -209,7 +238,9 @@ class Workflow:
             self.save()
             try:
                 preferred=None
-                if role in {'diagnosis','single'} and not self.handbook_checked and self.run.input['kind']!='inspection':
+                if role in {'diagnosis','single'} and self.run.input.get('control_request') and 'fan' not in self.runbooks:
+                    preferred='lookup_runbook'
+                elif role in {'diagnosis','single'} and not self.handbook_checked and self.run.input['kind']!='inspection':
                     preferred='knowledge_search'
                 elif role in {'diagnosis','single'} and self.run.input.get('control_request') and self.run.input['control_request']['asset_code'] in self.seen_assets and not self.controls:
                     preferred='propose_control'
@@ -232,27 +263,19 @@ class Workflow:
             calls=message.get('tool_calls')
             if not calls:
                 text=message.get('content') or ''
-                fenced=re.findall(r'```(?:json)?\s*(.*?)```',text,re.S)
-                if len(fenced)==1:
-                    step['envelopeTextExcluded']=True
-                    text=fenced[0]
-                else: text=text.strip()
                 allowed={e['id'] for e in self.evidence if e['status']=='ok'}
                 try:
-                    output=json.loads(text)
-                    if not isinstance(output,dict) or not isinstance(output.get('summary'),str): raise ValueError('角色输出必须为含summary的JSON。')
-                    ids=output.get('evidence_ids',[])
-                    if not isinstance(ids,list) or not all(isinstance(i,str) and i in allowed for i in ids): raise ValueError('无效证据引用。')
-                    references=set(re.findall(r'\b[EK]\d+\b',json.dumps(output,ensure_ascii=False)))
-                    if references-(allowed|self.knowledge_ids): raise ValueError('输出含不存在的引用。')
-                    if role=='evidence' and not self.evidence: raise ValueError('取证未调用工具。请实际选择并调用自己的取证工具。')
-                    if role=='review' and output.get('decision') not in {'pass','revise','insufficient'}: raise ValueError('复核决策无效。')
+                    from .sprint_output import parse_output,check_output
+                    output,enclosed=parse_output(text)
+                    if enclosed: step['envelopeTextExcluded']=True
+                    check_output(output,role,self.evidence,self.knowledge_ids,step['traces'])
                 except (ValueError,TypeError) as exc:
                     if self.format_repairs>=1: raise
                     self.format_repairs+=1
                     step.setdefault('formatRepairs',[]).append({'error':str(exc),'attempt':self.format_repairs})
                     messages.extend([{'role':'assistant','content':text},{'role':'user','content':json.dumps({
                         'formatError':str(exc),'allowedEvidenceIds':sorted(allowed),'knownKnowledgeIds':sorted(self.knowledge_ids),
+                        'rejectedCallIds':[e['id'] for e in self.evidence if e['status']=='rejected'],
                         'instruction':'最多一次格式纠正，仍计入120秒/12次模型/12次工具预算。保留真实结论；没有取证则先调用本角色工具。不能虚构新证据。'},ensure_ascii=False)}])
                     self.save()
                     continue
@@ -274,6 +297,7 @@ class Workflow:
                 fn=call.get('function',{})
                 name=fn.get('name','')
                 self.stats['toolCalls']+=1
+                args=None
                 try:
                     args=json.loads(fn['arguments'])
                     if name not in ROLES[role]: raise ValueError('工具超出角色权限。')
@@ -283,7 +307,7 @@ class Workflow:
                     status='ok'
                 except (ValueError,TypeError,KeyError) as exc:
                     data,status={'error':str(exc)},'rejected'
-                item=clean({'id':f'E{len(self.evidence)+1}','tool':name,'status':status,
+                item=clean({'id':f'E{len(self.evidence)+1}','tool':name,'status':status,'arguments':args,
                     'queriedAt':self.run.snapshot['capturedAt'],'data':data})
                 self.evidence.append(item)
                 step['traces'].append(item)
@@ -325,6 +349,12 @@ class Workflow:
             result['taskOutcome']='existing_work_order' if any(w['assetCode']==target for w in self.run.snapshot['orders']) else 'no_confirmable_draft'
         if self.run.input.get('control_request') and not result['controlProposals']: result['taskOutcome']='no_confirmable_action'
         result['previousSnapshot']=self.run.snapshot.get('previousSnapshot')
+        from .sprint_output import task_contract
+        contract=task_contract(self.run.input,self.evidence,result['proposals'],self.run.snapshot['orders'],self.handbook_checked)
+        result['taskContract']=contract
+        if not contract['passed']:
+            result.update(taskOutcome='incomplete',proposals=[],controlProposals=[],
+                reply='任务未完成：'+'；'.join(contract['missing'])+'。模型原始草稿保留在步骤记录，不能按已完成任务使用。')
         self.save()
         return clean(result)
 
@@ -342,5 +372,9 @@ def process_one():
         AgentRun.objects.filter(pk=run.pk,status='running').update(status='completed',stage='completed',result=result,finished_at=timezone.now())
     except Exception as exc:
         workflow.save()
-        AgentRun.objects.filter(pk=run.pk,status='running').update(status='failed',error=str(exc)[:500],finished_at=timezone.now())
+        partial={'partial':True,'taskOutcome':'incomplete','reply':'任务未完成：'+str(exc)[:500],
+            'evidence':workflow.evidence,'proposals':[],'controlProposals':[],
+            'source':run.snapshot.get('source'),'snapshotHash':run.snapshot.get('sha256'),
+            'naturalLanguageFullyVerified':False,'boundary':'已有工具结果与步骤保留；失败不表示取证完整，也不允许确认任何动作或草案。'}
+        AgentRun.objects.filter(pk=run.pk,status='running').update(status='failed',result=clean(partial),error=str(exc)[:500],finished_at=timezone.now())
     return True
