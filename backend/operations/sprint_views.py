@@ -46,8 +46,8 @@ def expire_runs():
             'evidence':[e for step in run.steps for e in step.get('traces',[])],
             'proposals':[],'controlProposals':[],'source':run.snapshot.get('source'),
             'snapshotHash':run.snapshot.get('sha256'),'naturalLanguageFullyVerified':False}
-        if run.snapshot.get('guardRuleVersion'):
-            from .agent_guardrails import derive
+        from .agent_guardrails import derive,VERSION
+        if run.snapshot.get('guardRuleVersion')==VERSION:
             partial['guardrails']=derive(run.snapshot,partial['evidence'])
             partial['guardrails']['violations']=[v for s in run.steps for v in s.get('guardViolations',[])]
             partial['experienceContext']=run.snapshot.get('experienceContext')

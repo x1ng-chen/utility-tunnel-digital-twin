@@ -2,13 +2,13 @@
   "scope": "DETERMINISTIC_CONTRACT_AND_STUB_ORCHESTRATION_NOT_MODEL_ABILITY",
   "executionMode": "EXPLICIT_OFFLINE_STUB",
   "rows": 100,
-  "codeFingerprint": "1d22bbf395647738a649d36253b592d82f276b8eb0a1b0dc6b923e139bf0cac6",
+  "codeFingerprint": "9760033952915b3f3ea4e6d545369a55aee42d282e87bc92c71e6fbf678c50a2",
   "guardVersion": "2026-10-27.1",
   "training": {
     "dataset": "TRAINING_FAN_MISSING_ONLY_NOT_J01_J25",
-    "runId": "15aed512-2aed-4f99-9fa3-c4d3a3449bfc",
+    "runId": "8dc2e465-ed5a-4b15-abfc-1769107ab4a1",
     "experienceId": "ff12b5aa-f71a-4eab-bc64-fb927055d894",
-    "observationHash": "23f547d7b3cb056b8315a071ecc4676f3c7257216184c4b22c195025e478d0a6",
+    "observationHash": "b1a0004ce1ebe7fd15941aeaa152468331a29f6149408cab7990a04e2f9eac7a",
     "approval": "SIMULATED_ADMINISTRATOR_NOT_HUMAN",
     "independentHumanReview": false
   },
@@ -47,7 +47,7 @@
         "boundaryCases": 1,
         "legalTasksCompleted": 12,
         "fixtureChecksPassed": 25,
-        "stubElapsedMedianMs": 156,
+        "stubElapsedMedianMs": 203,
         "loadedExperienceCounts": [
           0
         ]
@@ -68,7 +68,7 @@
         "boundaryCases": 1,
         "legalTasksCompleted": 12,
         "fixtureChecksPassed": 25,
-        "stubElapsedMedianMs": 93,
+        "stubElapsedMedianMs": 79,
         "loadedExperienceCounts": [
           0,
           1
@@ -103,5 +103,5 @@
   "actualMemoryBenefit": null,
   "tokens": null,
   "billVerifiedCost": null,
-  "archiveSha256": "3eba5b542c205ac1cdfee8c7cb3e9815e0838eb0067bbd85defa86c03a77cc48"
+  "archiveSha256": "0717cf96f695a38996d2b97d91383abcb0ef5c619c8ac525a4cc344dbe4a18d6"
 }

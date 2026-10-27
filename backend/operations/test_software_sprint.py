@@ -250,12 +250,14 @@ class RunTests(TestCase):
 
     def test_crashed_worker_expiry_retains_evidence_without_actions(self):
         from .sprint_views import expire_runs
-        r=AgentRun.objects.create(owner=self.user,request_key='expired',status='running',
-            started_at=timezone.now()-timedelta(seconds=126),steps=[{'traces':[{'id':'E1','status':'ok'}]}],
-            result={'proposals':[{'assetCode':'MQ4-05'}]})
-        expire_runs();r.refresh_from_db();self.assertEqual(r.status,'failed')
-        self.assertTrue(r.result['partial']);self.assertEqual(r.result['evidence'][0]['id'],'E1')
-        self.assertEqual(r.result['proposals'],[])
+        for version in (None,'obsolete',GUARD_VERSION):
+            r=AgentRun.objects.create(owner=self.user,request_key='expired-'+str(version),status='running',
+                started_at=timezone.now()-timedelta(seconds=126),steps=[{'traces':[{'id':'E1','status':'ok'}]}],
+                snapshot={'guardRuleVersion':version},result={'proposals':[{'assetCode':'MQ4-05'}]})
+            expire_runs();r.refresh_from_db();self.assertEqual(r.status,'failed')
+            self.assertTrue(r.result['partial']);self.assertEqual(r.result['evidence'][0]['id'],'E1')
+            self.assertEqual(r.result['proposals'],[])
+            self.assertEqual('guardrails' in r.result,version==GUARD_VERSION)
 
     def test_truncated_orders_cannot_prove_no_duplicate(self):
         w=Workflow(AgentRun(owner=self.user,input={'kind':'draft','asset_code':'MQ4-05'},
