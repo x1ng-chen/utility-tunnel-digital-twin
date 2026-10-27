@@ -57,7 +57,8 @@ def audit(archive):
                         if not text or message.get('tool_calls'): continue
                         try:
                             output,enclosed=parse_output(text)
-                            check_output(output,step['role'],evidence,knowledge,stage_traces)
+                            check_output(output,step['role'],evidence,knowledge,stage_traces,
+                                known_guard_ids={f['id'] for f in result.get('guardrails',{}).get('findings',[])})
                             verdict='accepted_format_and_reference_shape_only';error=None
                         except (ValueError,TypeError) as exc: verdict='rejected';error=str(exc)
                         replays.append({'batch':name,'caseId':row.get('caseId'),'mode':row.get('mode'),

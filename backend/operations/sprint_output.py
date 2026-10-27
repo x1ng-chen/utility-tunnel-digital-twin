@@ -24,7 +24,7 @@ def parse_output(text):
     return value,enclosed
 
 
-def check_output(output,role,evidence,knowledge_ids,stage_traces):
+def check_output(output,role,evidence,knowledge_ids,stage_traces,known_guard_ids=None):
     good={e['id'] for e in evidence if e['status']=='ok'}
     rejected={e['id'] for e in evidence if e['status']=='rejected'}
     ids=output.get('evidence_ids',[]);errors=output.get('rejection_ids',[])
@@ -34,7 +34,12 @@ def check_output(output,role,evidence,knowledge_ids,stage_traces):
     refs=set(re.findall(r'(?<![A-Za-z0-9_])[EK]\d+(?![A-Za-z0-9_])',json.dumps(output,ensure_ascii=False)))
     if refs-(good|rejected|knowledge_ids): raise ValueError('输出含不存在的引用。')
     if (refs&rejected)-set(errors): raise ValueError('被拒调用须列入rejection_ids，不能作测量证据。')
-    for key in ('missing','candidates','next_checks','findings','facts'):
+    guard_ids=output.get('guard_ids',[]);known_guard_ids=set(known_guard_ids or ())
+    if not isinstance(guard_ids,list) or len(guard_ids)>40 or not all(isinstance(i,str) and i in known_guard_ids for i in guard_ids):
+        raise ValueError('无效规则推导引用；不能冒充原始E证据。')
+    guard_refs=set(re.findall(r'(?<![A-Za-z0-9_])G\d+(?![A-Za-z0-9_])',json.dumps(output,ensure_ascii=False)))
+    if guard_refs-set(guard_ids): raise ValueError('规则编号须列入guard_ids且属于本快照。')
+    for key in ('missing','candidates','next_checks','findings','facts','claims'):
         if key in output and (not isinstance(output[key],list) or len(output[key])>40):
             raise ValueError(key+'必须是有界数组。')
     if 'request_evidence' in output and not isinstance(output['request_evidence'],str):

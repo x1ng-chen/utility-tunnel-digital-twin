@@ -34,6 +34,7 @@ if CONTROLLER_COMMAND_PROTOCOL not in {'legacy', 'four-controller-v2'}:
 MQTT_COMMAND_USERNAME = os.getenv('MQTT_COMMAND_USERNAME', '')
 MQTT_COMMAND_PASSWORD = os.getenv('MQTT_COMMAND_PASSWORD', '')
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '').strip()
+AGENT_EXPERIENCE_ENABLED = os.getenv('AGENT_EXPERIENCE_ENABLED','true').strip().lower() in {'1','true','yes'}
 DEEPSEEK_MODEL = os.getenv('DEEPSEEK_MODEL', 'deepseek-flash').strip()
 if DEEPSEEK_MODEL not in {'deepseek-flash', 'deepseek-v4-pro'}:
     raise ValueError('DEEPSEEK_MODEL must be deepseek-flash or deepseek-v4-pro.')

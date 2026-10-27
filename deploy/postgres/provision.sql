@@ -44,6 +44,11 @@ GRANT UPDATE (display_name, role) ON operations_profile TO ut_runtime;
 GRANT SELECT, INSERT, DELETE ON authtoken_token TO ut_runtime;
 
 -- Operational reads and the exact columns written by the Django API routes.
+-- Persistent Agent tasks and sanitized review queue; no deletion of evidence.
+GRANT SELECT, INSERT, UPDATE ON operations_agentrun, operations_reviewexperience TO ut_runtime;
+-- Normal task serialization may read historical simulated receipts; production
+-- runtime receives no INSERT/UPDATE permission for simulated hardware actions.
+GRANT SELECT ON operations_simulatedaction TO ut_runtime;
 GRANT SELECT ON operations_asset, operations_alert, operations_workorder,
   operations_workorderevent,
   operations_telemetry, operations_threshold, operations_auditlog,

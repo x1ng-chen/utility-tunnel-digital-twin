@@ -7,8 +7,70 @@ const webUrl = process.env.E2E_WEB_URL || 'http://127.0.0.1:5173';
 const apiUrl = process.env.E2E_API_URL || 'http://127.0.0.1:8000/api';
 test.skip(process.env.AGENT_E2E !== '1', 'Requires the explicit isolated Agent sandbox.');
 
+// These two page contracts deliberately use response fixtures. They do not
+// represent human approval, real model inference or the backend permission score.
+test('护栏分层、旧任务不倒填；受控经验审核携带版本且修订不覆盖', async ({ page }) => {
+  await login(page, 'administrator');
+  const base = { station_id:'P5',asset_code:'FAN-01',category:'FAN-OBS-1',source_scope:'simulated_test',
+    rule_version:'2026-10-27.1',revision:1,canReview:true,canRevise:true };
+  let entries = [{...base,id:'approved-example',status:'approved',lesson:'已批准的模拟提醒：缺转速时继续只读取证。'},
+    {...base,id:'candidate-example',status:'candidate',lesson:'待审核示例：电流不能单独证明转动。'}];
+  const requests = [];
+  await page.route('**/api/assistant/experiences/**', async route => {
+    const req = route.request();
+    if (req.method() === 'GET') return route.fulfill({json:{items:entries,truncated:false}});
+    const payload = req.postDataJSON(); requests.push(payload);
+    const item=entries.find(e=>req.url().endsWith(`/${e.id}/`));
+    if (payload.action==='revise') entries=[...entries,{...item,id:'new-candidate',status:'candidate',revision:1,lesson:payload.lesson}];
+    else { item.status={approve:'approved',reject:'rejected',retire:'retired'}[payload.action];item.revision++; }
+    return route.fulfill({json:item});
+  });
+  const current = {id:'current-example',status:'completed',stage:'completed',error:'',input:{},steps:[],runtime:{modelCalls:0,toolCalls:0},
+    result:{reply:'页面响应桩：模型解释。',evidence:[{id:'E1',status:'ok',tool:'asset_snapshot',data:{asset_code:'FAN-01',rpm:0}}],
+      guardrails:{version:'2026-10-27.1',findings:[{id:'G1',assetCode:'FAN-01',ruleId:'FAN-OBS-1',state:'unknown',
+        sourceScope:'simulated_test',message:'反馈不足，继续只读核查。',evidenceIds:['E1'],missing:['independentRPM']}],violations:[],boundary:'结构化校验不覆盖全部自然语言。'},
+      experienceContext:{items:[entries[0]],hash:'page-fixture-only'}}};
+  const legacy={...current,id:'legacy-example',result:{reply:'旧任务，无护栏与经验记录。'}};
+  await page.route('**/api/assistant/runs/**', async route => route.fulfill({json:
+    route.request().url().endsWith('/runs/')?[current,legacy]:legacy}));
+  await page.goto(`${webUrl}/agent-workbench`);
+  await expect(page.getByRole('heading',{name:'模型解释',exact:true})).toBeVisible();
+  await expect(page.locator('.derived-checks')).toContainText('推导不是原始测量');
+  await page.getByText('查看 1 项规则判断',{exact:true}).click();
+  await expect(page.locator('.derived-checks')).toContainText('证据不足');
+  await expect(page.getByText(/已加载 1 条管理员审核/)).toBeVisible();
+  await page.getByText('查看原始证据',{exact:true}).click();
+  await expect(page.getByText('"rpm": 0',{exact:false})).toBeVisible();
+  const candidate=page.locator('.experience-card').filter({hasText:'待审核示例：'});
+  await candidate.getByRole('button',{name:'批准共享',exact:true}).click();
+  await expect(candidate).toContainText('管理员已批准');
+  expect(requests[0]).toEqual({action:'approve',revision:1});
+  await candidate.getByRole('button',{name:'修订为新候选'}).click();
+  await page.getByLabel('脱敏提醒（最多300字）').fill('修订示例：先核对独立测速，再讨论转动。');
+  await page.getByRole('button',{name:'保存新候选',exact:true}).click();
+  await expect(page.locator('.experience-card').filter({hasText:'修订示例：'})).toContainText('候选，未批准');
+  await expect(candidate).toContainText('管理员已批准');
+  expect(requests[1]).toMatchObject({action:'revise',revision:2});
+  await candidate.getByRole('button',{name:'退役经验'}).click();
+  await expect(candidate).toContainText('已退役');
+  await page.getByLabel('历史任务').selectOption('legacy-example');
+  await expect(page.locator('.derived-checks')).toContainText('旧版本任务未记录');
+  await expect(page.getByText('旧版本任务未记录经验上下文。')).toBeVisible();
+  await page.screenshot({path:test.info().outputPath('reviewed-experience-page.png'),fullPage:true});
+});
+
+test('受控经验查看者不显示审核入口且不请求共享审核队列', async ({ page }) => {
+  await login(page,'viewer');let calls=0;
+  await page.route('**/api/assistant/experiences/**',async route=>{calls++;await route.fulfill({json:{items:[],truncated:false}});});
+  await page.goto(`${webUrl}/agent-workbench`);
+  await expect(page.getByRole('heading',{name:'多Agent工作台',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'受控复核经验',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'批准共享',exact:true})).toHaveCount(0);
+  expect(calls).toBe(0);
+});
+
 async function login(page, role = 'operator') {
-  const passwords = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../.agent-eval/users.json'), 'utf8'));
+  const passwords = JSON.parse(fs.readFileSync(process.env.AGENT_E2E_USERS || path.resolve(__dirname, '../../.agent-eval/users.json'), 'utf8'));
   await page.context().addInitScript(url => localStorage.setItem('vue-api-url', url), apiUrl);
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill(`agent-eval-${role}`);

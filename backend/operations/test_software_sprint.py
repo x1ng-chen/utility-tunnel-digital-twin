@@ -14,6 +14,7 @@ from .sprint_agents import process_one, Workflow, freeze, raw
 from .sprint_costs import calculate, example
 from .sprint_knowledge import search, corpus
 from .sprint_validation import validate_arguments, validate_facts
+from .agent_guardrails import VERSION as GUARD_VERSION
 from .sprint_views import DemoCommands, DemoCommandDetail, match_ack
 
 
@@ -291,6 +292,7 @@ class RunTests(TestCase):
         session=DemoSession.objects.create()
         run=AgentRun.objects.create(owner=self.user,request_key='cmd',status='completed',finished_at=timezone.now(),
             snapshot={'demoGeneration':str(session.generation)},result={'review':{'decision':'pass'},
+            'guardrails':{'version':GUARD_VERSION,'violations':[]},
             'controlProposals':[{'asset_code':'FAN-01','intent':'pwm','value':50}]})
         factory=APIRequestFactory()
         with patch('operations.sprint_demo.guard'):
@@ -298,6 +300,23 @@ class RunTests(TestCase):
             response=DemoCommands.as_view()(request)
         self.assertEqual(response.status_code,200,response.data)
         return SimulatedAction.objects.get(),factory
+
+    def test_legacy_guard_or_blocked_run_cannot_create_confirmable_action(self):
+        a,factory=self.action();run=a.run
+        run.result.pop('guardrails',None);run.save(update_fields=['result'])
+        with patch('operations.sprint_demo.guard'):
+            req=factory.post('/x',{'action':'confirm'},format='json');force_authenticate(req,self.user)
+            self.assertEqual(DemoCommandDetail.as_view()(req,pk=a.pk).status_code,409)
+        self.assertEqual(DemoSession.objects.get().outputs,{})
+        a.delete()
+        for report in (None,{'version':'old','violations':[]},{'version':'2026-10-27.1','violations':[{'ruleId':'FAN-OBS-1'}]}):
+            if report is None: run.result.pop('guardrails',None)
+            else: run.result['guardrails']=report
+            run.save(update_fields=['result'])
+            with patch('operations.sprint_demo.guard'):
+                req=factory.post('/x',{'runId':str(run.pk),'proposalIndex':0},format='json');force_authenticate(req,self.user)
+                self.assertEqual(DemoCommands.as_view()(req).status_code,400)
+            self.assertFalse(SimulatedAction.objects.exists())
 
     def test_command_confirm_once_no_alarm_resolution_no_mqtt(self):
         a,factory=self.action()

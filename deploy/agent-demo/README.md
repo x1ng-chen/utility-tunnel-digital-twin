@@ -62,3 +62,7 @@ node deploy/agent-demo/browser-tests/check.mjs
 浏览器检查需要本地服务已启动，执行真实HTTP、桌面/手机截图及65秒暂停恢复，不调用模型。真实模型结果单独保存在 `.agent-eval-sprint/runs`，包含快照、模型、真实Token、耗时、失败与程序确认的测试工单号。普通问答基线使用 `evaluate_plain_sprint --packets runs/<同批UTC前缀> --live`。费用以供应商账单为准，人工评分模板在参赛文档目录。
 
 最终集成验收使用 `config.sprint_final_eval_settings`，独立保存在 `.agent-eval-sprint/final/.agent-eval-sprint/runs`，与迭代批次分开。当前最终模型验收因HTTP 402中断，补足额度前不要重复启动；401/402/403会中止整个批次并保留已有记录。S05为显式受控超时桩，统计时与供应商真实请求分开。
+
+## 护栏与受控经验升级（2026-10-27）
+
+[功能、规则、审核与复现](../../docs/guardrails-experience-20261027/README.md)。更新后启动器自动应用新经验表迁移；既有记录不自动获批。需要禁止付费调用时使用`python deploy/agent-demo/manage_demo.py start --no-paid-model`，或PowerShell启动器增加`-NoPaidModel`。该选项仅清空本次进程模型密钥，不改写私有配置，也不移除三维模型。

@@ -1,4 +1,5 @@
 from django.urls import path
+from .experience_views import ExperienceList,ExperienceDetail
 from django.conf import settings
 from .sprint_views import RunList, RunDetail, RunExport, KnowledgeSearch, CostEstimate, DemoSessionView, DemoCommands, DemoCommandDetail
 from .views import AiAssistantView, StationInspectionView, AgentContextView, ControllerCommandCapabilitiesView
@@ -6,6 +7,8 @@ from .views import AdminRegistrationRequestDetailView, AdminRegistrationRequestL
 
 
 urlpatterns = [
+    path('assistant/experiences/',ExperienceList.as_view()),
+    path('assistant/experiences/<uuid:pk>/',ExperienceDetail.as_view()),
     path('assistant/runs/', RunList.as_view()),
     path('assistant/runs/<uuid:pk>/', RunDetail.as_view()),
     path('assistant/runs/<uuid:pk>/export/', RunExport.as_view()),
