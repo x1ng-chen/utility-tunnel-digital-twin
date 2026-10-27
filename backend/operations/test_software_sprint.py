@@ -186,6 +186,8 @@ class RunTests(TestCase):
         with self.assertRaises(ValueError): w.execute('propose_control',run.input['control_request'])
         w.handbook_checked=True;w.seen_assets={'FAN-01','FAN-02'}
         with self.assertRaises(ValueError): w.execute('propose_control',{'asset_code':'FAN-02','intent':'pwm','value':60})
+        with self.assertRaises(ValueError): w.execute('propose_control',run.input['control_request'])
+        w.execute('lookup_runbook',{'topic':'fan'})
         self.assertEqual(w.execute('propose_control',run.input['control_request'])['state'],'proposed_not_executed')
 
     def test_cost_api_cannot_assert_real_source(self):
@@ -212,6 +214,55 @@ class RunTests(TestCase):
         with patch('operations.ai_assistant._completion',side_effect=loop): process_one()
         r=AgentRun.objects.get();self.assertEqual(r.status,'failed');self.assertGreater(r.runtime['modelCalls'],0)
         self.assertLessEqual(r.runtime['modelCalls'],12);self.assertLessEqual(r.runtime['toolCalls'],12)
+        self.assertTrue(r.result['partial']);self.assertTrue(r.result['evidence'])
+        self.assertEqual(r.result['proposals'],[]);self.assertEqual(r.result['controlProposals'],[])
+
+    def test_absence_is_query_evidence_not_registered_or_observed_asset(self):
+        w=Workflow(AgentRun(owner=self.user,input={'kind':'diagnosis'},snapshot={'assets':{},'source':'SIMULATED_TEST'}))
+        data=w.execute('asset_snapshot',{'asset_code':'XX-NOT-EXIST'})
+        self.assertIs(data['exists'],False);self.assertNotIn('XX-NOT-EXIST',w.seen_assets)
+        e={'id':'E1','tool':'asset_snapshot','status':'ok','data':data}
+        validate_facts({'facts':[{'asset_code':'XX-NOT-EXIST','exists':False,'evidence_id':'E1'}]},[e],{})
+        with self.assertRaises(ValueError): validate_facts({'facts':[{'asset_code':'XX-NOT-EXIST','exists':True,'evidence_id':'E1'}]},[e],{})
+
+    def test_empty_or_legacy_search_cannot_unlock_handbook_gate(self):
+        w=Workflow(AgentRun(owner=self.user,input={}))
+        for hits in ([],[{'id':'K1','sourceKind':'historical_case','layout':'legacy_two_node'}]):
+            with patch('operations.sprint_agents.search',return_value={'hits':hits}): w.execute('knowledge_search',{'query':'anything'})
+            self.assertFalse(w.handbook_checked)
+
+    def test_local_snapshot_does_not_authorize_unseen_fan_action(self):
+        w=Workflow(AgentRun(owner=self.user,input={'station_id':'P5'},snapshot=freeze({'station_id':'P5'})))
+        w.execute('station_snapshot',{'station_id':'P5'})
+        self.assertIn('MQ4-05',w.seen_assets);self.assertNotIn('FAN-01',w.seen_assets)
+
+    def test_no_hollow_inspection_or_work_order_completion(self):
+        from .sprint_output import task_contract
+        e=[{'id':'E1','tool':'collect_station_evidence','status':'ok','data':{}}]
+        self.assertFalse(task_contract({'kind':'inspection'},e,[],[],False)['passed'])
+        self.assertFalse(task_contract({'kind':'draft','asset_code':'MQ4-05'},e,[],[],True)['passed'])
+
+    def test_supplement_stage_requires_its_own_successful_read(self):
+        from .sprint_output import check_output
+        e=[{'id':'E1','status':'ok'}]
+        with self.assertRaises(ValueError): check_output({'summary':'已补查','evidence_ids':['E1']},'evidence',e,set(),[])
+
+    def test_crashed_worker_expiry_retains_evidence_without_actions(self):
+        from .sprint_views import expire_runs
+        r=AgentRun.objects.create(owner=self.user,request_key='expired',status='running',
+            started_at=timezone.now()-timedelta(seconds=126),steps=[{'traces':[{'id':'E1','status':'ok'}]}],
+            result={'proposals':[{'assetCode':'MQ4-05'}]})
+        expire_runs();r.refresh_from_db();self.assertEqual(r.status,'failed')
+        self.assertTrue(r.result['partial']);self.assertEqual(r.result['evidence'][0]['id'],'E1')
+        self.assertEqual(r.result['proposals'],[])
+
+    def test_truncated_orders_cannot_prove_no_duplicate(self):
+        w=Workflow(AgentRun(owner=self.user,input={'kind':'draft','asset_code':'MQ4-05'},
+            snapshot={'orders':[],'ordersTruncated':True}))
+        w.handbook_checked=True;w.seen_assets={'MQ4-05'};w.checked_orders={'MQ4-05'}
+        with self.assertRaisesMessage(ValueError,'截断'):
+            w.execute('draft_work_order',{'asset_code':'MQ4-05','title':'test','description':'test','priority':'medium'})
+        self.assertEqual(w.proposals,[])
 
     def test_invalid_reference_fails_and_keeps_actual_attempt(self):
         self.create()

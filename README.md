@@ -1,5 +1,7 @@
 <div align="center">
 
+最新补齐：[Agent可靠性、专业知识与效果证据](docs/agent-evidence-quality-20261027/README.md) · [人工评分操作](docs/agent-evidence-quality-20261027/review-protocol.md)。软件检查与真实模型、独立人工评分分别记录；本轮付费复测暂缓。
+
 ## 三Agent软件参赛版（2026-10-27）
 
 独立取证/诊断/复核、版本化知识检索、人工确认的仿真处置、双风机成本测算及可重放评测。当前为隔离软件演示，真机与公网待验收。

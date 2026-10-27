@@ -26,7 +26,12 @@ def validate_facts(output,evidence,assets):
     for f in facts:
         if not isinstance(f,dict): raise ValueError('事实必须是对象。')
         code=f.get('asset_code')
-        if code is not None and code not in assets: raise ValueError('事实引用不存在设备。')
+        if code is not None and code not in assets:
+            absence=any(e['status']=='ok' and e['tool']=='asset_snapshot' and e['data'].get('asset_code')==code
+                and e['data'].get('exists') is False and e['id']==f.get('evidence_id') for e in evidence)
+            if not absence or f.get('exists') is not False or set(f)-{'asset_code','exists','evidence_id'}:
+                raise ValueError('事实引用不存在设备。')
+            continue
         if f.get('evidence_id') is not None and f['evidence_id'] not in valid: raise ValueError('事实引用无效证据。')
         if code and 'metric_key' in f and 'value' in f:
             rows=assets[code].get('readings',[])

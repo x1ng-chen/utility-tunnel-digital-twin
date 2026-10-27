@@ -41,8 +41,13 @@ def serialize(run):
 
 def expire_runs():
     now=timezone.now()
-    AgentRun.objects.filter(status='running',started_at__lt=now-timedelta(seconds=125)).update(
-        status='failed',error='工作进程超过全局期限或已中断。',finished_at=now)
+    for run in AgentRun.objects.filter(status='running',started_at__lt=now-timedelta(seconds=125)):
+        partial={'partial':True,'taskOutcome':'incomplete','reply':'工作进程超过全局期限或已中断，任务未完成。',
+            'evidence':[e for step in run.steps for e in step.get('traces',[])],
+            'proposals':[],'controlProposals':[],'source':run.snapshot.get('source'),
+            'snapshotHash':run.snapshot.get('sha256'),'naturalLanguageFullyVerified':False}
+        AgentRun.objects.filter(pk=run.pk,status='running').update(status='failed',result=partial,
+            error='工作进程超过全局期限或已中断。',finished_at=now)
     AgentRun.objects.filter(status='queued',created_at__lt=now-timedelta(minutes=5)).update(
         status='failed',error='排队超时，请检查工作进程。',finished_at=now)
 
