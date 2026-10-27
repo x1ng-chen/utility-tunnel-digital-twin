@@ -447,7 +447,7 @@ test('设备控制必须经二次确认并按一次性凭据顺序下发', async
   await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
   await page.getByRole('button', { name: '启动风扇（10秒）' }).click();
   const dialog = page.getByRole('dialog', { name: '确认下发设备命令' });
-  await expect(dialog).toContainText('启动风扇（10 秒）');
+  await expect(dialog).toContainText('接通风机供电（最长10秒）');
   expect(confirmationRequests).toBe(0);
   expect(commandRequests).toBe(0);
   await dialog.getByRole('button', { name: '取消' }).click();
@@ -727,7 +727,8 @@ test('非空历史告警在趋势图上叠加', async ({ page, request }) => {
     eventId: `alert-overlay-${run}-${index}`,
     assetCode, metricKey: 'humidity', metric: '环境湿度',
     value: index % 2 === 0 ? 78 : 60, unit: '%RH', quality: 'good',
-    recordedAt: new Date(run - (11 - index) * 60000).toISOString(),
+    // Generate alerts from fresh observations; expired backfill must not alter live alarms.
+    recordedAt: new Date(run - (11 - index) * 1000).toISOString(),
   }));
   const result = await request.post(`${base}/telemetry/`, { headers, data: { readings } });
   expect(result.ok(), await result.text()).toBe(true);
@@ -773,7 +774,7 @@ test('多页事件加载、报警次数口径与页码刷新恢复', async ({ pa
     eventId: `page-evt-${run}-${index}`,
     assetCode, metricKey: 'humidity', metric: '环境湿度',
     value: index % 2 === 0 ? 78 : 60, unit: '%RH', quality: 'good',
-    recordedAt: new Date(run - (159 - index) * 60000).toISOString(),
+    recordedAt: new Date(run - (159 - index) * 100).toISOString(),
   }));
   for (let index = 0; index < readings.length; index += 100) {
     const result = await request.post(`${base}/telemetry/`, { headers, data: { readings: readings.slice(index, index + 100) } });
