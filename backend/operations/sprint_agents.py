@@ -215,6 +215,7 @@ class Workflow:
         self.run.steps.append(step)
         self.save()
         schema='输出JSON对象：summary字符串、evidence_ids证据编号数组、missing数组。'
+        schema+=' 可选facts数组中的数值事实必须含asset_code、metric_key、value有限数字、unit、evidence_id，且引用的实际工具结果中须包含该读数；不要用手册引用替代观测。'
         if role in {'diagnosis','single'}:
             schema+=' 增加candidates数组、next_checks数组、request_evidence字符串（不需补查时为空）。动作和工单只能调用工具提出，不能声称已执行。'
         if role=='review':

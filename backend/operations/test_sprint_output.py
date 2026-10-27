@@ -6,6 +6,20 @@ from unittest.mock import patch
 
 
 class OutputBoundaryTests(SimpleTestCase):
+    def test_measurement_citation_must_actually_contain_the_reading(self):
+        from .sprint_validation import validate_facts
+        assets={'FAN-01':{'asset_code':'FAN-01','readings':[{'metric_key':'rotational.speed','value':0,'unit':'rpm'}]}}
+        evidence=[{'id':'E1','status':'ok','data':{'text':'风机手册'}},
+            {'id':'E2','status':'ok','data':{'station':{'items':[assets['FAN-01']]}}}]
+        fact={'asset_code':'FAN-01','metric_key':'rotational.speed','value':0,'unit':'rpm','evidence_id':'E1'}
+        with self.assertRaisesMessage(ValueError,'未包含'): validate_facts({'facts':[fact]},evidence,assets)
+        validate_facts({'facts':[{**fact,'evidence_id':'E2'}]},evidence,assets)
+        with self.assertRaises(ValueError): validate_facts({'facts':[{**fact,'value':False,'evidence_id':'E2'}]},evidence,assets)
+        with self.assertRaises(ValueError): validate_facts({'facts':[{'asset_code':'FAN-01','exists':False}]},evidence,assets)
+        for change in ({'controller_id':'CTRL-99'},{'unit':None},{'evidence_id':None}):
+            with self.subTest(change=change),self.assertRaises(ValueError):
+                validate_facts({'facts':[{**fact,**change}]},evidence,assets)
+
     def test_rejected_call_is_only_failure_reference(self):
         e=[{'id':'E1','status':'ok'},{'id':'E2','status':'rejected'}]
         value={'summary':'E2拒绝访问；E1为测量','evidence_ids':['E1'],'rejection_ids':['E2']}
