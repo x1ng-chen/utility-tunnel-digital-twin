@@ -8,6 +8,11 @@
 #include "device_map.h"
 #include "telemetry_encode.h"
 #include "runtime_config.h"
+/* Arduino's default 8 KiB loop stack overflows on real S3 hardware while
+ * parsing and acknowledging UART network configuration. JSON parsing, NVS
+ * readback and formatting share this task; reserve an explicit bounded stack.
+ * UART status reports its measured minimum remaining space. */
+SET_LOOP_TASK_STACK_SIZE(24576U);
 #if defined(UT_NETWORK_COMPILE_CHECK) && !defined(UT_RUNTIME_CONFIG_ONLY)
 #include "secrets.example.h"
 #define HAVE_COMPILED_NET 1

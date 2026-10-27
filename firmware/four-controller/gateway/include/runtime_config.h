@@ -18,9 +18,15 @@ class UtRuntimeConfig {
   bool ready=false,configured_=false,discard=false,restart_=false;
   const char *source="unconfigured";
   void reply(const char *id,const char *result,bool restart=false) {
-    char out[256];
-    int n=snprintf(out,sizeof out,"{\"schema\":\"ut.gateway.config-ack.v1\",\"requestId\":\"%s\",\"result\":\"%s\",\"configured\":%s,\"restart\":%s,\"source\":\"%s\",\"firmware\":\"%s\"}\n",
-      id,result,configured_?"true":"false",restart?"true":"false",source,UT_FIRMWARE_VERSION);
+    char out[384];
+#ifdef UT_RUNTIME_CONFIG_TEST
+    unsigned long stack_free=0; /* Host stub has no FreeRTOS stack measurement. */
+#else
+    /* ESP-IDF's Xtensa port reports this watermark in bytes, not words. */
+    unsigned long stack_free=(unsigned long)uxTaskGetStackHighWaterMark(nullptr);
+#endif
+    int n=snprintf(out,sizeof out,"{\"schema\":\"ut.gateway.config-ack.v1\",\"requestId\":\"%s\",\"result\":\"%s\",\"configured\":%s,\"restart\":%s,\"source\":\"%s\",\"firmware\":\"%s\",\"loopStackMinFreeBytes\":%lu}\n",
+      id,result,configured_?"true":"false",restart?"true":"false",source,UT_FIRMWARE_VERSION,stack_free);
     if(n>0&&(size_t)n<sizeof out&&Serial.availableForWrite()>=n)Serial.write((const uint8_t *)out,(size_t)n);
   }
   bool persist(const UtConfigRecord &record) {
