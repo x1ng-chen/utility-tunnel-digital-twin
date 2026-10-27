@@ -75,14 +75,14 @@ def main():
     if args.arm_emulated:
         sys.path.insert(0, str(args.dependency_dir.resolve()))
     records = []
-    for name, filename, language in (("core", "test_core.c", "c"), ("command_json", "test_command_json.cpp", "c++"), ("telemetry", "test_telemetry.cpp", "c++")):
+    for name, filename, language in (("core", "test_core.c", "c"), ("command_json", "test_command_json.cpp", "c++"), ("telemetry", "test_telemetry.cpp", "c++"),("network_config","test_network_config.cpp","c++"),("runtime_config","test_runtime_config.cpp","c++")):
         compiler_name = ("arm-none-eabi-" if args.arm_emulated else "") + ("g++" if language == "c++" else "gcc")
         compiler = shutil.which(compiler_name)
         if not compiler:
             raise RuntimeError(f"{compiler_name} is unavailable.")
         target = args.output.parent / (name + (".elf" if args.arm_emulated else (".exe" if sys.platform == "win32" else ".native")))
         command = [compiler, "-std=" + ("c++17" if language == "c++" else "c11"), "-Os", "-g", "-Wall", "-Wextra", "-Werror",
-                   "-ffunction-sections", "-fdata-sections", "-I", args.json_include, HERE / filename, "-o", target]
+                   "-ffunction-sections", "-fdata-sections", "-I", args.json_include,"-I",HERE, HERE / filename, "-o", target]
         if language == "c++":
             command += ["-fno-exceptions", "-fno-rtti", "-DARDUINOJSON_ENABLE_STD_STRING=0", "-DARDUINOJSON_ENABLE_STD_STREAM=0"]
         if args.arm_emulated:
@@ -98,6 +98,8 @@ def main():
         HERE.parent / "common/protocol.h", HERE.parent / "common/interaction.h",
         HERE.parent / "common/digital.h", HERE.parent / "common/measurements.h", HERE.parent / "common/snapshot.h",
         HERE.parent / "gateway/include/command_json.h", HERE.parent / "gateway/include/command_ledger.h", HERE.parent / "gateway/include/telemetry_encode.h", HERE.parent / "gateway/include/device_map.h",
+        HERE / "test_network_config.cpp",HERE.parent / "gateway/include/network_config.h",
+        HERE / "test_runtime_config.cpp",HERE / "test_runtime_hal.h",HERE.parent / "gateway/include/runtime_config.h",
     ]
     report = {
         "mode": "ARM machine-code emulation (portable logic only)" if args.arm_emulated else "native machine code",

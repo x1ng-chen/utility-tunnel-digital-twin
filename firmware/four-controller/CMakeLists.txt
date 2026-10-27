@@ -13,6 +13,21 @@ endif()
 
 set(TARGET "four_ctrl0${BOARD_ID}")
 set(CMAKE_C_STANDARD 11)
+set(UT_BUILD_ID "development" CACHE STRING "Release source fingerprint")
+set(UT_RELEASE_BUILD "1" CACHE STRING "Reject diagnostic-only builds")
+foreach(PAIR IN ITEMS "UT_WATCHDOG_ENABLED=1" "FAN_PWM_INVERTED=1" "RELAY_ACTIVE_HIGH=1" "FAN_PULSES_PER_REV=2" "FAN_TACH_VERIFIED=0" "INA_SHUNT_MICROOHMS=100000" "INA_CURRENT_LSB_UA=10" "INA_CALIBRATION_VERIFIED=0")
+  string(REPLACE "=" ";" PARTS "${PAIR}")
+  list(GET PARTS 0 KEY)
+  list(GET PARTS 1 DEFAULT)
+  set(${KEY} "${DEFAULT}" CACHE STRING "Explicit hardware/release parameter")
+  if(NOT "${${KEY}}" MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "${KEY} must be a non-negative integer")
+  endif()
+  list(APPEND RELEASE_DEFINITIONS "${KEY}=${${KEY}}")
+endforeach()
+if(NOT UT_BUILD_ID MATCHES "^[a-zA-Z0-9._-]+$")
+  message(FATAL_ERROR "Invalid UT_BUILD_ID")
+endif()
 
 get_filename_component(BASE "${CMAKE_CURRENT_LIST_DIR}/../stm32f103rct6" ABSOLUTE)
 set(HAL "${BASE}/Drivers/STM32F1xx_HAL_Driver")
@@ -43,7 +58,8 @@ target_include_directories(${TARGET}.elf PRIVATE
     "${BASE}/Drivers/CMSIS/Include"
     "${BASE}/Drivers/CMSIS/Device/ST/STM32F1xx/Include")
 target_compile_definitions(${TARGET}.elf PRIVATE
-    USE_HAL_DRIVER STM32F103xE BOARD_ID=${BOARD_ID})
+    USE_HAL_DRIVER STM32F103xE BOARD_ID=${BOARD_ID}
+    UT_RELEASE_BUILD=${UT_RELEASE_BUILD} UT_BUILD_ID="${UT_BUILD_ID}" ${RELEASE_DEFINITIONS})
 target_compile_options(${TARGET}.elf PRIVATE
     -mcpu=cortex-m3 -mthumb -Os -g3 -Wall -Wextra -Werror
     -ffunction-sections -fdata-sections)

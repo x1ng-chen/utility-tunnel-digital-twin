@@ -4,7 +4,7 @@
 #include "stm32f1xx_hal.h"
 
 /* 四主控固件通过 BOARD_ID 选择板型：1 左下、2 右下、3 右上、4 左上。
- * 引脚依据 docs/hardware/four-controller-wiring-20261026/README.md（V0.3）。 */
+ * 引脚依据 docs/hardware/four-controller-wiring-20261026/README.md（V0.4）。 */
 #ifndef BOARD_ID
 #error "BOARD_ID must be defined as 1, 2, 3 or 4"
 #endif

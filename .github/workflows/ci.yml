@@ -92,7 +92,7 @@ jobs:
       - name: Compile offline and network code without credentials or hardware
         run: >-
           python -m platformio run --project-dir firmware/four-controller/gateway
-          -e s3_four_gateway -e s3_four_gateway_network_check
+          -e s3_four_gateway -e s3_four_gateway_network_check -e s3_four_gateway_release
       - name: Check offline diagnostic parsing and identity mapping
         run: python -m unittest discover -s firmware/four-controller/tests -p 'test_*.py'
       - name: Execute native C protocol/control and real JSON parser tests

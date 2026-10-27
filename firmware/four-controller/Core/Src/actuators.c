@@ -1,6 +1,7 @@
 #include "actuators.h"
 #include "board_config.h"
 #include "board_io.h"
+#include "release_profile.h"
 #include "../../common/measurements.h"
 #include "stm32f1xx_hal.h"
 #include <string.h>
@@ -142,7 +143,7 @@ static void FanPwm_Set(uint8_t percent)
   if (percent > 100U) percent = 100U;
   fan_percent = percent;
   /* 经外部 NPN 驱动，MCU 波形反相：晶体管截止=风机端高电平=运行。 */
-  counts = ((uint32_t)(100U - percent) * (FAN_PWM_TIMER_PERIOD + 1U) + 50U) / 100U;
+  counts = ((uint32_t)(FAN_PWM_INVERTED?100U-percent:percent) * (FAN_PWM_TIMER_PERIOD + 1U) + 50U) / 100U;
   FAN_CCR = counts;
 }
 
@@ -182,8 +183,9 @@ void Actuators_Init(void)
     gpio.Pin = RELAY_PIN;
     gpio.Mode = GPIO_MODE_OUTPUT_PP;
     gpio.Speed = GPIO_SPEED_FREQ_LOW;
+    /* Set the inactive latch before enabling the output driver. */
+    HAL_GPIO_WritePin(RELAY_PORT,RELAY_PIN,RELAY_ACTIVE_HIGH?GPIO_PIN_RESET:GPIO_PIN_SET);
     HAL_GPIO_Init(RELAY_PORT, &gpio);
-    HAL_GPIO_WritePin(RELAY_PORT, RELAY_PIN, GPIO_PIN_RESET);
     relay_on = 0U;
     tach_last_at = HAL_GetTick();
   }
@@ -277,7 +279,7 @@ void Actuators_SetRelay(uint8_t on)
 {
   if (!board_config.has_fan) return;
   relay_on = on ? 1U : 0U;
-  HAL_GPIO_WritePin(RELAY_PORT, RELAY_PIN, relay_on ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(RELAY_PORT, RELAY_PIN, (relay_on==RELAY_ACTIVE_HIGH)?GPIO_PIN_SET:GPIO_PIN_RESET);
 }
 
 uint8_t Actuators_RelayOn(void)

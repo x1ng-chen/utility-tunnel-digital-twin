@@ -6,6 +6,7 @@
 #include "modbus_slave.h"
 #include "screen.h"
 #include "menu.h"
+#include "release_profile.h"
 #include <stdio.h>
 
 #define SAMPLE_INTERVAL_MS 2000U
@@ -15,6 +16,24 @@ static UART_HandleTypeDef huart1;
 static uint16_t sequence;
 
 static uint32_t last_log_at;
+static uint32_t reset_flags;
+#define UT_STRING_(x) #x
+#define UT_STRING(x) UT_STRING_(x)
+static const char image_identity[]="UT-IMAGE:STM32:CTRL-0" UT_STRING(BOARD_ID) ":" UT_FIRMWARE_VERSION ":" UT_BUILD_ID;
+void Error_Handler(void);
+
+static void Watchdog_Init(void)
+{
+#if UT_WATCHDOG_ENABLED
+  /* LSI runs independently of IRQs. Nominal 4s at 40kHz; actual timeout is
+   * oscillator dependent. Feed only from the complete main service loop. */
+  __HAL_DBGMCU_FREEZE_IWDG();
+  IWDG->KR=0xCCCCU;IWDG->KR=0x5555U;IWDG->PR=4U;IWDG->RLR=2499U;
+  uint32_t at=HAL_GetTick();
+  while(IWDG->SR){if((uint32_t)(HAL_GetTick()-at)>100U)Error_Handler();}
+  IWDG->KR=0xAAAAU;
+#endif
+}
 
 void Error_Handler(void)
 {
@@ -98,6 +117,8 @@ int main(void)
 {
   HAL_Init();
   SystemClock_Config();
+  reset_flags=RCC->CSR;__HAL_RCC_CLEAR_RESET_FLAGS();
+  Watchdog_Init();
   DebugUart_Init();
 
 #ifdef ONLY_MODBUS
@@ -109,6 +130,9 @@ int main(void)
     for (;;)
     {
       Modbus_Poll();
+#if UT_WATCHDOG_ENABLED
+      IWDG->KR=0xAAAAU;
+#endif
       if ((uint32_t)(HAL_GetTick() - last_ping) >= 2000U)
       {
         last_ping = HAL_GetTick();
@@ -129,10 +153,14 @@ int main(void)
 #endif
 
   {
-    char banner[96];
+    char banner[192];
+    (void)HAL_UART_Transmit(&huart1,(uint8_t *)image_identity,sizeof image_identity-1U,50U);
+    const uint8_t newline[]="\r\n";
+    (void)HAL_UART_Transmit(&huart1,(uint8_t *)newline,2U,10U);
     int size = snprintf(banner, sizeof banner,
-      "FOUR_CTRL CTRL-0%u BOOT sensors=%u bus=PA2/PA3 19200-8E1\r\n",
-      (unsigned)BOARD_ID, (unsigned)BoardIo_SampleCount());
+      "FOUR_CTRL CTRL-0%u BOOT fw=%s build=%s sensors=%u bus=PA2/PA3 19200-8E1 reset=%08lx wdg=%u\r\n",
+      (unsigned)BOARD_ID,UT_FIRMWARE_VERSION,UT_BUILD_ID,(unsigned)BoardIo_SampleCount(),
+      (unsigned long)reset_flags,(unsigned)UT_WATCHDOG_ENABLED);
     if (size > 0 && (size_t)size < sizeof banner)
       (void)HAL_UART_Transmit(&huart1, (uint8_t *)banner, (uint16_t)size, 50U);
   }
@@ -153,5 +181,8 @@ int main(void)
       last_screen=now;
     }
     if((uint32_t)(now-last_log_at)>=LOG_INTERVAL_MS) {Log_Status();last_log_at=now;}
+#if UT_WATCHDOG_ENABLED
+    IWDG->KR=0xAAAAU;
+#endif
   }
 }

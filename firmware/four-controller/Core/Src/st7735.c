@@ -1,6 +1,7 @@
 /* ST7735 IPS LCD: hardware SPI3, RGB565, bounded peripheral waits. */
 #include "st7735.h"
 #include "st7735_font.h"
+#include "ui_zh_font.h"
 
 /* Hardware SPI3. Peripheral failures latch a fault rather than hanging. */
 static uint8_t spi_fault;
@@ -214,5 +215,34 @@ void ST7735_DrawString(int x, int y, const char *str, uint16_t color, uint16_t b
         ST7735_DrawChar(cx, cy, *str, color, bg);
         cx += 8;
         str++;
+    }
+}
+
+/* One bounded 128x16 row, with padded background. No full-screen redraw. */
+void ST7735_DrawUtf8Line(int y,const char *text,uint16_t color,uint16_t bg)
+{
+    if(!text||y<0||y+16>LCD_HEIGHT)return;
+    struct Cell {const uint8_t *bits;uint8_t width;} cells[16];
+    unsigned count=0,width=0;
+    const unsigned char *p=(const unsigned char *)text;
+    while(*p&&count<16U) {
+        uint16_t code=*p++;uint8_t w=8U;const uint8_t *bits=NULL;
+        if(code>=0xE0U&&code<=0xEFU&&p[0]&&p[1]&&(p[0]&0xC0U)==0x80U&&(p[1]&0xC0U)==0x80U) {
+            code=(uint16_t)(((code&15U)<<12)|((p[0]&63U)<<6)|(p[1]&63U));p+=2;w=16U;
+            for(unsigned i=0;i<UT_UI_GLYPH_COUNT;++i)if(UT_UI_GLYPHS[i].codepoint==code){bits=UT_UI_GLYPHS[i].bitmap;break;}
+        }
+        if(!bits){w=8U;if(code<32U||code>126U)code='?';bits=FONT8x8[code-32U];}
+        if(width+w>LCD_WIDTH)break;
+        cells[count].bits=bits;cells[count++].width=w;width+=w;
+    }
+    ST7735_SetWindow(0,y,LCD_WIDTH-1,y+15);
+    for(unsigned row=0;row<16U;++row) {
+        unsigned x=0;
+        for(unsigned i=0;i<count;++i)for(unsigned col=0;col<cells[i].width;++col) {
+            uint8_t bits=cells[i].bits[cells[i].width==16U?row*2U+col/8U:row/2U];
+            uint16_t pixel=(bits&(0x80U>>(col%8U)))?color:bg;
+            ST7735_Data(pixel>>8);ST7735_Data(pixel&255U);++x;
+        }
+        while(x++<LCD_WIDTH){ST7735_Data(bg>>8);ST7735_Data(bg&255U);}
     }
 }

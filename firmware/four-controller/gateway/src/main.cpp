@@ -7,15 +7,17 @@
 #include "command_ledger.h"
 #include "device_map.h"
 #include "telemetry_encode.h"
-#if defined(UT_NETWORK_COMPILE_CHECK)
+#include "runtime_config.h"
+#if defined(UT_NETWORK_COMPILE_CHECK) && !defined(UT_RUNTIME_CONFIG_ONLY)
 #include "secrets.example.h"
-#define HAVE_NET 1
-#elif __has_include("secrets.h")
+#define HAVE_COMPILED_NET 1
+#elif !defined(UT_RUNTIME_CONFIG_ONLY) && __has_include("secrets.h")
 #include "secrets.h"
-#define HAVE_NET 1
+#define HAVE_COMPILED_NET 1
 #else
-#define HAVE_NET 0
+#define HAVE_COMPILED_NET 0
 #endif
+#define HAVE_NET 1
 #if HAVE_NET
 #include <WiFi.h>
 #include <PubSubClient.h>
@@ -25,6 +27,7 @@ static HardwareSerial bus(1);
 static uint32_t gateway_session,command_nonce,poll_at,bus_errors;
 static std::atomic<uint32_t> publish_drops{0};
 static char boot_id[24];
+static UtRuntimeConfig network_config;
 static const uint8_t order[4]={4,3,2,1};
 
 struct Node {
@@ -268,9 +271,10 @@ static void on_command(char *topic,uint8_t *payload,unsigned int length)
 }
 static void network_task(void *)
 {
-  WiFi.mode(WIFI_STA);WiFi.setAutoReconnect(true);WiFi.begin(WIFI_SSID,WIFI_PASSWORD);
-  configTime(0,0,"pool.ntp.org","time.cloudflare.com");
-  mqtt.setServer(MQTT_HOST,MQTT_PORT);mqtt.setCallback(on_command);
+  const UtNetworkConfig &config=network_config.value();
+  WiFi.mode(WIFI_STA);WiFi.setAutoReconnect(true);WiFi.begin(config.ssid,config.wifiPassword);
+  configTime(0,0,config.ntpServer,"time.cloudflare.com");
+  mqtt.setServer(config.mqttHost,config.mqttPort);mqtt.setCallback(on_command);
   mqtt.setBufferSize(4096);mqtt.setSocketTimeout(1);mqtt.setKeepAlive(15);
   transport.setTimeout(1000);
   NetMessage msg;uint32_t attempt=millis()-5000U;
@@ -278,7 +282,7 @@ static void network_task(void *)
   for(;;) {
     if(WiFi.status()==WL_CONNECTED&&!mqtt.connected()&&ut_due(millis(),attempt,5000U)) {
       attempt=millis();
-      if(mqtt.connect(client_id,MQTT_USERNAME,MQTT_PASSWORD,"ut/v1/GW-01/status",1,true,"{\"online\":false}")) {
+      if(mqtt.connect(client_id,config.mqttUser,config.mqttPassword,"ut/v1/GW-01/status",1,true,"{\"online\":false}")) {
         for(unsigned i=1;i<=4U;i++){char t[48];snprintf(t,sizeof t,"ut/v1/CTRL-%02u/cmd",i);mqtt.subscribe(t,1);}
         mqtt.publish("ut/v1/GW-01/status","{\"online\":true}",true);
       }
@@ -296,27 +300,37 @@ static void network_task(void *)
 #endif
 void setup()
 {
-  Serial.setTxBufferSize(8192);Serial.begin(115200);bus.setRxBufferSize(512);bus.begin(19200,SERIAL_8E1,18,17);
+  Serial.setTxBufferSize(8192);Serial.setRxBufferSize(2048);Serial.begin(115200);bus.setRxBufferSize(512);bus.begin(19200,SERIAL_8E1,18,17);
+  UtNetworkConfig compiled{};
+#if HAVE_COMPILED_NET
+  strlcpy(compiled.ssid,WIFI_SSID,sizeof compiled.ssid);strlcpy(compiled.wifiPassword,WIFI_PASSWORD,sizeof compiled.wifiPassword);
+  strlcpy(compiled.mqttHost,MQTT_HOST,sizeof compiled.mqttHost);compiled.mqttPort=MQTT_PORT;
+  strlcpy(compiled.mqttUser,MQTT_USERNAME,sizeof compiled.mqttUser);strlcpy(compiled.mqttPassword,MQTT_PASSWORD,sizeof compiled.mqttPassword);
+  strlcpy(compiled.ntpServer,"pool.ntp.org",sizeof compiled.ntpServer);
+#endif
+  network_config.begin(HAVE_COMPILED_NET?&compiled:nullptr);memset(&compiled,0,sizeof compiled);
   load_commands();
   gateway_session=esp_random()|1U;snprintf(boot_id,sizeof boot_id,"%08lx%08lx",(unsigned long)gateway_session,(unsigned long)esp_random());
   telemetry_queue=xQueueCreate(8,sizeof(NetMessage));ack_queue=xQueueCreate(8,sizeof(NetMessage));command_queue=xQueueCreate(8,sizeof(UtRequest));
   if(!telemetry_queue||!ack_queue||!command_queue){Serial.println("QUEUE_ALLOCATION_FAILED");for(;;)delay(1000);}
 #if HAVE_NET
-  if(xTaskCreatePinnedToCore(network_task,"ut-net",16384,nullptr,1,nullptr,0)!=pdPASS){Serial.println("NETWORK_TASK_FAILED");}
+  if(network_config.configured()&&xTaskCreatePinnedToCore(network_task,"ut-net",16384,nullptr,1,nullptr,0)!=pdPASS){Serial.println("NETWORK_TASK_FAILED");}
 #endif
-  Serial.println("FOUR_GATEWAY_V2.0 19200-8E1 network isolated from bus");
+  Serial.printf("FOUR_GATEWAY fw=%s build=%s network_configured=%u bus=19200-8E1\n",UT_FIRMWARE_VERSION,UT_BUILD_ID,network_config.configured()?1U:0U);
+  Serial.println("UT-IMAGE:ESP32-S3:GW-01:" UT_FIRMWARE_VERSION ":" UT_BUILD_ID);
 }
 void loop()
 {
   static unsigned next;
+  network_config.poll();
+  if(network_config.restarting()){delay(1);return;}
   UtRequest r;
   if(xQueueReceive(command_queue,&r,0)==pdTRUE)process_command(r);
   if(ut_due(millis(),poll_at,500U)){poll_at=millis();poll(order[next++%4U]);}
-#if !HAVE_NET
-  /* Offline firmware is diagnostic only; it does not pretend to publish. */
-  NetMessage discarded;
-  while(xQueueReceive(telemetry_queue,&discarded,0)==pdTRUE){}
-  while(xQueueReceive(ack_queue,&discarded,0)==pdTRUE){}
-#endif
+  if(!network_config.configured()) {
+    NetMessage discarded;
+    while(xQueueReceive(telemetry_queue,&discarded,0)==pdTRUE){}
+    while(xQueueReceive(ack_queue,&discarded,0)==pdTRUE){}
+  }
   delay(1);
 }

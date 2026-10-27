@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "layoutVersion": "four-controller-20261026.1",
+  "common": {
+    "UT_WATCHDOG_ENABLED": 1,
+    "FAN_PWM_INVERTED": 1,
+    "RELAY_ACTIVE_HIGH": 1,
+    "FAN_PULSES_PER_REV": 2,
+    "FAN_TACH_VERIFIED": 0,
+    "INA_SHUNT_MICROOHMS": 100000,
+    "INA_CURRENT_LSB_UA": 10,
+    "INA_CALIBRATION_VERIFIED": 0
+  },
+  "boards": {"1": {}, "2": {}, "3": {}, "4": {}},
+  "verificationReferences": {},
+  "notes": "Existing NPN-inverted PWM and active-high relay wiring. PPR and INA calibration remain unverified, so converted feedback is suspect. No Wi-Fi or MQTT credentials belong in this file."
+}
