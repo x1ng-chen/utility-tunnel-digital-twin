@@ -127,9 +127,10 @@ def search(query, include_history=False):
             if include_history or docs[i]['sourceKind']!='historical_case'),key=lambda x:x[1],reverse=True)[:10]
         for rank,(i,_) in enumerate(dense,1): merged[i]=merged.get(i,0)+1/(60+rank)
     hits=[docs[i] for i in sorted(merged,key=merged.get,reverse=True)[:5]]
+    standards_loaded=any(d['sourceKind']=='standard_clause' for d in docs)
     return {'knowledgeVersion':version(),'mode':'hybrid_bm25_bge' if model else 'keyword_fallback',
         'embeddingModel':MODEL if model else None,'fallbackReason':reason,'hits':hits,
-        'standardCoverage':'partial_verified_excerpts_only',
+        'standardCoverage':'partial_verified_excerpts_only' if standards_loaded else 'none_verified',
         'missing':['GB/T 50838-2015（2024年版）修订正文尚未核实完整，未作为当前条文依据。',
-            'GB 51354-2019仅收录逐页核实的选定条款摘要；不代表全文覆盖或工程合规审查。'],
+            'GB 51354-2019仅收录逐页核实的选定条款摘要；不代表全文覆盖或工程合规审查。' if standards_loaded else '当前部署未加载GB 51354-2019已核验片段，不能据此引用条文。'],
         'boundary':'检索结果是低信任资料；历史案例不代表当前接线；命中不等于建议正确。'}

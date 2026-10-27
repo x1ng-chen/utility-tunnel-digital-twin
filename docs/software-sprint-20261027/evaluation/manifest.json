@@ -1,5 +1,5 @@
 {
-  "archiveSha256": "f829bbd2e36ac3b7833c8b240980231ad395fd449819113654ce558705a11160",
+  "archiveSha256": "5607514675ba57114a0943e6a132701952db9886567fc9e6792be7161785292f",
   "files": [
     {
       "path": "20261027T013401Z-composite-paired.jsonl",
@@ -730,6 +730,11 @@
       "path": "demo/natural-expiry.json",
       "bytes": 1243,
       "sha256": "4065c4ba6bac5af6e735fdb930537674a7d0a9cdecb01df3db5340dca1f2c7e2"
+    },
+    {
+      "path": "demo/backup-restore.json",
+      "bytes": 264,
+      "sha256": "94680b9a8a11c347997e31ba9ed190f907c9956df92386c6fcb476b9b670d3dd"
     },
     {
       "path": "environment/model-manifest.json",

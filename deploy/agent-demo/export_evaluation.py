@@ -35,22 +35,25 @@ with zipfile.ZipFile(archive_path,'w',zipfile.ZIP_DEFLATED) as archive:
                 run=row.get('run',{});runtime=run.get('runtime',{});result=run.get('result',{})
                 ms=runtime.get('elapsedMs',row.get('elapsedMs'))
                 if ms is not None: elapsed.append(ms)
-                calls+=runtime.get('modelCalls',row.get('modelCalls',0))
+                controlled=row.get('controlledFaultInjection',False)
+                calls+=0 if controlled else runtime.get('modelCalls',row.get('modelCalls',0))
                 usage=runtime.get('tokens') or row.get('provider',{}).get('usage')
                 if usage: known_tokens+=usage.get('total_tokens',0)
-                if not runtime.get('tokenUsageComplete',bool(row.get('provider',{}).get('usage'))): unknown_usage+=1
+                if not controlled and not runtime.get('tokenUsageComplete',bool(row.get('provider',{}).get('usage'))): unknown_usage+=1
                 flat.append({'batch':file.name,'caseId':row.get('caseId',row.get('packet','')),'mode':mode,
                     'status':row['status'],'review':result.get('review',{}).get('decision'),'taskOutcome':result.get('taskOutcome'),
-                    'modelCalls':runtime.get('modelCalls',row.get('modelCalls',0)),'elapsedMs':ms,
+                    'providerRequestAttempts':0 if controlled else runtime.get('modelCalls',row.get('modelCalls',0)),
+                    'controlledFaultInjection':controlled,'elapsedMs':ms,
                     'proposals':len(result.get('proposals',[])),'error':run.get('error',row.get('error','')),
                     'humanScoring':'PENDING','factAccuracy':None})
             summary.append({'batch':file.name,'mode':mode,'rows':len(group),
                 'statuses':dict(Counter(r['status'] for r in group)),
                 'reviewDecisions':dict(Counter(r.get('run',{}).get('result',{}).get('review',{}).get('decision','none') for r in group)),
-                'modelCalls':calls,'knownTotalTokens':known_tokens,'rowsWithUnknownOrIncompleteUsage':unknown_usage,
+                'modelCalls':calls,'controlledFaultCases':sum(bool(r.get('controlledFaultInjection')) for r in group),
+                'knownTotalTokens':known_tokens,'rowsWithUnknownOrIncompleteUsage':unknown_usage,
                 'medianElapsedMs':statistics.median(elapsed) if elapsed else None,
                 'humanScoring':'PENDING','factualAccuracy':None,'billVerifiedCost':None})
-    for pattern in ('live-control-*.json','retrieval-checks.json','browser/result.json','concurrent-soak.json','natural-expiry.json'):
+    for pattern in ('live-control-*.json','retrieval-checks.json','browser/result.json','concurrent-soak.json','natural-expiry.json','backup-restore.json'):
         for file in (ROOT/'.agent-demo').glob(pattern):
             blob=file.read_bytes()
             if any(value.encode() in blob for value in secrets): raise SystemExit('Credential match in '+file.name)
@@ -80,10 +83,10 @@ with (target/'human-scoring.csv').open('w',encoding='utf-8-sig',newline='') as s
     for case in ('INS-01','INS-02','INS-03','INS-04','DIA-01','DIA-02','DIA-03','DIA-04','ORD-01','ORD-02','ORD-03','ORD-04'):
         for group in ('human','ordinary_model','single','multi'): writer.writerow({'caseId':case,'group':group})
 md=['# 实际模型与仿真执行记录','','下表为真实请求生命周期统计，**不是人工事实准确率或获奖效果证明**。原始响应、失败、工具轨迹和固定数据包见 `actual-traces.zip`，散列见 `manifest.json`。',
-    '','| 批次 | 方式 | 记录数 | 状态统计 | 模型请求次数（含失败） | 已知Token | 耗时中位数 ms |','|---|---|---:|---|---:|---:|---:|']
+    '','| 批次 | 方式 | 记录数 | 状态统计 | 供应商请求次数（含失败、排除桩） | 已知Token | 耗时中位数 ms |','|---|---|---:|---|---:|---:|---:|']
 for row in summary:
     md.append('| '+row['batch']+' | '+row['mode']+' | '+str(row['rows'])+' | '+json.dumps(row['statuses'],ensure_ascii=False)+' | '+str(row['modelCalls'])+' | '+str(row['knownTotalTokens'])+' | '+str(row['medianElapsedMs'])+' |')
-md+=['','首次失败和修订后重测分批保留。人工组与人工评分未运行；模板见 `human-scoring.csv`。回执为模拟，不能计入真机通过。','',
+md+=['','首次失败和修订后重测分批保留。S05为显式受控超时桩，不计供应商请求或真实模型成绩；权限拒绝也不调用模型。人工组与人工评分未运行；模板见 `human-scoring.csv`。回执为模拟，不能计入真机通过。','',
     '普通问答不使用工具；读取同批原始数据包和手册。单/三Agent有同一总预算；简单巡检只取证，复杂任务才运行三个角色。',
     '独立复核结果与任务完成度另见 `summary.json`。成本不按猜测单价推算，实际账单仍待核对。']
 (target/'README.md').write_text('\n'.join(md)+'\n',encoding='utf-8')

@@ -12,6 +12,8 @@ import subprocess
 import sys
 import time
 import zipfile
+from uuid import uuid4
+from urllib.request import urlopen
 
 ROOT=Path(__file__).resolve().parents[2]
 STATE=ROOT/'.agent-demo'
@@ -65,7 +67,7 @@ def start():
     commands=[('api',[PYTHON,manage,'runserver','127.0.0.1:18927','--noreload']),
         ('sampler',[PYTHON,manage,'run_agent_demo']),('worker',[PYTHON,manage,'run_agent_worker','--warm-knowledge']),
         ('web',[node,vite,'--host','127.0.0.1','--port','5187','--strictPort'])]
-    launched=[]
+    launched=[];children=[]
     try:
         for name,command in commands:
             child_env={**env,'VITE_API_BASE_URL':'http://127.0.0.1:18927/api'}
@@ -74,7 +76,16 @@ def start():
                     env=child_env,stdout=log,stderr=subprocess.STDOUT,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
             launched.append({'name':name,'pid':p.pid})
-        time.sleep(3)
+            children.append(p)
+        deadline=time.monotonic()+30
+        while time.monotonic()<deadline:
+            if any(p.poll() is not None for p in children): raise SystemExit('A demo process exited; inspect .agent-demo/*.log.')
+            try:
+                with urlopen('http://127.0.0.1:18927/api/health/',timeout=1) as response: assert response.status==200
+                with urlopen('http://127.0.0.1:5187/',timeout=1) as response: assert response.status==200
+                break
+            except (OSError,AssertionError): time.sleep(.3)
+        else: raise SystemExit('Demo readiness timed out; inspect logs before retrying.')
     finally:
         (STATE/'processes.json').write_text(json.dumps(launched),encoding='utf-8')
     print('http://127.0.0.1:5187/agent-workbench ; accounts: .agent-demo/users.json (keep private)')
@@ -106,7 +117,7 @@ def offline():
 
 def backup():
     offline();folder=STATE/'backups';folder.mkdir(exist_ok=True)
-    target=folder/(time.strftime('%Y%m%d-%H%M%S')+'.zip')
+    target=folder/(time.strftime('%Y%m%d-%H%M%S')+'-'+uuid4().hex[:8]+'.zip')
     with zipfile.ZipFile(target,'w',zipfile.ZIP_DEFLATED) as archive:
         for name in ('db.sqlite3','users.json','scenario.json'):
             file=STATE/name
@@ -114,6 +125,7 @@ def backup():
         for file in (STATE/'media').rglob('*'):
             if file.is_file(): archive.write(file,str(file.relative_to(STATE)))
     print(target)
+    return target
 
 
 def restore(source):
