@@ -124,6 +124,8 @@ class RunTests(TestCase):
             Asset.objects.create(code=c,name=c,zone='风机',asset_type='fan')
 
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear() # each test receives a fresh throttling window
         self.client=APIClient(); self.client.force_authenticate(self.user)
 
     def create(self,key=None,**payload):

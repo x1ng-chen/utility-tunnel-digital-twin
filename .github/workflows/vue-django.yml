@@ -64,7 +64,7 @@ jobs:
         run: docker compose -f deploy/agent-demo/compose.yml up --build -d
       - name: Verify local API and isolation
         run: |
-          curl --fail --retry 30 --retry-delay 2 --retry-connrefused http://127.0.0.1:5187/api/health/
+          curl --fail --retry 30 --retry-delay 2 --retry-all-errors http://127.0.0.1:5187/api/health/
           docker compose -f deploy/agent-demo/compose.yml exec -T api python manage.py shell -c "from operations.sprint_demo import guard; from django.conf import settings; assert str(guard()) == '/app/.agent-demo'; assert not settings.DEEPSEEK_API_KEY"
       - name: Container logs and cleanup
         if: always()

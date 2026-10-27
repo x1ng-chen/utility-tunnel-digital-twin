@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 secrets.*
+!firmware/four-controller/gateway/include/secrets.example.h
 private.*
 firmware/esp8266-01s/include/secrets.h
 

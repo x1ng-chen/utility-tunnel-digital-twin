@@ -26,6 +26,13 @@ const laborSeconds = ref(60), hourlyRate = ref(30);
 const roiEnabled=ref(false), investment=ref(1000), annualBenefit=ref(100), annualOperatingCost=ref(50);
 const confirmation = ref<{ type: 'command' | 'order'; data: Json; index: number } | null>(null);
 const active = computed(() => !!run.value && ['queued', 'running'].includes(run.value.status));
+const inspected = computed(() => {
+  const items=run.value?.result.evidence || [];
+  const full=items.find(e=>e.status==='ok' && e.tool==='station_snapshot');
+  if(full) return full.data as Json;
+  const station=items.find(e=>e.status==='ok' && e.tool==='collect_station_evidence');
+  return ((station?.data as Json | undefined)?.station as Json | undefined) || null;
+});
 const roles: Record<string, string> = { evidence: '取证Agent', diagnosis: '诊断Agent', review: '复核Agent', single: '单Agent基线' };
 const outcomes:Record<string,string>={reviewed:'已独立复核',observed:'已取得巡检证据',single_agent_unreviewed:'单Agent结果，未经独立复核',unresolved_review:'复核意见尚未解决',existing_work_order:'已有工单，未重复生成',no_confirmable_draft:'未形成可确认工单',no_confirmable_action:'未形成可确认动作'};
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -131,6 +138,7 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
           <p>{{ step.output?.summary || '正在执行实际查询与模型调用…' }}</p><details><summary>本阶段证据和调用记录</summary><pre>{{ JSON.stringify(step, null, 2) }}</pre></details></li></ol>
         <h3 v-if="run.result.reply">本次结论</h3><p v-if="run.result.taskOutcome">任务结果：{{ outcomes[run.result.taskOutcome] || run.result.taskOutcome }}</p><p>{{ run.result.reply }}</p><p v-if="run.result.review">复核：{{ run.result.review.decision }} · {{ run.result.review.summary }}。复核通过不等于现场验收或全部事实正确。</p>
         <details v-if="run.result.evidence?.length"><summary>查看原始证据</summary><pre>{{ JSON.stringify(run.result.evidence, null, 2) }}</pre></details>
+        <section v-if="inspected"><h3>本轮取证覆盖</h3><p>预期 {{ inspected.expected_sensor_count }} 个物理模块 · 已登记 {{ inspected.registered_sensor_count }} · 场景观测可用 {{ inspected.scenario_usable_sensor_count }} · 数据异常 {{ inspected.data_issue_sensor_count }}。场景可用不代表现场实测。</p><div class="sensor-table"><table><thead><tr><th>检测站</th><th>设备</th><th>主控</th><th>观测状态／缺项</th><th>三维绑定</th></tr></thead><tbody><tr v-for="sensor in (inspected.items as Json[] || [])" :key="String(sensor.assetCode)"><td>{{ sensor.stationId }}</td><td>{{ sensor.assetCode }}</td><td>{{ sensor.controllerId }}</td><td>{{ sensor.observation_state }} {{ sensor.data_issues }}</td><td>{{ sensor.mapping_status }}</td></tr></tbody></table></div></section>
         <div class="controls"><RouterLink v-for="location in run.result.locations || []" :key="location.assetCode" :to="{path:'/twin-3d',query:{asset:location.assetCode,source:'agent'}}">{{ location.stationId }} · {{ location.assetCode }} · {{ location.mappingStatus }}</RouterLink></div>
         <div v-if="canWrite"><article v-for="(proposal, index) in run.result.proposals || []" :key="index"><h3>待确认工单：{{ proposal.title }}</h3><p>{{ proposal.description }}</p><button @click="confirmation = {type:'order',data:proposal,index}">审阅工单草案</button></article>
           <article v-for="(proposal, index) in run.result.controlProposals || []" :key="index"><p>仿真动作：{{ proposal.asset_code }} · {{ proposal.intent }} → {{ proposal.value }}</p><button :disabled="!session" @click="previewCommand(index)">审阅仿真动作</button></article></div>
@@ -158,4 +166,5 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
 
 <style scoped>
 .agent-workbench{min-width:0;grid-template-columns:minmax(0,1fr)}.panel{min-width:0}.check-label{display:flex;align-items:center;gap:8px}.check-label input[type=checkbox]{width:16px;height:16px;padding:0;flex:0 0 16px}
+.sensor-table{max-width:100%;overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:8px;border-bottom:1px solid #d7e1ea;overflow-wrap:anywhere}th{white-space:nowrap}
 </style>
