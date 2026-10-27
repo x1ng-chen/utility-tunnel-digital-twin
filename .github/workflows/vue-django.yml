@@ -13,6 +13,8 @@ on:
       - 'docs/software-quality-gates.md'
       - 'deploy/postgres/**'
       - 'deploy/containers/**'
+      - 'deploy/agent-demo/**'
+      - 'docs/software-sprint-20261027/**'
       - 'deploy/start-local.ps1'
       - 'deploy/LOCAL-START.md'
       - 'services/iotda-gateway/**'
@@ -32,6 +34,8 @@ on:
       - 'docs/software-quality-gates.md'
       - 'deploy/postgres/**'
       - 'deploy/containers/**'
+      - 'deploy/agent-demo/**'
+      - 'docs/software-sprint-20261027/**'
       - 'deploy/start-local.ps1'
       - 'deploy/LOCAL-START.md'
       - 'services/iotda-gateway/**'
@@ -43,6 +47,30 @@ permissions:
   contents: read
 
 jobs:
+  agent-demo-package:
+    name: Isolated Agent demo containers (no paid calls)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {lfs: false}
+      - name: Fetch only the demonstration GLB
+        run: git lfs pull --include="model/square-five-station-v17-fan-ready/*.glb" --exclude=""
+      - name: Prepare empty local model configuration
+        run: |
+          mkdir -p .agent-demo .agent-knowledge
+          cp deploy/agent-demo/.env.example .agent-demo/.env
+      - name: Build and start the isolated package
+        run: docker compose -f deploy/agent-demo/compose.yml up --build -d
+      - name: Verify local API and isolation
+        run: |
+          curl --fail --retry 30 --retry-delay 2 --retry-connrefused http://127.0.0.1:5187/api/health/
+          docker compose -f deploy/agent-demo/compose.yml exec -T api python manage.py shell -c "from operations.sprint_demo import guard; from django.conf import settings; assert str(guard()) == '/app/.agent-demo'; assert not settings.DEEPSEEK_API_KEY"
+      - name: Container logs and cleanup
+        if: always()
+        run: |
+          docker compose -f deploy/agent-demo/compose.yml logs --no-color --tail=30
+          docker compose -f deploy/agent-demo/compose.yml down
   model-release-contract:
     name: Candidate binary and runtime contract
     runs-on: ubuntu-latest

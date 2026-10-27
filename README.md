@@ -1,5 +1,11 @@
 <div align="center">
 
+## 三Agent软件参赛版（2026-10-27）
+
+独立取证/诊断/复核、版本化知识检索、人工确认的仿真处置、双风机成本测算及可重放评测。当前为隔离软件演示，真机与公网待验收。
+
+[方案与证据边界](docs/software-sprint-20261027/README.md) · [Windows/Docker启动](deploy/agent-demo/README.md) · [实际验证状态](docs/software-sprint-20261027/validation.md) · [演示脚本](docs/software-sprint-20261027/demo-script.md)
+
 ## 网页Agent闭环完善（2026-10-26）
 
 [实施与验收入口](docs/agent-web-loop-20261026/README.md)：最新11/7/6/7身份、隔离场景、明确任务、多证据排障、工单确认/复核和真实模型评测记录。模拟与现场观测分开统计；真人事实复核与M/L/A对照成绩不以自动测试代替。

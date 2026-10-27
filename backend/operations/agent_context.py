@@ -29,8 +29,15 @@ def data_context():
             scenario = json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError, AttributeError):
         pass
+    generation=None
+    if getattr(settings,'AGENT_DEMO_MODE',False):
+        from .sprint_models import DemoSession
+        session=DemoSession.objects.filter(pk=1).first()
+        if session:
+            scenario={'caseId':session.case_id,'seededAt':None}
+            generation=str(session.generation)
     return {'mode': 'simulated_test', 'label': '模拟测试 · 隔离验收库，非现场实时',
-            'scenarioId': scenario.get('caseId'), 'seededAt': scenario.get('seededAt')}
+            'scenarioId': scenario.get('caseId'), 'seededAt': scenario.get('seededAt'),'generation':generation}
 
 
 def observation_valid(reading):

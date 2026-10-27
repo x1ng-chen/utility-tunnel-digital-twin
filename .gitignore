@@ -77,3 +77,6 @@ firmware/**/compile_commands.json
 
 # Local Agent acceptance DB, users and model transcripts
 .agent-eval/
+.agent-demo/
+.agent-knowledge/
+.agent-eval-sprint/

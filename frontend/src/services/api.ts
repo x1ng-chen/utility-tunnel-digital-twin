@@ -108,6 +108,18 @@ client.interceptors.response.use(undefined, async (error) => {
 });
 
 export const api = {
+  agentRuns: () => client.get('/assistant/runs/'),
+  createAgentRun: (payload: Record<string, unknown>, key: string) => client.post('/assistant/runs/', payload, { headers: { 'Idempotency-Key': key } }),
+  agentRun: (id: string) => client.get(`/assistant/runs/${id}/`),
+  cancelAgentRun: (id: string) => client.post(`/assistant/runs/${id}/`, { action: 'cancel' }),
+  exportAgentRun: (id: string, format: string) => client.get(`/assistant/runs/${id}/export/`, { params: { export_format: format }, responseType: 'blob' }),
+  searchKnowledge: (q: string, history = false) => client.get('/assistant/knowledge/', { params: { q, history: history ? '1' : '0' } }),
+  demoSession: () => client.get('/assistant/demo/session/'),
+  demoControl: (action: string, caseId?: string) => client.post('/assistant/demo/session/', { action, ...(caseId ? { caseId } : {}) }),
+  proposeDemoCommand: (runId: string, proposalIndex: number) => client.post('/assistant/demo/commands/', { runId, proposalIndex }),
+  confirmDemoCommand: (id: string, action: 'confirm' | 'cancel') => client.post(`/assistant/demo/commands/${id}/`, { action }),
+  costExample: () => client.get('/assistant/cost-estimates/'),
+  estimateCost: (payload: Record<string, unknown>) => client.post('/assistant/cost-estimates/', payload),
   login: (payload: { email: string; password: string }) => client.post('/auth/login/', payload),
   requestRegistration: (payload: { account: string; displayName: string; role: 'operator' | 'viewer' }) => client.post('/auth/registration-requests/', payload),
   setupRegistrationPassword: (token: string, password: string) => client.post('/auth/registration-requests/setup/', { token, password }),

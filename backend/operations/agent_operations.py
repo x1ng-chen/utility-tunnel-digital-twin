@@ -297,7 +297,7 @@ def location_cards(evidence):
             continue
         data = item['data']
         inspection = data.get('station', data)
-        if item['tool'] in {'station_snapshot', 'diagnose_station'}:
+        if item['tool'] in {'station_snapshot', 'diagnose_station', 'collect_station_evidence'}:
             for sensor in inspection.get('items', []):
                 if sensor['registry_present']:
                     cards[sensor['assetCode']] = {'assetCode': sensor['assetCode'], 'stationId': sensor['stationId'],

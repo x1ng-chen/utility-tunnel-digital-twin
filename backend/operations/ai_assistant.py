@@ -201,13 +201,24 @@ def _execute(name, args, context):
     raise ValueError('未允许的工具。')
 
 
-def _completion(messages, deadline, final_round, task=None, context=None):
+def _completion(messages, deadline, final_round, task=None, context=None, available_tools=None, json_output=False, require_tool=False, preferred_tool=None):
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise AssistantServiceError('assistant_timeout', '智能体查询超时，请缩小问题范围后重试。', 504)
     payload = {'model': settings.DEEPSEEK_MODEL, 'messages': messages, 'thinking': {'type': 'disabled'},
                'max_tokens': 1600, 'stream': False, 'tools': TOOLS,
                'tool_choice': 'none' if final_round else 'auto'}
+    if available_tools is not None:
+        payload['tools'] = available_tools
+        if not available_tools:
+            payload.pop('tools', None)
+            payload.pop('tool_choice', None)
+    if json_output:
+        payload['response_format'] = {'type': 'json_object'}
+    if require_tool and not final_round and payload.get('tools'):
+        payload['tool_choice']='required'
+    if preferred_tool and not final_round and any(t['function']['name']==preferred_tool for t in payload.get('tools',[])):
+        payload['tool_choice']={'type':'function','function':{'name':preferred_tool}}
     if task:
         payload['tools'] = [t for t in TOOLS if t['function']['name'] in task_tools(task)]
         code = task.get('asset_code')
