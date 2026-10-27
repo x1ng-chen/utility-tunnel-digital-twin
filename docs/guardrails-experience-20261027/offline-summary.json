@@ -1,0 +1,107 @@
+{
+  "scope": "DETERMINISTIC_CONTRACT_AND_STUB_ORCHESTRATION_NOT_MODEL_ABILITY",
+  "executionMode": "EXPLICIT_OFFLINE_STUB",
+  "rows": 100,
+  "codeFingerprint": "4a1bb20d1ff388266eb9c2b7923360e426f39fabc2d41b2a1b6f544471295f20",
+  "guardVersion": "2026-10-27.1",
+  "training": {
+    "dataset": "TRAINING_FAN_MISSING_ONLY_NOT_J01_J25",
+    "runId": "4c193eec-7774-454f-a0f2-d86bd62a14fb",
+    "experienceId": "ff12b5aa-f71a-4eab-bc64-fb927055d894",
+    "observationHash": "cfc2cb188dfe0f9db14712f06547e6185a429d0c15030648687fb96722a4211a",
+    "approval": "SIMULATED_ADMINISTRATOR_NOT_HUMAN",
+    "independentHumanReview": false
+  },
+  "experienceArms": {
+    "off": {
+      "single": {
+        "mustReject": 12,
+        "correctlyRejected": 12,
+        "legalControls": 12,
+        "falseRejections": 0,
+        "interceptionRate": 1.0,
+        "falseRejectionRate": 0.0,
+        "modelAbilityScore": null,
+        "providerRequests": 0,
+        "realTokenUsage": null,
+        "billVerifiedCost": null,
+        "boundaryCases": 1,
+        "legalTasksCompleted": 12,
+        "fixtureChecksPassed": 25,
+        "stubElapsedMedianMs": 79,
+        "loadedExperienceCounts": [
+          0
+        ]
+      },
+      "multi": {
+        "mustReject": 12,
+        "correctlyRejected": 12,
+        "legalControls": 12,
+        "falseRejections": 0,
+        "interceptionRate": 1.0,
+        "falseRejectionRate": 0.0,
+        "modelAbilityScore": null,
+        "providerRequests": 0,
+        "realTokenUsage": null,
+        "billVerifiedCost": null,
+        "boundaryCases": 1,
+        "legalTasksCompleted": 12,
+        "fixtureChecksPassed": 25,
+        "stubElapsedMedianMs": 172,
+        "loadedExperienceCounts": [
+          0
+        ]
+      }
+    },
+    "approved": {
+      "single": {
+        "mustReject": 12,
+        "correctlyRejected": 12,
+        "legalControls": 12,
+        "falseRejections": 0,
+        "interceptionRate": 1.0,
+        "falseRejectionRate": 0.0,
+        "modelAbilityScore": null,
+        "providerRequests": 0,
+        "realTokenUsage": null,
+        "billVerifiedCost": null,
+        "boundaryCases": 1,
+        "legalTasksCompleted": 12,
+        "fixtureChecksPassed": 25,
+        "stubElapsedMedianMs": 94,
+        "loadedExperienceCounts": [
+          0,
+          1
+        ]
+      },
+      "multi": {
+        "mustReject": 12,
+        "correctlyRejected": 12,
+        "legalControls": 12,
+        "falseRejections": 0,
+        "interceptionRate": 1.0,
+        "falseRejectionRate": 0.0,
+        "modelAbilityScore": null,
+        "providerRequests": 0,
+        "realTokenUsage": null,
+        "billVerifiedCost": null,
+        "boundaryCases": 1,
+        "legalTasksCompleted": 12,
+        "fixtureChecksPassed": 25,
+        "stubElapsedMedianMs": 157,
+        "loadedExperienceCounts": [
+          0,
+          1
+        ]
+      }
+    }
+  },
+  "providerRequests": 0,
+  "realModelResults": "NOT_RUN",
+  "historicalResponseReplay": "NOT_RUN_THIS_RELEASE",
+  "humanApproval": "NO_HUMAN_APPROVAL_IN_PUBLISHED_FIXTURES",
+  "actualMemoryBenefit": null,
+  "tokens": null,
+  "billVerifiedCost": null,
+  "archiveSha256": "a7a332c738de49dea4772bc6600a9c2232debaef20114866b0caaf0a17c66fe0"
+}

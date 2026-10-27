@@ -151,6 +151,12 @@ jobs:
       - run: python manage.py data_governance_report --format=json
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test
+      - name: Offline guardrails and reviewed-memory paired matrix (no paid calls)
+        env:
+          DEEPSEEK_API_KEY: ''
+        run: |
+          python manage.py migrate --noinput --settings=config.guard_eval_settings
+          python manage.py evaluate_guardrails --settings=config.guard_eval_settings --offline --experience paired --with-experience-fixture
       - run: python -m compileall -q config operations
 
   postgres-policy-integration:
@@ -202,13 +208,21 @@ jobs:
           "from django.contrib.auth.models import User;
           from rest_framework.test import APIClient;
           from operations.models import Alert, Asset, ReportExport;
+          from operations.sprint_models import AgentRun, ReviewExperience;
           assert Asset.objects.count() > 0;
           actor = User.objects.order_by('id').first();
           ReportExport.objects.create(report_type='daily', file_name='ci-policy.csv', requested_by=actor);
-          client = APIClient();
+          client = APIClient(HTTP_HOST='localhost');
           login = client.post('/api/auth/login/', {'email': 'operator@example.com', 'password': 'demo-password-2026'}, format='json', HTTP_HOST='localhost');
           assert login.status_code == 200, login.content;
           client.credentials(HTTP_AUTHORIZATION='Bearer ' + login.json()['accessToken']);
+          owner = User.objects.get(email='operator@example.com');
+          run = AgentRun.objects.create(owner=owner, request_key='ci-review-policy', status='completed');
+          reminder = ReviewExperience.objects.create(source_run=run, owner=owner, station_id='P5', asset_code='FAN-01', asset_kind='FAN', category='FAN-OBS-1', lesson='CI权限夹具，未审批，不作为经验。', source_scope='database_observation', layout_version='CI', knowledge_version='CI', rule_version='CI-NOT-APPROVED', content_hash='0'*64);
+          reminder.revision=2; reminder.save(update_fields=['revision']);
+          assert client.get(f'/api/assistant/experiences/{reminder.pk}/').status_code == 200;
+          assert client.post(f'/api/assistant/experiences/{reminder.pk}/', {'action':'approve','revision':2}, format='json').status_code == 403;
+          assert client.get(f'/api/assistant/runs/{run.pk}/').status_code == 200;
           alert = Alert.objects.get(code='ALM-260826-001');
           acknowledged = client.post(f'/api/alerts/{alert.pk}/acknowledge/', format='json', HTTP_HOST='localhost');
           assert acknowledged.status_code == 200, acknowledged.content;

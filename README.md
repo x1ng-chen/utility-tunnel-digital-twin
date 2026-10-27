@@ -1,5 +1,7 @@
 <div align="center">
 
+最新实现：[设备证据护栏、24例联合矩阵与受控复核经验](docs/guardrails-experience-20261027/README.md)。单/三Agent×经验开/关100次离线契约执行通过；真实模型效果、经验收益和真人评分待测，模拟审批不算人工审核。
+
 最新补齐：[Agent可靠性、专业知识与效果证据](docs/agent-evidence-quality-20261027/README.md) · [人工评分操作](docs/agent-evidence-quality-20261027/review-protocol.md)。软件检查与真实模型、独立人工评分分别记录；本轮付费复测暂缓。
 
 ## 三Agent软件参赛版（2026-10-27）

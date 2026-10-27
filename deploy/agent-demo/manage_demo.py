@@ -29,7 +29,7 @@ def environment():
     from dotenv import dotenv_values
     env=os.environ.copy()
     for key,value in dotenv_values(STATE/'.env').items():
-        if key in {'DEEPSEEK_API_KEY','DEEPSEEK_MODEL','AGENT_EMBEDDING_MODEL_PATH','DJANGO_SECRET_KEY'} and value:
+        if key in {'DEEPSEEK_API_KEY','DEEPSEEK_MODEL','AGENT_EMBEDDING_MODEL_PATH','DJANGO_SECRET_KEY','AGENT_EXPERIENCE_ENABLED'} and value:
             env[key]=value
     secret=STATE/'secret.key'
     if not secret.exists(): secret.write_text(secrets.token_urlsafe(48),encoding='utf-8')
@@ -51,13 +51,14 @@ def setup(rag):
     print('Setup complete; configure .agent-demo/.env before explicit model tasks.')
 
 
-def start():
+def start(no_paid_model=False):
     STATE.mkdir(exist_ok=True)
     if (STATE/'processes.json').exists(): raise SystemExit('Run stop first; existing launch registry retained.')
     for port in (18927,5187):
         with socket.socket() as connection:
             if connection.connect_ex(('127.0.0.1',port))==0: raise SystemExit(f'Port {port} is occupied.')
     env=environment()
+    if no_paid_model: env['DEEPSEEK_API_KEY']='' # override private .env for this launch only
     manage=BACKEND/'manage.py'
     checked([PYTHON,manage,'migrate','--noinput'],cwd=BACKEND,env=env)
     checked([PYTHON,manage,'run_agent_demo','--initialize','--once'],cwd=BACKEND,env=env)
@@ -89,6 +90,7 @@ def start():
     finally:
         (STATE/'processes.json').write_text(json.dumps(launched),encoding='utf-8')
     print('http://127.0.0.1:5187/agent-workbench ; accounts: .agent-demo/users.json (keep private)')
+    if no_paid_model: print('Paid model transport disabled for this launch; private credentials were not modified.')
 
 
 def stop():
@@ -146,9 +148,10 @@ def restore(source):
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('command',choices=['setup','start','stop','backup','restore'])
     parser.add_argument('--rag',action='store_true');parser.add_argument('--file')
+    parser.add_argument('--no-paid-model',action='store_true')
     args=parser.parse_args()
     if args.command=='setup': setup(args.rag)
-    elif args.command=='start': start()
+    elif args.command=='start': start(args.no_paid_model)
     elif args.command=='stop': stop()
     elif args.command=='backup': backup()
     elif args.command=='restore':

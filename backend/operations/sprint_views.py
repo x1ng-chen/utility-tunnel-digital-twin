@@ -46,6 +46,11 @@ def expire_runs():
             'evidence':[e for step in run.steps for e in step.get('traces',[])],
             'proposals':[],'controlProposals':[],'source':run.snapshot.get('source'),
             'snapshotHash':run.snapshot.get('sha256'),'naturalLanguageFullyVerified':False}
+        from .agent_guardrails import derive,VERSION
+        if run.snapshot.get('guardRuleVersion')==VERSION:
+            partial['guardrails']=derive(run.snapshot,partial['evidence'])
+            partial['guardrails']['violations']=[v for s in run.steps for v in s.get('guardViolations',[])]
+            partial['experienceContext']=run.snapshot.get('experienceContext')
         AgentRun.objects.filter(pk=run.pk,status='running').update(status='failed',result=partial,
             error='工作进程超过全局期限或已中断。',finished_at=now)
     AgentRun.objects.filter(status='queued',created_at__lt=now-timedelta(minutes=5)).update(
@@ -144,6 +149,10 @@ class RunExport(APIView):
             for step in run.steps:
                 writer.writerow([str(run.pk),step['role'],step['startedAt'],json.dumps(step.get('output'),ensure_ascii=False),
                     json.dumps(run.snapshot.get('source'),ensure_ascii=False)])
+            for key in ('guardrails','experienceContext'):
+                if key in run.result:
+                    writer.writerow([str(run.pk),'read_only:'+key,run.snapshot.get('capturedAt'),
+                        json.dumps(run.result[key],ensure_ascii=False),json.dumps(run.snapshot.get('source'),ensure_ascii=False)])
             body='\ufeff'+stream.getvalue(); mime='text/csv'
         else: return Response(status=400)
         response=HttpResponse(body,content_type=mime+'; charset=utf-8')
@@ -202,6 +211,10 @@ class DemoCommands(APIView):
             index=p['proposalIndex']
             if isinstance(index,bool) or not isinstance(index,int) or index<0: raise ValueError('无效动作编号。')
             if run.result.get('review',{}).get('decision')!='pass': raise ValueError('复核尚未通过。')
+            from .agent_guardrails import VERSION
+            report=run.result.get('guardrails')
+            if not isinstance(report,dict) or report.get('version')!=VERSION or report.get('violations'):
+                raise ValueError('规则版本变化或护栏已阻断，请重新核查。')
             item=run.result['controlProposals'][index]
             session=DemoSession.objects.get(pk=1)
             # A new scenario generation invalidates old reviewed proposals.
@@ -226,6 +239,11 @@ class DemoCommandDetail(APIView):
         a=SimulatedAction.objects.select_for_update().filter(pk=pk,owner=request.user).first()
         if not a: return Response(status=404)
         if a.state!='proposed': return Response({'state':a.state,'events':a.events,'replayed':True})
+        if request.data['action']=='confirm':
+            from .agent_guardrails import VERSION
+            report=a.run.result.get('guardrails')
+            if not isinstance(report,dict) or report.get('version')!=VERSION or report.get('violations'):
+                return Response({'message':'规则版本已变化或任务被护栏阻断，需重新核查；仍可取消。'},status=409)
         session=DemoSession.objects.select_for_update().get(pk=1)
         if a.expires_at<=timezone.now() or a.generation!=session.generation:
             a.state='expired'; a.save(); return Response({'state':'expired'},status=409)

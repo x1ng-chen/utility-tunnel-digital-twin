@@ -8,6 +8,8 @@ type Json = Record<string, unknown>;
 type Run = { id: string; status: string; stage: string; error: string; input: Json;
   steps: { role: string; startedAt: string; output: Json | null; traces: Json[]; calls: Json[] }[];
   result: { reply?: string; taskOutcome?: string; review?: Json; evidence?: Json[]; proposals?: Json[]; controlProposals?: Json[];
+    guardrails?: { version: string; findings: Json[]; violations: Json[]; boundary: string };
+    experienceContext?: { items: Json[]; hash?: string; enabled?: boolean };
     locations?: { assetCode: string; stationId: string; mappingStatus: string }[] };
   runtime: { modelCalls?: number; toolCalls?: number; elapsedMs?: number; tokens?: Json | null; tokenUsageComplete?: boolean } };
 const auth = useAuthStore();
@@ -25,6 +27,9 @@ const cost = ref<Json | null>(null), watts1 = ref(3.6), watts2 = ref(3.6), minut
 const laborSeconds = ref(60), hourlyRate = ref(30);
 const roiEnabled=ref(false), investment=ref(1000), annualBenefit=ref(100), annualOperatingCost=ref(50);
 const confirmation = ref<{ type: 'command' | 'order'; data: Json; index: number } | null>(null);
+const experiences = ref<Json[]>([]), experienceTruncated = ref(false), editing = ref<Json | null>(null), lessonText = ref('');
+const experienceStates: Record<string, string> = {candidate:'候选，未批准',approved:'管理员已批准',rejected:'已驳回',retired:'已退役'};
+const guardStates: Record<string, string> = {supported:'本来源下有证据支持',unsupported:'本来源下不支持',unknown:'证据不足'};
 const active = computed(() => !!run.value && ['queued', 'running'].includes(run.value.status));
 const inspected = computed(() => {
   const items=run.value?.result.evidence || [];
@@ -38,9 +43,22 @@ const outcomes:Record<string,string>={incomplete:'任务未完成，已有证据
 let timer: ReturnType<typeof setTimeout> | undefined;
 let alive = true;
 function fail(cause: unknown) { error.value = (cause as { response?: { data?: { message?: string } } }).response?.data?.message || '操作失败，请检查服务与权限。'; }
+async function loadExperiences() {
+  try { const { data } = await api.reviewExperiences(); experiences.value = data.items; experienceTruncated.value = data.truncated; }
+  catch (cause) { fail(cause); }
+}
+async function experienceAction(item: Json, action: string, lesson?: string) {
+  if (busy.value) return;
+  busy.value = true; error.value = '';
+  try {
+    await api.transitionExperience(String(item.id), action, Number(item.revision), lesson);
+    editing.value = null; await loadExperiences();
+    notice.value = action === 'revise' ? '已生成新候选；原内容未覆盖。' : '经验状态已更新；审批不代表独立现场验证。';
+  } catch (cause) { fail(cause); } finally { busy.value = false; }
+}
 async function poll() {
   if (!run.value || !alive) return;
-  try { const { data } = await api.agentRun(run.value.id); if (alive) run.value = data; }
+  try { const { data } = await api.agentRun(run.value.id); if (alive) { run.value = data; if (!['queued','running'].includes(data.status) && canWrite.value) await loadExperiences(); } }
   catch (cause) { fail(cause); }
   if (alive && active.value) timer = setTimeout(poll, 1500);
 }
@@ -110,6 +128,7 @@ onMounted(async () => {
     if (data.dataContext.demoControlsAvailable) { const demo=await api.demoSession(); session.value=demo.data.session; cases.value=demo.data.cases; }
   } catch { /* unknown provenance stays visible */ }
   try { history.value = (await api.agentRuns()).data; if (history.value[0]) { run.value = history.value[0]; if (active.value) void poll(); } } catch (cause) { fail(cause); }
+  if (canWrite.value) await loadExperiences();
 });
 onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
 </script>
@@ -139,7 +158,25 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
         <p>模型调用 {{ run.runtime.modelCalls ?? 0 }} · 工具调用 {{ run.runtime.toolCalls ?? 0 }} · 耗时 {{ run.runtime.elapsedMs ?? 0 }} ms · Token {{ run.runtime.tokens?.total_tokens ?? '未知' }} {{ run.runtime.tokenUsageComplete === false ? '（用量可能不完整）' : '' }}</p>
         <ol class="timeline"><li v-for="(step, index) in run.steps" :key="index"><h3>{{ roles[step.role] || step.role }}</h3><small>{{ step.startedAt }}</small>
             <p>{{ step.output?.summary || (active ? '正在执行实际查询与模型调用…' : '本阶段未完成，已有调用记录保留。') }}</p><details><summary>本阶段证据和调用记录</summary><pre>{{ JSON.stringify(step, null, 2) }}</pre></details></li></ol>
-        <h3 v-if="run.result.reply">本次结论</h3><p v-if="run.result.taskOutcome">任务结果：{{ outcomes[run.result.taskOutcome] || run.result.taskOutcome }}</p><p>{{ run.result.reply }}</p><p v-if="run.result.review">复核：{{ run.result.review.decision }} · {{ run.result.review.summary }}。复核通过不等于现场验收或全部事实正确。</p>
+        <h3 v-if="run.result.reply">模型解释</h3><p v-if="run.result.taskOutcome">任务结果：{{ outcomes[run.result.taskOutcome] || run.result.taskOutcome }}</p><p>{{ run.result.reply }}</p><p v-if="run.result.review">复核：{{ run.result.review.decision }} · {{ run.result.review.summary }}。复核通过不等于现场验收或全部事实正确。</p>
+        <section class="derived-checks"><h3>规则判断与阻断原因</h3>
+          <template v-if="run.result.guardrails"><p>规则版本 {{ run.result.guardrails.version }} · 推导不是原始测量</p>
+            <p v-for="(v, i) in run.result.guardrails.violations" :key="i" role="alert">阻断 {{ v.ruleId }}：{{ v.message }}</p>
+            <details><summary>查看 {{ run.result.guardrails.findings.length }} 项规则判断</summary>
+              <article v-for="f in run.result.guardrails.findings" :key="String(f.id)"><strong>{{ f.assetCode }} · {{ f.ruleId }}</strong>
+                <p>{{ guardStates[String(f.state)] || f.state }} · {{ f.sourceScope }}：{{ f.message }}</p>
+                <small>原始证据 {{ f.evidenceIds }} · 缺项 {{ f.missing }}</small></article>
+            </details><p>{{ run.result.guardrails.boundary }}</p></template>
+          <p v-else>旧版本任务未记录护栏结果；不会倒填为已验证。</p>
+        </section>
+        <section><h3>本任务使用的复核经验</h3>
+          <template v-if="run.result.experienceContext"><p>已加载 {{ run.result.experienceContext.items.length }} 条管理员审核的匹配经验；仅为低信任排查提醒。</p>
+            <p v-if="run.result.experienceContext.enabled === false">本任务未启用经验检索。</p>
+            <article v-for="item in run.result.experienceContext.items" :key="String(item.id)"><p>{{ item.lesson }}</p>
+              <small>{{ item.station_id }} · {{ item.source_scope }} · {{ item.rule_version }} · 内容散列 {{ item.content_hash }}</small>
+              <details><summary>已批准 · 条目版本 {{ item.revision }} · 查看冻结来源与版本</summary><pre>{{ JSON.stringify(item, null, 2) }}</pre></details></article></template>
+          <p v-else>旧版本任务未记录经验上下文。</p>
+        </section>
         <details v-if="run.result.evidence?.length"><summary>查看原始证据</summary><pre>{{ JSON.stringify(run.result.evidence, null, 2) }}</pre></details>
         <section v-if="inspected"><h3>本轮取证覆盖</h3><p>预期 {{ inspected.expected_sensor_count }} 个物理模块 · 已登记 {{ inspected.registered_sensor_count }} · 场景观测可用 {{ inspected.scenario_usable_sensor_count }} · 数据异常 {{ inspected.data_issue_sensor_count }}。场景可用不代表现场实测。</p><div class="sensor-table"><table><thead><tr><th>检测站</th><th>设备</th><th>主控</th><th>观测状态／缺项</th><th>三维绑定</th></tr></thead><tbody><tr v-for="sensor in (inspected.items as Json[] || [])" :key="String(sensor.assetCode)"><td>{{ sensor.stationId }}</td><td>{{ sensor.assetCode }}</td><td>{{ sensor.controllerId }}</td><td>{{ sensor.observation_state }} {{ sensor.data_issues }}</td><td>{{ sensor.mapping_status }}</td></tr></tbody></table></div></section>
         <div class="controls"><RouterLink v-for="location in run.result.locations || []" :key="location.assetCode" :to="{path:'/twin-3d',query:{asset:location.assetCode,source:'agent'}}">{{ location.stationId }} · {{ location.assetCode }} · {{ location.mappingStatus }}</RouterLink></div>
@@ -151,6 +188,19 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
       <section class="panel"><h2>规程与缺陷检索</h2><div class="controls"><input v-model="query" aria-label="知识检索问题" maxlength="500" /><label class="check-label"><input v-model="historyKnowledge" type="checkbox" />包含旧双节点历史案例</label><button @click="search">检索依据</button></div>
         <p v-if="knowledge">检索方式：{{ knowledge.mode }} · {{ knowledge.fallbackReason || '' }}</p><ul v-if="knowledge?.missing"><li v-for="gap in (knowledge.missing as string[])" :key="gap">{{ gap }}</li></ul>
         <details v-for="hit in (knowledge?.hits as Json[] || [])" :key="String(hit.id)"><summary>{{ hit.id }} · {{ hit.sourceKind }} · {{ hit.source }} · {{ hit.version }}</summary><pre>{{ hit.text }}</pre><small>适用布局：{{ hit.layout }}；验证状态：{{ hit.verification }}</small></details>
+      </section>
+      <section v-if="canWrite" class="panel"><h2>受控复核经验</h2><p>候选不是已验证知识；管理员审核脱敏条目后共享，原始私有任务不开放。审批不代替现场验证。</p>
+        <button :disabled="busy" @click="loadExperiences">刷新经验</button><p v-if="experienceTruncated">列表已截断，请按任务或经验编号核查，不能视为完整清单。</p>
+        <p v-if="!experiences.length">暂无可见经验。不会自动把历史记录批准为知识。</p>
+        <article v-for="item in experiences" :key="String(item.id)" class="experience-card"><h3>{{ item.station_id }} · {{ item.asset_code }} · {{ experienceStates[String(item.status)] }}</h3>
+          <p>{{ item.lesson }}</p><small>{{ item.source_scope }} · {{ item.category }} · 版本 {{ item.revision }}</small>
+          <details><summary>适用版本、来源与审核记录</summary><pre>{{ JSON.stringify(item, null, 2) }}</pre></details>
+          <div class="controls"><template v-if="item.canReview && item.status === 'candidate'"><button :disabled="busy" @click="experienceAction(item, 'approve')">批准共享</button><button :disabled="busy" @click="experienceAction(item, 'reject')">驳回候选</button></template>
+            <button v-if="item.canReview && item.status === 'approved'" :disabled="busy" @click="experienceAction(item, 'retire')">退役经验</button>
+            <button v-if="item.canRevise" :disabled="busy" @click="editing = item; lessonText = String(item.lesson)">修订为新候选</button></div>
+        </article>
+        <div v-if="editing"><label>脱敏提醒（最多300字）<textarea v-model="lessonText" maxlength="300" rows="3" /></label>
+          <button :disabled="busy" @click="experienceAction(editing, 'revise', lessonText)">保存新候选</button><button :disabled="busy" @click="editing = null">取消修订</button></div>
       </section>
       <section class="panel"><h2>双风机能耗与任务成本</h2><p>以下为可调整的模拟参数，非现场电费或实际节能成果；不含MQ加热等其他负载。</p><div class="controls">
         <label>风机1功率 W<input v-model.number="watts1" type="number" min="0" /></label><label>风机2功率 W<input v-model.number="watts2" type="number" min="0" /></label><label>时间 分钟<input v-model.number="minutes" type="number" min="1" max="60" /></label><label>电价 元/kWh<input v-model.number="price" type="number" min="0" step="0.1" /></label><label>人工耗时 秒<input v-model.number="laborSeconds" type="number" min="0" /></label><label>人工单价 元/小时<input v-model.number="hourlyRate" type="number" min="0" /></label><button @click="calculate">计算模拟情景</button></div>
