@@ -66,6 +66,8 @@ class RunList(APIView):
         return Response([serialize(r) for r in AgentRun.objects.filter(owner=request.user).order_by('-created_at')[:20]])
 
     def post(self,request):
+        if getattr(settings, 'HARDWARE_LIVE_MODE', False):
+            return Response({'message':'实物联调阶段付费模型任务暂停；请使用五站直接巡检查看真实证据。'}, status=503)
         p=request.data
         if not isinstance(p,dict) or set(p)-{'kind','station_id','asset_code','work_order_code','prompt','mode','previous_run_id','control_request'}:
             return Response({'message':'无效任务字段。'},status=400)

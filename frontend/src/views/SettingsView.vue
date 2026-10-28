@@ -238,7 +238,7 @@ watch([() => store.source, () => auth.user?.role], () => { void loadUsers(); voi
 
 <template>
   <AppShell>
-    <section class="section-title"><div><span class="eyebrow light">平台管理</span><h1>系统配置</h1><p>管理告警阈值与数据服务，管理员变更会写入审计日志。</p></div><span class="config-source"><i />{{ store.offline ? '离线数据快照' : '数据服务在线' }}</span></section>
+    <section class="section-title"><div><h1>系统配置</h1><p>管理告警阈值与数据服务，管理员变更会写入审计日志。</p></div><span class="config-source"><i />{{ store.offline ? '离线数据快照' : '数据服务在线' }}</span></section>
     <nav class="settings-sections" aria-label="配置分区导航">
       <a href="#threshold-settings">告警阈值</a><a href="#password-settings">账户安全</a>
       <template v-if="auth.user?.role === 'administrator'"><a href="#approval-settings">账号审批</a><a href="#model-settings">三维模型</a><a href="#account-settings">已开通账号</a></template>
@@ -356,6 +356,11 @@ watch([() => store.source, () => auth.user?.role], () => { void loadUsers(); voi
 .registration-actions button { min-height: 44px; }
 .user-row small { display: block; color: var(--ops-muted); margin-top: 8px; }
 .inline-message a { overflow-wrap: anywhere; }
+.settings-sections a { border-radius: 6px; min-height: 44px; }
+.settings-sections a:focus-visible { outline: 2px solid var(--ops-signal); outline-offset: 2px; }
+.model-upload-form input[type="file"] { height: auto; padding: 10px; overflow-wrap: anywhere; }
+.model-upload-form input[type="file"]::file-selector-button { min-height: 32px; margin-right: 10px; border: 1px solid var(--ops-line); border-radius: 5px; background: var(--ops-panel); color: var(--ops-text); cursor: pointer; }
+.settings-panel :is(b, p, small) { overflow-wrap: anywhere; }
 @container (max-width: 850px) {
   .threshold-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .threshold-row > div { grid-column: 1 / -1; }
@@ -364,6 +369,10 @@ watch([() => store.source, () => auth.user?.role], () => { void loadUsers(); voi
 }
 @container (max-width: 480px) {
   .password-form, .model-upload-form, .user-row { grid-template-columns: minmax(0, 1fr); }
+  .user-row > select, .user-row > button, .user-row > .account-protected { grid-column: auto; grid-row: auto; width: 100%; }
+  .threshold-row { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+  .threshold-row > button { justify-self: stretch; }
+  .password-form, .model-upload-form { padding: 16px; }
   .settings-sections a { flex: 1 1 40%; text-align: center; }
 }
 </style>

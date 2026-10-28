@@ -49,10 +49,12 @@ def clean(value):
 
 
 def freeze(payload,owner=None):
+    from .twin_presentation import runtime_inventory
     now=timezone.now()
     codes=list(Asset.objects.filter(is_active=True).values_list('code',flat=True))
     station=payload.get('station_id','P5')
     data={'capturedAt':now.isoformat(),'layoutVersion':INVENTORY['revision'],'source':data_context(),
+        'inventory':runtime_inventory(),
         'knowledgeVersion':knowledge_version(),'knowledgeCorpus':knowledge_corpus(),'inspection':station_snapshot('all'),
         'guardRuleVersion':guards.VERSION,
         'thresholds':{t.key:{'warning':t.warning,'alarm':t.alarm,'unit':t.unit,'version':t.version} for t in Threshold.objects.all()},
@@ -128,7 +130,7 @@ class Workflow:
     def execute(self, name,args):
         s=self.run.snapshot
         if name=='runtime_overview':
-            return {'layout':INVENTORY,'assets':list(s['assets']),'inspection':s['inspection'],'source':s['source']}
+            return {'layout':s.get('inventory',INVENTORY),'assets':list(s['assets']),'inspection':s['inspection'],'source':s['source']}
         if name=='open_alerts':
             code=args.get('asset_code')
             return {'items':[a for a in s['alerts'] if not code or a['asset__code']==code],'source':s['source'],'limit':100,

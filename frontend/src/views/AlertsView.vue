@@ -7,6 +7,7 @@ import { api } from '../services/api';
 import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
 import type { Alert } from '../types';
+import { agentTaskLocation } from '../utils/agentTaskEntry';
 
 const store = useOperationsStore();
 const auth = useAuthStore();
@@ -96,6 +97,14 @@ function openTwin(alert: Alert) {
   void router.push({ path: '/twin-3d', query: { asset: alert.assetCode, source: 'alert', alert: alert.code } });
 }
 
+function prepareDiagnosis(alert: Alert) {
+  const asset = store.assets.find(item => item.code === alert.assetCode);
+  void router.push(agentTaskLocation('diagnosis', {
+    station: asset && /^P[1-5]$/.test(asset.zone) ? asset.zone : 'all',
+    ...(asset ? {asset:asset.code} : {}), alert:alert.code,
+  }));
+}
+
 function openGis(alert: Alert) {
   if (!alert.assetCode) return;
   void router.push({ path: '/gis', query: { asset: alert.assetCode, source: 'alert', alert: alert.code } });
@@ -136,9 +145,9 @@ function getUserFacingError(cause: unknown) {
 <template>
   <AppShell>
     <section class="section-title">
-      <div><span class="eyebrow light">异常处置</span><h1>告警中心</h1><p>确认异常、关联工单并保留完整处理链路。</p></div>
+      <div><h1>告警中心</h1><p>确认异常、关联工单并保留完整处理链路。</p></div>
       <ReportExportButton report="alerts" label="导出全部告警" />
-      <div class="filter-tabs"><button v-for="item in [['all','全部'],['open','待确认'],['acknowledged','已确认']]" :key="item[0]" :class="{ active: filter === item[0] }" @click="filter = item[0]">{{ item[1] }}</button></div>
+      <div class="filter-tabs" role="group" aria-label="按告警状态筛选"><button v-for="item in [['all','全部'],['open','待确认'],['acknowledged','已确认']]" :key="item[0]" type="button" :aria-pressed="filter === item[0]" :class="{ active: filter === item[0] }" @click="filter = item[0]">{{ item[1] }}</button></div>
     </section>
     <p v-if="actionError" class="inline-message error-message" role="alert">{{ actionError }}</p>
     <p v-if="hasContextualQuery" class="inline-message" role="status">正在查看数据洞察筛选范围内的完整告警记录，共 {{ contextualTotal }} 条。</p>
@@ -151,6 +160,7 @@ function getUserFacingError(cause: unknown) {
         <span :class="['badge', alert.severity]">{{ alert.severity === 'critical' ? '严重' : alert.severity === 'warning' ? '警告' : '提示' }}</span>
         <span :data-testid="`alert-status-${alert.code}`" :class="['status-text', alert.status]">{{ alert.status === 'open' ? '待确认' : alert.status === 'acknowledged' ? '已确认' : alert.status === 'resolved' ? '已解决' : '已关闭' }}</span>
         <div class="row-actions">
+          <button type="button" class="alert-agent-button" @click="prepareDiagnosis(alert)">Agent排障</button>
           <button v-if="alert.assetCode" class="alert-locate-button" type="button" @click="openTwin(alert)">三维定位</button>
           <button v-if="alert.assetCode" class="alert-locate-button" type="button" @click="openGis(alert)">地图定位</button>
           <template v-if="canWrite">
@@ -170,3 +180,18 @@ function getUserFacingError(cause: unknown) {
     </section>
   </AppShell>
 </template>
+
+<style scoped>
+.alerts-table { min-width: 0; }
+.alerts-table .table-row { line-height: 1.6; }
+.alerts-table .table-row > div { min-width: 0; overflow-wrap: anywhere; }
+.alerts-table .table-row small { line-height: 1.6; }
+.alerts-table .row-actions { align-items: center; }
+.alerts-table .row-actions button:focus-visible { outline: 2px solid var(--ops-signal); outline-offset: 2px; }
+.filter-tabs { flex-wrap: wrap; }
+.filter-tabs button { min-height: 40px; }
+@container (max-width: 640px) {
+  .alerts-table .row-actions { gap: 8px; }
+  .alerts-table .row-actions button { min-height: 44px; }
+}
+</style>

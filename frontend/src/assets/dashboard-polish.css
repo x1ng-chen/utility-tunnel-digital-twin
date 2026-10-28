@@ -11,7 +11,7 @@
 .dashboard-shell .command-main .page-content { padding: 28px clamp(18px,2.5vw,40px) 24px !important; }
 .dashboard-shell .dashboard-workspace { min-width: 0; }
 .dashboard-shell .dashboard-heading.hero { min-height: 0; align-items: center; gap: 20px; padding: 0 !important; margin: 0 0 20px !important; border: 0; }
-.dashboard-shell .dashboard-heading h1 { margin: 9px 0 8px; font-size: clamp(27px,2.65vw,39px) !important; line-height: 1.25 !important; letter-spacing: .015em !important; font-weight: 700 !important; }
+.dashboard-shell .dashboard-heading h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.3; letter-spacing: -.02em; font-weight: 700; }
 .dashboard-shell .dashboard-heading p { margin: 0; color: var(--ops-muted) !important; font-size: 13px !important; line-height: 1.8; }
 .dashboard-shell .dashboard-context { display: flex; align-items: center; gap: 8px; color: var(--ops-muted); font-size: 12px; }
 .dashboard-shell .context-line { width: 20px; height: 2px; background: var(--ops-signal); }

@@ -5,32 +5,73 @@ import { describe,it,expect,vi,beforeEach,afterEach } from 'vitest';
 import View from './AgentWorkbenchView.vue';
 import { api } from '../services/api';
 import { useAuthStore } from '../stores/auth';
+const { entryQuery } = vi.hoisted(()=>({entryQuery:{} as Record<string,string>}));
+vi.mock('vue-router',()=>({useRoute:()=>({query:entryQuery})}));
 vi.mock('../components/AppShell.vue',()=>({default:{template:'<div><slot /></div>'}}));
 describe('persistent Agent workbench',()=>{
  let wrapper:ReturnType<typeof mount>;
+ const show=()=>mount(View,{global:{stubs:{RouterLink:{template:'<a><slot /></a>'}}}});
  beforeEach(()=>{
   vi.restoreAllMocks();sessionStorage.clear();sessionStorage.setItem('ut-django-token','TEST_STUB');setActivePinia(createPinia());
+  Object.keys(entryQuery).forEach(key=>delete entryQuery[key]);
   useAuthStore().user={id:1,email:'operator',displayName:'operator',role:'operator'};
   vi.spyOn(api,'agentContext').mockResolvedValue({data:{dataContext:{label:'模拟测试 · 隔离库',demoControlsAvailable:true},modelNotice:'旧模型文字'}} as never);
   vi.spyOn(api,'demoSession').mockResolvedValue({data:{session:{phase:0,running:false,tick:10},cases:['INS-01']}} as never);
   vi.spyOn(api,'agentRuns').mockResolvedValue({data:[]} as never);
+  vi.spyOn(api,'reviewExperiences').mockResolvedValue({data:{items:[],truncated:false}} as never);
  });
  afterEach(()=>wrapper?.unmount());
  it('never invokes models or commands just by mounting',async()=>{
   const start=vi.spyOn(api,'createAgentRun');const control=vi.spyOn(api,'proposeDemoCommand');
-  wrapper=mount(View);await flushPromises();
+  wrapper=show();await flushPromises();
   expect(wrapper.text()).toContain('模拟测试');expect(wrapper.text()).toContain('旧模型文字');
   expect(start).not.toHaveBeenCalled();expect(control).not.toHaveBeenCalled();
   expect(wrapper.text()).not.toContain('重置场景');
+  expect(wrapper.find('[aria-labelledby=agent-result-title]').exists()).toBe(true);
+  expect(wrapper.find('[aria-label=实际Agent执行阶段]').exists()).toBe(false);
+  expect(wrapper.findAll('details.tool-panel').every(panel=>panel.attributes('open')===undefined)).toBe(true);
  });
  it('viewer cannot create a work-order draft',async()=>{
-  useAuthStore().user!.role='viewer';wrapper=mount(View);await flushPromises();
+  useAuthStore().user!.role='viewer';wrapper=show();await flushPromises();
   expect(wrapper.get('option[value=draft]').attributes('disabled')).toBeDefined();
+ });
+ it('prepares an explicit diagnosis from a page link without running or confirming it',async()=>{
+  Object.assign(entryQuery,{task:'diagnosis',station:'P5',asset:'FLAME-05',alert:'ALM-TEST-05'});
+  const start=vi.spyOn(api,'createAgentRun');const order=vi.spyOn(api,'createWorkOrder');
+  wrapper=show();await flushPromises();
+  expect(wrapper.get('.prepared-task').text()).toContain('FLAME-05');
+  expect(wrapper.get('.prepared-task').text()).toContain('尚未调用模型');
+  expect(wrapper.get('textarea').element.value).toContain('ALM-TEST-05');
+  expect(start).not.toHaveBeenCalled();expect(order).not.toHaveBeenCalled();
+ });
+ it('does not let a task URL select an operator-only draft for a viewer',async()=>{
+  useAuthStore().user!.role='viewer';Object.assign(entryQuery,{task:'draft',asset:'FLAME-05'});
+  const start=vi.spyOn(api,'createAgentRun');wrapper=show();await flushPromises();
+  expect(wrapper.find('.prepared-task').exists()).toBe(false);
+  expect(wrapper.text()).toContain('当前账号不能准备工单草案');expect(start).not.toHaveBeenCalled();
+ });
+ it('honors server model pause while retaining read-only tools and collapsed model details',async()=>{
+  vi.mocked(api.agentContext).mockResolvedValue({data:{dataContext:{label:'实物遥测 · 独立联调库',modelCallsDisabled:true},modelNotice:'V20完整布局说明'}} as never);
+  vi.mocked(api.agentRuns).mockResolvedValue({data:[{id:'paused-history',status:'completed',input:{},steps:[],runtime:{},result:{}}]} as never);
+  const start=vi.spyOn(api,'createAgentRun');
+  const search=vi.spyOn(api,'searchKnowledge').mockResolvedValue({data:{mode:'keyword',hits:[],missing:[]}} as never);
+  wrapper=show();await flushPromises();
+  const actions=wrapper.get('.task-actions').findAll('button');
+  expect(actions[0].attributes('disabled')).toBeDefined();
+  expect(actions[1].attributes('disabled')).toBeDefined();
+  await actions[0].trigger('click');await actions[1].trigger('click');await flushPromises();
+  expect(start).not.toHaveBeenCalled();
+  expect(wrapper.text()).toContain('当前环境已暂停模型调用，仍可查看历史记录和使用只读工具');
+  expect(wrapper.get('.model-context').attributes('open')).toBeUndefined();
+  expect(wrapper.get('.model-context').text()).toContain('V20完整布局说明');
+  const searchButton=wrapper.findAll('button').find(button=>button.text()==='检索依据')!;
+  expect(searchButton.attributes('disabled')).toBeUndefined();
+  await searchButton.trigger('click');await flushPromises();expect(search).toHaveBeenCalledOnce();
  });
  it('does not create an order before review and confirmation',async()=>{
   const order=vi.spyOn(api,'createWorkOrder').mockResolvedValue({data:{code:'WO-TEST'}} as never);
   vi.spyOn(api,'agentRuns').mockResolvedValue({data:[{id:'run-test',status:'completed',input:{},steps:[],runtime:{},result:{proposals:[{assetCode:'MQ4-05',title:'检查',description:'模拟测试',priority:'normal'}]}}]} as never);
-  wrapper=mount(View);await flushPromises();
+  wrapper=show();await flushPromises();
   const button=wrapper.findAll('button').find(b=>b.text()==='审阅工单草案')!;await button.trigger('click');
   expect(order).not.toHaveBeenCalled();await wrapper.get('[role=alertdialog]').findAll('button')[1].trigger('click');await flushPromises();
   expect(order).not.toHaveBeenCalled();

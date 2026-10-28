@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useAuthStore } from './auth';
@@ -6,8 +7,20 @@ import * as realtimeService from '../services/realtime';
 import { api } from '../services/api';
 
 describe('operations store', () => {
-  beforeEach(() => setActivePinia(createPinia()));
-  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+  beforeEach(() => { window.sessionStorage.clear(); setActivePinia(createPinia()); });
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); window.sessionStorage.clear(); });
+
+  function mockEmptyApiSnapshot() {
+    vi.spyOn(api, 'dashboard').mockResolvedValue({ data: { assets: { total: 0, online: 0 }, health: { value: 0 }, openAlerts: 0, activeWorkOrders: 0, telemetry: null } } as never);
+    vi.spyOn(api, 'assets').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'alerts').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'workOrders').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'thresholds').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'telemetry').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'audit').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'gisFeatures').mockResolvedValue({ data: { features: [] } } as never);
+    vi.spyOn(api, 'hardwareBindings').mockResolvedValue({ data: { items: [] } } as never);
+  }
 
   it('upserts a live delta without dropping unrelated records or replacing identity', () => {
     const retained = { id: 1, status: 'open' };
@@ -70,6 +83,83 @@ describe('operations store', () => {
     expect(store.assets).toHaveLength(19);
     expect(store.openAlerts).toBe(2);
     expect(store.activeOrders).toBe(2);
+  });
+
+  it('starts a restored API session with pending empty state rather than demo claims', () => {
+    window.sessionStorage.setItem('ut-vue-user', JSON.stringify({ id: 42, email: 'operator@example.test', displayName: '测试运维员', role: 'operator' }));
+    window.sessionStorage.setItem('ut-session-mode', 'api');
+    window.sessionStorage.setItem('ut-django-token', 'unit-test-token');
+    const store = useOperationsStore();
+    expect(store.source).toBe('api');
+    expect(store.loading).toBe(true);
+    expect(store.dashboard).toMatchObject({ assets: { total: 0, online: 0 }, openAlerts: 0, activeWorkOrders: 0, telemetry: null });
+    expect(store.assets).toEqual([]);
+    expect(store.alerts).toEqual([]);
+    expect(store.workOrders).toEqual([]);
+    expect(store.telemetry).toEqual([]);
+    expect(store.thresholds).toEqual([]);
+    expect(store.hardwareBindings).toEqual([]);
+    expect(store.lastSyncedAt).toBeNull();
+  });
+
+  it('removes synthetic records before an API snapshot settles and keeps them absent on failure', async () => {
+    const auth = useAuthStore();
+    await auth.login('', '', 'operator', 'demo');
+    const store = useOperationsStore();
+    expect(store.assets).toHaveLength(19);
+    await store.loadTelemetryInsights();
+    expect(store.telemetryInsights.length).toBeGreaterThan(0);
+    mockEmptyApiSnapshot();
+    let rejectSnapshot!: (cause: Error) => void;
+    vi.mocked(api.dashboard).mockImplementationOnce(() => new Promise((_, reject) => { rejectSnapshot = reject; }));
+    const pending = store.refresh('api');
+    expect(store.source).toBe('api');
+    expect(store.loading).toBe(true);
+    expect(store.assets).toEqual([]);
+    expect(store.alerts).toEqual([]);
+    expect(store.workOrders).toEqual([]);
+    expect(store.telemetry).toEqual([]);
+    expect(store.telemetryInsights).toEqual([]);
+    expect(store.telemetrySummary.sampleCount).toBe(0);
+    expect(store.dashboard.telemetry).toBeNull();
+    expect(store.lastSyncedAt).toBeNull();
+    rejectSnapshot(new Error('test API unavailable'));
+    await pending;
+    expect(store.offline).toBe(true);
+    expect(store.assets).toEqual([]);
+    expect(store.openAlerts).toBe(0);
+    expect(store.activeOrders).toBe(0);
+    expect(store.dashboard.assets.total).toBe(0);
+  });
+
+  it('retains the last genuine API snapshot when a later refresh fails', async () => {
+    const auth = useAuthStore();
+    await auth.login('', '', 'operator', 'demo');
+    const store = useOperationsStore();
+    const actualAsset = { ...store.assets[0], id: 501, code: 'ACTUAL-CTRL-01', name: 'API测试控制器' };
+    const actualReading = { ...store.telemetry[0], id: 601, assetCode: actualAsset.code, value: 33 };
+    mockEmptyApiSnapshot();
+    vi.mocked(api.assets).mockResolvedValue({ data: { items: [actualAsset] } } as never);
+    vi.mocked(api.telemetry).mockResolvedValue({ data: { items: [actualReading] } } as never);
+    vi.mocked(api.dashboard).mockResolvedValue({ data: { assets: { total: 1, online: 1 }, health: { value: 100 }, openAlerts: 0, activeWorkOrders: 0, telemetry: actualReading } } as never);
+    await store.refresh('api');
+    const retainedAsset = store.assets[0];
+    const savedSync = store.lastSyncedAt;
+    vi.mocked(api.dashboard).mockRejectedValueOnce(new Error('test connection lost'));
+    await store.refresh('api');
+    expect(store.offline).toBe(true);
+    expect(store.source).toBe('api');
+    expect(store.assets).toHaveLength(1);
+    expect(store.assets[0]).toBe(retainedAsset);
+    expect(store.assets[0].code).toBe(actualAsset.code);
+    expect(store.telemetry[0].value).toBe(33);
+    expect(store.lastSyncedAt).toBe(savedSync);
+    expect(store.dashboard.assets.total).toBe(1);
+    await store.refresh('demo');
+    expect(store.source).toBe('demo');
+    expect(store.assets).toHaveLength(19);
+    expect(store.assets.some(item => item.code === actualAsset.code)).toBe(false);
+    expect(store.openAlerts).toBe(2);
   });
 
   it('keeps five pipe stations unconnected and independent of the seep sensor', () => {
@@ -150,13 +240,8 @@ describe('operations store', () => {
     const auth = useAuthStore();
     await auth.login('', '', 'operator', 'demo');
     const store = useOperationsStore();
-    vi.spyOn(api, 'dashboard').mockRejectedValue({ response: { status: 401 } });
-    vi.spyOn(api, 'assets').mockResolvedValue({ data: { items: [] } } as never);
-    vi.spyOn(api, 'alerts').mockResolvedValue({ data: { items: [] } } as never);
-    vi.spyOn(api, 'workOrders').mockResolvedValue({ data: { items: [] } } as never);
-    vi.spyOn(api, 'thresholds').mockResolvedValue({ data: { items: [] } } as never);
-    vi.spyOn(api, 'telemetry').mockResolvedValue({ data: { items: [] } } as never);
-    vi.spyOn(api, 'audit').mockResolvedValue({ data: { items: [] } } as never);
+    mockEmptyApiSnapshot();
+    vi.mocked(api.dashboard).mockRejectedValue({ response: { status: 401 } });
 
     await store.refresh('api');
 

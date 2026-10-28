@@ -59,11 +59,13 @@ describe('reviewed physical output controls', () => {
     vi.mocked(api.controllerCommandCapabilities).mockRejectedValueOnce(new Error('configuration unavailable'));
     const w = await show();
     expect(w.findAll('.fan-unit button').every(b => b.attributes('disabled') !== undefined)).toBe(true);
+    expect(w.get('.control-access-note').text()).toContain('配置尚未加载成功');
     expect(api.controllerCommand).not.toHaveBeenCalled();
     w.unmount();wrapper = undefined;
     vi.mocked(api.controllerCommandCapabilities).mockResolvedValueOnce({ data: { protocol: 'four-controller-v2', controlDisabled: true } } as never);
     const disabled = await show();
     expect(disabled.findAll('.fan-unit button').every(b => b.attributes('disabled') !== undefined)).toBe(true);
+    expect(disabled.get('.control-access-note').text()).toContain('服务端禁用设备控制');
   });
   it('a rejected or unknown result is not presented as a successful action', async () => {
     vi.mocked(api.controllerCommand).mockResolvedValueOnce({ data: { ack: { status: 'rejected', reason: 'local_protection' } } } as never);
