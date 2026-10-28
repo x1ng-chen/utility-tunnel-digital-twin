@@ -1,0 +1,69 @@
+{
+  "revision": "square-five-station-v23-refined-acrylic",
+  "scope": "MODEL_ONLY_NO_HARDWARE_FIRMWARE_OR_RUNTIME_REGISTRY_CHANGE",
+  "sensors": [
+    {
+      "oldAssetCode": "GAS-O2-01",
+      "newAssetCode": "GAS-O2-01",
+      "oldPhysicalTag": "O2-01",
+      "newPhysicalTag": "O2-01",
+      "oldStationId": "P4",
+      "stationId": "P1",
+      "controllerId": "CTRL-01",
+      "oldPositionBlender_m": [
+        0.2150000035762787,
+        0.45500001311302185,
+        0.18000000715255737
+      ],
+      "newPositionBlender_m": [
+        0.4400000274181366,
+        0.5400000214576721,
+        0.1510000079870224
+      ],
+      "newTargetNode": "GAS-O2-01",
+      "oldTargetNode": "GAS-O2-01"
+    },
+    {
+      "oldAssetCode": "GAS-O2-03",
+      "newAssetCode": "GAS-O2-02",
+      "oldPhysicalTag": "O2-03",
+      "newPhysicalTag": "O2-02",
+      "oldStationId": "P2",
+      "stationId": "P2",
+      "controllerId": "CTRL-04",
+      "oldPositionBlender_m": [
+        0.46000000834465027,
+        0.24500000476837158,
+        0.18000000715255737
+      ],
+      "newPositionBlender_m": [
+        0.4400000274181366,
+        0.1600000113248825,
+        0.1510000079870224
+      ],
+      "newTargetNode": "GAS-O2-02",
+      "oldTargetNode": "GAS-O2-03"
+    },
+    {
+      "oldAssetCode": "GAS-O2-02",
+      "newAssetCode": "GAS-O2-05",
+      "oldPhysicalTag": "O2-02",
+      "newPhysicalTag": "O2-05",
+      "oldStationId": "P5",
+      "stationId": "P5",
+      "controllerId": "CTRL-03",
+      "oldPositionBlender_m": [
+        0.4350000321865082,
+        0.3500000238418579,
+        0.18000000715255737
+      ],
+      "newPositionBlender_m": [
+        0.3500000238418579,
+        0.3500000238418579,
+        0.1510000079870224
+      ],
+      "newTargetNode": "GAS-O2-05",
+      "oldTargetNode": "GAS-O2-02"
+    }
+  ]
+}
