@@ -1,0 +1,2047 @@
+{
+  "revision": "square-five-station-v23-refined-acrylic",
+  "date": "2026-10-29",
+  "status": "CONCEPT_NOT_FABRICATION_APPROVED",
+  "envelope_mm": [
+    700,
+    700,
+    300
+  ],
+  "coordinates": "Blender metres +Z up. Canonical plan: screen up=+X, right=-Y; four pipe ports at bottom (-X). glTF=(x,z,-y).",
+  "sensor_total": 31,
+  "ownership": {
+    "CTRL-01": 7,
+    "CTRL-02": 6,
+    "CTRL-03": 11,
+    "CTRL-04": 7
+  },
+  "category_counts": {
+    "utility_pipe": 2,
+    "controller": 4,
+    "rs485_module": 5,
+    "regulator": 4,
+    "power_entry": 1,
+    "gateway": 1,
+    "external_sensor": 31,
+    "wet_tray": 4,
+    "business_display": 2,
+    "relay": 2,
+    "power_monitor": 2,
+    "joystick": 1,
+    "buzzer": 1,
+    "led_strip": 1,
+    "fan": 2,
+    "voice_controller": 1,
+    "microphone": 1,
+    "amplifier": 1,
+    "speaker": 1,
+    "voice_display": 1,
+    "voice_button": 1
+  },
+  "assets": [
+    {
+      "assetCode": "PIPE-G01",
+      "physicalTag": "",
+      "meshNames": [
+        "PIPE-G01"
+      ],
+      "category": "utility_pipe",
+      "family": "PROCESS_LINE_MEDIUM_UNSPECIFIED",
+      "controllerId": "",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_PRESERVED",
+      "position_mm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "positionGltf_m": [
+        0.0,
+        0.0,
+        -0.0
+      ]
+    },
+    {
+      "assetCode": "PIPE-W01",
+      "physicalTag": "",
+      "meshNames": [
+        "PIPE-W01"
+      ],
+      "category": "utility_pipe",
+      "family": "PROCESS_LINE_MEDIUM_UNSPECIFIED",
+      "controllerId": "",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "positionGltf_m": [
+        0.0,
+        0.0,
+        -0.0
+      ]
+    },
+    {
+      "assetCode": "CTRL-01",
+      "physicalTag": "CTRL-01",
+      "meshNames": [
+        "CTRL-01"
+      ],
+      "category": "controller",
+      "family": "STM32F103RCT6",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_PRESERVED",
+      "position_mm": [
+        109.99999940395355,
+        110.00001430511475,
+        135.00000536441803
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.10999999940395355,
+        0.11000001430511475,
+        0.13500000536441803
+      ],
+      "positionGltf_m": [
+        0.10999999940395355,
+        0.13500000536441803,
+        -0.11000001430511475
+      ]
+    },
+    {
+      "assetCode": "RS485-01",
+      "physicalTag": "",
+      "meshNames": [
+        "RS485-01"
+      ],
+      "category": "rs485_module",
+      "family": "JSM485_NONISOLATED",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        165.00000655651093,
+        590.0000333786011,
+        135.00000536441803
+      ],
+      "dimensionEvidence": "APPROX_33x17_MM_IMAGE_NOT_MEASURED",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.16500000655651093,
+        0.5900000333786011,
+        0.13500000536441803
+      ],
+      "positionGltf_m": [
+        0.16500000655651093,
+        0.13500000536441803,
+        -0.5900000333786011
+      ]
+    },
+    {
+      "assetCode": "REG-01",
+      "physicalTag": "",
+      "meshNames": [
+        "REG-01"
+      ],
+      "category": "regulator",
+      "family": "ZONE_REGULATOR_TBD",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        55.000003427267075,
+        590.0000333786011,
+        135.00000536441803
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.055000003427267075,
+        0.5900000333786011,
+        0.13500000536441803
+      ],
+      "positionGltf_m": [
+        0.055000003427267075,
+        0.13500000536441803,
+        -0.5900000333786011
+      ]
+    },
+    {
+      "assetCode": "CTRL-02",
+      "physicalTag": "CTRL-02",
+      "meshNames": [
+        "CTRL-02"
+      ],
+      "category": "controller",
+      "family": "STM32F103RCT6",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_PRESERVED",
+      "position_mm": [
+        110.00001430511475,
+        589.9999737739563,
+        135.00000536441803
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.11000001430511475,
+        0.5899999737739563,
+        0.13500000536441803
+      ],
+      "positionGltf_m": [
+        0.11000001430511475,
+        0.13500000536441803,
+        -0.5899999737739563
+      ]
+    },
+    {
+      "assetCode": "RS485-02",
+      "physicalTag": "",
+      "meshNames": [
+        "RS485-02"
+      ],
+      "category": "rs485_module",
+      "family": "JSM485_NONISOLATED",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        645.0000405311584,
+        590.0000333786011,
+        135.00000536441803
+      ],
+      "dimensionEvidence": "APPROX_33x17_MM_IMAGE_NOT_MEASURED",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.6450000405311584,
+        0.5900000333786011,
+        0.13500000536441803
+      ],
+      "positionGltf_m": [
+        0.6450000405311584,
+        0.13500000536441803,
+        -0.5900000333786011
+      ]
+    },
+    {
+      "assetCode": "REG-02",
+      "physicalTag": "",
+      "meshNames": [
+        "REG-02"
+      ],
+      "category": "regulator",
+      "family": "ZONE_REGULATOR_TBD",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        535.0000262260437,
+        590.0000333786011,
+        135.00000536441803
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.5350000262260437,
+        0.5900000333786011,
+        0.13500000536441803
+      ],
+      "positionGltf_m": [
+        0.5350000262260437,
+        0.13500000536441803,
+        -0.5900000333786011
+      ]
+    },
+    {
+      "assetCode": "CTRL-03",
+      "physicalTag": "CTRL-03",
+      "meshNames": [
+        "CTRL-03"
+      ],
+      "category": "controller",
+      "family": "STM32F103RCT6",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        589.9999737739563,
+        109.99999940395355,
+        135.00000536441803
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.5899999737739563,
+        0.10999999940395355,
+        0.13500000536441803
+      ],
+      "positionGltf_m": [
+        0.5899999737739563,
+        0.13500000536441803,
+        -0.10999999940395355
+      ]
+    },
+    {
+      "assetCode": "RS485-03",
+      "physicalTag": "",
+      "meshNames": [
+        "RS485-03"
+      ],
+      "category": "rs485_module",
+      "family": "JSM485_NONISOLATED",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        165.00000655651093,
+        110.00000685453415,
+        135.00000536441803
+      ],
+      "dimensionEvidence": "APPROX_33x17_MM_IMAGE_NOT_MEASURED",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.16500000655651093,
+        0.11000000685453415,
+        0.13500000536441803
+      ],
+      "positionGltf_m": [
+        0.16500000655651093,
+        0.13500000536441803,
+        -0.11000000685453415
+      ]
+    },
+    {
+      "assetCode": "REG-03",
+      "physicalTag": "",
+      "meshNames": [
+        "REG-03"
+      ],
+      "category": "regulator",
+      "family": "ZONE_REGULATOR_TBD",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        55.000003427267075,
+        110.00000685453415,
+        135.00000536441803
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.055000003427267075,
+        0.11000000685453415,
+        0.13500000536441803
+      ],
+      "positionGltf_m": [
+        0.055000003427267075,
+        0.13500000536441803,
+        -0.11000000685453415
+      ]
+    },
+    {
+      "assetCode": "CTRL-04",
+      "physicalTag": "CTRL-04",
+      "meshNames": [
+        "CTRL-04"
+      ],
+      "category": "controller",
+      "family": "STM32F103RCT6",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        589.9999737739563,
+        589.9999737739563,
+        135.00000536441803
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.5899999737739563,
+        0.5899999737739563,
+        0.13500000536441803
+      ],
+      "positionGltf_m": [
+        0.5899999737739563,
+        0.13500000536441803,
+        -0.5899999737739563
+      ]
+    },
+    {
+      "assetCode": "RS485-04",
+      "physicalTag": "",
+      "meshNames": [
+        "RS485-04"
+      ],
+      "category": "rs485_module",
+      "family": "JSM485_NONISOLATED",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        645.0000405311584,
+        110.00000685453415,
+        135.00000536441803
+      ],
+      "dimensionEvidence": "APPROX_33x17_MM_IMAGE_NOT_MEASURED",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.6450000405311584,
+        0.11000000685453415,
+        0.13500000536441803
+      ],
+      "positionGltf_m": [
+        0.6450000405311584,
+        0.13500000536441803,
+        -0.11000000685453415
+      ]
+    },
+    {
+      "assetCode": "REG-04",
+      "physicalTag": "",
+      "meshNames": [
+        "REG-04"
+      ],
+      "category": "regulator",
+      "family": "ZONE_REGULATOR_TBD",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        535.0000262260437,
+        110.00000685453415,
+        135.00000536441803
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.5350000262260437,
+        0.11000000685453415,
+        0.13500000536441803
+      ],
+      "positionGltf_m": [
+        0.5350000262260437,
+        0.13500000536441803,
+        -0.11000000685453415
+      ]
+    },
+    {
+      "assetCode": "POWER-ENTRY-01",
+      "physicalTag": "",
+      "meshNames": [
+        "LV_POWER_ENTRY"
+      ],
+      "category": "power_entry",
+      "family": "LOW_VOLTAGE_RATING_TBD",
+      "controllerId": "",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        350.0,
+        676.0,
+        145.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION"
+    },
+    {
+      "assetCode": "NET-01",
+      "physicalTag": "ESP32-S3-GATEWAY",
+      "meshNames": [
+        "MESH_ESP01S_01"
+      ],
+      "category": "gateway",
+      "family": "ESP32-S3_RS485_MQTT",
+      "controllerId": "",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_HARDWARE_MIGRATION_PENDING",
+      "position_mm": [
+        80.0,
+        350.0,
+        150.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION"
+    },
+    {
+      "assetCode": "RS485-05",
+      "physicalTag": "",
+      "meshNames": [
+        "RS485-05"
+      ],
+      "category": "rs485_module",
+      "family": "JSM485_NONISOLATED",
+      "controllerId": "NET-01",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        120.00000476837158,
+        350.0000238418579,
+        150.00000596046448
+      ],
+      "dimensionEvidence": "APPROX_33x17_MM_IMAGE_NOT_MEASURED",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.12000000476837158,
+        0.3500000238418579,
+        0.15000000596046448
+      ],
+      "positionGltf_m": [
+        0.12000000476837158,
+        0.15000000596046448,
+        -0.3500000238418579
+      ]
+    },
+    {
+      "assetCode": "MQ2-04",
+      "physicalTag": "MQ2-04",
+      "meshNames": [
+        "MQ2-04"
+      ],
+      "category": "external_sensor",
+      "family": "MQ2",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "P4",
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        217.00002253055573,
+        578.9999961853027,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P4",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "MQ2-04",
+      "stationGroupNode": "STATION_P4",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "positionBlender_m": [
+        0.21700002253055573,
+        0.5789999961853027,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.21700002253055573,
+        0.1510000079870224,
+        -0.5789999961853027
+      ]
+    },
+    {
+      "assetCode": "MQ4-04",
+      "physicalTag": "MQ4-04",
+      "meshNames": [
+        "MQ4-04"
+      ],
+      "category": "external_sensor",
+      "family": "MQ4",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "P4",
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        303.0000329017639,
+        578.9999961853027,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P4",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "MQ4-04",
+      "stationGroupNode": "STATION_P4",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "positionBlender_m": [
+        0.3030000329017639,
+        0.5789999961853027,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3030000329017639,
+        0.1510000079870224,
+        -0.5789999961853027
+      ]
+    },
+    {
+      "assetCode": "CO-04",
+      "physicalTag": "CO-04",
+      "meshNames": [
+        "CO-04"
+      ],
+      "category": "external_sensor",
+      "family": "CO",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "P4",
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        217.00002253055573,
+        501.0000467300415,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P4",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "CO-04",
+      "stationGroupNode": "STATION_P4",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "positionBlender_m": [
+        0.21700002253055573,
+        0.5010000467300415,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.21700002253055573,
+        0.1510000079870224,
+        -0.5010000467300415
+      ]
+    },
+    {
+      "assetCode": "FLAME-04",
+      "physicalTag": "FLAME-04",
+      "meshNames": [
+        "FLAME-04"
+      ],
+      "category": "external_sensor",
+      "family": "FLAME",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "P4",
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        303.0000329017639,
+        501.0000467300415,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P4",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "FLAME-04",
+      "stationGroupNode": "STATION_P4",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "positionBlender_m": [
+        0.3030000329017639,
+        0.5010000467300415,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3030000329017639,
+        0.1510000079870224,
+        -0.5010000467300415
+      ]
+    },
+    {
+      "assetCode": "SMOKE-01",
+      "physicalTag": "MQ2-01",
+      "meshNames": [
+        "SMOKE-01"
+      ],
+      "category": "external_sensor",
+      "family": "MQ2",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "P1",
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        397.0000147819519,
+        578.9999961853027,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P1",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "SMOKE-01",
+      "stationGroupNode": "STATION_P1",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "positionBlender_m": [
+        0.3970000147819519,
+        0.5789999961853027,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3970000147819519,
+        0.1510000079870224,
+        -0.5789999961853027
+      ]
+    },
+    {
+      "assetCode": "GAS-CH4-01",
+      "physicalTag": "MQ4-01",
+      "meshNames": [
+        "GAS-CH4-01"
+      ],
+      "category": "external_sensor",
+      "family": "MQ4",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "P1",
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        483.0000400543213,
+        578.9999961853027,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P1",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "GAS-CH4-01",
+      "stationGroupNode": "STATION_P1",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "positionBlender_m": [
+        0.4830000400543213,
+        0.5789999961853027,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4830000400543213,
+        0.1510000079870224,
+        -0.5789999961853027
+      ]
+    },
+    {
+      "assetCode": "GAS-CO-01",
+      "physicalTag": "CO-01",
+      "meshNames": [
+        "GAS-CO-01"
+      ],
+      "category": "external_sensor",
+      "family": "CO",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "P1",
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        397.0000147819519,
+        501.0000467300415,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P1",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "GAS-CO-01",
+      "stationGroupNode": "STATION_P1",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "positionBlender_m": [
+        0.3970000147819519,
+        0.5010000467300415,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3970000147819519,
+        0.1510000079870224,
+        -0.5010000467300415
+      ]
+    },
+    {
+      "assetCode": "FLAME-01",
+      "physicalTag": "FLAME-01",
+      "meshNames": [
+        "FLAME-01"
+      ],
+      "category": "external_sensor",
+      "family": "FLAME",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "P1",
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        483.0000400543213,
+        501.0000467300415,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P1",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "FLAME-01",
+      "stationGroupNode": "STATION_P1",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "positionBlender_m": [
+        0.4830000400543213,
+        0.5010000467300415,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4830000400543213,
+        0.1510000079870224,
+        -0.5010000467300415
+      ]
+    },
+    {
+      "assetCode": "MQ2-03",
+      "physicalTag": "MQ2-03",
+      "meshNames": [
+        "MQ2-03"
+      ],
+      "category": "external_sensor",
+      "family": "MQ2",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "P3",
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "position_mm": [
+        217.00002253055573,
+        199.0000158548355,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P3",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "MQ2-03",
+      "stationGroupNode": "STATION_P3",
+      "positionBlender_m": [
+        0.21700002253055573,
+        0.1990000158548355,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.21700002253055573,
+        0.1510000079870224,
+        -0.1990000158548355
+      ]
+    },
+    {
+      "assetCode": "MQ4-03",
+      "physicalTag": "MQ4-03",
+      "meshNames": [
+        "MQ4-03"
+      ],
+      "category": "external_sensor",
+      "family": "MQ4",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "P3",
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "position_mm": [
+        303.0000329017639,
+        199.0000158548355,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P3",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "MQ4-03",
+      "stationGroupNode": "STATION_P3",
+      "positionBlender_m": [
+        0.3030000329017639,
+        0.1990000158548355,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3030000329017639,
+        0.1510000079870224,
+        -0.1990000158548355
+      ]
+    },
+    {
+      "assetCode": "CO-03",
+      "physicalTag": "CO-03",
+      "meshNames": [
+        "CO-03"
+      ],
+      "category": "external_sensor",
+      "family": "CO",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "P3",
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "position_mm": [
+        217.00002253055573,
+        121.0000067949295,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P3",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "CO-03",
+      "stationGroupNode": "STATION_P3",
+      "positionBlender_m": [
+        0.21700002253055573,
+        0.1210000067949295,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.21700002253055573,
+        0.1510000079870224,
+        -0.1210000067949295
+      ]
+    },
+    {
+      "assetCode": "FLAME-03",
+      "physicalTag": "FLAME-03",
+      "meshNames": [
+        "FLAME-03"
+      ],
+      "category": "external_sensor",
+      "family": "FLAME",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "P3",
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "position_mm": [
+        303.0000329017639,
+        121.0000067949295,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P3",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "FLAME-03",
+      "stationGroupNode": "STATION_P3",
+      "positionBlender_m": [
+        0.3030000329017639,
+        0.1210000067949295,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3030000329017639,
+        0.1510000079870224,
+        -0.1210000067949295
+      ]
+    },
+    {
+      "assetCode": "MQ2-02",
+      "physicalTag": "MQ2-02",
+      "meshNames": [
+        "MQ2-02"
+      ],
+      "category": "external_sensor",
+      "family": "MQ2",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "P2",
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        397.0000147819519,
+        199.0000158548355,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P2",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "MQ2-02",
+      "stationGroupNode": "STATION_P2",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "positionBlender_m": [
+        0.3970000147819519,
+        0.1990000158548355,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3970000147819519,
+        0.1510000079870224,
+        -0.1990000158548355
+      ]
+    },
+    {
+      "assetCode": "MQ4-02",
+      "physicalTag": "MQ4-02",
+      "meshNames": [
+        "MQ4-02"
+      ],
+      "category": "external_sensor",
+      "family": "MQ4",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "P2",
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        483.0000400543213,
+        199.0000158548355,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P2",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "MQ4-02",
+      "stationGroupNode": "STATION_P2",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "positionBlender_m": [
+        0.4830000400543213,
+        0.1990000158548355,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4830000400543213,
+        0.1510000079870224,
+        -0.1990000158548355
+      ]
+    },
+    {
+      "assetCode": "CO-02",
+      "physicalTag": "CO-02",
+      "meshNames": [
+        "CO-02"
+      ],
+      "category": "external_sensor",
+      "family": "CO",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "P2",
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        397.0000147819519,
+        121.0000067949295,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P2",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "CO-02",
+      "stationGroupNode": "STATION_P2",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "positionBlender_m": [
+        0.3970000147819519,
+        0.1210000067949295,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3970000147819519,
+        0.1510000079870224,
+        -0.1210000067949295
+      ]
+    },
+    {
+      "assetCode": "FLAME-02",
+      "physicalTag": "FLAME-02",
+      "meshNames": [
+        "FLAME-02"
+      ],
+      "category": "external_sensor",
+      "family": "FLAME",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "P2",
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        483.0000400543213,
+        121.0000067949295,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P2",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "FLAME-02",
+      "stationGroupNode": "STATION_P2",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "positionBlender_m": [
+        0.4830000400543213,
+        0.1210000067949295,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4830000400543213,
+        0.1510000079870224,
+        -0.1210000067949295
+      ]
+    },
+    {
+      "assetCode": "MQ2-05",
+      "physicalTag": "MQ2-05",
+      "meshNames": [
+        "MQ2-05"
+      ],
+      "category": "external_sensor",
+      "family": "MQ2",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "P5",
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "position_mm": [
+        307.0000112056732,
+        389.0000283718109,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P5",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "MQ2-05",
+      "stationGroupNode": "STATION_P5",
+      "positionBlender_m": [
+        0.3070000112056732,
+        0.3890000283718109,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3070000112056732,
+        0.1510000079870224,
+        -0.3890000283718109
+      ]
+    },
+    {
+      "assetCode": "MQ4-05",
+      "physicalTag": "MQ4-05",
+      "meshNames": [
+        "MQ4-05"
+      ],
+      "category": "external_sensor",
+      "family": "MQ4",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "P5",
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "position_mm": [
+        393.0000364780426,
+        389.0000283718109,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P5",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "MQ4-05",
+      "stationGroupNode": "STATION_P5",
+      "positionBlender_m": [
+        0.3930000364780426,
+        0.3890000283718109,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3930000364780426,
+        0.1510000079870224,
+        -0.3890000283718109
+      ]
+    },
+    {
+      "assetCode": "CO-05",
+      "physicalTag": "CO-05",
+      "meshNames": [
+        "CO-05"
+      ],
+      "category": "external_sensor",
+      "family": "CO",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "P5",
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "position_mm": [
+        307.0000112056732,
+        311.0000193119049,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P5",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "CO-05",
+      "stationGroupNode": "STATION_P5",
+      "positionBlender_m": [
+        0.3070000112056732,
+        0.3110000193119049,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3070000112056732,
+        0.1510000079870224,
+        -0.3110000193119049
+      ]
+    },
+    {
+      "assetCode": "FLAME-05",
+      "physicalTag": "FLAME-05",
+      "meshNames": [
+        "FLAME-05"
+      ],
+      "category": "external_sensor",
+      "family": "FLAME",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "P5",
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "position_mm": [
+        393.0000364780426,
+        311.0000193119049,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P5",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "alarmTargetNode": "FLAME-05",
+      "stationGroupNode": "STATION_P5",
+      "positionBlender_m": [
+        0.3930000364780426,
+        0.3110000193119049,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3930000364780426,
+        0.1510000079870224,
+        -0.3110000193119049
+      ]
+    },
+    {
+      "assetCode": "WET-TRAY-01",
+      "physicalTag": "",
+      "meshNames": [
+        "WET_TRAY_01"
+      ],
+      "category": "wet_tray",
+      "family": "INDEPENDENT_CATCH_POSITION",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        115.0,
+        440.0,
+        17.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION"
+    },
+    {
+      "assetCode": "LEVEL-L01",
+      "physicalTag": "LEVEL-01",
+      "meshNames": [
+        "MESH_V12-FSIR02_L01_BOARD",
+        "MESH_V12-FSIR02_L01_PROBE"
+      ],
+      "category": "external_sensor",
+      "family": "LEVEL",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_PRESERVED_INSTALLATION_CHANGED",
+      "position_mm": [
+        115.0,
+        500.0,
+        105.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P4",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "alarmTargetNode": "MESH_V12-FSIR02_L01_BOARD",
+      "stationGroupNode": "STATION_P4"
+    },
+    {
+      "assetCode": "ENV-01",
+      "physicalTag": "SHT-01",
+      "meshNames": [
+        "ENV-01"
+      ],
+      "category": "external_sensor",
+      "family": "SHT",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_HARDWARE_MIGRATION_PENDING",
+      "position_mm": [
+        110.00000685453415,
+        520.0000405311584,
+        180.00000715255737
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P4",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "alarmTargetNode": "ENV-01",
+      "stationGroupNode": "STATION_P4",
+      "positionBlender_m": [
+        0.11000000685453415,
+        0.5200000405311584,
+        0.18000000715255737
+      ],
+      "positionGltf_m": [
+        0.11000000685453415,
+        0.18000000715255737,
+        -0.5200000405311584
+      ]
+    },
+    {
+      "assetCode": "WET-TRAY-02",
+      "physicalTag": "",
+      "meshNames": [
+        "WET_TRAY_02"
+      ],
+      "category": "wet_tray",
+      "family": "INDEPENDENT_CATCH_POSITION",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        585.0,
+        440.0,
+        17.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION"
+    },
+    {
+      "assetCode": "LEVEL-L02",
+      "physicalTag": "LEVEL-02",
+      "meshNames": [
+        "MESH_V12-FSIR02_L02_BOARD",
+        "MESH_V12-FSIR02_L02_PROBE"
+      ],
+      "category": "external_sensor",
+      "family": "LEVEL",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_PRESERVED_INSTALLATION_CHANGED",
+      "position_mm": [
+        585.0,
+        500.0,
+        105.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P1",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "alarmTargetNode": "MESH_V12-FSIR02_L02_BOARD",
+      "stationGroupNode": "STATION_P1"
+    },
+    {
+      "assetCode": "ENV-02",
+      "physicalTag": "SHT-02",
+      "meshNames": [
+        "ENV-02"
+      ],
+      "category": "external_sensor",
+      "family": "SHT",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        590.0000333786011,
+        520.0000405311584,
+        180.00000715255737
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P1",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "alarmTargetNode": "ENV-02",
+      "stationGroupNode": "STATION_P1",
+      "positionBlender_m": [
+        0.5900000333786011,
+        0.5200000405311584,
+        0.18000000715255737
+      ],
+      "positionGltf_m": [
+        0.5900000333786011,
+        0.18000000715255737,
+        -0.5200000405311584
+      ]
+    },
+    {
+      "assetCode": "WET-TRAY-03",
+      "physicalTag": "",
+      "meshNames": [
+        "WET_TRAY_03"
+      ],
+      "category": "wet_tray",
+      "family": "INDEPENDENT_CATCH_POSITION",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        115.0,
+        260.0,
+        17.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION"
+    },
+    {
+      "assetCode": "LEVEL-L03",
+      "physicalTag": "LEVEL-03",
+      "meshNames": [
+        "MESH_V12-FSIR02_L03_BOARD",
+        "MESH_V12-FSIR02_L03_PROBE"
+      ],
+      "category": "external_sensor",
+      "family": "LEVEL",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_PRESERVED_INSTALLATION_CHANGED",
+      "position_mm": [
+        115.0,
+        200.0,
+        105.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P3",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "alarmTargetNode": "MESH_V12-FSIR02_L03_BOARD",
+      "stationGroupNode": "STATION_P3"
+    },
+    {
+      "assetCode": "ENV-03",
+      "physicalTag": "SHT-03",
+      "meshNames": [
+        "ENV-03"
+      ],
+      "category": "external_sensor",
+      "family": "SHT",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        110.00000685453415,
+        180.00000715255737,
+        180.00000715255737
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P3",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "alarmTargetNode": "ENV-03",
+      "stationGroupNode": "STATION_P3",
+      "positionBlender_m": [
+        0.11000000685453415,
+        0.18000000715255737,
+        0.18000000715255737
+      ],
+      "positionGltf_m": [
+        0.11000000685453415,
+        0.18000000715255737,
+        -0.18000000715255737
+      ]
+    },
+    {
+      "assetCode": "WET-TRAY-04",
+      "physicalTag": "",
+      "meshNames": [
+        "WET_TRAY_04"
+      ],
+      "category": "wet_tray",
+      "family": "INDEPENDENT_CATCH_POSITION",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        585.0,
+        260.0,
+        17.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION"
+    },
+    {
+      "assetCode": "LEVEL-L04",
+      "physicalTag": "LEVEL-04",
+      "meshNames": [
+        "MESH_V12-FSIR02_L04_BOARD",
+        "MESH_V12-FSIR02_L04_PROBE"
+      ],
+      "category": "external_sensor",
+      "family": "LEVEL",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_PRESERVED_INSTALLATION_CHANGED",
+      "position_mm": [
+        585.0,
+        200.0,
+        105.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P2",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "alarmTargetNode": "MESH_V12-FSIR02_L04_BOARD",
+      "stationGroupNode": "STATION_P2"
+    },
+    {
+      "assetCode": "ENV-04",
+      "physicalTag": "SHT-04",
+      "meshNames": [
+        "ENV-04"
+      ],
+      "category": "external_sensor",
+      "family": "SHT",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        590.0000333786011,
+        180.00000715255737,
+        180.00000715255737
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P2",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "alarmTargetNode": "ENV-04",
+      "stationGroupNode": "STATION_P2",
+      "positionBlender_m": [
+        0.5900000333786011,
+        0.18000000715255737,
+        0.18000000715255737
+      ],
+      "positionGltf_m": [
+        0.5900000333786011,
+        0.18000000715255737,
+        -0.18000000715255737
+      ]
+    },
+    {
+      "assetCode": "GAS-O2-01",
+      "physicalTag": "O2-01",
+      "meshNames": [
+        "GAS-O2-01"
+      ],
+      "category": "external_sensor",
+      "family": "O2",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "",
+      "identityStatus": "MODEL_RELOCATED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        440.0000274181366,
+        540.0000214576721,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P1",
+      "stationLinkKind": "DIRECT_CENTER_OXYGEN_MEMBER",
+      "alarmTargetNode": "GAS-O2-01",
+      "stationGroupNode": "STATION_P1",
+      "positionBlender_m": [
+        0.4400000274181366,
+        0.5400000214576721,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4400000274181366,
+        0.1510000079870224,
+        -0.5400000214576721
+      ],
+      "physicalMember": true,
+      "identityEvidence": "Model-only location/number migration per oxygen-placement-migration.json. Original controllerId retained; physical labels, firmware and live registry not modified."
+    },
+    {
+      "assetCode": "GAS-O2-05",
+      "physicalTag": "O2-05",
+      "meshNames": [
+        "GAS-O2-05"
+      ],
+      "category": "external_sensor",
+      "family": "O2",
+      "controllerId": "CTRL-03",
+      "detectionPoint": "",
+      "identityStatus": "MODEL_RELOCATED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        350.0000238418579,
+        350.0000238418579,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P5",
+      "stationLinkKind": "DIRECT_CENTER_OXYGEN_MEMBER",
+      "alarmTargetNode": "GAS-O2-05",
+      "stationGroupNode": "STATION_P5",
+      "positionBlender_m": [
+        0.3500000238418579,
+        0.3500000238418579,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3500000238418579,
+        0.1510000079870224,
+        -0.3500000238418579
+      ],
+      "physicalMember": true,
+      "identityEvidence": "Model-only location/number migration per oxygen-placement-migration.json. Original controllerId retained; physical labels, firmware and live registry not modified."
+    },
+    {
+      "assetCode": "GAS-O2-02",
+      "physicalTag": "O2-02",
+      "meshNames": [
+        "GAS-O2-02"
+      ],
+      "category": "external_sensor",
+      "family": "O2",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "",
+      "identityStatus": "MODEL_RELOCATED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "position_mm": [
+        440.0000274181366,
+        160.0000113248825,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "stationId": "P2",
+      "stationLinkKind": "DIRECT_CENTER_OXYGEN_MEMBER",
+      "alarmTargetNode": "GAS-O2-02",
+      "stationGroupNode": "STATION_P2",
+      "positionBlender_m": [
+        0.4400000274181366,
+        0.1600000113248825,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4400000274181366,
+        0.1510000079870224,
+        -0.1600000113248825
+      ],
+      "physicalMember": true,
+      "identityEvidence": "Model-only location/number migration per oxygen-placement-migration.json. Original controllerId retained; physical labels, firmware and live registry not modified."
+    },
+    {
+      "assetCode": "DISP-02",
+      "physicalTag": "",
+      "meshNames": [
+        "MESH_DISP_02"
+      ],
+      "category": "business_display",
+      "family": "ST7735S_TFT",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        110.0,
+        630.0,
+        158.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION"
+    },
+    {
+      "assetCode": "DISP-01",
+      "physicalTag": "",
+      "meshNames": [
+        "MESH_DISP_01"
+      ],
+      "category": "business_display",
+      "family": "ST7735S_TFT",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_PRESERVED",
+      "position_mm": [
+        590.0,
+        630.0,
+        158.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION"
+    },
+    {
+      "assetCode": "RELAY-01",
+      "physicalTag": "",
+      "meshNames": [
+        "MESH_RELAY_01"
+      ],
+      "category": "relay",
+      "family": "ONE_RELAY_CHANNEL",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_PRESERVED",
+      "position_mm": [
+        55.0,
+        625.0,
+        137.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION"
+    },
+    {
+      "assetCode": "INA226-01",
+      "physicalTag": "",
+      "meshNames": [
+        "INA226-01"
+      ],
+      "category": "power_monitor",
+      "family": "INA226",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        165.00000655651093,
+        625.0,
+        137.00000941753387
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.16500000655651093,
+        0.625,
+        0.13700000941753387
+      ],
+      "positionGltf_m": [
+        0.16500000655651093,
+        0.13700000941753387,
+        -0.625
+      ]
+    },
+    {
+      "assetCode": "RELAY-02",
+      "physicalTag": "",
+      "meshNames": [
+        "RELAY-02"
+      ],
+      "category": "relay",
+      "family": "ONE_RELAY_CHANNEL",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        535.0000262260437,
+        145.00001072883606,
+        137.00000941753387
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.5350000262260437,
+        0.14500001072883606,
+        0.13700000941753387
+      ],
+      "positionGltf_m": [
+        0.5350000262260437,
+        0.13700000941753387,
+        -0.14500001072883606
+      ]
+    },
+    {
+      "assetCode": "INA226-02",
+      "physicalTag": "",
+      "meshNames": [
+        "INA226-02"
+      ],
+      "category": "power_monitor",
+      "family": "INA226",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        645.0000405311584,
+        145.00001072883606,
+        137.00000941753387
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.6450000405311584,
+        0.14500001072883606,
+        0.13700000941753387
+      ],
+      "positionGltf_m": [
+        0.6450000405311584,
+        0.13700000941753387,
+        -0.14500001072883606
+      ]
+    },
+    {
+      "assetCode": "JOYSTICK-01",
+      "physicalTag": "",
+      "meshNames": [
+        "JOYSTICK-01"
+      ],
+      "category": "joystick",
+      "family": "ANALOG_JOYSTICK",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        635.0000500679016,
+        550.000011920929,
+        155.0000011920929
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.6350000500679016,
+        0.550000011920929,
+        0.1550000011920929
+      ],
+      "positionGltf_m": [
+        0.6350000500679016,
+        0.1550000011920929,
+        -0.550000011920929
+      ]
+    },
+    {
+      "assetCode": "BUZZ-01",
+      "physicalTag": "",
+      "meshNames": [
+        "MESH_BUZZ_01"
+      ],
+      "category": "buzzer",
+      "family": "ACTIVE_BUZZER",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_PRESERVED",
+      "position_mm": [
+        545.0,
+        550.0,
+        154.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION"
+    },
+    {
+      "assetCode": "LED-01",
+      "physicalTag": "",
+      "meshNames": [
+        "MESH_LED_01"
+      ],
+      "category": "led_strip",
+      "family": "EXISTING_LED_STRIP_LENGTH_TBD",
+      "controllerId": "CTRL-02",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_PRESERVED",
+      "position_mm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION"
+    },
+    {
+      "assetCode": "FAN-01",
+      "physicalTag": "",
+      "meshNames": [
+        "FAN-01"
+      ],
+      "category": "fan",
+      "family": "CHAMBER_AIR_EXHAUST",
+      "controllerId": "CTRL-01",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_PRESERVED",
+      "position_mm": [
+        530.0000309944153,
+        687.000036239624,
+        200.00000298023224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "rotorNode": "FAN-01_ROTOR",
+      "positionBlender_m": [
+        0.5300000309944153,
+        0.687000036239624,
+        0.20000000298023224
+      ],
+      "positionGltf_m": [
+        0.5300000309944153,
+        0.20000000298023224,
+        -0.687000036239624
+      ]
+    },
+    {
+      "assetCode": "FAN-02",
+      "physicalTag": "",
+      "meshNames": [
+        "FAN-02"
+      ],
+      "category": "fan",
+      "family": "CHAMBER_AIR_EXHAUST",
+      "controllerId": "CTRL-04",
+      "detectionPoint": "",
+      "identityStatus": "LEGACY_ID_PRESERVED",
+      "position_mm": [
+        160.0000113248825,
+        13.000000268220901,
+        200.00000298023224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "rotorNode": "FAN-02_ROTOR",
+      "positionBlender_m": [
+        0.1600000113248825,
+        0.013000000268220901,
+        0.20000000298023224
+      ],
+      "positionGltf_m": [
+        0.1600000113248825,
+        0.20000000298023224,
+        -0.013000000268220901
+      ]
+    },
+    {
+      "assetCode": "VOICE-01",
+      "physicalTag": "ESP32-S3-VOICE",
+      "meshNames": [
+        "VOICE-01"
+      ],
+      "category": "voice_controller",
+      "family": "ESP32-S3_XIAOZHI",
+      "controllerId": "",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        585.0000381469727,
+        350.0000238418579,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.5850000381469727,
+        0.3500000238418579,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.5850000381469727,
+        0.1510000079870224,
+        -0.3500000238418579
+      ]
+    },
+    {
+      "assetCode": "VOICE-MIC-01",
+      "physicalTag": "",
+      "meshNames": [
+        "VOICE-MIC-01"
+      ],
+      "category": "microphone",
+      "family": "INMP441",
+      "controllerId": "VOICE-01",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        564.9999976158142,
+        390.00001549720764,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.5649999976158142,
+        0.39000001549720764,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.5649999976158142,
+        0.1510000079870224,
+        -0.39000001549720764
+      ]
+    },
+    {
+      "assetCode": "VOICE-AMP-01",
+      "physicalTag": "",
+      "meshNames": [
+        "VOICE-AMP-01"
+      ],
+      "category": "amplifier",
+      "family": "MAX98357",
+      "controllerId": "VOICE-01",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        585.0000381469727,
+        305.0000071525574,
+        151.0000079870224
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.5850000381469727,
+        0.3050000071525574,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.5850000381469727,
+        0.1510000079870224,
+        -0.3050000071525574
+      ]
+    },
+    {
+      "assetCode": "VOICE-SPK-01",
+      "physicalTag": "",
+      "meshNames": [
+        "VOICE-SPK-01"
+      ],
+      "category": "speaker",
+      "family": "8OHM_3W_RATED_SIZE_TBD",
+      "controllerId": "VOICE-01",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        635.0000500679016,
+        350.0000238418579,
+        157.00000524520874
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.6350000500679016,
+        0.3500000238418579,
+        0.15700000524520874
+      ],
+      "positionGltf_m": [
+        0.6350000500679016,
+        0.15700000524520874,
+        -0.3500000238418579
+      ]
+    },
+    {
+      "assetCode": "VOICE-OLED-01",
+      "physicalTag": "",
+      "meshNames": [
+        "VOICE-OLED-01"
+      ],
+      "category": "voice_display",
+      "family": "0.91_INCH_OLED",
+      "controllerId": "VOICE-01",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        625.0,
+        393.0000066757202,
+        152.00001001358032
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.625,
+        0.3930000066757202,
+        0.15200001001358032
+      ],
+      "positionGltf_m": [
+        0.625,
+        0.15200001001358032,
+        -0.3930000066757202
+      ]
+    },
+    {
+      "assetCode": "VOICE-BUTTON-01",
+      "physicalTag": "",
+      "meshNames": [
+        "VOICE-BUTTON-01"
+      ],
+      "category": "voice_button",
+      "family": "PUSH_TO_TALK",
+      "controllerId": "VOICE-01",
+      "detectionPoint": "",
+      "identityStatus": "PROPOSED_NEW_ID",
+      "position_mm": [
+        697.4999904632568,
+        305.0000071525574,
+        159.9999964237213
+      ],
+      "dimensionEvidence": "UNMEASURED_PROXY",
+      "pin": "TBD_NOT_A_WIRING_INSTRUCTION",
+      "positionBlender_m": [
+        0.6974999904632568,
+        0.3050000071525574,
+        0.1599999964237213
+      ],
+      "positionGltf_m": [
+        0.6974999904632568,
+        0.1599999964237213,
+        -0.3050000071525574
+      ]
+    }
+  ],
+  "provenance": {
+    "sourceRevision": "square-five-station-v22-sensor-numbering",
+    "change": "Refined enclosure/materials/detail geometry, spaced station layout and centred O2-01/P1 O2-02/P2 O2-05/P5; model-only migration."
+  },
+  "numberingReference": "User top view with pipe ports at bottom: upper-left P1, upper-right P2, lower-left P4, lower-right P3, centre P5"
+}

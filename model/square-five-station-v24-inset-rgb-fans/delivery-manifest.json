@@ -1,0 +1,172 @@
+{
+  "revision": "square-five-station-v24-inset-rgb-fans",
+  "date": "2026-10-29",
+  "status": "MODEL_DELIVERY_NOT_HARDWARE_COMMISSIONING",
+  "files": [
+    {
+      "path": "asset-map.json",
+      "bytes": 60891,
+      "sha256": "e9480fdd770b44132dd805ff9bb185c15521a009044e43acb43ddc5db71fd6bf"
+    },
+    {
+      "path": "build_inset_fans.py",
+      "bytes": 16419,
+      "sha256": "2ce54643c7913fd940efb2dd5fc0d6e65f71a8db487fc84ed16d6b09b7647644"
+    },
+    {
+      "path": "export-verification.json",
+      "bytes": 2415,
+      "sha256": "bb511629088a39a8477248870241f8337a69621b2717e02be7d3aef1c3ceca93"
+    },
+    {
+      "path": "export_and_render.py",
+      "bytes": 4830,
+      "sha256": "5731a86f90a7239579f83a87d6c063a7f95346758a21df9d64ff9db6ceb7da0f"
+    },
+    {
+      "path": "fan-animation-contract.json",
+      "bytes": 2826,
+      "sha256": "a5755c24b2ab25db7a4fed2c3ee9e082c75284d0cea6cc86836b91ac1268c30d"
+    },
+    {
+      "path": "fan-mount-review.json",
+      "bytes": 2526,
+      "sha256": "ae0cdd23b03ab0cbf22ea839cf5f6ba02ff61b013a7609957c4096f638802cc9"
+    },
+    {
+      "path": "history/oxygen-placement-migration.json",
+      "bytes": 1889,
+      "sha256": "f826cf21e960e4f5e9f0d6e368028717a117004f689e950515fc38b337dd1ef6"
+    },
+    {
+      "path": "history/sensor-numbering-migration.csv",
+      "bytes": 1478,
+      "sha256": "6870866fd2695c8b39adfb6383dd1be60ecad487c79d61fdb5674e815e12c9d6"
+    },
+    {
+      "path": "history/sensor-numbering-migration.json",
+      "bytes": 13309,
+      "sha256": "77a5f93c02e8cbbe4e37c8ead9c921d00a7f0aa2e322e94adf537ef4ff2d441e"
+    },
+    {
+      "path": "integration/fan-motion.mjs",
+      "bytes": 6895,
+      "sha256": "151a29d68e0d2445e4d29e873f3a5e0cd653ea4b053b40af4f7c7dc67c5c21c4"
+    },
+    {
+      "path": "integration/README.md",
+      "bytes": 1661,
+      "sha256": "3cdad6713ec1134ed402bb343b1a64e81867f2c4996a5e65ea6243ba464a0478"
+    },
+    {
+      "path": "integration/reference-provenance.json",
+      "bytes": 480,
+      "sha256": "99e859a9551e032ef670e7c75f9c180838c890e1eceb3ddc43c693c8b7f75d1c"
+    },
+    {
+      "path": "integration/reference-verification.json",
+      "bytes": 1884,
+      "sha256": "c4867500a3cc641f9cd0fd0ff0c2fbace351db3f158654230ae3cd9ca4e0de65"
+    },
+    {
+      "path": "integration/verify-fan-motion.mjs",
+      "bytes": 5370,
+      "sha256": "995b6844174b3b49ba1a8dd9345b8d16daa372d939d63f604fdbff6a19d2409f"
+    },
+    {
+      "path": "make_motion_gif.py",
+      "bytes": 1315,
+      "sha256": "a74b5944488ef2106cddb22c062244c66138a0cb77ac7136ee2884a35d17178e"
+    },
+    {
+      "path": "previews/fan-inset-powered-example.png",
+      "bytes": 1471338,
+      "sha256": "e889cc83f3c7ed86d08f8138434ad6beac128202a979993f006b09eeb728ba14"
+    },
+    {
+      "path": "previews/overall-powered-example.png",
+      "bytes": 3488223,
+      "sha256": "41ecde70bdf4ba2211bfed7f37ca9b43ea554ec1c54146a3876751871700b14c"
+    },
+    {
+      "path": "previews/power-and-motion-example.gif",
+      "bytes": 4719159,
+      "sha256": "1b0e38dc3a4f9385383a642c756476ede300ca842b31acbf906cd827e43d84da"
+    },
+    {
+      "path": "README.md",
+      "bytes": 6601,
+      "sha256": "72936acef256c6b2ef8239d8503372a7983225a64814e382be0ba553e5f34d32"
+    },
+    {
+      "path": "render_motion_example.py",
+      "bytes": 2190,
+      "sha256": "5a8b93675fd6810e8b9c94b277bedfd13df63769ef5e4ce8a59435b5ba933bcc"
+    },
+    {
+      "path": "sensor-bindings.json",
+      "bytes": 29804,
+      "sha256": "e467c336560a45991a6641406cd1ab4f46de1b1bd39c1e97c3efe1d388c19ae5"
+    },
+    {
+      "path": "software-validation.json",
+      "bytes": 1822,
+      "sha256": "29ea7b615a3ef2bccb052117f8a3f6b2e6caa6528f5e91390be47dbed1f83728"
+    },
+    {
+      "path": "sources/square-five-station-v23-refined-acrylic/asset-map.json",
+      "bytes": 59029,
+      "sha256": "512022d9a925c3935422706841b82c23b357be39769c2e435076b8977d1fb643"
+    },
+    {
+      "path": "sources/square-five-station-v23-refined-acrylic/README.md",
+      "bytes": 394,
+      "sha256": "74a2ce2a4c351a3f7ee811258f6d237960efdb65c584fedd8c5f91d5f24b991e"
+    },
+    {
+      "path": "sources/square-five-station-v23-refined-acrylic/sensor-bindings.json",
+      "bytes": 29767,
+      "sha256": "fbeb9b70aa61eaca73c04da2f951bedfd1661e46dc787569b57b9404da9a795e"
+    },
+    {
+      "path": "sources/square-five-station-v23-refined-acrylic/square-five-station-v23-refined-acrylic.blend",
+      "bytes": 12833656,
+      "sha256": "141ce9aea2850eaceec6bd27376a35399af10e2899687c3030726273608e584c"
+    },
+    {
+      "path": "sources/square-five-station-v23-refined-acrylic/square-five-station-v23-refined-acrylic.glb",
+      "bytes": 8799364,
+      "sha256": "649d2c1d702e931a3c76871aa17fc3ea77a60920a556ddcd76132b552f86c750"
+    },
+    {
+      "path": "sources/square-five-station-v23-refined-acrylic/station-focus.json",
+      "bytes": 6425,
+      "sha256": "3cf2e9de10f007934b44d7868704d989127c0f2d6c612896547d2356547d049f"
+    },
+    {
+      "path": "square-five-station-v24-inset-rgb-fans.blend",
+      "bytes": 12968142,
+      "sha256": "1e2d7dd5548d89161c56685ba4ecbba73f5ef47fb312dee3ac54df34b9d83281"
+    },
+    {
+      "path": "square-five-station-v24-inset-rgb-fans.glb",
+      "bytes": 10159544,
+      "sha256": "b974e683be2aff9b79e6c04dcd0e753849ec4619c961d48004eb5abf84711a9c"
+    },
+    {
+      "path": "station-focus.json",
+      "bytes": 6462,
+      "sha256": "45a46fe858a3fde43a36182cee4a7265e4a1f943f367832be7bb18af2dee24db"
+    },
+    {
+      "path": "verify_export.mjs",
+      "bytes": 9471,
+      "sha256": "0267b1d931249838a649235f10d29db366f57b306403b265646417819b7b4409"
+    },
+    {
+      "path": "verify_package.py",
+      "bytes": 753,
+      "sha256": "29aa5f040c8911b45f4bee0587ea5c757b8b3063e59b97fa02927fd2dc37ef72"
+    }
+  ]
+}

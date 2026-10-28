@@ -1,0 +1,75 @@
+{
+  "status": "PASS",
+  "scope": "EXECUTABLE_REFERENCE_AND_ACTUAL_V24_GLB_SYNTHETIC_FEEDBACK",
+  "checks": [
+    {
+      "name": "powered stationary fan stays illuminated",
+      "status": "PASS"
+    },
+    {
+      "name": "unpowered coast rotates but lights are off",
+      "status": "PASS"
+    },
+    {
+      "name": "missing supply is unknown despite positive rpm",
+      "status": "PASS"
+    },
+    {
+      "name": "different fan cannot borrow readings",
+      "status": "PASS"
+    },
+    {
+      "name": "reject supply {\"quality\":\"bad\"}",
+      "status": "PASS"
+    },
+    {
+      "name": "reject supply {\"quality\":\"suspect\"}",
+      "status": "PASS"
+    },
+    {
+      "name": "reject supply {\"quality\":\"missing\"}",
+      "status": "PASS"
+    },
+    {
+      "name": "reject supply {\"unit\":\"rpm\"}",
+      "status": "PASS"
+    },
+    {
+      "name": "reject supply {\"value\":-1}",
+      "status": "PASS"
+    },
+    {
+      "name": "reject supply {\"recordedAt\":\"invalid\"}",
+      "status": "PASS"
+    },
+    {
+      "name": "reject supply {\"recordedAt\":\"2026-10-29T00:00:00.001Z\"}",
+      "status": "PASS"
+    },
+    {
+      "name": "reject supply {\"recordedAt\":\"2026-10-28T23:59:57.999Z\"}",
+      "status": "PASS"
+    },
+    {
+      "name": "reject supply {\"eventId\":\"simulation:sample\"}",
+      "status": "PASS"
+    },
+    {
+      "name": "demo offline and expired binding never claim real running/lights",
+      "status": "PASS"
+    },
+    {
+      "name": "newer invalid or conflicting sample wins over old good data",
+      "status": "PASS"
+    },
+    {
+      "name": "RGB material ownership is independent and released",
+      "status": "PASS"
+    },
+    {
+      "name": "actual V24 GLB motion lights stator and second fan remain independent",
+      "status": "PASS"
+    }
+  ],
+  "hardwareVerification": "NOT_RUN_USER_CONFIRMED_DEVICES_OFF"
+}

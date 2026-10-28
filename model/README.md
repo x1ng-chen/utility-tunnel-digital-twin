@@ -1,6 +1,17 @@
 # 综合管廊实体样品模型
 
-## 最新概念模型：V17 五检测站与独立风机叶轮（2026-10-25 发布）
+## 最新模型包：V24 透明亚克力与嵌入式 RGB 风机（2026-10-29）
+
+[V24 完整说明](square-five-station-v24-inset-rgb-fans/README.md)包含两台 120×120 mm 风机、左右侧板等大的真实嵌入口、独立七叶叶轮与固定彩虹灯环。供电反馈决定灯亮灭，TACH 转速决定转动，支持带电停转仍亮灯和断电惯性滑行灭灯的独立状态。保留 31 个传感器和五站编号，三只氧模块位于 P1/P2/P5 中央。
+
+- [Blender 原生工程](square-five-station-v24-inset-rgb-fans/square-five-station-v24-inset-rgb-fans.blend) · [GLB](square-five-station-v24-inset-rgb-fans/square-five-station-v24-inset-rgb-fans.glb) · [完整下载 ZIP](square-five-station-v24-inset-rgb-fans/v24-inset-rgb-fans-delivery.zip)。
+- [嵌入及灯效近景](square-five-station-v24-inset-rgb-fans/previews/fan-inset-powered-example.png) · [供电/转速独立演示动图](square-five-station-v24-inset-rgb-fans/previews/power-and-motion-example.gif)；动图为合成输入，不是实物录像。
+- 附冻结 V23 重建输入、资产映射、传感器身份迁移表、风机联动参考代码、验证脚本及 SHA256 清单。二进制使用 Git LFS，克隆后需执行 `git lfs pull`。
+- 本次是模型交付，设备目前未开机，真实联动未验收；未激活服务器正式模型版本。25 mm 厚度与安装公差为展示假设，加工前仍需实测。
+
+以下 V17/V16 和更早版本保留作历史，不代表 V24 已部署到现场。
+
+## 历史概念模型：V17 五检测站与独立风机叶轮（2026-10-25 发布）
 
 [V17 模型与接入说明](square-five-station-v17-fan-ready/README.md)包含 700×700×300 mm 方形结构、四角主控、五检测站、31 个独立传感器，以及两台可分别旋转的叶轮。外壳和护网固定，原生文件与 GLB 均已保存；32 项实际 GLB 加载与合成遥测检查通过。
 
@@ -9,7 +20,7 @@
 - 叶轮接口已准备，风机实际转速、停转、过期及离线反馈尚未接入运行网页。本次发布不切换运行 GLB，不代表实物联调或加工验收完成。
 - Blend、GLB、PNG 和交付 ZIP 通过 Git LFS 保存；获取完整二进制文件需执行 `git lfs pull`。文件清单按原始字节保留，可用各目录的 `delivery-manifest.json` 核对 SHA256。
 
-V17 是最新概念设计；以下 V13 与更早版本说明保留作历史和运行时溯源，不代表 V17 已上线。
+V17 为历史概念设计；以下 V13 与更早版本说明保留作历史和运行时溯源，不代表 V17 已上线。
 
 > 2026-09-28：当前台架网页已运行用户指定 V13 的导出 GLB，实物映射见 [当前状态](../docs/项目当前状态.md)。运行实现位于功能分支；PR #29 还保留独立的导出/版本切换工作，尚未合并。下文 V07/V08 等为历史阶段说明，不应据此把现场版本判为 V07。
 
