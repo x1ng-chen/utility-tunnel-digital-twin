@@ -1,0 +1,115 @@
+{
+  "revision": "square-five-station-v24-inset-rgb-fans",
+  "date": "2026-10-29",
+  "fans": [
+    {
+      "assetCode": "FAN-01",
+      "wallNode": "CLEAR_WALL_TOP",
+      "centreBlender_m": [
+        0.3499999940395355,
+        0.699999988079071,
+        0.2199999988079071
+      ],
+      "outwardAxisBlender": [
+        0,
+        1,
+        0
+      ],
+      "frameMm": [
+        120,
+        120,
+        25
+      ],
+      "cutoutMm": [
+        120.4,
+        120.4
+      ],
+      "openingCentreBlender_m": [
+        0.35,
+        0.698,
+        0.22
+      ],
+      "depthAssumed": true,
+      "rotorNode": "FAN-01_ROTOR",
+      "spinAxisGltfLocal": [
+        0,
+        1,
+        0
+      ],
+      "rgbNodePrefix": "FAN-01_RGB_SEGMENT_",
+      "originalControllerIdPreserved": "CTRL-01"
+    },
+    {
+      "assetCode": "FAN-02",
+      "wallNode": "CLEAR_WALL_BOTTOM",
+      "centreBlender_m": [
+        0.3499999940395355,
+        0.0,
+        0.2199999988079071
+      ],
+      "outwardAxisBlender": [
+        0,
+        -1,
+        0
+      ],
+      "frameMm": [
+        120,
+        120,
+        25
+      ],
+      "cutoutMm": [
+        120.4,
+        120.4
+      ],
+      "openingCentreBlender_m": [
+        0.35,
+        0.002,
+        0.22
+      ],
+      "depthAssumed": true,
+      "rotorNode": "FAN-02_ROTOR",
+      "spinAxisGltfLocal": [
+        0,
+        1,
+        0
+      ],
+      "rgbNodePrefix": "FAN-02_RGB_SEGMENT_",
+      "originalControllerIdPreserved": "CTRL-04"
+    }
+  ],
+  "motion": {
+    "metricKey": "rotational.speed",
+    "unit": "rpm",
+    "source": "api",
+    "quality": "good",
+    "requiresFreshBindingAndHeartbeat": true,
+    "nativeAxes": [
+      0,
+      0,
+      1
+    ],
+    "gltfLocalAxis": [
+      0,
+      1,
+      0
+    ],
+    "visualSpeedCapRpm": 90
+  },
+  "lighting": {
+    "metricKey": "supply.voltage",
+    "unit": "V",
+    "source": "api",
+    "quality": "good",
+    "independentOfRpm": true,
+    "unknownVoltage": "unknown/dark, never infer power from RPM",
+    "colorMode": "Fixed rainbow visual approximation of supplied photo; no RGB control channel or actual color feedback",
+    "voltageDisplayPolicy": "Positive measured supply -> on; zero -> off. This is a display rule, not an LED voltage specification."
+  },
+  "evidence": {
+    "frameXY": "USER_CONFIRMED_120x120MM",
+    "frameDepth": "25mm assumed for display",
+    "cutoutClearance": ".2mm per side conceptual allowance; verify outer frame, corner radius, tooling and retention before fabrication",
+    "screwPitch": "105mm illustrative proxy; measure actual holes",
+    "hardware": "User confirms TACH wired and lights follow supply, independent of speed; no physical commands sent by this edit"
+  }
+}

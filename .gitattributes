@@ -54,3 +54,11 @@ firmware/four-controller/** text eol=lf
 # Preserve V20 model bytes for the presentation manifest hash.
 model/square-five-station-v20-node-numbering/** -text whitespace=cr-at-eol,-blank-at-eof
 model/square-five-station-v20-node-numbering/**/*.glb filter=lfs diff=lfs merge=lfs -text
+
+# V24 immutable model delivery and frozen rebuild inputs.
+model/square-five-station-v24-inset-rgb-fans/** -text whitespace=cr-at-eol,-blank-at-eof
+model/square-five-station-v24-inset-rgb-fans/**/*.blend filter=lfs diff=lfs merge=lfs -text
+model/square-five-station-v24-inset-rgb-fans/**/*.glb filter=lfs diff=lfs merge=lfs -text
+model/square-five-station-v24-inset-rgb-fans/**/*.png filter=lfs diff=lfs merge=lfs -text
+model/square-five-station-v24-inset-rgb-fans/**/*.gif filter=lfs diff=lfs merge=lfs -text
+model/square-five-station-v24-inset-rgb-fans/**/*.zip filter=lfs diff=lfs merge=lfs -text

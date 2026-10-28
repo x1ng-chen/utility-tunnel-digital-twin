@@ -1,0 +1,488 @@
+{
+  "revision": "square-five-station-v22-sensor-numbering",
+  "scope": "MODEL_ONLY_NO_RUNTIME_DATABASE_OR_FIRMWARE_CHANGE",
+  "changedSensors": 12,
+  "verifiedStationMembers": 20,
+  "sensors": [
+    {
+      "stationId": "P1",
+      "family": "CO",
+      "oldAssetCode": "CO-02",
+      "newAssetCode": "GAS-CO-01",
+      "oldPhysicalTag": "CO-02",
+      "newPhysicalTag": "CO-01",
+      "oldTargetNode": "CO-02",
+      "newTargetNode": "GAS-CO-01",
+      "labelNode": "CO-01_TEXT",
+      "labelText": "CO-01",
+      "controllerIdPreserved": "CTRL-02",
+      "positionBlender_m": [
+        0.4150000214576721,
+        0.5180000066757202,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4150000214576721,
+        0.1510000079870224,
+        -0.5180000066757202
+      ],
+      "changed": true
+    },
+    {
+      "stationId": "P1",
+      "family": "FLAME",
+      "oldAssetCode": "FLAME-02",
+      "newAssetCode": "FLAME-01",
+      "oldPhysicalTag": "FLAME-02",
+      "newPhysicalTag": "FLAME-01",
+      "oldTargetNode": "FLAME-02",
+      "newTargetNode": "FLAME-01",
+      "labelNode": "FLAME-01_TEXT",
+      "labelText": "FLAME-01",
+      "controllerIdPreserved": "CTRL-02",
+      "positionBlender_m": [
+        0.4650000333786011,
+        0.5180000066757202,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4650000333786011,
+        0.1510000079870224,
+        -0.5180000066757202
+      ],
+      "changed": true
+    },
+    {
+      "stationId": "P1",
+      "family": "MQ2",
+      "oldAssetCode": "MQ2-02",
+      "newAssetCode": "SMOKE-01",
+      "oldPhysicalTag": "MQ2-02",
+      "newPhysicalTag": "MQ2-01",
+      "oldTargetNode": "MQ2-02",
+      "newTargetNode": "SMOKE-01",
+      "labelNode": "MQ2-01_TEXT",
+      "labelText": "MQ2-01",
+      "controllerIdPreserved": "CTRL-02",
+      "positionBlender_m": [
+        0.4150000214576721,
+        0.562000036239624,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4150000214576721,
+        0.1510000079870224,
+        -0.562000036239624
+      ],
+      "changed": true
+    },
+    {
+      "stationId": "P1",
+      "family": "MQ4",
+      "oldAssetCode": "MQ4-02",
+      "newAssetCode": "GAS-CH4-01",
+      "oldPhysicalTag": "MQ4-02",
+      "newPhysicalTag": "MQ4-01",
+      "oldTargetNode": "MQ4-02",
+      "newTargetNode": "GAS-CH4-01",
+      "labelNode": "MQ4-01_TEXT",
+      "labelText": "MQ4-01",
+      "controllerIdPreserved": "CTRL-02",
+      "positionBlender_m": [
+        0.4650000333786011,
+        0.562000036239624,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4650000333786011,
+        0.1510000079870224,
+        -0.562000036239624
+      ],
+      "changed": true
+    },
+    {
+      "stationId": "P2",
+      "family": "CO",
+      "oldAssetCode": "CO-04",
+      "newAssetCode": "CO-02",
+      "oldPhysicalTag": "CO-04",
+      "newPhysicalTag": "CO-02",
+      "oldTargetNode": "CO-04",
+      "newTargetNode": "CO-02",
+      "labelNode": "CO-02_TEXT",
+      "labelText": "CO-02",
+      "controllerIdPreserved": "CTRL-04",
+      "positionBlender_m": [
+        0.4150000214576721,
+        0.1380000114440918,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4150000214576721,
+        0.1510000079870224,
+        -0.1380000114440918
+      ],
+      "changed": true
+    },
+    {
+      "stationId": "P2",
+      "family": "FLAME",
+      "oldAssetCode": "FLAME-04",
+      "newAssetCode": "FLAME-02",
+      "oldPhysicalTag": "FLAME-04",
+      "newPhysicalTag": "FLAME-02",
+      "oldTargetNode": "FLAME-04",
+      "newTargetNode": "FLAME-02",
+      "labelNode": "FLAME-02_TEXT",
+      "labelText": "FLAME-02",
+      "controllerIdPreserved": "CTRL-04",
+      "positionBlender_m": [
+        0.4650000333786011,
+        0.1380000114440918,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4650000333786011,
+        0.1510000079870224,
+        -0.1380000114440918
+      ],
+      "changed": true
+    },
+    {
+      "stationId": "P2",
+      "family": "MQ2",
+      "oldAssetCode": "MQ2-04",
+      "newAssetCode": "MQ2-02",
+      "oldPhysicalTag": "MQ2-04",
+      "newPhysicalTag": "MQ2-02",
+      "oldTargetNode": "MQ2-04",
+      "newTargetNode": "MQ2-02",
+      "labelNode": "MQ2-02_TEXT",
+      "labelText": "MQ2-02",
+      "controllerIdPreserved": "CTRL-04",
+      "positionBlender_m": [
+        0.4150000214576721,
+        0.18200001120567322,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4150000214576721,
+        0.1510000079870224,
+        -0.18200001120567322
+      ],
+      "changed": true
+    },
+    {
+      "stationId": "P2",
+      "family": "MQ4",
+      "oldAssetCode": "MQ4-04",
+      "newAssetCode": "MQ4-02",
+      "oldPhysicalTag": "MQ4-04",
+      "newPhysicalTag": "MQ4-02",
+      "oldTargetNode": "MQ4-04",
+      "newTargetNode": "MQ4-02",
+      "labelNode": "MQ4-02_TEXT",
+      "labelText": "MQ4-02",
+      "controllerIdPreserved": "CTRL-04",
+      "positionBlender_m": [
+        0.4650000333786011,
+        0.18200001120567322,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4650000333786011,
+        0.1510000079870224,
+        -0.18200001120567322
+      ],
+      "changed": true
+    },
+    {
+      "stationId": "P3",
+      "family": "CO",
+      "oldAssetCode": "CO-03",
+      "newAssetCode": "CO-03",
+      "oldPhysicalTag": "CO-03",
+      "newPhysicalTag": "CO-03",
+      "oldTargetNode": "CO-03",
+      "newTargetNode": "CO-03",
+      "labelNode": "CO-03_TEXT",
+      "labelText": "CO-03",
+      "controllerIdPreserved": "CTRL-03",
+      "positionBlender_m": [
+        0.23500001430511475,
+        0.1380000114440918,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.23500001430511475,
+        0.1510000079870224,
+        -0.1380000114440918
+      ],
+      "changed": false
+    },
+    {
+      "stationId": "P3",
+      "family": "FLAME",
+      "oldAssetCode": "FLAME-03",
+      "newAssetCode": "FLAME-03",
+      "oldPhysicalTag": "FLAME-03",
+      "newPhysicalTag": "FLAME-03",
+      "oldTargetNode": "FLAME-03",
+      "newTargetNode": "FLAME-03",
+      "labelNode": "FLAME-03_TEXT",
+      "labelText": "FLAME-03",
+      "controllerIdPreserved": "CTRL-03",
+      "positionBlender_m": [
+        0.2850000262260437,
+        0.1380000114440918,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.2850000262260437,
+        0.1510000079870224,
+        -0.1380000114440918
+      ],
+      "changed": false
+    },
+    {
+      "stationId": "P3",
+      "family": "MQ2",
+      "oldAssetCode": "MQ2-03",
+      "newAssetCode": "MQ2-03",
+      "oldPhysicalTag": "MQ2-03",
+      "newPhysicalTag": "MQ2-03",
+      "oldTargetNode": "MQ2-03",
+      "newTargetNode": "MQ2-03",
+      "labelNode": "MQ2-03_TEXT",
+      "labelText": "MQ2-03",
+      "controllerIdPreserved": "CTRL-03",
+      "positionBlender_m": [
+        0.23500001430511475,
+        0.18200001120567322,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.23500001430511475,
+        0.1510000079870224,
+        -0.18200001120567322
+      ],
+      "changed": false
+    },
+    {
+      "stationId": "P3",
+      "family": "MQ4",
+      "oldAssetCode": "MQ4-03",
+      "newAssetCode": "MQ4-03",
+      "oldPhysicalTag": "MQ4-03",
+      "newPhysicalTag": "MQ4-03",
+      "oldTargetNode": "MQ4-03",
+      "newTargetNode": "MQ4-03",
+      "labelNode": "MQ4-03_TEXT",
+      "labelText": "MQ4-03",
+      "controllerIdPreserved": "CTRL-03",
+      "positionBlender_m": [
+        0.2850000262260437,
+        0.18200001120567322,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.2850000262260437,
+        0.1510000079870224,
+        -0.18200001120567322
+      ],
+      "changed": false
+    },
+    {
+      "stationId": "P4",
+      "family": "FLAME",
+      "oldAssetCode": "FLAME-01",
+      "newAssetCode": "FLAME-04",
+      "oldPhysicalTag": "FLAME-01",
+      "newPhysicalTag": "FLAME-04",
+      "oldTargetNode": "FLAME-01",
+      "newTargetNode": "FLAME-04",
+      "labelNode": "FLAME-04_TEXT",
+      "labelText": "FLAME-04",
+      "controllerIdPreserved": "CTRL-01",
+      "positionBlender_m": [
+        0.2850000262260437,
+        0.5180000066757202,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.2850000262260437,
+        0.1510000079870224,
+        -0.5180000066757202
+      ],
+      "changed": true
+    },
+    {
+      "stationId": "P4",
+      "family": "MQ4",
+      "oldAssetCode": "GAS-CH4-01",
+      "newAssetCode": "MQ4-04",
+      "oldPhysicalTag": "MQ4-01",
+      "newPhysicalTag": "MQ4-04",
+      "oldTargetNode": "GAS-CH4-01",
+      "newTargetNode": "MQ4-04",
+      "labelNode": "MQ4-04_TEXT",
+      "labelText": "MQ4-04",
+      "controllerIdPreserved": "CTRL-01",
+      "positionBlender_m": [
+        0.2850000262260437,
+        0.562000036239624,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.2850000262260437,
+        0.1510000079870224,
+        -0.562000036239624
+      ],
+      "changed": true
+    },
+    {
+      "stationId": "P4",
+      "family": "CO",
+      "oldAssetCode": "GAS-CO-01",
+      "newAssetCode": "CO-04",
+      "oldPhysicalTag": "CO-01",
+      "newPhysicalTag": "CO-04",
+      "oldTargetNode": "GAS-CO-01",
+      "newTargetNode": "CO-04",
+      "labelNode": "CO-04_TEXT",
+      "labelText": "CO-04",
+      "controllerIdPreserved": "CTRL-01",
+      "positionBlender_m": [
+        0.23500001430511475,
+        0.5180000066757202,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.23500001430511475,
+        0.1510000079870224,
+        -0.5180000066757202
+      ],
+      "changed": true
+    },
+    {
+      "stationId": "P4",
+      "family": "MQ2",
+      "oldAssetCode": "SMOKE-01",
+      "newAssetCode": "MQ2-04",
+      "oldPhysicalTag": "MQ2-01",
+      "newPhysicalTag": "MQ2-04",
+      "oldTargetNode": "SMOKE-01",
+      "newTargetNode": "MQ2-04",
+      "labelNode": "MQ2-04_TEXT",
+      "labelText": "MQ2-04",
+      "controllerIdPreserved": "CTRL-01",
+      "positionBlender_m": [
+        0.23500001430511475,
+        0.562000036239624,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.23500001430511475,
+        0.1510000079870224,
+        -0.562000036239624
+      ],
+      "changed": true
+    },
+    {
+      "stationId": "P5",
+      "family": "CO",
+      "oldAssetCode": "CO-05",
+      "newAssetCode": "CO-05",
+      "oldPhysicalTag": "CO-05",
+      "newPhysicalTag": "CO-05",
+      "oldTargetNode": "CO-05",
+      "newTargetNode": "CO-05",
+      "labelNode": "CO-05_TEXT",
+      "labelText": "CO-05",
+      "controllerIdPreserved": "CTRL-03",
+      "positionBlender_m": [
+        0.32500001788139343,
+        0.328000009059906,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.32500001788139343,
+        0.1510000079870224,
+        -0.328000009059906
+      ],
+      "changed": false
+    },
+    {
+      "stationId": "P5",
+      "family": "FLAME",
+      "oldAssetCode": "FLAME-05",
+      "newAssetCode": "FLAME-05",
+      "oldPhysicalTag": "FLAME-05",
+      "newPhysicalTag": "FLAME-05",
+      "oldTargetNode": "FLAME-05",
+      "newTargetNode": "FLAME-05",
+      "labelNode": "FLAME-05_TEXT",
+      "labelText": "FLAME-05",
+      "controllerIdPreserved": "CTRL-03",
+      "positionBlender_m": [
+        0.3750000298023224,
+        0.328000009059906,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3750000298023224,
+        0.1510000079870224,
+        -0.328000009059906
+      ],
+      "changed": false
+    },
+    {
+      "stationId": "P5",
+      "family": "MQ2",
+      "oldAssetCode": "MQ2-05",
+      "newAssetCode": "MQ2-05",
+      "oldPhysicalTag": "MQ2-05",
+      "newPhysicalTag": "MQ2-05",
+      "oldTargetNode": "MQ2-05",
+      "newTargetNode": "MQ2-05",
+      "labelNode": "MQ2-05_TEXT",
+      "labelText": "MQ2-05",
+      "controllerIdPreserved": "CTRL-03",
+      "positionBlender_m": [
+        0.32500001788139343,
+        0.3720000088214874,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.32500001788139343,
+        0.1510000079870224,
+        -0.3720000088214874
+      ],
+      "changed": false
+    },
+    {
+      "stationId": "P5",
+      "family": "MQ4",
+      "oldAssetCode": "MQ4-05",
+      "newAssetCode": "MQ4-05",
+      "oldPhysicalTag": "MQ4-05",
+      "newPhysicalTag": "MQ4-05",
+      "oldTargetNode": "MQ4-05",
+      "newTargetNode": "MQ4-05",
+      "labelNode": "MQ4-05_TEXT",
+      "labelText": "MQ4-05",
+      "controllerIdPreserved": "CTRL-03",
+      "positionBlender_m": [
+        0.3750000298023224,
+        0.3720000088214874,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3750000298023224,
+        0.1510000079870224,
+        -0.3720000088214874
+      ],
+      "changed": false
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "status": "PASS",
+  "route": "LIVE_BLENDER_MCP",
+  "semanticAssets": 69,
+  "externalSensors": 31,
+  "fans": [
+    {
+      "assetCode": "FAN-01",
+      "wallNode": "CLEAR_WALL_TOP",
+      "centreBlender_m": [
+        0.3499999940395355,
+        0.699999988079071,
+        0.2199999988079071
+      ],
+      "outwardAxisBlender": [
+        0,
+        1,
+        0
+      ],
+      "frameMm": [
+        120,
+        120,
+        25
+      ],
+      "cutoutMm": [
+        120.4,
+        120.4
+      ],
+      "openingCentreBlender_m": [
+        0.35,
+        0.698,
+        0.22
+      ],
+      "depthAssumed": true,
+      "rotorNode": "FAN-01_ROTOR",
+      "spinAxisGltfLocal": [
+        0,
+        1,
+        0
+      ],
+      "rgbNodePrefix": "FAN-01_RGB_SEGMENT_",
+      "originalControllerIdPreserved": "CTRL-01"
+    },
+    {
+      "assetCode": "FAN-02",
+      "wallNode": "CLEAR_WALL_BOTTOM",
+      "centreBlender_m": [
+        0.3499999940395355,
+        0.0,
+        0.2199999988079071
+      ],
+      "outwardAxisBlender": [
+        0,
+        -1,
+        0
+      ],
+      "frameMm": [
+        120,
+        120,
+        25
+      ],
+      "cutoutMm": [
+        120.4,
+        120.4
+      ],
+      "openingCentreBlender_m": [
+        0.35,
+        0.002,
+        0.22
+      ],
+      "depthAssumed": true,
+      "rotorNode": "FAN-02_ROTOR",
+      "spinAxisGltfLocal": [
+        0,
+        1,
+        0
+      ],
+      "rgbNodePrefix": "FAN-02_RGB_SEGMENT_",
+      "originalControllerIdPreserved": "CTRL-04"
+    }
+  ],
+  "sameOpeningDimensions": true,
+  "other67AssetRootsAndIdentitiesUnchanged": true,
+  "protectedInputFiles": {
+    "sources/square-five-station-v23-refined-acrylic/square-five-station-v23-refined-acrylic.blend": "141ce9aea2850eaceec6bd27376a35399af10e2899687c3030726273608e584c",
+    "sources/square-five-station-v23-refined-acrylic/square-five-station-v23-refined-acrylic.glb": "649d2c1d702e931a3c76871aa17fc3ea77a60920a556ddcd76132b552f86c750"
+  },
+  "hardwareCommandsSent": false,
+  "realDeviceLinkageVerified": false,
+  "glbNodes": 755,
+  "glbSha256": "b974e683be2aff9b79e6c04dcd0e753849ec4619c961d48004eb5abf84711a9c",
+  "nativeCentreRaysThroughBothApertures": true,
+  "frameDimensionsMeasuredFromEvaluatedMeshMm": [
+    120,
+    120,
+    25
+  ],
+  "savedDefaultEmission": 0,
+  "previewsAreSyntheticPowerExample": true,
+  "blendSha256": "1e2d7dd5548d89161c56685ba4ecbba73f5ef47fb312dee3ac54df34b9d83281"
+}

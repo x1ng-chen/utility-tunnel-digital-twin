@@ -1,0 +1,217 @@
+{
+  "revision": "square-five-station-v24-inset-rgb-fans",
+  "labelsToggleNode": "STATION_LABELS",
+  "stations": [
+    {
+      "stationId": "P1",
+      "groupNode": "STATION_P1",
+      "controllerId": "CTRL-02",
+      "topViewPosition": "UPPER_LEFT",
+      "focusPositionBlender_m": [
+        0.44,
+        0.54,
+        0.16
+      ],
+      "focusPositionGltf_m": [
+        0.44,
+        0.16,
+        -0.54
+      ],
+      "memberAssetCodes": [
+        "GAS-CO-01",
+        "FLAME-01",
+        "SMOKE-01",
+        "GAS-CH4-01",
+        "GAS-O2-01"
+      ],
+      "memberPhysicalTags": [
+        "CO-01",
+        "FLAME-01",
+        "MQ2-01",
+        "MQ4-01",
+        "O2-01"
+      ],
+      "referenceViewPosition": "UPPER_LEFT",
+      "labelNode": "STATION_LABEL_P1",
+      "displayLabel": "P1 / 采集节点",
+      "topViewBasis": "SCREEN_RIGHT=-Y, SCREEN_UP=+X; pipe ports at bottom",
+      "memberControllerIds": {
+        "GAS-CO-01": "CTRL-02",
+        "FLAME-01": "CTRL-02",
+        "SMOKE-01": "CTRL-02",
+        "GAS-CH4-01": "CTRL-02",
+        "GAS-O2-01": "CTRL-01"
+      },
+      "controllerNote": "Station controllerId is retained from V22; individual sensor ownership is authoritative and preserved. This scene edit does not change hardware wiring."
+    },
+    {
+      "stationId": "P2",
+      "groupNode": "STATION_P2",
+      "controllerId": "CTRL-04",
+      "topViewPosition": "UPPER_RIGHT",
+      "focusPositionBlender_m": [
+        0.44,
+        0.16,
+        0.16
+      ],
+      "focusPositionGltf_m": [
+        0.44,
+        0.16,
+        -0.16
+      ],
+      "memberAssetCodes": [
+        "CO-02",
+        "FLAME-02",
+        "MQ2-02",
+        "MQ4-02",
+        "GAS-O2-02"
+      ],
+      "memberPhysicalTags": [
+        "CO-02",
+        "FLAME-02",
+        "MQ2-02",
+        "MQ4-02",
+        "O2-02"
+      ],
+      "referenceViewPosition": "UPPER_RIGHT",
+      "labelNode": "STATION_LABEL_P2",
+      "displayLabel": "P2 / 采集节点",
+      "topViewBasis": "SCREEN_RIGHT=-Y, SCREEN_UP=+X; pipe ports at bottom",
+      "memberControllerIds": {
+        "CO-02": "CTRL-04",
+        "FLAME-02": "CTRL-04",
+        "MQ2-02": "CTRL-04",
+        "MQ4-02": "CTRL-04",
+        "GAS-O2-02": "CTRL-04"
+      },
+      "controllerNote": "Station controllerId is retained from V22; individual sensor ownership is authoritative and preserved. This scene edit does not change hardware wiring."
+    },
+    {
+      "stationId": "P3",
+      "groupNode": "STATION_P3",
+      "controllerId": "CTRL-03",
+      "topViewPosition": "LOWER_RIGHT",
+      "focusPositionBlender_m": [
+        0.26,
+        0.16,
+        0.16
+      ],
+      "focusPositionGltf_m": [
+        0.26,
+        0.16,
+        -0.16
+      ],
+      "memberAssetCodes": [
+        "CO-03",
+        "FLAME-03",
+        "MQ2-03",
+        "MQ4-03"
+      ],
+      "memberPhysicalTags": [
+        "CO-03",
+        "FLAME-03",
+        "MQ2-03",
+        "MQ4-03"
+      ],
+      "referenceViewPosition": "LOWER_RIGHT",
+      "labelNode": "STATION_LABEL_P3",
+      "displayLabel": "P3 / 采集节点",
+      "topViewBasis": "SCREEN_RIGHT=-Y, SCREEN_UP=+X; pipe ports at bottom",
+      "memberControllerIds": {
+        "CO-03": "CTRL-03",
+        "FLAME-03": "CTRL-03",
+        "MQ2-03": "CTRL-03",
+        "MQ4-03": "CTRL-03"
+      },
+      "controllerNote": "Station controllerId is retained from V22; individual sensor ownership is authoritative and preserved. This scene edit does not change hardware wiring."
+    },
+    {
+      "stationId": "P4",
+      "groupNode": "STATION_P4",
+      "controllerId": "CTRL-01",
+      "topViewPosition": "LOWER_LEFT",
+      "focusPositionBlender_m": [
+        0.26,
+        0.54,
+        0.16
+      ],
+      "focusPositionGltf_m": [
+        0.26,
+        0.16,
+        -0.54
+      ],
+      "memberAssetCodes": [
+        "CO-04",
+        "FLAME-04",
+        "MQ2-04",
+        "MQ4-04"
+      ],
+      "memberPhysicalTags": [
+        "CO-04",
+        "FLAME-04",
+        "MQ2-04",
+        "MQ4-04"
+      ],
+      "referenceViewPosition": "LOWER_LEFT",
+      "labelNode": "STATION_LABEL_P4",
+      "displayLabel": "P4 / 采集节点",
+      "topViewBasis": "SCREEN_RIGHT=-Y, SCREEN_UP=+X; pipe ports at bottom",
+      "memberControllerIds": {
+        "CO-04": "CTRL-01",
+        "FLAME-04": "CTRL-01",
+        "MQ2-04": "CTRL-01",
+        "MQ4-04": "CTRL-01"
+      },
+      "controllerNote": "Station controllerId is retained from V22; individual sensor ownership is authoritative and preserved. This scene edit does not change hardware wiring."
+    },
+    {
+      "stationId": "P5",
+      "groupNode": "STATION_P5",
+      "controllerId": "CTRL-03",
+      "topViewPosition": "CENTRE",
+      "focusPositionBlender_m": [
+        0.35,
+        0.35,
+        0.16
+      ],
+      "focusPositionGltf_m": [
+        0.35,
+        0.16,
+        -0.35
+      ],
+      "memberAssetCodes": [
+        "CO-05",
+        "FLAME-05",
+        "MQ2-05",
+        "MQ4-05",
+        "GAS-O2-05"
+      ],
+      "memberPhysicalTags": [
+        "CO-05",
+        "FLAME-05",
+        "MQ2-05",
+        "MQ4-05",
+        "O2-05"
+      ],
+      "referenceViewPosition": "CENTRE",
+      "labelNode": "STATION_LABEL_P5",
+      "displayLabel": "P5 / 采集节点",
+      "topViewBasis": "SCREEN_RIGHT=-Y, SCREEN_UP=+X; pipe ports at bottom",
+      "memberControllerIds": {
+        "CO-05": "CTRL-03",
+        "FLAME-05": "CTRL-03",
+        "MQ2-05": "CTRL-03",
+        "MQ4-05": "CTRL-03",
+        "GAS-O2-05": "CTRL-03"
+      },
+      "controllerNote": "Station controllerId is retained from V22; individual sensor ownership is authoritative and preserved. This scene edit does not change hardware wiring."
+    }
+  ],
+  "provenance": {
+    "sourceRevision": "square-five-station-v23-refined-acrylic",
+    "change": "Two user-confirmed 120x120 mm RGB fans embedded in equal side-plate apertures; separate TACH rotor and power-only lighting. Other asset identities/positions preserved."
+  },
+  "date": "2026-10-29",
+  "numberingReference": "User top view with pipe ports at bottom: upper-left P1, upper-right P2, lower-left P4, lower-right P3, centre P5",
+  "coordinates": "Blender metres +Z up. Canonical plan: screen up=+X, right=-Y; four pipe ports at bottom (-X). glTF=(x,z,-y)."
+}
