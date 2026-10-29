@@ -16,8 +16,10 @@ from .sprint_models import AgentRun, DemoSession, SimulatedAction
 
 def guard():
     root = require_evaluation_database()
-    if not getattr(settings, 'AGENT_DEMO_MODE', False) or root.resolve() != (settings.BASE_DIR.parent / '.agent-demo').resolve():
-        raise CommandError('Only the dedicated .agent-demo database supports demonstration control.')
+    allowed = {(settings.BASE_DIR.parent / name).resolve()
+               for name in ('.agent-demo', '.agent-capabilities')}
+    if not getattr(settings, 'AGENT_DEMO_MODE', False) or root.resolve() not in allowed:
+        raise CommandError('Only dedicated .agent-demo or .agent-capabilities databases support demonstration control.')
     return root
 
 

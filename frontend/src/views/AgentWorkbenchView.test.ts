@@ -5,6 +5,8 @@ import { describe,it,expect,vi,beforeEach,afterEach } from 'vitest';
 import View from './AgentWorkbenchView.vue';
 import { api } from '../services/api';
 import { useAuthStore } from '../stores/auth';
+import AgentInvestigationPanel from '../components/AgentInvestigationPanel.vue';
+import AgentCapabilityTools from '../components/AgentCapabilityTools.vue';
 const { entryQuery } = vi.hoisted(()=>({entryQuery:{} as Record<string,string>}));
 vi.mock('vue-router',()=>({useRoute:()=>({query:entryQuery})}));
 vi.mock('../components/AppShell.vue',()=>({default:{template:'<div><slot /></div>'}}));
@@ -77,5 +79,25 @@ describe('persistent Agent workbench',()=>{
   expect(order).not.toHaveBeenCalled();
   await button.trigger('click');await wrapper.get('[role=alertdialog]').findAll('button')[0].trigger('click');await flushPromises();
   expect(order).toHaveBeenCalledOnce();expect(wrapper.text()).toContain('WO-TEST');
+ });
+ it('links a continuation to the saved case and clears any prior actuator request',async()=>{
+  const create=vi.spyOn(api,'createAgentRun').mockResolvedValue({data:{id:'continued-run',status:'queued',input:{kind:'diagnosis',case_id:'case-1'},steps:[],runtime:{},result:{}}} as never);
+  const command=vi.spyOn(api,'proposeDemoCommand');wrapper=show();await flushPromises();
+  await wrapper.get('.action-options input[type=checkbox]').setValue(true);
+  wrapper.getComponent(AgentInvestigationPanel).vm.$emit('continue-case',{id:'case-1',title:'火焰间歇异常',stationId:'P5',assetCode:'FLAME-05',status:'waiting',revision:1,hypotheses:[],checks:[],history:[],runs:[]});await flushPromises();
+  expect(create).toHaveBeenCalledOnce();expect(create.mock.calls[0][0]).toMatchObject({case_id:'case-1',kind:'diagnosis',station_id:'P5',asset_code:'FLAME-05'});
+  expect(create.mock.calls[0][0]).not.toHaveProperty('control_request');expect(command).not.toHaveBeenCalled();
+ });
+ it('prepares an approved procedure and only attaches it after explicit start',async()=>{
+  const create=vi.spyOn(api,'createAgentRun').mockResolvedValue({data:{id:'procedure-run',status:'queued',input:{kind:'diagnosis'},steps:[],runtime:{},result:{}}} as never);
+  wrapper=show();await flushPromises();wrapper.getComponent(AgentCapabilityTools).vm.$emit('select-procedure',{id:'procedure-1',title:'风机反馈只读检查',stationId:'P2',status:'approved',revision:2});await flushPromises();
+  expect(create).not.toHaveBeenCalled();expect(wrapper.text()).toContain('尚未启动');
+  await wrapper.findAll('button').find(button=>button.text()==='开始任务（调用模型）')!.trigger('click');await flushPromises();
+  expect(create.mock.calls[0][0]).toMatchObject({procedure_id:'procedure-1',station_id:'P2'});
+ });
+ it('does not bypass a server model pause through a case continuation event',async()=>{
+  vi.mocked(api.agentContext).mockResolvedValue({data:{dataContext:{label:'实物联调',modelCallsDisabled:true},modelNotice:''}} as never);
+  const create=vi.spyOn(api,'createAgentRun');wrapper=show();await flushPromises();
+  wrapper.getComponent(AgentInvestigationPanel).vm.$emit('continue-case',{id:'case-1',title:'只读档案',stationId:'P5',status:'waiting',revision:1,hypotheses:[],checks:[],history:[],runs:[]});await flushPromises();expect(create).not.toHaveBeenCalled();
  });
 });

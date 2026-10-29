@@ -1,0 +1,13 @@
+{
+  "settings": "config.agent_capability_settings",
+  "source": "simulated_test",
+  "ticked": true,
+  "telemetryRows": 43,
+  "oldTaskCountPreserved": 3,
+  "topologyHttpStatus": 200,
+  "caseCreateHttpStatus": 201,
+  "caseDetailHttpStatus": 200,
+  "pausedAtEnd": true,
+  "modelCalls": 0,
+  "commandsSent": 0
+}

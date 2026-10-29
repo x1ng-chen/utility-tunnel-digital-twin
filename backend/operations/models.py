@@ -438,7 +438,7 @@ class AuditLog(models.Model):
         indexes = [models.Index(fields=['action', '-occurred_at'], name='audit_action_time_idx')]
 
 
-from .sprint_models import AgentRun, DemoSession, SimulatedAction, ReviewExperience  # noqa: E402,F401
+from .sprint_models import AgentRun, DemoSession, SimulatedAction, ReviewExperience, InvestigationCase, ProcedureTemplate, BranchComparison  # noqa: E402,F401
 
 
 class ReportExport(models.Model):

@@ -18,6 +18,7 @@ class AgentRun(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True)
     finished_at = models.DateTimeField(null=True)
+    case = models.ForeignKey('InvestigationCase', null=True, blank=True, on_delete=models.PROTECT, related_name='runs')
 
     class Meta:
         constraints = [
@@ -84,3 +85,50 @@ class ReviewExperience(models.Model):
         constraints=[models.UniqueConstraint(fields=['owner','source_run','content_hash'],name='review_experience_capture_once'),
             models.UniqueConstraint(fields=['content_hash'],condition=models.Q(status='approved'),name='experience_active_unique')]
         indexes=[models.Index(fields=['status','station_id','rule_version'],name='experience_lookup_idx')]
+
+
+class InvestigationCase(models.Model):
+    """Long-lived investigation; waiting for a person never holds a worker."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    title = models.CharField(max_length=160)
+    station_id = models.CharField(max_length=4)
+    asset_code = models.CharField(max_length=50, blank=True)
+    status = models.CharField(max_length=24, default='open')
+    revision = models.PositiveIntegerField(default=1)
+    source = models.JSONField(default=dict)
+    layout_version = models.CharField(max_length=100)
+    presentation_version = models.CharField(max_length=100, blank=True)
+    state = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class ProcedureTemplate(models.Model):
+    """Reviewed, immutable read-only procedure, distinct from a memory reminder."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    source_run = models.ForeignKey(AgentRun, null=True, blank=True, on_delete=models.PROTECT)
+    title = models.CharField(max_length=160)
+    station_id = models.CharField(max_length=4)
+    asset_kind = models.CharField(max_length=30, blank=True)
+    steps = models.JSONField(default=list)
+    source_refs = models.JSONField(default=list)
+    source_scope = models.CharField(max_length=40)
+    layout_version = models.CharField(max_length=100)
+    presentation_version = models.CharField(max_length=100, blank=True)
+    rule_version = models.CharField(max_length=40)
+    knowledge_version = models.CharField(max_length=64)
+    status = models.CharField(max_length=20, default='candidate')
+    revision = models.PositiveIntegerField(default=1)
+    content_hash = models.CharField(max_length=64)
+    audit = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class BranchComparison(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    run = models.ForeignKey(AgentRun, on_delete=models.PROTECT, related_name='comparisons')
+    result = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)

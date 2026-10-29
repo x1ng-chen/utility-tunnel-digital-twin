@@ -1,0 +1,51 @@
+{
+  "algorithm": "SHA256",
+  "records": [
+    {
+      "path": "matrix-offline-initial-fixture-error.json",
+      "sha256": "4456400aeed8ade0f0147d36e35d2f88d54132d462d01beec23d94859498d5fc",
+      "bytes": 13686631
+    },
+    {
+      "path": "matrix-local-initial.json",
+      "sha256": "d5dd56aef9b64b219942749791ddd2ff9165a3130399b8beee9c91f0ca135fa3",
+      "bytes": 9970104
+    },
+    {
+      "path": "matrix-local-final.json",
+      "sha256": "c1969c1bd43977d0f8db9ae733344819165d4fd12a6b13ce02e928fd5a4bfad5",
+      "bytes": 22106821
+    },
+    {
+      "path": "matrix-offline-final.json",
+      "sha256": "0a2cf6ed35fed1e98f9a69f31eb051bda4851a35e451504637038c62ca927d23",
+      "bytes": 25824197
+    },
+    {
+      "path": "evaluation-records.zip",
+      "sha256": "fde5388ccdbe868ff3e0ca926e9ea62f767c2da13b71c50a7ce32181c58388c4",
+      "bytes": 5329252
+    },
+    {
+      "path": "local-router-evaluation.json",
+      "sha256": "2fb6f1566f6e6b8e8e39eb925c1fe22ce86c8a6408a9826f8e03a11d0e4a434b",
+      "bytes": 30124
+    },
+    {
+      "path": "local-router-holdout-v2.json",
+      "sha256": "ddb8b0f0f6796d99724a6da7c2ef8f00ecaaa591d7347c3dd80da95507f5cf0f",
+      "bytes": 40770
+    },
+    {
+      "path": "sandbox-smoke.json",
+      "sha256": "755510332416b843167033706991f1ed537e90addcc198a9f1b959e867758296",
+      "bytes": 319
+    },
+    {
+      "path": "validation-summary.json",
+      "sha256": "821502e4b8329a7ef20a89f1622a19ed0c5f2429dd059f0d2acb3c8905448a3e",
+      "bytes": 4814
+    }
+  ],
+  "containsPrivateRuntimeConfiguration": false
+}
