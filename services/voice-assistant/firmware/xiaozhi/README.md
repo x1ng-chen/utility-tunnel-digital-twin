@@ -1,6 +1,8 @@
 # ESP32-S3 小管固件
 
-当前应用（2026-10-29）音量80，用户确认清楚；保留双唤醒词和两个停止词。停止控制现覆盖Speaking和Listening；用户确认两种场景均可回复停止确认后回到待机。最新构建及实物验收见 [停止状态修复](stop-states-build-report.json)。正常网络唤醒回应尾音150ms，热输入不再重复等120ms，冷输入保持原延迟。显式热路径等待预计减少270ms，不代表已量化P1识别准确率。
+最新界面和音量控制：待机整屏双眼；连接、聆听时双眼缩小到左侧，右侧状态与字幕；回答时右侧改为嘴巴和声波动画，不显示文字。用户确认两种布局和语音调音正常。音量0–80保存于NVS，唤醒和停止回应不再重置音量；两个MCP工具仅用于本机语音板音量，服务端配置仍不启用管廊控制工具。129项语音回归测试通过。
+
+此前应用（2026-10-29）音量80，用户确认清楚；保留双唤醒词和两个停止词。停止控制现覆盖Speaking和Listening；用户确认两种场景均可回复停止确认后回到待机。最新构建及实物验收见 [停止状态修复](stop-states-build-report.json)。正常网络唤醒回应尾音150ms，热输入不再重复等120ms，冷输入保持原延迟。显式热路径等待预计减少270ms，不代表已量化P1识别准确率。
 
 本次只更新0x20000应用，assets、Wi-Fi、设备凭据与运行时otadata保留；音量设置由codec按用户要求更新。四个静态镜像核验通过。记录见 [构建](volume80-build-report.json)、[来源](volume80-source-check.json)、[实物与用户反馈](volume80-test-report.json)。DeepSeek和表达优化位于服务器侧。
 
@@ -9,10 +11,10 @@
 - 专用 ESP32-S3 N16R8；外接 I²S 麦克风和 MAX98357A。
 - 麦克风 16 kHz、功放 48 kHz，独立 I²S 时钟，固定左声道。
 - 启用 I²C OLED（SDA41/SCL42、100kHz），探测 0x3C/0x3D，暂按 SSD1306-compatible 128×32 驱动；0x3C 实物文字与状态已通过。初始化失败退回 NoDisplay；保持 NoLed，只使用 BOOT 键。
-- 按用户要求，开机音量设为80、运行时请求限制为0–80；用户确认喇叭/功放为卖家配套，额定规格仍未知。
+- 开机恢复上次音量（首次默认80、允许静音0），运行时请求限制为0–80；用户确认喇叭/功放为卖家配套，额定规格仍未知。
 - 离线自测片段sdkconfig.voice.defaults仅用于历史自测；当前使用sdkconfig.voice.online.defaults，生成配置须确认离线开关关闭。
 - 当前联网模式不启用BOOT手动喇叭测试；唤醒后本地回应“我在呀，你说！”。历史测试选项保留在离线模式。
-- 当前注册两个唤醒命令ni hao xiao guan / xiao guan；中文MultiNet7，阈值初值20。两条停止命令仅在联网模式注册。
+- 当前注册两个唤醒命令ni hao xiao guan / xiao guan；中文MultiNet7，阈值初值20。联网模式另注册两条停止命令及“声音大一点/小一点”音量命令。
 
 引脚、电源、喇叭输出和照片识别见 [接线说明](../../hardware/README.md)。
 
@@ -133,7 +135,7 @@ OFFLINE WAKE DETECTED: 你好管廊
 
 ## 当前本地回应固件
 
-唤醒后本地使用Breeze少女音回答“我在呀，你说！”，固定音量40；暂停识别、队列排空和300ms冷却后重新监听。板级 ut_wake_ack.ogg 只加入本板 EMBED_FILES，通过 wake_ack.h 引用，无需手改生成语言头或模型assets分区。覆盖目录须完整复制，build-voice.ps1会核对新增头与音频。当前构建与试听结果见 [回应记录](wake-ack-test.md)，OLED/喇叭旧报告保留各阶段快照。
+历史阶段：唤醒后本地使用Breeze少女音回答“我在呀，你说！”，当时固定音量40；暂停识别、队列排空和300ms冷却后重新监听。板级 ut_wake_ack.ogg 只加入本板 EMBED_FILES，通过 wake_ack.h 引用，无需手改生成语言头或模型assets分区。覆盖目录须完整复制，build-voice.ps1会核对新增头与音频。当前构建与试听结果见 [回应记录](wake-ack-test.md)，OLED/喇叭旧报告保留各阶段快照。
 
 
 新版应用2304416字节，已通过容量检查和四静态镜像校验。当前哈希见 [Breeze构建](breeze-playful-build-report.json)，两次串口周期和人工试听见 [Breeze实测](breeze-playful-test-report.json)。Huihui、OLED与喇叭旧报告保留为历史。

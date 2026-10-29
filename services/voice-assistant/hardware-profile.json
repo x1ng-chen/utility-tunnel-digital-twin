@@ -58,7 +58,7 @@
       5,
       10
     ],
-    "preferred_output_volume": 80,
+    "preferred_output_volume": "persistent_user_setting",
     "loudness_accepted_by_user": true,
     "volume40_requested_by_user": true,
     "last_user_accepted_volume": 80,
@@ -98,7 +98,8 @@
     "latest_idle_return_delay_range_ms": [
       2130,
       2140
-    ]
+    ],
+    "ui": "full-screen idle eyes; docked eyes while active; text-free mouth animation while speaking"
   },
   "wake_word": {
     "chinese": "你好，小管",
@@ -265,17 +266,18 @@
     "model_content_and_metadata_preserved": true,
     "specific_data_limits_retained": true,
     "latest_report": "server/no-prefix-test-report.json",
-    "voice_tests_passed": 124
+    "voice_tests_passed": 129
   },
   "current_application": {
-    "bytes": 2406320,
-    "sha256": "23ed21f0a80b3b33bdae46db92dccc048724880ad4f68baa908af4af1f944e10",
-    "report": "firmware/xiaozhi/stop-states-build-report.json"
+    "bytes": 2411568,
+    "sha256": "a49867faed43a6c976240bbc7d16ad9b31f754110f624cfcc1b3b4e6934b527e",
+    "report": "firmware/xiaozhi/eyes-volume-test-report.json"
   },
   "stop_command_states": [
     "speaking",
     "listening"
   ],
   "stop_command_states_user_confirmed": true,
-  "ai_query_count_limit": "none"
+  "ai_query_count_limit": "none",
+  "voice_volume_commands": true
 }
