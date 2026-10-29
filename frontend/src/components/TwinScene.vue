@@ -6,7 +6,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Alert, Asset } from '../types';
 import { cameraFitDistance } from '../utils/cameraFit';
-import { createFanAnimator, type FanFeedbackContext, type FanMotion } from '../utils/fanMotion';
+import { createFanAnimator, type FanFeedbackContext, type FanVisualFeedback } from '../utils/fanMotion';
 import { modelNodeNames, nextTwinCameraDistance, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
 import TwinAlarmOverlay from './TwinAlarmOverlay.vue';
 import { collectVisualAlarms, paintTwinMaterial, twinVisualColors, visualIntensity } from '../utils/twinAlarmStyle';
@@ -50,7 +50,7 @@ const materialBaselines = new WeakMap<MeshStandardMaterial, { color: Color; emis
 let modelRoot: Object3D | undefined;
 let fanAnimator: ReturnType<typeof createFanAnimator> | undefined;
 let lastFanFrame = 0;
-const fanStates = ref<FanMotion[]>([]);
+const fanStates = ref<FanVisualFeedback[]>([]);
 let fanUiSignature = '';
 let fallbackSceneRoot: Group | undefined;
 let fallbackAssetRoot: Group | undefined;
@@ -188,7 +188,7 @@ function bindModelAssets(root: Object3D) {
     const materials: MeshStandardMaterial[] = [];
     node.traverse((child) => {
       child.userData.assetCode = asset.code;
-      if (!(child instanceof Mesh)) return;
+      if (!(child instanceof Mesh) || child.userData.fanRgb === true) return;
       child.material = Array.isArray(child.material) ? child.material.map((material) => material.clone()) : child.material.clone();
       const childMaterials = Array.isArray(child.material) ? child.material : [child.material];
       childMaterials.forEach((material) => { if (material instanceof MeshStandardMaterial) materials.push(material); });
@@ -247,7 +247,7 @@ function clearLoadedModel() {
 
 function colorObject(object: Object3D, state: TwinVisualState, selected = false, critical = false) {
   object.traverse((child) => {
-    if (!(child instanceof Mesh)) return;
+    if (!(child instanceof Mesh) || child.userData.fanRgb === true) return;
     const materials = Array.isArray(child.material) ? child.material : [child.material];
     materials.forEach((material) => {
       if (!(material instanceof MeshStandardMaterial)) return;
@@ -675,6 +675,7 @@ defineExpose({ resetView, focusAsset, focusStation, zoomBy, setNavigationMode, r
     <div v-if="fanStates.length" class="twin-fan-feedback" aria-label="独立风机反馈">
       <span v-for="fan in fanStates" :key="fan.assetCode" :title="fan.reason">
         {{ fan.assetCode }} · {{ fan.state === 'unknown' ? '反馈未知' : fan.state === 'stopped' ? '0 rpm · 已停止' : `${fan.measuredRpm} rpm` }}
+        · {{ fan.lighting.state === 'on' ? '供电亮灯' : fan.lighting.state === 'off' ? '断电灭灯' : '灯光供电未知' }}
       </span><small>叶轮转速为示意，数值为反馈值</small>
     </div>
     <div v-if="modelState === 'loading'" class="twin-model-progress" role="progressbar" aria-label="三维模型加载进度" :aria-valuenow="modelProgress" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${Math.max(modelProgress, 6)}%` }" /></div>

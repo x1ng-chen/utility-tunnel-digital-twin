@@ -11,7 +11,7 @@ import { useOperationsStore } from '../stores/operations';
 import { api } from '../services/api';
 import { newTwinAlert } from '../utils/newTwinAlert';
 import { twinTelemetryTrend } from '../utils/twinTelemetryTrend';
-import previewPresentation from '../data/twin-v20-presentation.json';
+import previewPresentation from '../data/twin-v24-presentation.json';
 import { twinModelUrl } from '../services/twin3d';
 import { activeTwinAlerts, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelDelivery, twinStateLabel, type TwinModelBindingReport, type TwinModelReadinessResponse, type TwinVisualState } from '../services/twin3d';
 
@@ -64,7 +64,7 @@ const activeModelUrl = ref<string>();
 const modelSource = ref<'checking' | 'active' | 'preview' | 'unavailable'>('checking');
 const displayedPresentation = computed(() => modelSource.value === 'active'
   ? serverModelReadiness.value?.presentation
-  : modelSource.value === 'preview' && twinModelUrl === '/models/utility-tunnel-v20.glb' ? previewPresentation : null);
+  : modelSource.value === 'preview' && twinModelUrl === '/models/utility-tunnel-v24.glb' ? previewPresentation : null);
 const viewPresets = computed(() => displayedPresentation.value
   ? ['总览', ...displayedPresentation.value.stations.map(station => station.id)]
   : ['总览', '电力舱', '燃气舱', '水浸点']);
@@ -302,7 +302,7 @@ onBeforeUnmount(() => {
       <div class="twin-title-actions"><span :class="['twin-live', { blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><i />{{ modelDeliveryLabel }}</span><button v-if="modelReport.mode === 'fallback' || modelSource === 'unavailable'" type="button" class="outline-button twin-model-retry-top" @click="retryModel"><RefreshCw />检测模型</button><button class="primary-button compact-button" @click="resetView"><RotateCcw />重置视角</button><button class="outline-button" @click="fullscreen"><Expand />全屏查看</button></div>
     </section>
     <details v-if="displayedPresentation" class="model-numbering-notice" data-testid="model-numbering-notice">
-      <summary><strong>V20模型布局</strong><span>查看工位与主控位置</span></summary>
+      <summary><strong>模型布局</strong><span>查看工位与主控位置</span></summary>
       <p>以四个管口侧为前方 ·
       <span v-for="station in displayedPresentation.stations" :key="station.id">{{ station.id }} {{ station.position }}　</span>
       <small>主控位置：后左4、后右3、前左2、前右1。设备数据归属以当前接线清单为准。</small>

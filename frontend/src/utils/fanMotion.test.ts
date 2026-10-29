@@ -1,6 +1,6 @@
-import { Group } from 'three';
+import { BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three';
 import { describe, expect, it } from 'vitest';
-import { createFanAnimator, resolveFanMotion, type FanFeedbackContext } from './fanMotion';
+import { createFanAnimator, resolveFanLighting, resolveFanMotion, type FanFeedbackContext } from './fanMotion';
 import type { HardwareBinding, Telemetry } from '../types';
 import { readFileSync } from 'node:fs';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -16,6 +16,7 @@ const binding = (code: string): HardwareBinding => ({ id: 1, assetCode: code, pr
 const context = (telemetry = [reading()]): FanFeedbackContext => ({
   source: 'api', offline: false, telemetry, bindings: [binding('FAN-01'), binding('FAN-02')],
 });
+const supply = (code = 'FAN-01', value = 12, overrides: Partial<Telemetry> = {}) => reading(code, { id: 2, metricKey: 'supply.voltage', metric: '供电电压', value, unit: 'V', ...overrides });
 
 describe('per-fan measured motion', () => {
   it('separates fan identity and zero-speed feedback', () => {
@@ -54,6 +55,48 @@ describe('per-fan measured motion', () => {
 
   it('ignores command intent and PWM metrics as motion evidence', () => {
     expect(resolveFanMotion(context([reading('FAN-01', { metricKey: 'control.fan_pwm', value: 100 })]), 'FAN-01', now).state).toBe('unknown');
+  });
+
+  it('keeps RGB powered at zero RPM and off during unpowered coast-down', () => {
+    expect(resolveFanLighting(context([reading('FAN-01', { value: 0 }), supply()]), 'FAN-01', now).state).toBe('on');
+    expect(resolveFanLighting(context([reading(), supply('FAN-01', 0)]), 'FAN-01', now).state).toBe('off');
+    expect(resolveFanLighting(context([reading()]), 'FAN-01', now).state).toBe('unknown');
+    expect(resolveFanMotion(context([supply()]), 'FAN-01', now).state).toBe('unknown');
+    expect(resolveFanLighting(context([supply('FAN-02')]), 'FAN-01', now).state).toBe('unknown');
+  });
+
+  it.each([
+    { quality: 'bad' }, { quality: 'missing' }, { unit: 'rpm' }, { value: -1 },
+    { recordedAt: new Date(now - 2001).toISOString() }, { recordedAt: new Date(now + 1).toISOString() },
+    { eventId: 'simulation:supply' },
+  ] as Partial<Telemetry>[])('rejects untrusted supply feedback %j without consulting RPM', override => {
+    expect(resolveFanLighting(context([reading(), supply('FAN-01', 12, override)]), 'FAN-01', now).state).toBe('unknown');
+  });
+
+  it('rejects conflicting/newer bad supply, demo source and stale binding', () => {
+    expect(resolveFanLighting(context([supply(), supply('FAN-01', 0)]), 'FAN-01', now).state).toBe('unknown');
+    expect(resolveFanLighting(context([supply('FAN-01', 12, { recordedAt: new Date(now - 100).toISOString() }), supply('FAN-01', 0, { quality: 'bad' })]), 'FAN-01', now).state).toBe('unknown');
+    expect(resolveFanLighting({ ...context([supply()]), source: 'demo' }, 'FAN-01', now).state).toBe('unknown');
+    expect(resolveFanLighting(context([supply()]), 'FAN-01', now + 2001).state).toBe('unknown');
+  });
+
+  it('isolates RGB materials, follows exported rotor axes and restores resources on dispose', () => {
+    const root = new Group(), first = new Group(), second = new Group();
+    first.name = 'FAN-01_ROTOR'; first.userData.spinAxisLocal = [0, 1, 0]; second.name = 'FAN-02_ROTOR'; root.add(first, second);
+    const shared = new MeshStandardMaterial({ emissive: 0xff00ff, emissiveIntensity: 0 });
+    const leds = ['FAN-01', 'FAN-02'].map(code => {
+      const led = new Mesh(new BoxGeometry(), shared); led.userData = { fanRgb: true, fanAssetCode: code, fanRgbColor: [1, 0, .5] }; root.add(led); return led;
+    });
+    const animator = createFanAnimator(root);
+    const result = animator.update(context([reading('FAN-01', { value: 0 }), supply()]), now, .1);
+    expect(result[0].lighting.state).toBe('on'); expect(first.quaternion.y).toBe(0);
+    expect((leds[0].material as MeshStandardMaterial).emissiveIntensity).toBe(3);
+    expect((leds[1].material as MeshStandardMaterial).emissiveIntensity).toBe(0); expect(shared.emissiveIntensity).toBe(0);
+    animator.update(context([reading(), supply('FAN-01', 0)]), now, .1);
+    expect(first.quaternion.y).not.toBe(0); expect(first.quaternion.z).toBe(0);
+    expect((leds[0].material as MeshStandardMaterial).emissiveIntensity).toBe(0);
+    animator.dispose(); expect(leds[0].material).toBe(shared); expect(leds[1].material).toBe(shared);
+    animator.dispose();
   });
 
   it('moves only the matching rotor, preserves phase on stop and releases on dispose', () => {
@@ -97,6 +140,17 @@ describe('per-fan measured motion', () => {
     expect(first.quaternion.equals(before[0])).toBe(false);
     expect(second.quaternion.equals(before[1])).toBe(true);
     expect(housing.quaternion.equals(before[2])).toBe(true);
+    const led = gltf.scene.getObjectByName('FAN-01_RGB_SEGMENT_00') as Mesh | undefined;
+    if (led) {
+      const stopped = first.quaternion.clone();
+      animator.update(context([reading('FAN-01', { value: 0 }), supply()]), now, .1);
+      expect(first.quaternion.equals(stopped)).toBe(true);
+      const materials = Array.isArray(led.material) ? led.material : [led.material];
+      expect(materials.every(m => m instanceof MeshStandardMaterial && m.emissiveIntensity > 0)).toBe(true);
+      animator.update(context([reading(), supply('FAN-01', 0)]), now, .1);
+      expect(first.quaternion.equals(stopped)).toBe(false);
+      expect(materials.every(m => m instanceof MeshStandardMaterial && m.emissiveIntensity === 0)).toBe(true);
+    }
     animator.dispose();
   });
 });

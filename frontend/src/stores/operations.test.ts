@@ -58,6 +58,7 @@ describe('operations store', () => {
     vi.spyOn(api, 'alerts').mockImplementation(() => new Promise(resolve => { resolveAlerts = resolve; }));
     vi.spyOn(api, 'workOrders').mockResolvedValue({ data: { items: [] } } as never);
     vi.spyOn(api, 'telemetry').mockResolvedValue({ data: { items: [] } } as never);
+    vi.spyOn(api, 'hardwareBindings').mockResolvedValue({ data: { items: [] } } as never);
     const pending = store.refreshLive();
     await options.onEvent!({ epoch: 'test', seq: 1, type: 'alert', entityId: old.id, version: '2', updatedAt: null, payload: { ...old, status: 'resolved' } });
     resolveAlerts({ data: { items: [old, other] } } as never);
@@ -65,6 +66,25 @@ describe('operations store', () => {
     expect(store.alerts.find(item => item.id === old.id)?.status).toBe('resolved');
     expect(store.alerts.some(item => item.id === other.id)).toBe(true);
     store.stopRealtime();
+  });
+
+  it('keeps independent fan observations and refreshes their actual heartbeats on live polling', async () => {
+    const auth = useAuthStore();
+    await auth.login('', '', 'viewer', 'demo');
+    const store = useOperationsStore();
+    store.source = 'api';
+    mockEmptyApiSnapshot();
+    const recordedAt = '2026-10-29T02:00:00Z';
+    const general = { id: 801, assetCode: 'FLAME-05', metricKey: 'flame.alarm', value: 0, unit: 'bool', quality: 'good', recordedAt };
+    const fan1 = { id: 802, assetCode: 'FAN-01', metricKey: 'rotational.speed', value: 1200, unit: 'rpm', quality: 'good', recordedAt };
+    const fan2 = { id: 803, assetCode: 'FAN-02', metricKey: 'supply.voltage', value: 12, unit: 'V', quality: 'good', recordedAt };
+    vi.mocked(api.telemetry).mockImplementation((params) => Promise.resolve({ data: { items: params?.assetCode === 'FAN-01' ? [fan1] : params?.assetCode === 'FAN-02' ? [fan2] : [general] } }) as never);
+    vi.mocked(api.hardwareBindings).mockResolvedValue({ data: { items: [{ id: 80, assetCode: 'FAN-01', lastHeartbeatAt: recordedAt }] } } as never);
+    await store.refreshLive();
+    expect(store.telemetry.map(r => r.id).sort()).toEqual([801, 802, 803]);
+    expect(store.hardwareBindings[0].lastHeartbeatAt).toBe(recordedAt);
+    expect(vi.mocked(api.telemetry)).toHaveBeenCalledWith({ page: 1, pageSize: 30, assetCode: 'FAN-01' });
+    expect(vi.mocked(api.telemetry)).toHaveBeenCalledWith({ page: 1, pageSize: 30, assetCode: 'FAN-02' });
   });
 
   it('treats repeated identical notices as new feedback events', () => {

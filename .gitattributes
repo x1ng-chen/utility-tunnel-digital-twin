@@ -62,3 +62,4 @@ model/square-five-station-v24-inset-rgb-fans/**/*.glb filter=lfs diff=lfs merge=
 model/square-five-station-v24-inset-rgb-fans/**/*.png filter=lfs diff=lfs merge=lfs -text
 model/square-five-station-v24-inset-rgb-fans/**/*.gif filter=lfs diff=lfs merge=lfs -text
 model/square-five-station-v24-inset-rgb-fans/**/*.zip filter=lfs diff=lfs merge=lfs -text
+frontend/public/models/utility-tunnel-v24.glb filter=lfs diff=lfs merge=lfs -text

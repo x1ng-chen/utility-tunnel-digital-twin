@@ -188,15 +188,23 @@ export const useOperationsStore = defineStore('operations', () => {
     liveRefreshPromise = (async () => {
       try {
         const listParams = { page: 1, pageSize: 100 };
-        const [dashboardResponse, assetsResponse, alertsResponse, ordersResponse, telemetryResponse] = await Promise.all([
+        const [dashboardResponse, assetsResponse, alertsResponse, ordersResponse, telemetryResponse, bindingsResponse, fan1Response, fan2Response] = await Promise.all([
           api.dashboard(), api.assets(listParams), api.alerts(listParams), api.workOrders(listParams), api.telemetry(listParams),
+          api.hardwareBindings(listParams),
+          api.telemetry({ page: 1, pageSize: 30, assetCode: 'FAN-01' }),
+          api.telemetry({ page: 1, pageSize: 30, assetCode: 'FAN-02' }),
         ]);
         if (requestId !== snapshotRequestId || source.value !== 'api' || !auth.isAuthenticated) return;
         dashboard.value = dashboardResponse.data;
         assets.value = reconcileRecords(assets.value, assetsResponse.data.items);
         alerts.value = reconcileRecords(alerts.value, alertsResponse.data.items);
         workOrders.value = reconcileRecords(workOrders.value, ordersResponse.data.items);
-        telemetry.value = reconcileRecords(telemetry.value, telemetryResponse.data.items);
+        // Preserve both fan windows even when 31 sensors fill the global page;
+        // refresh real heartbeat data instead of inventing browser timestamps.
+        const latestTelemetry = new Map<number, Telemetry>();
+        for (const reading of [...telemetryResponse.data.items, ...fan1Response.data.items, ...fan2Response.data.items] as Telemetry[]) latestTelemetry.set(reading.id, reading);
+        telemetry.value = reconcileRecords(telemetry.value, [...latestTelemetry.values()].sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt)));
+        hardwareBindings.value = reconcileRecords(hardwareBindings.value, bindingsResponse.data.items);
         offline.value = false;
         replayRealtimeChanges(snapshotRevision);
         syncError.value = '';
