@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-29",
+  "scope": "eyes_ui_and_persistent_voice_volume",
+  "built": true,
+  "flashed": true,
+  "app_flash_verified": true,
+  "write_offsets": [
+    "0x20000"
+  ],
+  "artifacts": {
+    "xiaozhi.bin": {
+      "bytes": 2411568,
+      "sha256": "a49867faed43a6c976240bbc7d16ad9b31f754110f624cfcc1b3b4e6934b527e"
+    },
+    "generated_assets.bin": {
+      "bytes": 2951624,
+      "sha256": "80d109b00f376d695ee0c076336e7feeeb47fa9ea35a11f10665d0c01b337257"
+    },
+    "bootloader/bootloader.bin": {
+      "bytes": 16640,
+      "sha256": "bc9c12a89867d4a3a3f4a9bcb1bc4b7c402a6ca50995d9c229fe1fee7def1317"
+    },
+    "partition_table/partition-table.bin": {
+      "bytes": 3072,
+      "sha256": "4811619cacae08ef2e0e71b7220c6033a346ca5da7ca179082408c963ef530b5"
+    }
+  },
+  "ui": {
+    "resolution": [
+      128,
+      32
+    ],
+    "idle": "full-screen eyes only, no text",
+    "listening": "small eyes left, status and subtitles right",
+    "speaking": "small eyes left, animated mouth and decorative sound bars right, no text",
+    "playback_tail_uses_speaking_animation": true,
+    "user_confirmed_initial_layout": true,
+    "latest_speech_animation_user_confirmation_pending": false,
+    "user_confirmed_text_free_speech_animation_and_idle_restore": true
+  },
+  "volume": {
+    "range": [
+      0,
+      80
+    ],
+    "persistent_nvs": true,
+    "wake_and_stop_ack_keep_current_volume": true,
+    "commands": [
+      "音量调到50",
+      "声音大一点",
+      "声音小一点",
+      "静音",
+      "取消静音"
+    ],
+    "user_confirmed_set_and_relative_adjustment": true,
+    "device_readbacks_verified": [
+      50,
+      60,
+      70
+    ],
+    "reboot_persistence_physical_check_pending": true,
+    "speaking_local_adjustment_physical_check_pending": true
+  },
+  "server_regression_tests": {
+    "tests": 129,
+    "passed": true
+  },
+  "device_mcp_tools": [
+    "self.audio_speaker.get_volume",
+    "self.audio_speaker.set_volume"
+  ],
+  "source_sha256": {
+    "firmware/xiaozhi/overlay/main/boards/utility-tunnel-s3/utility_tunnel_s3.cc": "8e2de69b4dfc12f866297c4afa826ab14cf8782e1aebaf841b4cc359884fb8ed",
+    "firmware/xiaozhi/register-board.patch": "e1d61924e6cf761dc4246ea61b972b13f3f1c217674b7b5dd42053644753829b",
+    "server/volume_control.py": "507457d9ec9dc0f8ec294daa6b019cb94f1aa20a76d229486f23f9ad074c0c65",
+    "server/restricted_voice_server.py": "52371ee1900284e72b26d1d252cb5d91797a1b3cfd04656f44a01f819a3e9bbe"
+  }
+}

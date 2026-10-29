@@ -96,6 +96,7 @@ def restricted_class(Base,Handler,websockets):
                     if name in ws.request.headers:del ws.request.headers[name]
                 ws.request.headers['Device-Id']=mac;ws.request.headers['Client-Id']=client
                 handler=Handler(self.config,self._vad,self._asr,self._llm,self._memory,self._intent,self)
+                handler._ut_terminal_volume_authorized=True
                 await handler.handle_connection(ws)
             except asyncio.CancelledError:raise
             except Exception:self.logger.bind(tag='restricted_admission').error('Device session failed.')
@@ -148,6 +149,8 @@ def prepare(args,registry):
     logger.add(sys.stdout,format='{time:HH:mm:ss} | {level} | {message}',level='INFO',backtrace=False,diagnose=False)
     from core.websocket_server import WebSocketServer
     from core.connection import ConnectionHandler
+    from volume_control import install_volume_controls
+    install_volume_controls()
     from core.utils.util import check_ffmpeg_installed
     import websockets
     check_ffmpeg_installed()
