@@ -1,0 +1,26 @@
+{
+  "suite": "smoke",
+  "mode": "multi",
+  "source": "SIMULATED_TEST_WITH_REAL_PROVIDER_ATTEMPT",
+  "attemptedCases": [
+    "INS-01"
+  ],
+  "notRunCases": [
+    "DIA-01",
+    "ORD-01"
+  ],
+  "providerHttpStatus": 402,
+  "modelCalls": 1,
+  "modelReturned": null,
+  "providerUsageReturned": null,
+  "modelHash": "v24-presentation-20261029.1:b974e683be2aff9b79e6c04dcd0e753849ec4619c961d48004eb5abf84711a9c",
+  "layoutVersion": "four-controller-20261026.1",
+  "snapshotHash": "bf31f1db8bb514f27e3e66a36494b21b5f5de08d8d13213e590bb58a6dbc7b2c",
+  "codeFingerprint": "1ed1cb8607d846fc0a89572c25e23a7e84f54b7b627751186ae6a164ad88d2b1",
+  "status": "BLOCKED_PROVIDER_INSUFFICIENT_BALANCE",
+  "paidModelSuccesses": 0,
+  "recordFile": "20261029T080127Z-smoke-multi.jsonl",
+  "recordSha256": "53254cd2705733cce982c4f84aafca136fde45997bf8c11c7ed823a2c065a66c",
+  "humanScoring": "NOT_RUN",
+  "boundary": "A real provider request was attempted and rejected with HTTP402; no diagnostic benefit or pass score inferred. Actual fees remain subject to supplier billing."
+}

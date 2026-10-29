@@ -36,6 +36,26 @@ describe('persistent Agent workbench',()=>{
  it('viewer cannot create a work-order draft',async()=>{
   useAuthStore().user!.role='viewer';wrapper=show();await flushPromises();
   expect(wrapper.get('option[value=draft]').attributes('disabled')).toBeDefined();
+  expect(wrapper.get('[data-task-kind=draft]').attributes('disabled')).toBeDefined();
+ });
+ it('task entry prepares the full inspection without a model call or actuator request',async()=>{
+  const create=vi.spyOn(api,'createAgentRun');const command=vi.spyOn(api,'proposeDemoCommand');
+  wrapper=show();await flushPromises();
+  await wrapper.get('.action-options input[type=checkbox]').setValue(true);
+  await wrapper.get('[data-task-kind=inspection]').trigger('click');await flushPromises();
+  expect(wrapper.get('[data-task-kind=inspection]').attributes('aria-current')).toBe('step');
+  expect((wrapper.get('.task-fields select').element as HTMLSelectElement).value).toBe('all');
+  expect(wrapper.get('textarea').element.value).toContain('31路物理传感器');
+  expect(wrapper.text()).toContain('尚未调用模型');
+  expect(create).not.toHaveBeenCalled();expect(command).not.toHaveBeenCalled();
+ });
+ it('review entry asks for a real work-order number and keeps manual investigation collapsed',async()=>{
+  const create=vi.spyOn(api,'createAgentRun');wrapper=show();await flushPromises();
+  expect(wrapper.get('.investigation-section').attributes('open')).toBeUndefined();
+  await wrapper.get('[data-task-kind=review]').trigger('click');await flushPromises();
+  expect(wrapper.text()).toContain('请填写需要复核的工单编号');
+  await wrapper.findAll('button').find(button=>button.text()==='开始任务（调用模型）')!.trigger('click');
+  expect(create).not.toHaveBeenCalled();
  });
  it('prepares an explicit diagnosis from a page link without running or confirming it',async()=>{
   Object.assign(entryQuery,{task:'diagnosis',station:'P5',asset:'FLAME-05',alert:'ALM-TEST-05'});

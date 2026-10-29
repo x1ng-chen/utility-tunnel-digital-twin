@@ -1,0 +1,50 @@
+{
+  "generatedAtUtc": "2026-10-29T08:22:24.675772+00:00",
+  "records": [
+    {
+      "file": "live-smoke-records.zip",
+      "sha256": "a25269272b3a409e421e263aab4c05e481099dd00a9b22a7746a05146cadf998",
+      "bytes": 42989
+    },
+    {
+      "file": "live-smoke-status.json",
+      "sha256": "8569cd3852343bf43e81e452e1de62ab797cba85813a1f1c053321970e0cecd6",
+      "bytes": 1080
+    },
+    {
+      "file": "README.md",
+      "sha256": "6c2759299e882aa4e08838af883fe7e8419f6e1164e5bc56bc54a5422fb1cdc7",
+      "bytes": 5711
+    },
+    {
+      "file": "runtime-acceptance.json",
+      "sha256": "1f29f815328c6472a853a39549eee0c6ce00401d96b45562789caa9a4d3865d2",
+      "bytes": 1244
+    },
+    {
+      "file": "v24-rendered.jpg",
+      "sha256": "b5b3f578d572c5b66c9b80c267feec6185f31b1010d71db4be66a31682711c0f",
+      "bytes": 97147,
+      "mediaType": "image/jpeg"
+    },
+    {
+      "file": "workbench-desktop.jpg",
+      "sha256": "9bcf966dfad33e1c77f7263a8e023ecb28fac667134f0a2b2b1076b77ad66d64",
+      "bytes": 108901,
+      "mediaType": "image/jpeg"
+    },
+    {
+      "file": "workbench-narrow.jpg",
+      "sha256": "ce4ef6188a4f3b4ad21edaf316002ee2224b1ed87d309fecb316e0c2e635bab8",
+      "bytes": 101583,
+      "mediaType": "image/jpeg"
+    },
+    {
+      "file": "workbench-overview.jpg",
+      "sha256": "34070e3ce8640775679ee66c3a4aa9527ff4056d8a962a7bd054bf0c2866178b",
+      "bytes": 42871,
+      "mediaType": "image/jpeg"
+    }
+  ],
+  "privateConfigurationIncluded": false
+}

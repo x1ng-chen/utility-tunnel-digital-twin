@@ -72,6 +72,8 @@ class RunList(APIView):
     def post(self,request):
         if getattr(settings, 'HARDWARE_LIVE_MODE', False):
             return Response({'message':'实物联调阶段付费模型任务暂停；请使用五站直接巡检查看真实证据。'}, status=503)
+        if not settings.DEEPSEEK_API_KEY:
+            return Response({'message':'当前软件环境未启用模型调用；可查看历史和使用只读工具，配置后需显式重新启动。'}, status=503)
         p=request.data
         if not isinstance(p,dict) or set(p)-{'kind','station_id','asset_code','work_order_code','prompt','mode','previous_run_id','control_request','case_id','procedure_id'}:
             return Response({'message':'无效任务字段。'},status=400)

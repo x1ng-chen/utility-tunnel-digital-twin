@@ -55,6 +55,20 @@ const experienceStates: Record<string, string> = {candidate:'候选，未批准'
 const guardStates: Record<string, string> = {supported:'本来源下有证据支持',unsupported:'本来源下不支持',unknown:'证据不足'};
 const active = computed(() => !!run.value && ['queued', 'running'].includes(run.value.status));
 const preparedEntry = ref<AgentTaskEntry | null>(null);
+const taskEntries = [
+  {kind:'inspection', label:'巡检五站', hint:'核对31路覆盖与质量'},
+  {kind:'diagnosis', label:'排查异常', hint:'对照证据并提出检查'},
+  {kind:'draft', label:'准备工单', hint:'生成草案，等待确认'},
+  {kind:'review', label:'恢复复核', hint:'核查新观测，不自动结单'},
+] as const;
+function prepareTask(task: typeof taskEntries[number]['kind']) {
+  if (busy.value || active.value || task==='draft' && !canWrite.value) return;
+  kind.value=task; mode.value='multi'; proposeAction.value=false; preparedEntry.value=null;
+  selectedProcedure.value=null;
+  station.value=task==='inspection'?'all':selectedInvestigation.value?.stationId || (station.value==='all'?'P5':station.value);
+  prompt.value=agentTaskPrompt({kind:task,station:station.value,asset:asset.value,order:order.value,alert:''});
+  notice.value=task==='review'&&!order.value.trim()?'已准备恢复复核，请填写需要复核的工单编号。':'任务已准备，请核对目标后点击开始；尚未调用模型。';
+}
 watch(() => readAgentTaskEntry(route.query), entry => {
   if (!entry) { preparedEntry.value = null; return; }
   if (busy.value || active.value) return;
@@ -107,7 +121,7 @@ async function start(previous = false) {
       prompt: prompt.value, ...(kind.value === 'draft' ? { asset_code: asset.value } : {}),
       ...(kind.value === 'review' ? { work_order_code: order.value } : {}),
       ...(kind.value === 'diagnosis' && selectedInvestigation.value ? {case_id:selectedInvestigation.value.id,...(selectedInvestigation.value.assetCode?{asset_code:selectedInvestigation.value.assetCode}:{})} : {}),
-      ...(selectedProcedure.value ? {procedure_id:selectedProcedure.value.id} : {}),
+      ...(kind.value==='diagnosis' && selectedProcedure.value ? {procedure_id:selectedProcedure.value.id} : {}),
       ...(kind.value === 'diagnosis' && mode.value === 'multi' && proposeAction.value ? {control_request:{asset_code:fanTarget.value,intent:'pwm',value:fanPwm.value}} : {}),
       ...(previous && run.value ? { previous_run_id: run.value.id } : {}) }, crypto.randomUUID());
     run.value = data; timer = setTimeout(poll, 500);
@@ -192,13 +206,21 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
       <header class="workbench-heading"><h1>多Agent工作台</h1><p>取证、诊断、复核，以及经过人工确认的仿真处置。</p></header>
       <p v-if="preparedEntry" class="prepared-task" role="status">已预选{{ preparedEntry.kind === 'inspection' ? '五站巡检' : preparedEntry.kind === 'review' ? '恢复复核' : preparedEntry.kind === 'draft' ? '工单草案' : '证据排障' }} · {{ preparedEntry.station === 'all' ? '全部五站' : preparedEntry.station }}<template v-if="preparedEntry.asset"> · {{ preparedEntry.asset }}</template><template v-if="preparedEntry.alert"> · {{ preparedEntry.alert }}</template><template v-if="preparedEntry.order"> · {{ preparedEntry.order }}</template>。请核对当前表单目标后开始；尚未调用模型或执行处置。</p>
       <aside class="source" role="status"><strong>{{ sourceLabel }}</strong><details v-if="modelNotice" class="model-context"><summary>模型与布局说明</summary><p>{{ modelNotice }}</p></details></aside>
+      <nav class="task-entry" aria-label="运维任务入口">
+        <button v-for="task in taskEntries" :key="task.kind" :data-task-kind="task.kind" :aria-current="kind===task.kind?'step':undefined"
+          :disabled="busy || active || task.kind==='draft' && !canWrite" @click="prepareTask(task.kind)">
+          <strong>{{ task.label }}</strong><span>{{ task.hint }}</span>
+        </button>
+      </nav>
       <p v-if="error" role="alert" class="error">{{ error }}</p><p v-if="notice" role="status" class="workbench-notice">{{ notice }}</p>
-      <section v-if="session" class="panel demo-session"><h2>演示场景</h2><p>模拟测试 · 阶段 {{ session.phase }} · {{ session.running ? '持续采样' : '已暂停，观测将正常过期' }} · 已采样 {{ session.tick }} 轮</p>
+      <details v-if="session" class="panel demo-session"><summary>演示场景<span>阶段 {{ session.phase }} · {{ session.running ? '持续采样' : '已暂停，观测将正常过期' }}</span></summary><p>模拟测试 · 已采样 {{ session.tick }} 轮；场景管理不会自动调用模型。</p>
         <div class="controls"><select v-model="caseId" aria-label="演示场景"><option v-for="id in cases" :key="id">{{ id }}</option></select>
           <template v-if="admin"><button @click="demoAction('reset')">重置场景</button><button @click="demoAction('start')">开始采样</button><button @click="demoAction('pause')">暂停采样</button><button @click="demoAction('advance')">推进阶段</button></template>
           <small v-else>场景控制由管理员操作；本账号可以查询。</small></div>
-      </section>
-      <AgentInvestigationPanel :station="station" :running="active" :model-calls-disabled="modelCallsDisabled" :last-run-id="run?.input.case_id === selectedInvestigation?.id ? run?.id : undefined" :last-run-status="run?.input.case_id === selectedInvestigation?.id ? run?.status : undefined" @select-case="selectInvestigation" @continue-case="continueInvestigation" />
+      </details>
+      <details class="investigation-section" :open="!!selectedInvestigation"><summary>人工检查与排障续查<span>记录检查结果，再对照新的观测</span></summary>
+        <AgentInvestigationPanel :station="station" :running="active" :model-calls-disabled="modelCallsDisabled" :last-run-id="run?.input.case_id === selectedInvestigation?.id ? run?.id : undefined" :last-run-status="run?.input.case_id === selectedInvestigation?.id ? run?.status : undefined" @select-case="selectInvestigation" @continue-case="continueInvestigation" />
+      </details>
       <div class="workbench-primary">
       <section class="panel task-composer" aria-labelledby="agent-task-title"><h2 id="agent-task-title">发起运维任务</h2><div class="controls task-fields">
         <label>检测点<select v-model="station"><option v-for="s in ['all','P1','P2','P3','P4','P5']" :key="s" :value="s">{{ s === 'all' ? '全部五站' : s }}</option></select></label>
@@ -299,6 +321,16 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
 .workbench-heading h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.25; letter-spacing: -.02em; }
 .prepared-task { margin: 0; padding: 12px 16px; border: 1px solid var(--ops-line); border-radius: 8px; background: var(--ops-bg-deep); font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
 .workbench-heading p { margin: 0; color: var(--ops-muted, #53657b); }
+.task-entry { display: flex; flex-wrap: wrap; gap: 0; border-block: 1px solid var(--ops-line, #d8e2ee); }
+.agent-workbench .task-entry button { flex: 1 1 170px; display: grid; gap: 3px; min-height: 72px; text-align: left; border: 0; border-radius: 0; background: transparent; padding: 14px 16px; }
+.task-entry strong { font-size: 15px; }
+.task-entry span { color: var(--ops-muted, #53657b); font-size: 12px; font-weight: 400; }
+.agent-workbench .task-entry button[aria-current="step"] { color: var(--ops-signal, #1766c3); background: var(--ops-signal-soft, #eaf3ff); }
+.investigation-section { min-width: 0; }
+.investigation-section > summary { padding-block: 12px; cursor: pointer; font-weight: 600; }
+.investigation-section > summary span, .demo-session > summary span { margin-inline-start: 18px; color: var(--ops-muted, #53657b); font-weight: 400; font-size: 12px; }
+.agent-workbench details.demo-session { padding: 0 18px; }
+.demo-session > summary { min-height: 48px; padding-block: 12px; box-sizing: border-box; cursor: pointer; font-weight: 600; }
 .agent-workbench .panel, .source {
   min-width: 0;
   padding: 24px;
