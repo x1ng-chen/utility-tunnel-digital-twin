@@ -1,0 +1,18 @@
+{
+  "schema": "ut.voice.preferred.setup.v1",
+  "preferred_voice_id": "guanlang_playful_girl",
+  "preferred_asset_hashes_verified": true,
+  "historical_http_contract_verified": true,
+  "preferred_voice_http_tested_this_step": false,
+  "private_selected_tts": "BreezeLocal",
+  "private_auth_and_server_settings_preserved": true,
+  "WindowsSAPI_retained": true,
+  "historical_reports_unchanged": true,
+  "voice_files_modified": false,
+  "server_started": false,
+  "complete_assistant_verified": false,
+  "wake_audio_device_playback_verified": true,
+  "adapter_tests_passed": 26,
+  "preflight_passed": true,
+  "launcher_check_only_passed": true
+}

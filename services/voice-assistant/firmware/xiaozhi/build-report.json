@@ -1,0 +1,54 @@
+{
+  "firmware_source_commit": "c435f99a88066029ec2dbd2d758c8cc9d051565b",
+  "esp_idf_version": "6.0.1",
+  "board": "utility-tunnel-s3",
+  "mode": "offline_microphone_and_wake_test",
+  "wake_word": "你好管廊",
+  "wake_pinyin": "ni hao guan lang",
+  "models": [
+    "fst",
+    "mn7_cn"
+  ],
+  "threshold": 0.2,
+  "flash_files": {
+    "0x0": "bootloader/bootloader.bin",
+    "0x8000": "partition_table/partition-table.bin",
+    "0xd000": "ota_data_initial.bin",
+    "0x800000": "generated_assets.bin",
+    "0x20000": "xiaozhi.bin"
+  },
+  "artifacts": {
+    "xiaozhi.bin": {
+      "bytes": 1855680,
+      "sha256": "2527d80e38f6108a82f49d220f62bf0908bb30746007e63c29da698b68533983"
+    },
+    "bootloader/bootloader.bin": {
+      "bytes": 16640,
+      "sha256": "bc9c12a89867d4a3a3f4a9bcb1bc4b7c402a6ca50995d9c229fe1fee7def1317"
+    },
+    "partition_table/partition-table.bin": {
+      "bytes": 3072,
+      "sha256": "4811619cacae08ef2e0e71b7220c6033a346ca5da7ca179082408c963ef530b5"
+    },
+    "ota_data_initial.bin": {
+      "bytes": 8192,
+      "sha256": "7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f"
+    },
+    "generated_assets.bin": {
+      "bytes": 2951621,
+      "sha256": "1e610e12bcbee464eabff62432a870270f76df9acf56d0d9e3d2a05dd2ee888b"
+    },
+    "flasher_args.json": {
+      "bytes": 1218,
+      "sha256": "c392c12970446292b3b8762455506765c942c9bfecb93a52ed829117a5510ff4"
+    }
+  },
+  "firmware_compiled": true,
+  "assets_verified": true,
+  "device_flashed": false,
+  "real_device_tested": false,
+  "esp_idf_commit": "8c19b156084a0753687347cca1f5355782893533",
+  "checked_on": "2026-10-26",
+  "source_archive_sha256": "f0ec4fe8cf9beaf80d061c228ac245c31c4e57f194bbcf1cfbaf2fd57767c4d9",
+  "bridge_unit_tests_passed": 20
+}

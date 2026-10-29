@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-29",
+  "clean_upstream_apply_check": true,
+  "applied_files_match_runtime_ignoring_newlines": true,
+  "upstream_files": [
+    "main/CMakeLists.txt",
+    "main/Kconfig.projbuild",
+    "main/application.cc",
+    "main/application.h",
+    "main/audio/audio_service.cc",
+    "main/audio/wake_words/custom_wake_word.cc",
+    "main/display/oled_display.cc",
+    "main/ota.cc",
+    "main/protocols/websocket_protocol.cc"
+  ],
+  "patch_sha256": "8176ec80c1c9c32c85cef129c58ba9c853bc1342c4f9e9777b3ba80a1309e43a",
+  "wake_ack_tail_ms": 150,
+  "warm_input_skips_extra_120ms": true,
+  "cold_input_and_other_boards_unchanged": true
+}

@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-27",
+  "account_created": true,
+  "dedicated_voice_viewer": true,
+  "role": "viewer",
+  "is_staff": false,
+  "is_superuser": false,
+  "is_active": true,
+  "token_ttl_seconds": 900,
+  "admin_accounts_modified": false,
+  "credential_storage": "outside_repository_current_user_only_private_directory",
+  "credentials_printed": false,
+  "agent_test_passed": true,
+  "service_started": false,
+  "viewer_identity_verified": true,
+  "private_acl_current_user_only": true
+}

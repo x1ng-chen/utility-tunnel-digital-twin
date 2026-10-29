@@ -1,0 +1,39 @@
+{
+  "schema": "ut.voice.preferred.v1",
+  "provider": "BreezeLocal",
+  "base_url": "http://127.0.0.1:7861",
+  "voice_id": "guanlang_playful_girl",
+  "wake_response_text": "我在呀，你说",
+  "selection_basis": "User accepted playful girl direction, then confirmed two physical replies normal and new voice/volume suitable.",
+  "generation_report_sha256": "bddef1dc1761651235d97aa3b49e7e791af45ef6d2881607b54f77cfb790b150",
+  "runtime": {
+    "tag": "v0.1.3",
+    "server_relative_path": "runtime-v0.1.3/breeze-tts-2-v0.1.3-windows-x64-vulkan/breeze-server.exe",
+    "server_sha256": "909ab24b1f8ef15d8f9660ec64834223e773c7a52d9298160313a26835551623",
+    "archive_sha256": "d31feee5380e0609dc44b537d22cbe4f3cf8e93495756f3a580d8b448db79f7f"
+  },
+  "model": {
+    "relative_path": "models/breeze-tts-2-q4_k.gguf",
+    "bytes": 2538909376,
+    "sha256": "483418fbbb438f5f1c08dbe2b017e42db0f1d126765cd3f772d8622a30a4915c"
+  },
+  "saved_voice": {
+    "relative_path": "voices/guanlang_playful_girl.breeze",
+    "sha256": "e6602a25e7a1ab679b0d5a17688aaed825af35ae2c46cd6c4261b742cfc6aa0b",
+    "bytes": 8262
+  },
+  "reference_sample": {
+    "relative_path": "samples/playful-girl-reference.wav",
+    "sha256": "ca11b176f37abe3c1654bb4ae9e44e39046fe2b9a484c3446e927efe44b3cf85",
+    "duration_seconds": 10.0
+  },
+  "ack_sample": {
+    "relative_path": "samples/wake-ack-breeze-playful-girl.wav",
+    "sha256": "93219e91a118aa4c0da26cb4a4db7b52bfff8d81166815d7fee8ffbcd61b1554",
+    "duration_seconds": 2.4,
+    "text": "我在呀，你说"
+  },
+  "preferred_voice_http_tested": false,
+  "complete_assistant_verified": false,
+  "wake_audio_device_playback_verified": true
+}

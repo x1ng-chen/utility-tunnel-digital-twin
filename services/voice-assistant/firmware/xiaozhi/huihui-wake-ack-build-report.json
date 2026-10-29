@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-27",
+  "board": "utility-tunnel-s3",
+  "mode": "offline_wake_acknowledgement_and_oled",
+  "wake_phrase": "你好管廊",
+  "wake_ack_text": "我在",
+  "volume": 40,
+  "startup_volume": 40,
+  "runtime_volume_ceiling": 40,
+  "wake_ack_audio_sha256": "9e064652a695976c7b1c45a09e95ac7db489d3ee2dc2992275a68a727e1f577c",
+  "wake_ack_embedded_in_application": true,
+  "automatic_play_on_startup": false,
+  "normal_network_voice_flow_modified": false,
+  "display_driver": "SSD1306-compatible",
+  "display_geometry": [
+    128,
+    32
+  ],
+  "build_verified": true,
+  "model_assets_unchanged": true,
+  "flash_files": {
+    "0x0": "bootloader/bootloader.bin",
+    "0x8000": "partition_table/partition-table.bin",
+    "0xd000": "ota_data_initial.bin",
+    "0x800000": "generated_assets.bin",
+    "0x20000": "xiaozhi.bin"
+  },
+  "artifacts": {
+    "bootloader/bootloader.bin": {
+      "bytes": 16640,
+      "sha256": "bc9c12a89867d4a3a3f4a9bcb1bc4b7c402a6ca50995d9c229fe1fee7def1317"
+    },
+    "partition_table/partition-table.bin": {
+      "bytes": 3072,
+      "sha256": "4811619cacae08ef2e0e71b7220c6033a346ca5da7ca179082408c963ef530b5"
+    },
+    "ota_data_initial.bin": {
+      "bytes": 8192,
+      "sha256": "7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f"
+    },
+    "generated_assets.bin": {
+      "bytes": 2951621,
+      "sha256": "1e610e12bcbee464eabff62432a870270f76df9acf56d0d9e3d2a05dd2ee888b"
+    },
+    "xiaozhi.bin": {
+      "bytes": 2293088,
+      "sha256": "9c9c5db72390b42ba81e28cbad5633780f562dc0bdda99eeecc4772a89ba50dd"
+    },
+    "flasher_args.json": {
+      "bytes": 1218,
+      "sha256": "c392c12970446292b3b8762455506765c942c9bfecb93a52ed829117a5510ff4"
+    }
+  }
+}

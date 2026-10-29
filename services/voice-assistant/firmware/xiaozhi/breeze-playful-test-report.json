@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-27",
+  "voice_id": "guanlang_playful_girl",
+  "wake_phrase": "你好管廊",
+  "reply_text": "我在呀，你说！",
+  "volume": 40,
+  "application_sha256": "e7e66b911ffcf855dece3991db48eb169e59895a2ef7c9693f97506a2b677332",
+  "wake_audio_sha256": "cdf81cb01de8563d3b871ac322dc5ae84b65bb7f1a9acad0e16ddeae3b223e91",
+  "application_only_updated": true,
+  "static_images_verified": 4,
+  "model_assets_unchanged": true,
+  "runtime_ota_preserved": true,
+  "startup_psram_8mb": true,
+  "oled_initialized": true,
+  "serial_evidence": {
+    "log_basename": "device-breeze-playful-20261027-193925.log",
+    "cycles": [
+      {
+        "wake_ms": 75870,
+        "speaker_tx_frames": 41,
+        "start_ms": 75890,
+        "drained_ms": 78670,
+        "rearmed_ms": 78670,
+        "idle_ms": 80810,
+        "samples_per_frame": 2880,
+        "drained_to_idle_ms": 2140
+      },
+      {
+        "wake_ms": 105420,
+        "speaker_tx_frames": 41,
+        "start_ms": 105470,
+        "drained_ms": 108260,
+        "rearmed_ms": 108260,
+        "idle_ms": 110390,
+        "samples_per_frame": 2880,
+        "drained_to_idle_ms": 2130
+      }
+    ],
+    "complete_cycles": 2,
+    "boot_count": 1,
+    "fatal_errors_observed": false,
+    "playback_timeout_observed": false
+  },
+  "human_evidence": {
+    "feedback": "两次都正常，新声音和音量合适",
+    "reply_count": 2,
+    "new_voice_accepted": true,
+    "volume_accepted": true
+  },
+  "verification_scope": "Dedicated board offline local reply only; network voice conversation not tested",
+  "full_voice_assistant_verified": false
+}

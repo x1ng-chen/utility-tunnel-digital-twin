@@ -1,0 +1,65 @@
+{
+  "date": "2026-10-29",
+  "scope": "synthetic_audio_restricted_ws_asr_llm_tts_roundtrip",
+  "credentials_printed_or_recorded": false,
+  "physical_esp32_tested": false,
+  "physical_microphone_tested": false,
+  "server_started_or_stopped": false,
+  "network_requests_started": true,
+  "roundtrip_passed": true,
+  "input_fixture": {
+    "file": "windows-sapi-test.wav",
+    "sha256": "d7056347b61cdaf89f78de6b7dbee3ebcb601d3fbbea5e5253fb570317ee2dee",
+    "sample_rate": 16000,
+    "channels": 1,
+    "sample_width_bytes": 2,
+    "duration_seconds": 3.93
+  },
+  "phase": "tts_stopped",
+  "input_opus_packets": 71,
+  "input_trailing_silence_ms": 300,
+  "restricted_ota_accepted": true,
+  "ota_ws_version": 1,
+  "firmware_update_offered": false,
+  "hello_verified": true,
+  "negotiated_audio": {
+    "format": "opus",
+    "sample_rate": 16000,
+    "channels": 1,
+    "frame_duration": 60
+  },
+  "owned_websocket_closed": true,
+  "stt_text": "你好这是管廊本地语音测试",
+  "expected_stt_text": "你好这是管廊本地语音测试",
+  "asr_similarity": 1.0,
+  "reply_text": "还未核查现场数据，你好，我是小管，语音链路能正常听到你说话呀有管廊上的事随时喊我",
+  "llm_signals": [
+    {
+      "text": "🙂",
+      "emotion": "happy"
+    }
+  ],
+  "llm_signal_semantics": "upstream emotion signal; spoken reply is tts sentence text",
+  "tts_states": [
+    "start",
+    "sentence_start",
+    "sentence_start",
+    "stop"
+  ],
+  "reply_opus_packets": 137,
+  "reply_duration_seconds": 8.22,
+  "reply_peak": 0.520477,
+  "reply_rms": 0.091648,
+  "tts_stop_received": true,
+  "fallback_error_reply_detected": false,
+  "audio_artifact": {
+    "file": "reply.wav",
+    "bytes": 263084,
+    "sha256": "e0d814a4bb7a679f44da09a60ec107ac54eede8198bd6d80f461b40649a992bb"
+  },
+  "output_wav_verified": true,
+  "all_received_opus_frames_decoded": true,
+  "owned_native_codecs_released": true,
+  "elapsed_seconds": 17.328,
+  "note": "This successful full audio roundtrip preceded the final general-knowledge scope extension. Final LLM scope has separate real API and unit verification."
+}

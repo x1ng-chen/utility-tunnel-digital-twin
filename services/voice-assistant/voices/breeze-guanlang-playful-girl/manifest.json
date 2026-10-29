@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-27",
+  "voice_id": "guanlang_playful_girl",
+  "engine": "Breeze TTS 2 via Breeze-TTS-2.cpp v0.1.3 Q4_K",
+  "voice_style": "年轻女生的中文少女音，声线轻盈甜润，俏皮灵动，古灵精怪，带一点小淘气和笑意。标准普通话，像熟悉的朋友随口聊天，有自然的轻重音、停顿和语调起伏，反应机灵，亲近活泼，尾音轻快。声音自然圆润，吐字清楚，表达松弛，不刻意卖萌，不使用播音朗读腔。",
+  "reference_text": "我在呀，你说！怎么啦，是不是又有新任务了？好嘞，交给我。咱们先看看，今天管廊里有什么新情况。",
+  "user_style_approved": true,
+  "model_sha256": "483418fbbb438f5f1c08dbe2b017e42db0f1d126765cd3f772d8622a30a4915c",
+  "model_revision": "81b22bad9f05b99970e30c5ee5e4bbc52fedf2f8",
+  "model_url": "https://huggingface.co/HoppouAI/Breeze-TTS-2.cpp/resolve/81b22bad9f05b99970e30c5ee5e4bbc52fedf2f8/breeze-tts-2-q4_k.gguf",
+  "license": "BreezeBlue Research and Non-Commercial License applies to model outputs",
+  "license_source": "https://huggingface.co/BreezeBlue/breeze-tts-2/blob/main/LICENSE",
+  "files": {
+    "guanlang_playful_girl.breeze": {
+      "bytes": 8262,
+      "sha256": "e6602a25e7a1ab679b0d5a17688aaed825af35ae2c46cd6c4261b742cfc6aa0b"
+    },
+    "reference.wav": {
+      "bytes": 480078,
+      "sha256": "ca11b176f37abe3c1654bb4ae9e44e39046fe2b9a484c3446e927efe44b3cf85"
+    },
+    "ut_wake_ack.ogg": {
+      "bytes": 13278,
+      "sha256": "cdf81cb01de8563d3b871ac322dc5ae84b65bb7f1a9acad0e16ddeae3b223e91"
+    },
+    "wake-ack.wav": {
+      "bytes": 115278,
+      "sha256": "93219e91a118aa4c0da26cb4a4db7b52bfff8d81166815d7fee8ffbcd61b1554"
+    }
+  }
+}

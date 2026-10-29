@@ -1,0 +1,16 @@
+{
+  "status": "awaiting_hardware_confirmation",
+  "chip": "ESP32-S3",
+  "flash_mb": 16,
+  "psram_mb": 8,
+  "purchased_variant": null,
+  "audio_board_model": null,
+  "microphone_or_codec": null,
+  "speaker_amplifier": null,
+  "audio_pin_map": null,
+  "display_model": null,
+  "wake_word_chinese": null,
+  "wake_word_pinyin": null,
+  "firmware_build_verified": false,
+  "device_flashed": false
+}

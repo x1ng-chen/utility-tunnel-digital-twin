@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-29",
+  "status": "deepseek_voice_no_automatic_intro_volume80",
+  "deepseek_key_verified": true,
+  "dedicated_viewer_and_renewal_verified": true,
+  "breeze_voice_id": "guanlang_playful_girl",
+  "volume": 80,
+  "network_firmware_flashed": true,
+  "device_bearer_provisioned_over_usb": true,
+  "voice_gateway_lan_enabled": true,
+  "voice_firewall_rule_created": true,
+  "pc_roundtrip_passed": true,
+  "native_pcm_streaming_verified": true,
+  "physical_audio_and_latency_accepted_by_user": true,
+  "asr_to_first_text_ms": 3474,
+  "asr_to_first_audio_conversion_ms": 3769,
+  "latest_input_not_exact_same_P1_performance_comparison": true,
+  "voice_regression_tests_passed": 124,
+  "breeze_tests_passed": 39,
+  "services_left_running": true,
+  "new_request": {
+    "commands": [
+      "不用说了",
+      "闭嘴"
+    ],
+    "during": "speaking",
+    "reply": "好的，需要时请随时叫我",
+    "after_reply": "idle",
+    "implemented": true,
+    "built": true,
+    "flashed": true,
+    "physical_test_passed": true,
+    "both_commands_user_confirmed": true,
+    "fresh_wake_verified": true,
+    "report": "../firmware/xiaozhi/spoken-stop-test-report.json"
+  },
+  "credentials_printed": false,
+  "github_push_performed": false,
+  "firmware_app_sha256": "17dfe13db3c9f68e557e1b06948efdd059f2bfff4b09a34c8b64cb86548c8231",
+  "firmware_assets_sha256": "80d109b00f376d695ee0c076336e7feeeb47fa9ea35a11f10665d0c01b337257",
+  "new_wake_request": {
+    "phrases": [
+      "你好，小管",
+      "小管"
+    ],
+    "retired_phrase": "你好管廊",
+    "implemented": true,
+    "flashed": true,
+    "both_phrases_physical_test_passed": true,
+    "retired_phrase_negative_test_passed": true,
+    "report": "../firmware/xiaozhi/xiaoguan-test-report.json"
+  },
+  "voice_quality_report": "voice-quality-test-report.json",
+  "deepseek_conversation": {
+    "general_knowledge": true,
+    "multi_turn": true,
+    "user_confirmed_working": true,
+    "existing_key_reused": true
+  },
+  "automatic_spoken_intros": false,
+  "latest_fix_report": "no-prefix-test-report.json"
+}

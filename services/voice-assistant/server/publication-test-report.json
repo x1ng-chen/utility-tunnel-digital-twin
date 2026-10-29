@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-29",
+  "base_main": "9553b3bc0456a978ec4f38b002d62c66ba23a653",
+  "voice_regression": {
+    "tests": 124,
+    "skipped": 0,
+    "result": "passed"
+  },
+  "django_full_suite": {
+    "tests": 275,
+    "result": "passed",
+    "isolated_database": true,
+    "patched_dependencies": true
+  },
+  "repository_safety": "passed; 701 text files",
+  "postgres_policy": "passed; 27 checks",
+  "deployment_artifacts": "passed; 37 checks",
+  "private_value_scan": "976 files; 0 exact secret matches",
+  "firmware_artifacts": "All 6 hashes in stop-states-build-report.json; app-only flashed and 4 static flash images verified.",
+  "scope": "Integrate dedicated voice assistant into latest main while preserving agent runtime/task/data-context checks.",
+  "excluded": [
+    "private credentials",
+    ".env files",
+    "NVS/full-flash backups",
+    "raw non-test microphone transcripts",
+    "model weights",
+    "venvs and runtime dependencies"
+  ],
+  "hardware_regression_note": "User confirmed return to idle both while audio played and while waiting for a follow-up question.",
+  "ai_query_count_limit": "none",
+  "dependency_audit": {
+    "result": "no known vulnerabilities found",
+    "fixed_versions": {
+      "autobahn": "26.10.1",
+      "msgpack": "1.2.3"
+    },
+    "hashes": "canonical PyPI release metadata",
+    "fresh_hash_locked_install": true
+  }
+}

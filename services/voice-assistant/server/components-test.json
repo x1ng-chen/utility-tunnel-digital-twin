@@ -1,0 +1,122 @@
+{
+  "schema": "ut.voice.components.v1",
+  "tested_at": "2026-10-27T07:18:20.206028+00:00",
+  "python": "3.12.14",
+  "server_commit": "a377d89dcd58e6e18417a57e9357c0dd23657746",
+  "server_started": false,
+  "external_network_calls_allowed": false,
+  "microphone_used": false,
+  "computer_audio_played": false,
+  "agent_called": false,
+  "checks": {
+    "pip_check": {
+      "ok": true,
+      "elapsed_seconds": 1.625,
+      "details": {
+        "exit_code": 0
+      }
+    },
+    "ffmpeg": {
+      "ok": true,
+      "elapsed_seconds": 0.125,
+      "details": {
+        "sha256": "2ce797a0f88d7f067180338fb227f7b1928ea727bd9a4d7a1d022f7c52af71a3",
+        "version_line": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers"
+      }
+    },
+    "opus_roundtrip": {
+      "ok": true,
+      "elapsed_seconds": 0.297,
+      "details": {
+        "version": "libopus 1.6.1 ",
+        "dll_sha256": "39b603e3d9594748f9d08ebd3f5b5afb2b4976181f9162497487aafa26d54805",
+        "encoded_bytes": 155,
+        "decoded_samples": 960
+      }
+    },
+    "asr_model_load": {
+      "ok": true,
+      "elapsed_seconds": 1.032,
+      "details": {
+        "model_sha256": "3ef6c19369b912f7caf3cef8e545c5ccd1a33d9d7ec792a46668dc41c4b229ec",
+        "tokens_sha256": "4b2d964e18b9cf139b473003b6698fb2ed9a2a5ec55b93daa677b28f578897aa"
+      }
+    },
+    "asr_official_fixture": {
+      "ok": true,
+      "elapsed_seconds": 0.078,
+      "details": {
+        "fixture": "0.wav",
+        "sha256": "668bf8df51a10027b84d5d8816a1ce11ae93545538dc05cfe2aa6811d399c250",
+        "recognized_text": "对我做了介绍啊那么我想说的是呢大家如果对我的研究感兴趣呢嗯",
+        "sample_rate": 16000,
+        "duration_seconds": 5.612
+      }
+    },
+    "asr_sapi_fixture": {
+      "ok": true,
+      "elapsed_seconds": 0.047,
+      "details": {
+        "fixture": "windows-sapi-test.wav",
+        "sha256": "d7056347b61cdaf89f78de6b7dbee3ebcb601d3fbbea5e5253fb570317ee2dee",
+        "recognized_text": "你好这是管廊本地语音测试",
+        "sample_rate": 16000,
+        "duration_seconds": 3.93
+      }
+    },
+    "vad_model_and_samples": {
+      "ok": true,
+      "elapsed_seconds": 0.25,
+      "details": {
+        "model_sha256": "2623a2953f6ff3d2c1e61740c6cdb7168133479b267dfef114a4a3cc5bdd788f",
+        "providers": [
+          "CPUExecutionProvider"
+        ],
+        "silence_max_probability": 0.012012,
+        "speech_max_probability": 0.999984,
+        "speech_frames_above_half": 81
+      }
+    },
+    "app_import": {
+      "ok": true,
+      "elapsed_seconds": 4.281,
+      "details": {
+        "imported": true,
+        "main_called": false
+      }
+    },
+    "selected_provider_imports": {
+      "ok": true,
+      "elapsed_seconds": 0.359,
+      "details": {
+        "tts": "TTSProvider",
+        "asr": "ASRProvider",
+        "vad": "VADProvider",
+        "agent_constructed": false
+      }
+    },
+    "selected_provider_contracts": {
+      "ok": true,
+      "elapsed_seconds": 2.156,
+      "details": {
+        "asr_text": "你好这是管廊本地语音测试",
+        "tts_wav_bytes": 125804,
+        "tts_seconds": 3.93,
+        "vad_silence_detected": false,
+        "vad_speech_detected": true,
+        "agent_constructed": false
+      }
+    }
+  },
+  "all_component_checks_passed": true,
+  "not_verified": [
+    "live_microphone_ASR",
+    "ESP32_network_audio",
+    "device_admission",
+    "Django_DeepSeek_agent_response",
+    "viewer_token_provisioning",
+    "end_to_end_conversation",
+    "physical_speaker_TTS_playback",
+    "persistent_service_operation"
+  ]
+}
