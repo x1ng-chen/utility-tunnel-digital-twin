@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-29",
+  "base_main": "9553b3bc0456a978ec4f38b002d62c66ba23a653",
+  "voice_regression": {
+    "tests": 124,
+    "skipped": 0,
+    "result": "passed"
+  },
+  "django_full_suite": {
+    "tests": 273,
+    "result": "passed",
+    "isolated_database": true
+  },
+  "repository_safety": "passed; 701 text files",
+  "postgres_policy": "passed; 27 checks",
+  "deployment_artifacts": "passed; 37 checks",
+  "private_value_scan": "976 files; 0 exact secret matches",
+  "firmware_artifacts": "all 6 sizes and SHA256 match volume80-build-report.json",
+  "scope": "Integrate dedicated voice assistant into latest main while preserving agent runtime/task/data-context checks.",
+  "excluded": [
+    "private credentials",
+    ".env files",
+    "NVS/full-flash backups",
+    "raw non-test microphone transcripts",
+    "model weights",
+    "venvs and runtime dependencies"
+  ],
+  "hardware_regression_note": "No new board flashing during publication; previous physical acceptance retained. Noise/distance/AEC validation remains pending."
+}

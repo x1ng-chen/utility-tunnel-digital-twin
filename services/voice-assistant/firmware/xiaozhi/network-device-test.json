@@ -1,0 +1,12 @@
+{
+  "date": "2026-10-27",
+  "application_flash_verified": true,
+  "static_images_verified": 4,
+  "usb_provisioning_ready": true,
+  "credential_payload_sent": true,
+  "device_credentials_saved": true,
+  "credentials_printed": false,
+  "unexpected_faults": [],
+  "log_basename": "device-network-provision-20261027-231220.log",
+  "network_conversation_verified": false
+}

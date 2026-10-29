@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-29",
+  "scope": "local_synthetic_sapi_paraformer_smoke_not_human_accuracy",
+  "recognizer": "unchanged_paraformer_small_greedy_search",
+  "uses_model_hotword_bias": false,
+  "normalizer_never_fills_missing_station": true,
+  "results": [
+    {
+      "fixture": "p1",
+      "spoken_text": "查询P1站点现在的状态",
+      "raw_asr": "查询 p 一站点现在的状态",
+      "normalized_for_query": "查询 P1站点现在的状态",
+      "expected_identifier": "P1",
+      "identifier_preserved": true,
+      "asr_ms": 47,
+      "audio_sha256": "2ad10bc4a9d513693c8157d6067c7f6a4e4b05182828b1fb603e466ff7741564",
+      "normalized_after_boundary_fixes": "查询 P1站点现在的状态",
+      "identifier_preserved_after_fix": true
+    },
+    {
+      "fixture": "p2",
+      "spoken_text": "二号检测点现在有告警吗",
+      "raw_asr": "二号检测点现在有告警吗",
+      "normalized_for_query": "P2检测点现在有告警吗",
+      "expected_identifier": "P2",
+      "identifier_preserved": true,
+      "asr_ms": 47,
+      "audio_sha256": "dd9ec1d9d6218950ad1c0d40f14d8477ec87954842ea3b5b69ed748178da55ad",
+      "normalized_after_boundary_fixes": "P2检测点现在有告警吗",
+      "identifier_preserved_after_fix": true
+    },
+    {
+      "fixture": "mq2",
+      "spoken_text": "MQ二零一传感器现在是什么状态",
+      "raw_asr": "mq 二零一传感器现在是什么状态",
+      "normalized_for_query": "MQ2零一传感器现在是什么状态",
+      "expected_identifier": "MQ2-01",
+      "identifier_preserved": false,
+      "asr_ms": 47,
+      "audio_sha256": "887b577da93f98163ca66c6ee89251e34d1cf55a55b996f6f17450b702b1cab6",
+      "normalized_after_boundary_fixes": "MQ2-01传感器现在是什么状态",
+      "identifier_preserved_after_fix": true
+    },
+    {
+      "fixture": "chemistry",
+      "spoken_text": "一氧化碳和二氧化碳有什么区别",
+      "raw_asr": "一氧化碳和二氧化碳有什么区别",
+      "normalized_for_query": "一氧化碳和二氧化碳有什么区别",
+      "expected_identifier": null,
+      "identifier_preserved": null,
+      "asr_ms": 47,
+      "audio_sha256": "7a826c95c4f6894e598c2eb20a95e22916f383ee6505e2c569f74ef3c88ce49a",
+      "normalized_after_boundary_fixes": "一氧化碳和二氧化碳有什么区别"
+    },
+    {
+      "fixture": "missing-station",
+      "spoken_text": "点现在是什么状态",
+      "raw_asr": "点现在是什么状态",
+      "normalized_for_query": "点现在是什么状态",
+      "expected_identifier": null,
+      "identifier_preserved": null,
+      "asr_ms": 31,
+      "audio_sha256": "565c80134b57028f8b5b3e4f2c003b08be6ffc05608353f934b226c76dc5cd59",
+      "normalized_after_boundary_fixes": "点现在是什么状态"
+    },
+    {
+      "fixture": "identity",
+      "spoken_text": "你叫什么名字",
+      "raw_asr": "你叫什么名字",
+      "normalized_for_query": "你叫什么名字",
+      "expected_identifier": null,
+      "identifier_preserved": null,
+      "asr_ms": 31,
+      "audio_sha256": "b5a4a981c1cd8024a3bdf8f961e1c72da84de674be3bdc00683414942a65959d",
+      "normalized_after_boundary_fixes": "你叫什么名字"
+    }
+  ],
+  "postprocessing_only_rerun_on_same_raw_asr": true
+}

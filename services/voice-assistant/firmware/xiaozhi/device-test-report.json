@@ -1,0 +1,64 @@
+{
+  "checked_on": "2026-10-26",
+  "timezone": "Asia/Shanghai",
+  "chip": "ESP32-S3",
+  "chip_revision": "v0.2",
+  "port": "COM5",
+  "flash_mb_verified": 16,
+  "psram_mb_initialized": 8,
+  "psram_speed_mhz": 80,
+  "original_flash_backup_bytes": 16777216,
+  "original_flash_backup_verified_against_device": true,
+  "backup_stored_outside_repository": true,
+  "device_flashed": true,
+  "all_five_flash_images_verified": true,
+  "models": [
+    "mn7_cn",
+    "fst"
+  ],
+  "mode": "offline_microphone_and_wake_test",
+  "wake_word": "你好管廊",
+  "wake_pinyin": "ni hao guan lang",
+  "threshold_percent": 20,
+  "microphone_input_observed": true,
+  "successful_wake_events_observed": 3,
+  "repeat_without_reboot_verified": true,
+  "detection_scores": [
+    0.215499,
+    0.262111,
+    0.258016
+  ],
+  "hit_rate_measured": false,
+  "log_files": [
+    {
+      "name": "device-boot-20261026-224101.log",
+      "wake_events": 1,
+      "mic_entries": 118,
+      "rom_boot_events": 1
+    },
+    {
+      "name": "device-repeat-20261026-224800.log",
+      "wake_events": 0,
+      "mic_entries": 90,
+      "rom_boot_events": 0
+    },
+    {
+      "name": "device-repeat-20261026-225241.log",
+      "wake_events": 2,
+      "mic_entries": 64,
+      "rom_boot_events": 0
+    }
+  ],
+  "untested": [
+    "speaker_playback",
+    "display",
+    "ASR_TTS",
+    "platform_voice_integration",
+    "distance_noise_false_trigger_reliability"
+  ],
+  "notes": [
+    "The empty second listening window is not a missed wake: the user confirmed no additional phrase was spoken.",
+    "The final two detections occurred without restarting the device.",
+    "Digital RMS/peak values are not calibrated sound pressure measurements."
+  ]
+}

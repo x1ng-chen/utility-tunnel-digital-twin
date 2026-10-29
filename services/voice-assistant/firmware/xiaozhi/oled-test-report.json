@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-27",
+  "firmware_application_sha256": "519459982a98d3339e24db5c4aa2834f39eccda19ba6be0d89bf1885b74c9dbf",
+  "display_address": "0x3c",
+  "sda_gpio": 41,
+  "scl_gpio": 42,
+  "power": "3V3",
+  "i2c_clock_hz": 100000,
+  "configured_controller": "SSD1306-compatible",
+  "configured_layout": [
+    128,
+    32
+  ],
+  "controller_identity_confirmed": false,
+  "physical_resolution_measured": false,
+  "visual_text_confirmed_by_user": true,
+  "visual_state_switch_confirmed_by_user": true,
+  "automatic_idle_return_confirmed_by_user": true,
+  "automatic_idle_return_verified": true,
+  "idle_return_delay_ms": 2150,
+  "volume": 20,
+  "static_images_verified": 4,
+  "application_only_updated": true,
+  "observations": [
+    {
+      "source_log": "device-oled-20261027-151638.log",
+      "speaker_playback_drained": 2,
+      "speaker_tx_frames": 18,
+      "wake_events": 1,
+      "nonzero_microphone_levels": true
+    },
+    {
+      "source_log": "device-oled-20261027-152750.log",
+      "speaker_playback_drained": 1,
+      "speaker_tx_frames": 9,
+      "wake_events": 1,
+      "nonzero_microphone_levels": true
+    }
+  ],
+  "initial_timer_issue": "Fixed by masking the full FreeRTOS event-group snapshot to the waited test events; unrelated playback-completion bits no longer prevent timeout UI updates."
+}

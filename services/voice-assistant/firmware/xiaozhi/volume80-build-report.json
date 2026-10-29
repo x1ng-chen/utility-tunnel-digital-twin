@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-29",
+  "scope": "voice_quality_volume80",
+  "built": true,
+  "flashed": true,
+  "volume": 80,
+  "runtime_max_volume": 80,
+  "wake_words": [
+    "你好，小管",
+    "小管"
+  ],
+  "stop_words": [
+    "不用说了",
+    "闭嘴"
+  ],
+  "voice_id": "guanlang_playful_girl",
+  "wake_ack_tail_ms": 150,
+  "warm_input_skips_extra_120ms": true,
+  "artifacts": {
+    "bootloader/bootloader.bin": {
+      "bytes": 16640,
+      "sha256": "bc9c12a89867d4a3a3f4a9bcb1bc4b7c402a6ca50995d9c229fe1fee7def1317"
+    },
+    "partition_table/partition-table.bin": {
+      "bytes": 3072,
+      "sha256": "4811619cacae08ef2e0e71b7220c6033a346ca5da7ca179082408c963ef530b5"
+    },
+    "ota_data_initial.bin": {
+      "bytes": 8192,
+      "sha256": "7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f"
+    },
+    "generated_assets.bin": {
+      "bytes": 2951624,
+      "sha256": "80d109b00f376d695ee0c076336e7feeeb47fa9ea35a11f10665d0c01b337257"
+    },
+    "xiaozhi.bin": {
+      "bytes": 2406336,
+      "sha256": "17dfe13db3c9f68e557e1b06948efdd059f2bfff4b09a34c8b64cb86548c8231"
+    },
+    "flasher_args.json": {
+      "bytes": 1218,
+      "sha256": "c392c12970446292b3b8762455506765c942c9bfecb93a52ed829117a5510ff4"
+    }
+  },
+  "assets_unchanged": true,
+  "wifi_device_credentials_otadata_preserved": true,
+  "audio_volume_nvs_intentionally_updated_by_codec": true,
+  "write_offsets": [
+    "0x20000"
+  ],
+  "physical_test_pending": false,
+  "static_flash_images_verified": 4,
+  "user_confirmed_clear_playback": true,
+  "user_confirmed_continuous_dialogue": true,
+  "test_report": "volume80-test-report.json"
+}

@@ -1,0 +1,357 @@
+{
+  "date": "2026-10-28",
+  "scope": "physical_dual_wake_and_retired_word_negative",
+  "passed": true,
+  "active_wake_phrases": [
+    "你好，小管",
+    "小管"
+  ],
+  "long_phrase_idle_detections_observed": 2,
+  "short_phrase_idle_detections_observed": 2,
+  "repeat_without_reboot_verified": true,
+  "retired_word": "你好管廊",
+  "retired_word_not_registered": true,
+  "retired_word_absent_from_app_and_index": true,
+  "retired_word_negative_test_user_reported_two_attempts": true,
+  "retired_word_no_idle_wake_in_capture": true,
+  "user_confirmed_both_new_phrases": true,
+  "new_build_spoken_stop_observed": [
+    "闭嘴"
+  ],
+  "new_build_other_stop_word": "不用说了 is retained; user reports stopping normal, previous firmware has independent exact-word serial and human verification",
+  "stop_reply": "好的，需要时请随时叫我",
+  "wake_reply": "我在呀，你说！",
+  "voice_id": "guanlang_playful_girl",
+  "volume": 40,
+  "firmware_app_sha256": "072496f865882de1c977c6fdab881b94ad421a3038a7df15d5f1d8959522a9d3",
+  "assets_sha256": "80d109b00f376d695ee0c076336e7feeeb47fa9ea35a11f10665d0c01b337257",
+  "health_http_status": 200,
+  "breeze_saved_voice_http_status": 200,
+  "configuration_preflight_all_checks_passed": true,
+  "serial_capture_stopped_after_user_validation": true,
+  "serial_events": [
+    {
+      "elapsed_ms": 509,
+      "line": "I (370) StateMachine: State: unknown -> starting"
+    },
+    {
+      "elapsed_ms": 2368,
+      "line": "I (2230) StateMachine: State: starting -> activating"
+    },
+    {
+      "elapsed_ms": 2373,
+      "line": "I (2240) Ota: Current version: 2.5.3"
+    },
+    {
+      "elapsed_ms": 2701,
+      "line": "I (2560) StateMachine: State: activating -> idle"
+    },
+    {
+      "elapsed_ms": 2759,
+      "line": "I (2610) CustomWakeWord: Command: ni hao xiao guan, Text: 你好，小管, Action: wake"
+    },
+    {
+      "elapsed_ms": 3990,
+      "line": "Command 1: ni hao xiao guan"
+    },
+    {
+      "elapsed_ms": 3993,
+      "line": "Command 2: xiao guan"
+    },
+    {
+      "elapsed_ms": 3996,
+      "line": "Command 3: bu yong shuo le"
+    },
+    {
+      "elapsed_ms": 3997,
+      "line": "Command 4: bi zui"
+    },
+    {
+      "elapsed_ms": 4071,
+      "line": "I (3930) Application: Startup wake word hint: 说「你好，小管 / 小管」就能唤醒我。"
+    },
+    {
+      "elapsed_ms": 12483,
+      "line": "I (12350) CustomWakeWord: Custom wake word detected: command_id=2, string= xiao guan, prob=0.298123"
+    },
+    {
+      "elapsed_ms": 12488,
+      "line": "I (12350) Application: Wake word detected: 小管 (state: 3)"
+    },
+    {
+      "elapsed_ms": 12492,
+      "line": "I (12350) StateMachine: State: idle -> connecting"
+    },
+    {
+      "elapsed_ms": 12637,
+      "line": "I (12500) Application: Wake word detected: 小管"
+    },
+    {
+      "elapsed_ms": 12646,
+      "line": "I (12500) Application: VOICE NETWORK ACK: start, volume=40"
+    },
+    {
+      "elapsed_ms": 15391,
+      "line": "I (15260) Application: VOICE NETWORK ACK: drained; start listening"
+    },
+    {
+      "elapsed_ms": 15397,
+      "line": "I (15260) StateMachine: State: connecting -> listening"
+    },
+    {
+      "elapsed_ms": 28836,
+      "line": "I (28710) Application: >> 嗯嗯"
+    },
+    {
+      "elapsed_ms": 28894,
+      "line": "I (28760) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 31124,
+      "line": "I (30990) Application: << 以下是使用说明，未核查现场数据"
+    },
+    {
+      "elapsed_ms": 34612,
+      "line": "I (34480) Application: << 你好，有什么需要我核查的吗？"
+    },
+    {
+      "elapsed_ms": 38287,
+      "line": "I (38160) StateMachine: State: speaking -> listening"
+    },
+    {
+      "elapsed_ms": 46992,
+      "line": "I (46860) Application: >> 你好管喽"
+    },
+    {
+      "elapsed_ms": 47036,
+      "line": "I (46900) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 49087,
+      "line": "I (48950) Application: << 以下是使用说明，未核查现场数据。你好，我是管廊运维智能体"
+    },
+    {
+      "elapsed_ms": 53085,
+      "line": "I (52950) CustomWakeWord: Custom wake word detected: command_id=4, string= bi zui, prob=0.222854"
+    },
+    {
+      "elapsed_ms": 53088,
+      "line": "I (52950) Application: Wake word detected: 闭嘴 (state: 6)"
+    },
+    {
+      "elapsed_ms": 53096,
+      "line": "I (52950) Application: VOICE STOP: detected=闭嘴; cancelling current reply"
+    },
+    {
+      "elapsed_ms": 53197,
+      "line": "I (53070) Application: VOICE STOP ACK: start, volume=40"
+    },
+    {
+      "elapsed_ms": 55862,
+      "line": "I (55730) StateMachine: State: speaking -> idle"
+    },
+    {
+      "elapsed_ms": 55866,
+      "line": "I (55730) Application: VOICE STOP ACK: complete; return to idle"
+    },
+    {
+      "elapsed_ms": 196179,
+      "line": "I (196040) CustomWakeWord: Custom wake word detected: command_id=1, string= ni hao xiao guan, prob=0.240929"
+    },
+    {
+      "elapsed_ms": 196184,
+      "line": "I (196040) Application: Wake word detected: 你好，小管 (state: 3)"
+    },
+    {
+      "elapsed_ms": 196189,
+      "line": "I (196050) StateMachine: State: idle -> connecting"
+    },
+    {
+      "elapsed_ms": 196439,
+      "line": "I (196290) Application: Wake word detected: 你好，小管"
+    },
+    {
+      "elapsed_ms": 196493,
+      "line": "I (196360) Application: VOICE NETWORK ACK: start, volume=40"
+    },
+    {
+      "elapsed_ms": 199274,
+      "line": "I (199140) Application: VOICE NETWORK ACK: drained; start listening"
+    },
+    {
+      "elapsed_ms": 199279,
+      "line": "I (199140) StateMachine: State: connecting -> listening"
+    },
+    {
+      "elapsed_ms": 200665,
+      "line": "I (200530) Application: >> 是"
+    },
+    {
+      "elapsed_ms": 200700,
+      "line": "I (200570) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 202559,
+      "line": "I (202420) Application: << 以下是使用说明，未核查现场数据。请问您想查哪一项？"
+    },
+    {
+      "elapsed_ms": 206643,
+      "line": "I (206500) CustomWakeWord: Custom wake word detected: command_id=4, string= bi zui, prob=0.278366"
+    },
+    {
+      "elapsed_ms": 206649,
+      "line": "I (206510) Application: Wake word detected: 闭嘴 (state: 6)"
+    },
+    {
+      "elapsed_ms": 206654,
+      "line": "I (206510) Application: VOICE STOP: detected=闭嘴; cancelling current reply"
+    },
+    {
+      "elapsed_ms": 206745,
+      "line": "I (206610) Application: VOICE STOP ACK: start, volume=40"
+    },
+    {
+      "elapsed_ms": 209404,
+      "line": "I (209270) StateMachine: State: speaking -> idle"
+    },
+    {
+      "elapsed_ms": 209408,
+      "line": "I (209270) Application: VOICE STOP ACK: complete; return to idle"
+    },
+    {
+      "elapsed_ms": 225581,
+      "line": "I (225440) CustomWakeWord: Custom wake word detected: command_id=1, string= ni hao xiao guan, prob=0.775980"
+    },
+    {
+      "elapsed_ms": 225587,
+      "line": "I (225440) Application: Wake word detected: 你好，小管 (state: 3)"
+    },
+    {
+      "elapsed_ms": 225591,
+      "line": "I (225450) StateMachine: State: idle -> connecting"
+    },
+    {
+      "elapsed_ms": 225711,
+      "line": "I (225570) Application: Wake word detected: 你好，小管"
+    },
+    {
+      "elapsed_ms": 225722,
+      "line": "I (225580) Application: VOICE NETWORK ACK: start, volume=40"
+    },
+    {
+      "elapsed_ms": 228494,
+      "line": "I (228360) Application: VOICE NETWORK ACK: drained; start listening"
+    },
+    {
+      "elapsed_ms": 228499,
+      "line": "I (228360) StateMachine: State: connecting -> listening"
+    },
+    {
+      "elapsed_ms": 245080,
+      "line": "I (244950) Application: >> 小管"
+    },
+    {
+      "elapsed_ms": 245109,
+      "line": "I (244970) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 246719,
+      "line": "I (246580) Application: << 以下是使用说明，未核查现场数据。您好，我在。需要巡检查询检测点"
+    },
+    {
+      "elapsed_ms": 252007,
+      "line": "I (251870) CustomWakeWord: Custom wake word detected: command_id=4, string= bi zui, prob=0.287447"
+    },
+    {
+      "elapsed_ms": 252013,
+      "line": "I (251870) Application: Wake word detected: 闭嘴 (state: 6)"
+    },
+    {
+      "elapsed_ms": 252018,
+      "line": "I (251870) Application: VOICE STOP: detected=闭嘴; cancelling current reply"
+    },
+    {
+      "elapsed_ms": 252090,
+      "line": "I (251960) Application: VOICE STOP ACK: start, volume=40"
+    },
+    {
+      "elapsed_ms": 254754,
+      "line": "I (254620) StateMachine: State: speaking -> idle"
+    },
+    {
+      "elapsed_ms": 254759,
+      "line": "I (254620) Application: VOICE STOP ACK: complete; return to idle"
+    },
+    {
+      "elapsed_ms": 257432,
+      "line": "I (257290) CustomWakeWord: Custom wake word detected: command_id=2, string= xiao guan, prob=0.265799"
+    },
+    {
+      "elapsed_ms": 257438,
+      "line": "I (257290) Application: Wake word detected: 小管 (state: 3)"
+    },
+    {
+      "elapsed_ms": 257441,
+      "line": "I (257300) StateMachine: State: idle -> connecting"
+    },
+    {
+      "elapsed_ms": 257563,
+      "line": "I (257420) Application: Wake word detected: 小管"
+    },
+    {
+      "elapsed_ms": 257616,
+      "line": "I (257480) Application: VOICE NETWORK ACK: start, volume=40"
+    },
+    {
+      "elapsed_ms": 260394,
+      "line": "I (260260) Application: VOICE NETWORK ACK: drained; start listening"
+    },
+    {
+      "elapsed_ms": 260400,
+      "line": "I (260260) StateMachine: State: connecting -> listening"
+    },
+    {
+      "elapsed_ms": 265076,
+      "line": "I (264940) Application: >> 嗯嗯"
+    },
+    {
+      "elapsed_ms": 265109,
+      "line": "I (264970) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 267157,
+      "line": "I (267020) Application: << 以下是使用说明，未核查现场数据。您好，我在这里。需要检查五站传感器"
+    },
+    {
+      "elapsed_ms": 270663,
+      "line": "I (270520) CustomWakeWord: Custom wake word detected: command_id=4, string= bi zui, prob=0.251522"
+    },
+    {
+      "elapsed_ms": 270669,
+      "line": "I (270520) Application: Wake word detected: 闭嘴 (state: 6)"
+    },
+    {
+      "elapsed_ms": 270674,
+      "line": "I (270530) Application: VOICE STOP: detected=闭嘴; cancelling current reply"
+    },
+    {
+      "elapsed_ms": 270749,
+      "line": "I (270610) Application: VOICE STOP ACK: start, volume=40"
+    },
+    {
+      "elapsed_ms": 273414,
+      "line": "I (273280) StateMachine: State: speaking -> idle"
+    },
+    {
+      "elapsed_ms": 273419,
+      "line": "I (273280) Application: VOICE STOP ACK: complete; return to idle"
+    }
+  ],
+  "not_measured": [
+    "distance_noise_and_false_trigger_rate",
+    "acoustic_echo_self_name_trial",
+    "global_proof_of_no_phonetic_false_positive"
+  ],
+  "credentials_printed": false,
+  "github_push_performed": false
+}

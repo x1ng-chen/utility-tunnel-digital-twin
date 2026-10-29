@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-29",
+  "scope": "voice_input_onset",
+  "built": true,
+  "flashed": true,
+  "wake_ack_tail_ms": 150,
+  "warm_input_skips_extra_120ms": true,
+  "cold_input_keeps_delay": true,
+  "expected_explicit_warm_path_wait_reduction_ms": 270,
+  "measured_recognition_accuracy_improvement": null,
+  "wake_words": [
+    "你好，小管",
+    "小管"
+  ],
+  "stop_words": [
+    "不用说了",
+    "闭嘴"
+  ],
+  "volume": 40,
+  "voice_id": "guanlang_playful_girl",
+  "artifacts": {
+    "bootloader/bootloader.bin": {
+      "bytes": 16640,
+      "sha256": "bc9c12a89867d4a3a3f4a9bcb1bc4b7c402a6ca50995d9c229fe1fee7def1317"
+    },
+    "partition_table/partition-table.bin": {
+      "bytes": 3072,
+      "sha256": "4811619cacae08ef2e0e71b7220c6033a346ca5da7ca179082408c963ef530b5"
+    },
+    "ota_data_initial.bin": {
+      "bytes": 8192,
+      "sha256": "7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f"
+    },
+    "generated_assets.bin": {
+      "bytes": 2951624,
+      "sha256": "80d109b00f376d695ee0c076336e7feeeb47fa9ea35a11f10665d0c01b337257"
+    },
+    "xiaozhi.bin": {
+      "bytes": 2406336,
+      "sha256": "2cd3e7d85c551a260bfb4ae30b09d2909b74af6d426e66b4fc3eaab28c671030"
+    },
+    "flasher_args.json": {
+      "bytes": 1218,
+      "sha256": "c392c12970446292b3b8762455506765c942c9bfecb93a52ed829117a5510ff4"
+    }
+  },
+  "assets_unchanged": true,
+  "nvs_wifi_device_credentials_otadata_preserved": true,
+  "write_offsets": [
+    "0x20000"
+  ],
+  "physical_test_pending": true,
+  "static_flash_images_verified": 4,
+  "device_mac_verified": true
+}

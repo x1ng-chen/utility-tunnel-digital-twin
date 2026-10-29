@@ -1,0 +1,262 @@
+{
+  "date": "2026-10-28",
+  "scope": "two_physical_spoken_stop_commands_and_rewake",
+  "passed": true,
+  "commands": [
+    {
+      "command": "不用说了",
+      "detected_in_speaking": true,
+      "command_detection_to_local_ack_ms": 76,
+      "local_ack_to_idle_ms": 2670,
+      "old_response_did_not_resume_before_fresh_wake": true,
+      "fresh_wake_and_listening_verified": true,
+      "user_confirmed_full_reply_and_idle": true
+    },
+    {
+      "command": "闭嘴",
+      "detected_in_speaking": true,
+      "command_detection_to_local_ack_ms": 50,
+      "local_ack_to_idle_ms": 2664,
+      "old_response_did_not_resume_before_fresh_wake": true,
+      "fresh_wake_and_listening_verified": true,
+      "user_confirmed_full_reply_and_idle": true
+    }
+  ],
+  "reply": "好的，需要时请随时叫我",
+  "voice_id": "guanlang_playful_girl",
+  "volume": 40,
+  "capture_completed": true,
+  "capture_seconds": 300,
+  "serial_events": [
+    {
+      "elapsed_ms": 510,
+      "line": "I (371) StateMachine: State: unknown -> starting"
+    },
+    {
+      "elapsed_ms": 3329,
+      "line": "I (3191) StateMachine: State: starting -> activating"
+    },
+    {
+      "elapsed_ms": 3334,
+      "line": "I (3201) Ota: Current version: 2.5.3"
+    },
+    {
+      "elapsed_ms": 3586,
+      "line": "I (3451) StateMachine: State: activating -> idle"
+    },
+    {
+      "elapsed_ms": 3611,
+      "line": "I (3471) CustomWakeWord: Command: ni hao guan lang, Text: 你好管廊, Action: wake"
+    },
+    {
+      "elapsed_ms": 4842,
+      "line": "Command 1: ni hao guan lang"
+    },
+    {
+      "elapsed_ms": 4845,
+      "line": "Command 2: bu yong shuo le"
+    },
+    {
+      "elapsed_ms": 4848,
+      "line": "Command 3: bi zui"
+    },
+    {
+      "elapsed_ms": 66280,
+      "line": "I (66141) CustomWakeWord: Custom wake word detected: command_id=1, string= ni hao guan lang, prob=0.219922"
+    },
+    {
+      "elapsed_ms": 66285,
+      "line": "I (66141) Application: Wake word detected: 你好管廊 (state: 3)"
+    },
+    {
+      "elapsed_ms": 66290,
+      "line": "I (66151) StateMachine: State: idle -> connecting"
+    },
+    {
+      "elapsed_ms": 66453,
+      "line": "I (66311) Application: Wake word detected: 你好管廊"
+    },
+    {
+      "elapsed_ms": 66462,
+      "line": "I (66321) Application: VOICE NETWORK ACK: start, volume=40"
+    },
+    {
+      "elapsed_ms": 69233,
+      "line": "I (69101) Application: VOICE NETWORK ACK: drained; start listening"
+    },
+    {
+      "elapsed_ms": 69238,
+      "line": "I (69101) StateMachine: State: connecting -> listening"
+    },
+    {
+      "elapsed_ms": 72163,
+      "line": "I (72031) Application: >> 综合广告平台的功能"
+    },
+    {
+      "elapsed_ms": 72221,
+      "line": "I (72091) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 74294,
+      "line": "I (74151) Application: << 以下是使用说明，未核查现场数据。\"综合广告平台\"和当前综合管廊数字孪生运维平台不是同一类系统，我这边只能核查管廊平台的资产和告警数据"
+    },
+    {
+      "elapsed_ms": 87621,
+      "line": "I (87481) Application: << 不能介绍广告平台功能。您是想问管廊平台里的某个功能吗？"
+    },
+    {
+      "elapsed_ms": 92686,
+      "line": "I (92551) StateMachine: State: speaking -> listening"
+    },
+    {
+      "elapsed_ms": 97054,
+      "line": "I (96921) Application: >> 原来不理你吗跟你说不清楚"
+    },
+    {
+      "elapsed_ms": 97079,
+      "line": "I (96951) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 99071,
+      "line": "I (98931) Application: << 以下是使用说明，未核查现场数据。理解，是我的问题。您直接说想查哪一站或哪个资产"
+    },
+    {
+      "elapsed_ms": 103872,
+      "line": "I (103731) CustomWakeWord: Custom wake word detected: command_id=2, string= bu yong shuo le, prob=0.240219"
+    },
+    {
+      "elapsed_ms": 103878,
+      "line": "I (103731) Application: Wake word detected: 不用说了 (state: 6)"
+    },
+    {
+      "elapsed_ms": 103886,
+      "line": "I (103741) Application: VOICE STOP: detected=不用说了; cancelling current reply"
+    },
+    {
+      "elapsed_ms": 103948,
+      "line": "I (103811) Application: VOICE STOP ACK: start, volume=40"
+    },
+    {
+      "elapsed_ms": 106613,
+      "line": "I (106481) StateMachine: State: speaking -> idle"
+    },
+    {
+      "elapsed_ms": 106618,
+      "line": "I (106481) Application: VOICE STOP ACK: complete; return to idle"
+    },
+    {
+      "elapsed_ms": 253813,
+      "line": "I (253671) CustomWakeWord: Custom wake word detected: command_id=1, string= ni hao guan lang, prob=0.306752"
+    },
+    {
+      "elapsed_ms": 253818,
+      "line": "I (253671) Application: Wake word detected: 你好管廊 (state: 3)"
+    },
+    {
+      "elapsed_ms": 253823,
+      "line": "I (253681) StateMachine: State: idle -> connecting"
+    },
+    {
+      "elapsed_ms": 253926,
+      "line": "I (253781) Application: Wake word detected: 你好管廊"
+    },
+    {
+      "elapsed_ms": 253937,
+      "line": "I (253791) Application: VOICE NETWORK ACK: start, volume=40"
+    },
+    {
+      "elapsed_ms": 256715,
+      "line": "I (256581) Application: VOICE NETWORK ACK: drained; start listening"
+    },
+    {
+      "elapsed_ms": 256721,
+      "line": "I (256581) StateMachine: State: connecting -> listening"
+    },
+    {
+      "elapsed_ms": 262753,
+      "line": "I (262621) Application: >> 呃"
+    },
+    {
+      "elapsed_ms": 262819,
+      "line": "I (262681) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 264807,
+      "line": "I (264671) Application: << 以下是使用说明，未核查现场数据。有什么需要我查的？"
+    },
+    {
+      "elapsed_ms": 270628,
+      "line": "I (270491) Application: << 比如五站巡检、告警或工单复核，说一声就行"
+    },
+    {
+      "elapsed_ms": 273196,
+      "line": "I (273061) CustomWakeWord: Custom wake word detected: command_id=3, string= bi zui, prob=0.275282"
+    },
+    {
+      "elapsed_ms": 273202,
+      "line": "I (273061) Application: Wake word detected: 闭嘴 (state: 6)"
+    },
+    {
+      "elapsed_ms": 273207,
+      "line": "I (273061) Application: VOICE STOP: detected=闭嘴; cancelling current reply"
+    },
+    {
+      "elapsed_ms": 273246,
+      "line": "I (273111) Application: VOICE STOP ACK: start, volume=40"
+    },
+    {
+      "elapsed_ms": 275905,
+      "line": "I (275771) StateMachine: State: speaking -> idle"
+    },
+    {
+      "elapsed_ms": 275910,
+      "line": "I (275771) Application: VOICE STOP ACK: complete; return to idle"
+    },
+    {
+      "elapsed_ms": 291673,
+      "line": "I (291531) CustomWakeWord: Custom wake word detected: command_id=1, string= ni hao guan lang, prob=0.252692"
+    },
+    {
+      "elapsed_ms": 291678,
+      "line": "I (291531) Application: Wake word detected: 你好管廊 (state: 3)"
+    },
+    {
+      "elapsed_ms": 291683,
+      "line": "I (291541) StateMachine: State: idle -> connecting"
+    },
+    {
+      "elapsed_ms": 291831,
+      "line": "I (291691) Application: Wake word detected: 你好管廊"
+    },
+    {
+      "elapsed_ms": 291842,
+      "line": "I (291701) Application: VOICE NETWORK ACK: start, volume=40"
+    },
+    {
+      "elapsed_ms": 294616,
+      "line": "I (294481) Application: VOICE NETWORK ACK: drained; start listening"
+    },
+    {
+      "elapsed_ms": 294621,
+      "line": "I (294481) StateMachine: State: connecting -> listening"
+    },
+    {
+      "elapsed_ms": 299383,
+      "line": "I (299251) Application: >> 没事了"
+    },
+    {
+      "elapsed_ms": 299418,
+      "line": "I (299281) StateMachine: State: listening -> speaking"
+    }
+  ],
+  "human_feedback": [
+    "不用说了：停止并完整回复，随后回到待机",
+    "闭嘴：打断正常，再次唤醒也正常"
+  ],
+  "not_measured": [
+    "stop_word_acoustic_onset_to_detection",
+    "distance_noise_and_echo_hit_rate",
+    "long_running_false_trigger_rate"
+  ],
+  "github_push_performed": false
+}

@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-27",
+  "board": "utility-tunnel-s3",
+  "mode": "offline_wake_manual_speaker_and_oled_test",
+  "wake_phrase": "你好管廊",
+  "volume": 20,
+  "display_driver": "SSD1306-compatible",
+  "display_geometry": [
+    128,
+    32
+  ],
+  "display_pins": {
+    "sda": 41,
+    "scl": 42
+  },
+  "i2c_probe_addresses": [
+    "0x3c",
+    "0x3d"
+  ],
+  "i2c_bus_hz": 100000,
+  "controller_identity_confirmed": false,
+  "visual_test_passed": true,
+  "build_verified": true,
+  "assets_verified": true,
+  "flash_files": {
+    "0x0": "bootloader/bootloader.bin",
+    "0x8000": "partition_table/partition-table.bin",
+    "0xd000": "ota_data_initial.bin",
+    "0x800000": "generated_assets.bin",
+    "0x20000": "xiaozhi.bin"
+  },
+  "artifacts": {
+    "bootloader/bootloader.bin": {
+      "bytes": 16640,
+      "sha256": "bc9c12a89867d4a3a3f4a9bcb1bc4b7c402a6ca50995d9c229fe1fee7def1317"
+    },
+    "partition_table/partition-table.bin": {
+      "bytes": 3072,
+      "sha256": "4811619cacae08ef2e0e71b7220c6033a346ca5da7ca179082408c963ef530b5"
+    },
+    "ota_data_initial.bin": {
+      "bytes": 8192,
+      "sha256": "7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f"
+    },
+    "generated_assets.bin": {
+      "bytes": 2951621,
+      "sha256": "1e610e12bcbee464eabff62432a870270f76df9acf56d0d9e3d2a05dd2ee888b"
+    },
+    "xiaozhi.bin": {
+      "bytes": 2290688,
+      "sha256": "519459982a98d3339e24db5c4aa2834f39eccda19ba6be0d89bf1885b74c9dbf"
+    },
+    "flasher_args.json": {
+      "bytes": 1218,
+      "sha256": "c392c12970446292b3b8762455506765c942c9bfecb93a52ed829117a5510ff4"
+    }
+  },
+  "automatic_idle_return_verified": true,
+  "hardware_test_report": "oled-test-report.json"
+}

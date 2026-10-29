@@ -1,0 +1,32 @@
+{
+  "repository": "https://github.com/78/xiaozhi-esp32",
+  "commit": "c435f99a88066029ec2dbd2d758c8cc9d051565b",
+  "reviewed_on": "2026-10-29",
+  "board_type": "utility-tunnel-s3",
+  "esp_idf_minimum": "6.0.1",
+  "esp_idf_recommended_branch": "release/v6.1",
+  "esp_idf_commit": "8c19b156084a0753687347cca1f5355782893533",
+  "esp_sr_version": "2.4.7",
+  "overlay_compile_verified": true,
+  "real_device_verified": true,
+  "note": "Current app includes shorter warm-listen onset and requested volume80. User confirms clear audio and continuous DeepSeek dialogue. Wake aliases/stop words unchanged; assets preserved. Controlled P1 acoustic accuracy improvement is not measured. See volume80 and voice-quality reports.",
+  "esp_idf_version": "6.0.1",
+  "source_archive": {
+    "url": "https://codeload.github.com/78/xiaozhi-esp32/zip/c435f99a88066029ec2dbd2d758c8cc9d051565b",
+    "sha256": "f0ec4fe8cf9beaf80d061c228ac245c31c4e57f194bbcf1cfbaf2fd57767c4d9"
+  },
+  "device_validation_scope": [
+    "psram_boot",
+    "i2s_microphone_input",
+    "local_custom_wake",
+    "repeat_wake_without_reboot",
+    "manual_speaker_playback",
+    "oled_status_display",
+    "post_playback_wake_and_display_idle_return",
+    "local_wake_acknowledgement_human_listening",
+    "authenticated_network_dialogue",
+    "native_pcm_streaming",
+    "spoken_stop_two_commands_and_rewake",
+    "dual_xiaoguan_wake_and_retired_word_negative"
+  ]
+}
