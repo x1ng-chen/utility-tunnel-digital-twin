@@ -1,5 +1,7 @@
 # 语音联调断点 2026-10-29
 
+当前发布补充：停止词已覆盖Speaking及Listening，两种场景实物复测通过；AI_ASSISTANT_RATE_LIMIT=none关闭应用查询次数限制，鉴权保留。最新固件及SHA以firmware/xiaozhi/stop-states-build-report.json为准；下面旧应用SHA与历史测试为此前阶段快照。
+
 最新修正：用户反馈每轮加“还未核查现场数据”。根因是client.py的场景分类和fallback统一前缀，不是DeepSeek每轮都生成。现已删除整套分类器和_spoken_reply，问答格式/角色/proposals校验后直接返回reply.strip()，mode/queried_at元数据原样保留，不再自动补任何开场。不要恢复基于关键词的免责声明词表，也不要全局删除模型回答中的具体限制。
 
 VOICE_STYLE只对语音页面禁固定开场，真正没数据就具体说“P1没有新采样，暂时无法判断”，未知/过期/校准限制和工具权限保留。124项语音回归及5项后端语音路由检查通过；测试数量变化是移除旧分类器专用断言并改成内容保真/无前缀回归。真实DeepSeek聊天、知识解释和P1查询均不带统一开场；详情server/no-prefix-test-report.json。只改服务器，无需重新烧录，音量80与固件不变。

@@ -439,27 +439,25 @@ diff --git a/main/application.cc b/main/application.cc
                          [this, display, payload_str = std::string(payload_json.get())]() {
                              display->SetChatMessage("system", payload_str.c_str());
                          });
-@@ -928,6 +1135,28 @@
+@@ -928,6 +1135,26 @@
      auto wake_word = audio_service_.GetLastWakeWord();
      ESP_LOGI(TAG, "Wake word detected: %s (state: %d)", wake_word.c_str(), (int)state);
  
 +#if CONFIG_BOARD_TYPE_UTILITY_TUNNEL_S3
 +    if (wake_word == "不用说了" || wake_word == "闭嘴") {
-+        if (state == kDeviceStateSpeaking) {
++        if (state == kDeviceStateSpeaking || state == kDeviceStateListening) {
 +            StopUtilityTunnelSpeech(wake_word);
 +        } else if (state == kDeviceStateIdle) {
 +            audio_service_.EnableWakeWordDetection(true);
-+        } else if (state == kDeviceStateListening) {
-+            ConfigureWakeWordForListening();
 +        } else if (state == kDeviceStateNotifying) {
 +            audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
 +        }
 +        return;  // Stop commands cannot open a new chat from standby.
 +    }
-+    if (state == kDeviceStateSpeaking &&
++    if ((state == kDeviceStateSpeaking || state == kDeviceStateListening) &&
 +        (wake_word == "你好，小管" || wake_word == "小管")) {
-+        // Keep local stop commands active without letting the speaker saying
-+        // its own short name interrupt the reply and reopen a conversation.
++        // An active chat already streams microphone audio. Keep stop detection
++        // armed without reopening chat, including a buffered TTS playback tail.
 +        audio_service_.EnableWakeWordDetection(true);
 +        return;
 +    }
@@ -468,7 +466,7 @@ diff --git a/main/application.cc b/main/application.cc
      if (state == kDeviceStateIdle) {
          BeginWakeWordInvoke(wake_word);
      } else if (state == kDeviceStateNotifying) {
-@@ -958,7 +1187,9 @@
+@@ -958,7 +1185,9 @@
  
  void Application::BeginWakeWordInvoke(const std::string& wake_word) {
      // Must run in the main task with the device in idle state
@@ -478,7 +476,7 @@ diff --git a/main/application.cc b/main/application.cc
  
      // Always pass through the connecting state, even if the audio channel is
      // already opened. ContinueWakeWordInvoke() rejects any other state, so
-@@ -1001,7 +1232,14 @@
+@@ -1001,7 +1230,14 @@
      }
  
      ESP_LOGI(TAG, "Wake word detected: %s", wake_word.c_str());
@@ -494,14 +492,16 @@ diff --git a/main/application.cc b/main/application.cc
      // Encode and send the wake word data to the server
      while (auto packet = audio_service_.PopWakeWordPacket()) {
          protocol_->SendAudio(std::move(packet));
-@@ -1016,6 +1254,113 @@
+@@ -1016,6 +1252,115 @@
      SetListeningMode(GetDefaultListeningMode());
  #endif
  }
 +
 +#if CONFIG_BOARD_TYPE_UTILITY_TUNNEL_S3
 +void Application::StopUtilityTunnelSpeech(const std::string& command) {
-+    if (GetDeviceState() != kDeviceStateSpeaking || utility_stop_ack_in_progress_.exchange(true)) {
++    const auto state = GetDeviceState();
++    if ((state != kDeviceStateSpeaking && state != kDeviceStateListening) ||
++        utility_stop_ack_in_progress_.exchange(true)) {
 +        return;
 +    }
 +    ESP_LOGI(TAG, "VOICE STOP: detected=%s; cancelling current reply", command.c_str());
@@ -608,6 +608,19 @@ diff --git a/main/application.cc b/main/application.cc
  
  void Application::HandleStateChangedEvent() {
      DeviceState new_state = state_machine_.GetState();
+@@ -1182,7 +1527,11 @@
+ }
+ 
+ void Application::ConfigureWakeWordForListening() {
+-#ifdef CONFIG_WAKE_WORD_DETECTION_IN_LISTENING
++#if CONFIG_BOARD_TYPE_UTILITY_TUNNEL_S3
++    // Local stop commands must work during follow-up listening too. A TTS stop
++    // can enter this state while the speaker still drains buffered audio.
++    audio_service_.EnableWakeWordDetection(true);
++#elif defined(CONFIG_WAKE_WORD_DETECTION_IN_LISTENING)
+     // Enable wake word detection in listening mode (configured via Kconfig)
+     audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
+ #else
 diff --git a/main/application.h b/main/application.h
 --- a/main/application.h
 +++ b/main/application.h

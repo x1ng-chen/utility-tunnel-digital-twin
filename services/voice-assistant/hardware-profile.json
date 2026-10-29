@@ -266,5 +266,16 @@
     "specific_data_limits_retained": true,
     "latest_report": "server/no-prefix-test-report.json",
     "voice_tests_passed": 124
-  }
+  },
+  "current_application": {
+    "bytes": 2406320,
+    "sha256": "23ed21f0a80b3b33bdae46db92dccc048724880ad4f68baa908af4af1f944e10",
+    "report": "firmware/xiaozhi/stop-states-build-report.json"
+  },
+  "stop_command_states": [
+    "speaking",
+    "listening"
+  ],
+  "stop_command_states_user_confirmed": true,
+  "ai_query_count_limit": "none"
 }

@@ -78,3 +78,37 @@ class AiAssistantTests(TestCase):
              'page': 'voice'}, format='json')
         self.assertEqual(response.status_code, 400)
         mocked_urlopen.assert_not_called()
+
+    @override_settings(DEEPSEEK_API_KEY='test-secret-key', DEEPSEEK_MODEL='deepseek-flash')
+    @patch('operations.ai_assistant.urlopen')
+    def test_unlimited_ai_queries_allow_continuous_authenticated_dialogue(self, mocked_urlopen):
+        from django.core.cache import cache
+        from .throttling import AiAssistantRateThrottle
+        self.authenticate()
+        cache.delete(f'throttle_ai_assistant_{self.user.pk}')
+        body = {'choices': [{'message': {'content': '收到。'}}]}
+        mocked_urlopen.return_value.__enter__.side_effect = lambda: io.BytesIO(json.dumps(body).encode())
+        with patch.dict(AiAssistantRateThrottle.THROTTLE_RATES, {'ai_assistant': None}):
+            for _ in range(25):
+                response = self.client.post('/api/assistant/chat/',
+                    {'messages': [{'role': 'user', 'content': '你好'}], 'page': 'voice'}, format='json')
+                self.assertEqual(response.status_code, 200)
+        self.assertEqual(mocked_urlopen.call_count, 25)
+
+    @override_settings(DEEPSEEK_API_KEY='test-secret-key', DEEPSEEK_MODEL='deepseek-flash')
+    @patch('operations.ai_assistant.urlopen')
+    def test_configured_ai_budget_still_rejects_excess_requests(self, mocked_urlopen):
+        from django.core.cache import cache
+        from .throttling import AiAssistantRateThrottle
+        self.authenticate()
+        cache.delete(f'throttle_ai_assistant_{self.user.pk}')
+        body = {'choices': [{'message': {'content': '收到。'}}]}
+        mocked_urlopen.return_value.__enter__.side_effect = lambda: io.BytesIO(json.dumps(body).encode())
+        payload = {'messages': [{'role': 'user', 'content': '你好'}], 'page': 'voice'}
+        with patch.dict(AiAssistantRateThrottle.THROTTLE_RATES, {'ai_assistant': '1/min'}):
+            first = self.client.post('/api/assistant/chat/', payload, format='json')
+            second = self.client.post('/api/assistant/chat/', payload, format='json')
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 429)
+        self.assertEqual(mocked_urlopen.call_count, 1)
+        cache.delete(f'throttle_ai_assistant_{self.user.pk}')
