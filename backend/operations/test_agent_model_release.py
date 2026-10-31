@@ -76,7 +76,7 @@ class SoftwareModelBootstrapTests(TestCase):
         inventory = runtime_inventory()
         self.assertEqual(result['presentationRevision'], V24['revision'])
         self.assertEqual(len({b['targetNode'] for b in inventory['bindings']}),31)
-        self.assertEqual(Asset.objects.get(code='FLAME-02').mesh,'FLAME-01')
+        self.assertEqual(Asset.objects.get(code='FLAME-02').mesh,'FLAME-02')
         self.assertEqual(Asset.objects.get(code='GAS-O2-02').mesh,'GAS-O2-05')
         self.assertEqual(list(Asset.objects.order_by('id').values_list('id','code')),ids)
         self.assertEqual(list(HardwareBinding.objects.order_by('id').values()),bindings)
@@ -157,7 +157,7 @@ class SoftwareModelBootstrapTests(TestCase):
             self.assertEqual(Asset.objects.get(code='MQ4-05').mesh,'')
             control('reset','INS-01')
         self.assertEqual(Asset.objects.get(code='MQ4-05').mesh,V24['sensorMeshes']['MQ4-05'])
-        self.assertEqual(Asset.objects.get(code='FLAME-02').mesh,'FLAME-01')
+        self.assertEqual(Asset.objects.get(code='FLAME-02').mesh,'FLAME-02')
         self.assertTrue(AgentRun.objects.filter(pk=run.pk).exists())
 
     def test_default_scenario_installer_uses_v24_not_legacy_v17(self):

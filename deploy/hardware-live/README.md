@@ -23,6 +23,12 @@
 - 运行账号为运维员；CLI模型导入服务禁止密码登录，CLI激活不记为人工验收。
 - 硬件控制接口即使被管理员调用也拒绝；付费模型任务明确返回暂停提示，不进入无人处理的队列。五站直接巡检可用且不调用模型。
 
+## 当前模型与硬件状态
+
+当前前端默认V24统一编号；启动保留已激活模型，不静默切回V17/V20。模型安装选择`install_twin_v24 --unified-numbering`，需在专用联调库运行并使用精确SHA文件。历史模型记录不改写。
+
+板2当前最后确认仍运行临时SHT诊断，尚无业务遥测；GitHub完整业务镜像不等于已回装，详见`docs/PROJECT_STATUS.md`。
+
 ## 数据契约
 
 订阅四个明确主题：`ut/v1/CTRL-01/telemetry` 至 `ut/v1/CTRL-04/telemetry`。
@@ -68,4 +74,4 @@ node deploy/hardware-live/observe_flame.mjs
 ```
 
 第一条命令只配置0/1火焰规则，不注入观测；第二条只读观察真实MQTT与平台提交后的实时事件，窗口180秒或完成一次触发恢复后结束。
-网页是否高亮、位置是否正确及颜色是否恢复仍需实际观察。2026-10-28中央P5已经完成一次实物触发与用户画面确认，详见`docs/hardware/flame-highlight-acceptance-20261028.md`；其余四路待测。
+网页是否高亮、位置是否正确及颜色是否恢复仍需实际观察。2026-10-28中央P5已经完成一次实物触发与用户画面确认，详见`docs/hardware/flame-highlight-acceptance-20261028.md`；后续五路已获用户确认，见`docs/hardware/flame-five-user-acceptance-20261029.md`。

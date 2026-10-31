@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "evaluatedAtUtc": "2026-10-29T04:58:40.307Z",
+  "evaluatedAtUtc": "2026-10-31T07:40:31.530Z",
   "status": "PASS",
   "route": "ACTUAL_RUNTIME_GLB_THREE_GLTFLOADER",
   "runtimeFile": "frontend/public/models/utility-tunnel-v24.glb",
-  "descriptorRevision": "v24-presentation-20261029.1",
+  "descriptorRevision": "v24-presentation-20261029.2",
   "wireLayoutVersion": "four-controller-20261026.1",
   "source": "STATIC_GEOMETRY_AND_MAPPING_VERIFICATION",
   "checks": [
@@ -63,11 +63,11 @@
         {
           "wireAssetCode": "FLAME-01",
           "wireControllerId": "CTRL-04",
-          "targetNode": "FLAME-04",
-          "modelTag": "FLAME-04",
-          "stationId": "P4",
+          "targetNode": "FLAME-01",
+          "modelTag": "FLAME-01",
+          "stationId": "P1",
           "positionGltfM": [
-            0.3030000329017639,
+            0.4830000400543213,
             0.1510000079870224,
             -0.5010000467300415
           ]
@@ -111,13 +111,13 @@
         {
           "wireAssetCode": "FLAME-02",
           "wireControllerId": "CTRL-03",
-          "targetNode": "FLAME-01",
-          "modelTag": "FLAME-01",
-          "stationId": "P1",
+          "targetNode": "FLAME-02",
+          "modelTag": "FLAME-02",
+          "stationId": "P2",
           "positionGltfM": [
             0.4830000400543213,
             0.1510000079870224,
-            -0.5010000467300415
+            -0.1210000067949295
           ]
         },
         {
@@ -207,13 +207,13 @@
         {
           "wireAssetCode": "FLAME-04",
           "wireControllerId": "CTRL-02",
-          "targetNode": "FLAME-02",
-          "modelTag": "FLAME-02",
-          "stationId": "P2",
+          "targetNode": "FLAME-04",
+          "modelTag": "FLAME-04",
+          "stationId": "P4",
           "positionGltfM": [
-            0.4830000400543213,
+            0.3030000329017639,
             0.1510000079870224,
-            -0.1210000067949295
+            -0.5010000467300415
           ]
         },
         {

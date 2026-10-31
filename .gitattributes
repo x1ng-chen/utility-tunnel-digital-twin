@@ -67,3 +67,12 @@ frontend/public/models/utility-tunnel-v20.glb filter=lfs diff=lfs merge=lfs -tex
 # Preserve upstream patch context and original third-party license bytes.
 services/voice-assistant/firmware/xiaozhi/register-board.patch -text -whitespace
 services/voice-assistant/licenses/* -text -whitespace
+
+# Current navigation and small distributable firmware images.
+README.md text eol=lf
+CONTRIBUTING.md text eol=lf
+CHANGELOG.md text eol=lf
+docs/PROJECT_STATUS.md text eol=lf
+docs/README.md text eol=lf
+docs/releases/** text eol=lf
+releases/firmware/**/*.bin -text

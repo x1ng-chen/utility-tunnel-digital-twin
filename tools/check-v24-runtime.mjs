@@ -75,7 +75,10 @@ check('all_31_wire_identities_have_unique_exact_model_targets', () => {
   assert.equal(new Set(Object.values(descriptor.sensorMeshes)).size, 31);
   const evidence = [];
   for (const row of wire.bindings) {
-    const modelId = renames.get(row.assetCode) ?? row.assetCode;
+    // Three flame targets were corrected by the user's five-point physical check.
+    // This supersedes the frozen original numbering migration for those assets.
+    const modelId = ['FLAME-01', 'FLAME-02', 'FLAME-04'].includes(row.assetCode)
+      ? row.assetCode : (renames.get(row.assetCode) ?? row.assetCode);
     const target = targets.get(modelId);
     assert(target, `Source migration does not resolve ${row.assetCode}`);
     assert.equal(descriptor.sensorMeshes[row.assetCode], target.targetNode, row.assetCode);

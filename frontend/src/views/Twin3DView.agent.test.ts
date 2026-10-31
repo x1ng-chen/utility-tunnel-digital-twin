@@ -70,7 +70,7 @@ describe('agent to twin asset focus', () => {
     } } });
     try {
       await nextTick();
-      expect(twinModelUrl).toBe('/models/utility-tunnel-v24.glb');
+      expect(twinModelUrl).toBe('/models/utility-tunnel-v24-unified.glb');
       expect(wrapper.findComponent(scene).props('overviewDirection')).toEqual([-1, .85, 0]);
       const notice = wrapper.get('[data-testid="model-numbering-notice"]').text();
       expect(notice).toContain('P3 前右'); expect(notice).toContain('P4 前左');

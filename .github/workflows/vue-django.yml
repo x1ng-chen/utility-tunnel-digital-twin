@@ -100,6 +100,7 @@ jobs:
         with:
           node-version: 22
       - run: node tools/quality-scan.mjs
+      - run: python3 tools/check-project-navigation.py
       - run: node tools/check-postgres-policy.mjs
       - run: node tools/check-deployment-artifacts.mjs
       - run: node tools/check-twin-model-artifacts.mjs
