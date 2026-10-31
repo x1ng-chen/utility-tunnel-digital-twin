@@ -111,6 +111,19 @@ static void Log_Status(void)
     (unsigned long)(HAL_GetTick() / 1000U));
   if (size > 0 && (size_t)size < sizeof line)
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)line, (uint16_t)size, 50U);
+  BoardIoI2cDiagnostics d;
+  if(BoardIo_GetI2cDiagnostics(&d)) {
+    char diag[320];
+    int n=snprintf(diag,sizeof diag,
+      "I2C_DIAG CTRL-0%u at=%lu addr=%02x stage=%u idle=%u%u probe=%u ack=%u good=%lu fail=%lu last_good=%lu raw_at=%lu raw=%02x%02x%02x%02x%02x%02x ina_q=%u clk_fail=%lu\r\n",
+      (unsigned)BOARD_ID,(unsigned long)HAL_GetTick(),(unsigned)d.address,(unsigned)d.stage,
+      (unsigned)d.idle_scl,(unsigned)d.idle_sda,(unsigned)d.probes_run,(unsigned)d.ack_mask,
+      (unsigned long)d.good,(unsigned long)d.failed,(unsigned long)d.last_good_ms,(unsigned long)d.raw_read_ms,
+      (unsigned)d.raw[0],(unsigned)d.raw[1],(unsigned)d.raw[2],(unsigned)d.raw[3],(unsigned)d.raw[4],(unsigned)d.raw[5],
+      (unsigned)Actuators_Feedback()->ina_quality,(unsigned long)d.clock_timeouts);
+    if(n>0 && (size_t)n<sizeof diag)
+      (void)HAL_UART_Transmit(&huart1,(uint8_t *)diag,(uint16_t)n,50U);
+  }
 }
 
 int main(void)

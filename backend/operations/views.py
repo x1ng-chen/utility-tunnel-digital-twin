@@ -76,14 +76,16 @@ def error_response(code: str, message: str, status_code: int, details=None):
 
 from .agent_context import data_context, evaluation_enabled
 from .agent_operations import INVENTORY
+from .twin_presentation import runtime_inventory, presentation_for_release
 
 
 class AgentContextView(APIView):
     permission_classes = [AuthenticatedRead]
 
     def get(self, request):
+        inventory = runtime_inventory()
         return Response({'dataContext': data_context(), 'layoutVersion': INVENTORY['revision'],
-            'modelNotice': INVENTORY['modelNotice']})
+            'modelNotice': inventory['modelNotice'], 'presentation': inventory.get('presentation')})
 
 
 class StationInspectionView(APIView):
@@ -272,6 +274,7 @@ def telemetry_matches(reading, payload) -> bool:
         and reading.unit == payload['unit']
         and reading.quality == payload['quality']
         and reading.observation_kind == payload.get('observationKind', 'sample')
+        and reading.provenance == payload.get('provenance', {})
         and reading.recorded_at == payload['recordedAt']
     )
 
@@ -423,7 +426,9 @@ class ReadyView(APIView):
         except Exception:
             return error_response('not_ready', 'Database is not ready.', 503)
         latency_ms = round((timezone.now() - started).total_seconds() * 1000, 2)
-        return Response({'status': 'ready', 'service': 'utility-tunnel-django', 'checks': {'database': 'ok'}, 'latencyMs': latency_ms, 'time': timezone.now()})
+        return Response({'status': 'ready', 'service': 'utility-tunnel-django', 'checks': {'database': 'ok'},
+            'profile': 'hardware-live' if getattr(settings, 'HARDWARE_LIVE_MODE', False) else 'default',
+            'latencyMs': latency_ms, 'time': timezone.now()})
 
 
 class LoginView(APIView):
@@ -815,7 +820,7 @@ class ControllerCommandCapabilitiesView(APIView):
             'protocol': settings.CONTROLLER_COMMAND_PROTOCOL,
             'controllers': {key: sorted(value) for key, value in FOUR_ACTIONS.items()} if four_controller_enabled() else {'CTRL-01': sorted(CONTROLLER_ACTIONS)},
             'manualLeaseMs': 10000,
-            'controlDisabled': evaluation_enabled(),
+            'controlDisabled': evaluation_enabled() or getattr(settings, 'HARDWARE_LIVE_MODE', False),
             'physicalFeedbackRequired': True,
         })
 
@@ -827,6 +832,8 @@ class ControllerCommandConfirmationView(APIView):
     throttle_classes = [ControllerCommandRateThrottle]
 
     def post(self, request, asset_code):
+        if getattr(settings, 'HARDWARE_LIVE_MODE', False):
+            return error_response('hardware_control_disabled', '本轮实物联调只接收遥测，不允许硬件控制。', 403)
         if evaluation_enabled():
             return error_response('evaluation_control_disabled', '隔离验收环境不允许硬件控制。', 403)
         if not can_write(request):
@@ -884,6 +891,8 @@ class ControllerCommandView(APIView):
     throttle_classes = [ControllerCommandRateThrottle]
 
     def post(self, request, asset_code):
+        if getattr(settings, 'HARDWARE_LIVE_MODE', False):
+            return error_response('hardware_control_disabled', '本轮实物联调只接收遥测，不允许硬件控制。', 403)
         if evaluation_enabled():
             return error_response('evaluation_control_disabled', '隔离验收环境不允许硬件控制。', 403)
         if not can_write(request):
@@ -1028,6 +1037,7 @@ class TwinModelReadinessView(APIView):
                 'modelNodeInventoryAvailable': model_node_names is not None,
             },
             'activeRelease': TwinModelReleaseSerializer(active_release).data if active_release else None,
+            'presentation': presentation_for_release(active_release),
             'updatedAt': latest_update,
         })
 
@@ -1820,6 +1830,8 @@ class TelemetryListView(APIView):
     def post(self, request):
         if not can_ingest(request):
             return error_response('forbidden', 'Telemetry ingestion permission is required.', 403)
+        if getattr(settings, 'HARDWARE_LIVE_MODE', False) and role(request) != Profile.Role.INGEST:
+            return error_response('forbidden', '实物联调仅允许专用遥测接入服务写入观测。', 403)
         payload = object_payload(request)
         if payload is None or not isinstance(payload.get('readings'), list):
             return error_response('invalid_request', 'A JSON object with a readings array is required.', 400)
@@ -1902,6 +1914,7 @@ class TelemetryListView(APIView):
                         unit=item['unit'],
                         quality=item['quality'],
                         observation_kind=item['observationKind'],
+                        provenance=item['provenance'],
                         recorded_at=item['recordedAt'],
                     )
                     before_asset = (asset.status, asset.last_seen_at)
@@ -1963,7 +1976,7 @@ class TelemetrySummaryView(APIView):
             unit_count=Count('unit', distinct=True),
         )
         comparable = aggregate['metric_count'] <= 1 and aggregate['unit_count'] <= 1
-        values = queryset.aggregate(minimum=Min('value'), maximum=Max('value'), average=Avg('value')) if comparable else {'minimum': None, 'maximum': None, 'average': None}
+        values = queryset.filter(quality__in=['good', 'suspect']).aggregate(minimum=Min('value'), maximum=Max('value'), average=Avg('value')) if comparable else {'minimum': None, 'maximum': None, 'average': None}
         quality_counts = {quality: 0 for quality in Telemetry.Quality.values}
         for row in queryset.values('quality').annotate(count=Count('id')):
             quality_counts[row['quality']] = row['count']

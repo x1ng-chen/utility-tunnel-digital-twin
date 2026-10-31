@@ -36,9 +36,15 @@ def safe_lesson(text):
     return text.strip()
 
 
-def station_for(payload,code):
+def station_for(payload,code,inventory=None):
     station=payload.get('station_id')
-    return station if station in STATIONS else next((b['stationId'] for b in BINDINGS if b['assetCode']==code),None)
+    bindings=inventory.get('bindings',BINDINGS) if inventory else BINDINGS
+    return station if station in STATIONS else next((b['stationId'] for b in bindings if b['assetCode']==code),None)
+
+
+def experience_layout_version(snapshot):
+    presentation=snapshot.get('inventory',{}).get('presentationRevision')
+    return snapshot['layoutVersion'] + (':'+presentation if presentation else '')
 
 
 def contains_asset(value,code):
@@ -68,7 +74,7 @@ def capture_candidates(run):
         code=finding.get('asset_code');category=finding.get('ruleId');ids=finding.get('evidence_ids',[])
         if not isinstance(category,str) or category not in TEMPLATES or not isinstance(code,str) or code not in run.snapshot['assets']: continue
         if not isinstance(ids,list) or not ids or not all(isinstance(i,str) and i in good for i in ids): continue
-        station=station_for(run.input,code)
+        station=station_for(run.input,code,run.snapshot.get('inventory'))
         if not station: continue
         asset=run.snapshot['assets'][code]
         if not any(contains_asset(good[i].get('data'),code) for i in ids): continue
@@ -79,7 +85,7 @@ def capture_candidates(run):
         kind=next((b['physicalTag'].split('-')[0] for b in BINDINGS if b['assetCode']==code),'FAN' if code.startswith('FAN-') else 'controller')
         item={'station_id':station,'asset_code':code,'asset_kind':kind,'metric_key':metric_key,
             'category':category,'lesson':TEMPLATES[category],'source_scope':scope(run.snapshot),
-            'layout_version':run.snapshot['layoutVersion'],'knowledge_version':run.snapshot['knowledgeVersion'],'rule_version':VERSION}
+            'layout_version':experience_layout_version(run.snapshot),'knowledge_version':run.snapshot['knowledgeVersion'],'rule_version':VERSION}
         refs=[{'evidenceId':i,'tool':good[i]['tool'],'snapshotHash':run.snapshot.get('sha256')} for i in ids]
         value,_=ReviewExperience.objects.get_or_create(owner=run.owner,source_run=run,content_hash=hash_content(item),
             defaults={**item,'source_refs':refs,'audit':[{'action':'candidate_generated','at':timezone.now().isoformat(),
@@ -114,7 +120,7 @@ def matching(snapshot,payload,user,*,allowed_ids=None):
     station=payload.get('station_id','P5')
     if station not in STATIONS: return result
     rows=ReviewExperience.objects.filter(status='approved',station_id=station,rule_version=VERSION,
-        layout_version=snapshot['layoutVersion'],knowledge_version=snapshot['knowledgeVersion'],source_scope=scope(snapshot)).order_by('-updated_at','id')
+        layout_version=experience_layout_version(snapshot),knowledge_version=snapshot['knowledgeVersion'],source_scope=scope(snapshot)).order_by('-updated_at','id')
     if allowed_ids is not None: rows=rows.filter(pk__in=allowed_ids) # trusted evaluator only; never request data
     for item in rows:
         if payload.get('kind')=='draft' and item.asset_code!=payload.get('asset_code'): continue

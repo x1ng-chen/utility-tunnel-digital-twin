@@ -22,6 +22,8 @@ export interface TwinModelDeliveryReadiness {
 }
 
 export interface TwinModelReadinessResponse {
+  presentation?: { revision: string; modelVersion: string; notice: string; frontCameraDirection: number[];
+    stations: Array<{id: string; position: string; groupNode: string}> } | null;
   status: 'ready' | 'blocked';
   summary: { activeAssetCount: number; mappedAssetCount: number; unmappedAssetCount: number };
   missingMeshCodes: string[];
@@ -33,7 +35,7 @@ export interface TwinModelReadinessResponse {
   updatedAt: string | null;
 }
 
-export const twinModelUrl = (import.meta.env.VITE_TWIN_MODEL_URL || '/models/utility-tunnel.glb').trim();
+export const twinModelUrl = (import.meta.env.VITE_TWIN_MODEL_URL || '/models/utility-tunnel-v24-unified.glb').trim();
 const modelNodeNamePattern = /^[A-Z0-9][A-Z0-9_-]{1,79}$/;
 const activeAlertStatuses = new Set<Alert['status']>(['open', 'acknowledged']);
 const severityRank: Record<Alert['severity'], number> = { info: 0, warning: 1, critical: 2 };

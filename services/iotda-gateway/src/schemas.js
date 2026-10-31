@@ -85,7 +85,8 @@ export function parseTelemetry(payload, deviceId) {
     let quality = r.quality;
     if (r.sampleAgeMs > 5000 && quality !== 'missing') quality = 'bad';
     else if (quality === 'good' && (telemetry.clockSource !== 'gateway-ntp'
-        || r.metric.startsWith('oxygen.'))) quality = 'suspect';
+        || r.metric.startsWith('oxygen.')
+        || (['methane.raw', 'co.raw'].includes(r.metric) && r.value === 4095))) quality = 'suspect';
     return { ...r, quality };
   });
   return telemetry;

@@ -1,0 +1,7 @@
+{
+  "status": "PASS",
+  "method": "ACTUAL_THREEJS_GLB_LOAD",
+  "nodeGroupsAndTheirFourMembersVerified": 5,
+  "sensorBindingsAndUnchangedPositionsVerified": 31,
+  "unchangedStm32PositionsVerified": 4
+}

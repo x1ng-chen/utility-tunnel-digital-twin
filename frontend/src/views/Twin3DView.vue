@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { telemetryValue } from '../utils/telemetryValue';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
 import { Camera, Expand, MapPin, RefreshCw, RotateCcw, Search } from 'lucide-vue-next';
@@ -10,6 +11,8 @@ import { useOperationsStore } from '../stores/operations';
 import { api } from '../services/api';
 import { newTwinAlert } from '../utils/newTwinAlert';
 import { twinTelemetryTrend } from '../utils/twinTelemetryTrend';
+import previewPresentation from '../data/twin-v24-unified-presentation.json';
+import { twinModelUrl } from '../services/twin3d';
 import { activeTwinAlerts, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelDelivery, twinStateLabel, type TwinModelBindingReport, type TwinModelReadinessResponse, type TwinVisualState } from '../services/twin3d';
 
 const store = useOperationsStore();
@@ -17,7 +20,9 @@ const route = useRoute();
 const router = useRouter();
 const stage = ref<HTMLElement>();
 const requestedCode = typeof route.query.asset === 'string' ? route.query.asset : '';
-const selectedCode = ref(store.assets.some((asset) => asset.code === requestedCode) ? requestedCode : store.alerts.find((alert) => !['resolved', 'closed'].includes(alert.status))?.assetCode || store.assets[0]?.code || null);
+// Enter in overview; only an explicit asset link, operator choice or new alert
+// should move the camera to a device. Historical alerts must not hijack entry.
+const selectedCode = ref<string | null>(store.assets.some((asset) => asset.code === requestedCode) ? requestedCode : null);
 const scene = ref<InstanceType<typeof TwinScene>>();
 const autoLocate = ref(true);
 const autoLocateMessage = ref('');
@@ -57,6 +62,12 @@ const modelReport = ref<TwinModelBindingReport>({ mode: 'fallback', expectedCoun
 const serverModelReadiness = ref<TwinModelReadinessResponse | null>(null);
 const activeModelUrl = ref<string>();
 const modelSource = ref<'checking' | 'active' | 'preview' | 'unavailable'>('checking');
+const displayedPresentation = computed(() => modelSource.value === 'active'
+  ? serverModelReadiness.value?.presentation
+  : modelSource.value === 'preview' && twinModelUrl === '/models/utility-tunnel-v24-unified.glb' ? previewPresentation : null);
+const viewPresets = computed(() => displayedPresentation.value
+  ? ['总览', ...displayedPresentation.value.stations.map(station => station.id)]
+  : ['总览', '电力舱', '燃气舱', '水浸点']);
 let modelRequestToken = 0;
 let modelObjectUrl: string | undefined;
 const filterOptions: Array<{ value: 'all' | TwinVisualState; label: string }> = [
@@ -136,6 +147,9 @@ function openAlertCenter() { if (primaryAlert.value) void router.push({ path: '/
 function resetView() { pauseAutoLocate(); scene.value?.resetView(); }
 function selectPreset(zone: string) {
   if (zone === '总览') { resetView(); return; }
+  if (displayedPresentation.value?.stations.some(station => station.id === zone)) {
+    pauseAutoLocate(); scene.value?.focusStation(zone); return;
+  }
   const asset = store.assets.find((item) => item.zone.includes(zone) || (zone === '水浸点' && /SEEP|水浸|水位/.test(`${item.code}${item.name}`)));
   if (asset) select(asset.code);
 }
@@ -284,18 +298,25 @@ onBeforeUnmount(() => {
 <template>
   <AppShell>
     <section class="twin-title section-title">
-      <div><span class="eyebrow light">实体设备可视化</span><h1>三维孪生中心</h1><p>以真实实体模型定位设备、告警与工单；三维状态与运行数据实时同步。</p></div>
+      <div><h1>三维孪生中心</h1><p>以真实实体模型定位设备、告警与工单；三维状态与运行数据实时同步。</p></div>
       <div class="twin-title-actions"><span :class="['twin-live', { blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><i />{{ modelDeliveryLabel }}</span><button v-if="modelReport.mode === 'fallback' || modelSource === 'unavailable'" type="button" class="outline-button twin-model-retry-top" @click="retryModel"><RefreshCw />检测模型</button><button class="primary-button compact-button" @click="resetView"><RotateCcw />重置视角</button><button class="outline-button" @click="fullscreen"><Expand />全屏查看</button></div>
     </section>
+    <details v-if="displayedPresentation" class="model-numbering-notice" data-testid="model-numbering-notice">
+      <summary><strong>模型布局</strong><span>查看工位与主控位置</span></summary>
+      <p>以四个管口侧为前方 ·
+      <span v-for="station in displayedPresentation.stations" :key="station.id">{{ station.id }} {{ station.position }}　</span>
+      <small>主控位置：后左4、后右3、前左2、前右1。设备数据归属以当前接线清单为准。</small>
+      </p>
+    </details>
     <section class="twin-workspace">
       <div class="twin-auto-locate" role="group" aria-label="新告警自动定位">
         <label><input v-model="autoLocate" type="checkbox" @change="autoLocateMessage = autoLocate ? '将定位新产生或升级的告警。' : '自动定位已关闭。'" /> 新告警自动定位</label>
         <span role="status">{{ autoLocateMessage || '手动拖动、缩放或选择设备后暂停，避免抢占视角。' }}</span>
       </div>
       <article ref="stage" :class="['twin-stage-panel', { 'twin-fullscreen-active': fullscreenActive }]" @pointerdown.capture="pauseAutoLocate" @wheel.capture.passive="pauseAutoLocate" @keydown.capture="pauseAutoLocate" @pointermove="onStagePointerMove" @pointerdown="onStagePointerDown" @pointerup="onStagePointerUp" @pointerleave="onStagePointerLeave">
-        <nav class="twin-preset-hud" aria-label="三维视角预设"><span><Camera />视角预设</span><button v-for="preset in ['总览','电力舱','燃气舱','水浸点']" :key="preset" @click="selectPreset(preset)">{{ preset }}</button></nav>
-        <aside class="twin-risk-hud" aria-label="风险设备列表"><strong>风险设备 · {{ riskAssets.length }} 台</strong><button v-for="asset in riskAssets" :key="asset.id" type="button" :aria-pressed="selectedCode === asset.code" :title="asset.name" @click="select(asset.code)"><i :class="resolveTwinVisualState(asset, store.alerts)" /><span>{{ asset.code }}</span><small>{{ asset.name }}</small></button><p v-if="!riskAssets.length">当前无风险设备</p></aside>
-        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" :model-url="activeModelUrl" :model-enabled="modelSource === 'active' || modelSource === 'preview'" :fan-feedback="{ telemetry: store.telemetry, bindings: store.hardwareBindings, source: store.source, offline: store.offline }" @select="select" @model-report="receiveModelReport" />
+        <nav class="twin-preset-hud" aria-label="三维视角预设"><span><Camera />视角预设</span><button v-for="preset in viewPresets" :key="preset" @click="selectPreset(preset)">{{ preset }}</button></nav>
+        <details class="twin-risk-hud" aria-label="风险设备列表"><summary>风险设备 <b>{{ riskAssets.length }} 台</b><span>展开查看与定位</span></summary><div class="twin-risk-list"><button v-for="asset in riskAssets" :key="asset.id" type="button" :aria-pressed="selectedCode === asset.code" :title="asset.name" @click="select(asset.code)"><i :class="resolveTwinVisualState(asset, store.alerts)" /><span>{{ asset.code }}</span><small>{{ asset.name }}</small></button><p v-if="!riskAssets.length">当前无风险设备</p></div></details>
+        <TwinScene ref="scene" :assets="store.assets" :alerts="store.alerts" :selected-code="selectedCode" :model-url="activeModelUrl" :model-enabled="modelSource === 'active' || modelSource === 'preview'" :overview-direction="displayedPresentation?.frontCameraDirection" :fan-feedback="{ telemetry: store.telemetry, bindings: store.hardwareBindings, source: store.source, offline: store.offline }" @select="select" @model-report="receiveModelReport" />
         <div v-if="selectedAsset" class="twin-focus-status" aria-live="polite"><span :class="resolveTwinVisualState(selectedAsset, store.alerts)"><i />{{ statusLabel(resolveTwinVisualState(selectedAsset, store.alerts)) }}</span><b :title="selectedAsset.name">{{ selectedAssetName }}</b><small>{{ selectedAsset.code }} · {{ selectedAsset.zone }}</small><div v-if="riskAssets.length" class="twin-risk-patrol"><em>{{ riskPatrolLabel }}</em><button type="button" aria-label="巡检上一异常设备" @click="inspectRisk(-1)">← 上一异常</button><button type="button" aria-label="巡检下一异常设备" @click="inspectRisk(1)">下一异常 →</button></div></div>
         <nav class="twin-quick-switch" aria-label="场景内设备切换" @pointerenter="onQuickSwitchPointerMove" @pointerdown.capture="onQuickSwitchPointerDown" @pointermove.capture="onQuickSwitchPointerMove" @pointerup.capture="onQuickSwitchPointerEnd" @pointercancel.capture="onQuickSwitchPointerEnd" @mousedown.stop>
           <div class="twin-quick-switch-tools"><div class="twin-quick-switch-heading"><span>设备快速切换 · {{ visibleAssets.length }}/{{ store.assets.length }}</span><b>{{ selectedAssetName || '请选择设备' }}</b></div><div class="twin-switch-filters" role="group" aria-label="按运行状态筛选设备"><button v-for="filter in filterOptions" :key="filter.value" :class="{ selected: stateFilter === filter.value }" type="button" @pointerdown.stop @click.stop="stateFilter = filter.value">{{ filter.label }}</button></div></div>
@@ -317,7 +338,7 @@ onBeforeUnmount(() => {
           <section :class="['twin-model-contract', { ready: modelDeliveryReady, blocked: !modelDeliveryReady }]" :title="modelDeliveryHint"><span>模型交付检查</span><b>{{ modelDeliveryLabel }}</b><p>{{ modelDeliveryCount }} / {{ modelDeliveryTotal }} 个设备已具备标准节点名称</p></section>
           <details class="twin-model-binding-list"><summary>查看实体模型映射</summary><p v-if="modelReport.isComplete">模型中的设备节点已全部绑定，可进行状态高亮与点击定位。</p><p v-else>待补齐：{{ modelReport.missingCodes.join('、') }}</p><div><span v-for="code in modelReport.boundCodes" :key="code">{{ code }}</span></div></details>
           <p v-if="navigationContext" class="twin-navigation-context" role="status">{{ navigationContext }}</p>
-          <div class="twin-inspector-grid"><div><span>所在区域</span><b>{{ selectedAsset.zone }}</b></div><div><span>实体模型</span><b>{{ selectedAsset.mesh || '待绑定' }}</b></div><div><span>最新上报</span><b>{{ formatTime(selectedAsset.lastSeenAt) }}</b></div><div><span>当前遥测</span><b>{{ selectedTelemetry ? `${selectedTelemetry.value} ${selectedTelemetry.unit}` : '暂无数据' }}</b></div></div>
+          <div class="twin-inspector-grid"><div><span>所在区域</span><b>{{ selectedAsset.zone }}</b></div><div><span>实体模型</span><b>{{ selectedAsset.mesh || '待绑定' }}</b></div><div><span>最新上报</span><b>{{ formatTime(selectedAsset.lastSeenAt) }}</b></div><div><span>当前遥测</span><b>{{ selectedTelemetry ? telemetryValue(selectedTelemetry) : '暂无数据' }}</b></div></div>
           <section class="twin-detail-section">
             <span class="eyebrow">实时数据</span>
             <p v-if="selectedTelemetry" class="twin-empty">{{ selectedTelemetry.metric }} · {{ selectedTelemetry.unit }} · {{ selectedTelemetrySampleCount }} 条同类有效样本（当前已加载数据）</p>
@@ -343,6 +364,8 @@ onBeforeUnmount(() => {
 <style src="../assets/twin3d.css" />
 <style src="../assets/operational-layout-polish.css" />
 <style scoped>
+.model-numbering-notice { margin: 0 0 14px; padding: 12px 16px; border: 1px solid var(--ops-line); border-radius: 10px; background: var(--ops-panel); color: var(--ops-text); font-size: 12px; line-height: 1.8; }
+.model-numbering-notice small { display: block; color: var(--ops-muted); }
 .twin-auto-locate { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 16px; border: 1px solid var(--ops-line); background: var(--ops-panel); }
 .twin-auto-locate label { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; font-size: 13px; }
 .twin-auto-locate input { width: 16px; height: 16px; min-height: 0; padding: 0; }
@@ -383,3 +406,4 @@ onBeforeUnmount(() => {
    cursor regression but contributes no visual while the scene is fullscreen. */
 .twin-stage-panel.twin-fullscreen-active :deep(.experience-cursor) > * { display: none; }
 </style>
+<style src="../assets/twin-workspace.css" />

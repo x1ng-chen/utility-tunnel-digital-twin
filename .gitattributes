@@ -50,3 +50,13 @@ model/square-five-station-v17-fan-ready/**/*.zip filter=lfs diff=lfs merge=lfs -
 
 # Business source and executable protocol fixtures use stable line endings.
 firmware/four-controller/** text eol=lf
+
+# Preserve V20 model bytes for the presentation manifest hash.
+model/square-five-station-v20-node-numbering/** -text whitespace=cr-at-eol,-blank-at-eof
+model/square-five-station-v20-node-numbering/**/*.glb filter=lfs diff=lfs merge=lfs -text
+frontend/public/models/utility-tunnel-v24.glb filter=lfs diff=lfs merge=lfs -text
+frontend/public/models/utility-tunnel-v24-unified.glb filter=lfs diff=lfs merge=lfs -text
+model/square-five-station-v24-unified-numbering/*.glb filter=lfs diff=lfs merge=lfs -text
+model/square-five-station-v24-unified-numbering/*.blend filter=lfs diff=lfs merge=lfs -text
+
+frontend/public/models/utility-tunnel-v20.glb filter=lfs diff=lfs merge=lfs -text

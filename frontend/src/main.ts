@@ -9,5 +9,6 @@ import './assets/priority-upgrades.css';
 import './assets/tactical.css';
 import './assets/command-center.css';
 import './assets/light-theme.css';
+import './assets/operations-usability.css';
 
 createApp(App).use(createPinia()).use(router).mount('#app');

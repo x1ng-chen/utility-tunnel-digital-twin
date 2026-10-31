@@ -10,6 +10,14 @@ class ReleaseTests(unittest.TestCase):
         profile=build.profile_read(FW/'release-profile.json')
         self.assertEqual(set(profile['boards']),{'1','2','3','4'})
         self.assertFalse(profile['common']['FAN_TACH_VERIFIED']);self.assertFalse(profile['common']['INA_CALIBRATION_VERIFIED'])
+    def test_r010_scale_matches_confirmed_shunt_without_claiming_calibration(self):
+        profile=build.profile_read(FW/'release-profile.json')
+        for board in ('2','4'):
+            values={**profile['common'],**profile['boards'][board]}
+            self.assertEqual(values['INA_SHUNT_MICROOHMS'],10000)
+            self.assertEqual(values['INA_CURRENT_LSB_UA'],100)
+            self.assertEqual(5120000000//(values['INA_CURRENT_LSB_UA']*values['INA_SHUNT_MICROOHMS']),5120)
+            self.assertEqual(values['INA_CALIBRATION_VERIFIED'],0)
     def test_invalid_and_unsubstantiated_profiles_are_rejected(self):
         original=json.loads((FW/'release-profile.json').read_text(encoding='utf-8'))
         for key,value in [('FAN_PULSES_PER_REV',0),('FAN_PWM_INVERTED',2),('INA_CURRENT_LSB_UA',0),('FAN_TACH_VERIFIED',1)]:

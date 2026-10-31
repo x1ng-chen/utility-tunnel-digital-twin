@@ -21,6 +21,10 @@ def require_evaluation_database():
 
 def data_context():
     if not evaluation_enabled():
+        if getattr(settings, 'HARDWARE_LIVE_MODE', False):
+            return {'mode': 'database_observation', 'label': '实物遥测 · 独立联调库；逐路功能与标定仍待验收',
+                'scenarioId': None, 'demoControlsAvailable': False, 'hardwareLive': True,
+                'controlDisabled': True, 'modelCallsDisabled': True}
         return {'mode': 'database_observation', 'label': '数据库观测；现场状态需核验', 'scenarioId': None,'demoControlsAvailable':False}
     scenario = {}
     try:

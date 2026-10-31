@@ -57,8 +57,8 @@ code, data, samp, time, .eyebrow, .badge, .status-pill, .connection, .metric-car
 .topbar-clock strong { color: var(--ops-text); font-size: 13px; letter-spacing: .06em; }
 .topbar-clock small { color: var(--ops-muted); font-size: 10px; letter-spacing: .12em; }
 .page-content { max-width: none !important; padding: 34px 40px 56px !important; }
-.hero, .section-title { border-bottom: 1px solid var(--ops-line); padding-bottom: 26px !important; margin-bottom: 24px !important; }
-.hero h1, .section-title h1 { font-size: clamp(34px, 4vw, 62px) !important; line-height: .95 !important; letter-spacing: -.045em !important; font-weight: 900 !important; }
+.hero, .section-title { border-bottom: 1px solid var(--ops-line); padding-bottom: 20px; margin-bottom: 24px; }
+.hero h1, .section-title h1 { font-size: 28px; line-height: 1.3; letter-spacing: -.02em; font-weight: 700; }
 .hero p, .section-title p { color: var(--ops-muted) !important; font-size: 14px !important; }
 
 .panel, .metric-card, .table-panel, .settings-panel, .create-order-panel, .kanban-column, .asset-card, .telemetry-filters, .insight-metrics article { border: 1px solid var(--ops-line) !important; border-radius: 0 !important; background: var(--ops-panel) !important; box-shadow: none !important; }

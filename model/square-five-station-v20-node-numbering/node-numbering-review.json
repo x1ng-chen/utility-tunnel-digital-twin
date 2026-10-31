@@ -1,0 +1,146 @@
+{
+  "status": "PASS",
+  "route": "LIVE_BLENDER_MCP",
+  "orientation": "Pipe-port wall is front (-X); image left is +Y; image rear is +X",
+  "stationIdMigration": {
+    "P1": "P3",
+    "P2": "P1",
+    "P3": "P4",
+    "P4": "P2",
+    "P5": "P5"
+  },
+  "nodes": [
+    {
+      "oldStationId": "P2",
+      "newStationId": "P1",
+      "viewPosition": "REAR_LEFT",
+      "oldLabel": "P2  /  CTRL-03",
+      "newLabel": "P1 / 采集节点",
+      "controllerIdPreserved": "CTRL-02",
+      "positionBlender_m": [
+        0.4400000274181366,
+        0.5400000214576721,
+        0.1510000079870224
+      ],
+      "memberAssetCodes": [
+        "CO-02",
+        "FLAME-02",
+        "MQ2-02",
+        "MQ4-02"
+      ],
+      "reviewImageUV": [
+        0.30612194538116455,
+        0.5915375351905823,
+        1.868820071220398
+      ]
+    },
+    {
+      "oldStationId": "P4",
+      "newStationId": "P2",
+      "viewPosition": "REAR_RIGHT",
+      "oldLabel": "P3  /  CTRL-01",
+      "newLabel": "P2 / 采集节点",
+      "controllerIdPreserved": "CTRL-04",
+      "positionBlender_m": [
+        0.4400000274181366,
+        0.1600000113248825,
+        0.1510000079870224
+      ],
+      "memberAssetCodes": [
+        "CO-04",
+        "FLAME-04",
+        "MQ2-04",
+        "MQ4-04"
+      ],
+      "reviewImageUV": [
+        0.6938770413398743,
+        0.591537594795227,
+        1.868820071220398
+      ]
+    },
+    {
+      "oldStationId": "P1",
+      "newStationId": "P3",
+      "viewPosition": "FRONT_LEFT",
+      "oldLabel": "P1  /  CTRL-04",
+      "newLabel": "P3 / 采集节点",
+      "controllerIdPreserved": "CTRL-01",
+      "positionBlender_m": [
+        0.2600000202655792,
+        0.5400000214576721,
+        0.1510000079870224
+      ],
+      "memberAssetCodes": [
+        "FLAME-01",
+        "GAS-CH4-01",
+        "GAS-CO-01",
+        "SMOKE-01"
+      ],
+      "reviewImageUV": [
+        0.30612197518348694,
+        0.47523078322410583,
+        1.7144713401794434
+      ]
+    },
+    {
+      "oldStationId": "P3",
+      "newStationId": "P4",
+      "viewPosition": "FRONT_RIGHT",
+      "oldLabel": "P4  /  CTRL-02",
+      "newLabel": "P4 / 采集节点",
+      "controllerIdPreserved": "CTRL-03",
+      "positionBlender_m": [
+        0.2600000202655792,
+        0.1600000113248825,
+        0.1510000079870224
+      ],
+      "memberAssetCodes": [
+        "CO-03",
+        "FLAME-03",
+        "MQ2-03",
+        "MQ4-03"
+      ],
+      "reviewImageUV": [
+        0.693877100944519,
+        0.4752308428287506,
+        1.7144713401794434
+      ]
+    },
+    {
+      "oldStationId": "P5",
+      "newStationId": "P5",
+      "viewPosition": "CENTRE",
+      "oldLabel": "P5  /  CTRL-02",
+      "newLabel": "P5 / 采集节点",
+      "controllerIdPreserved": "CTRL-03",
+      "positionBlender_m": [
+        0.3500000238418579,
+        0.3500000238418579,
+        0.1510000079870224
+      ],
+      "memberAssetCodes": [
+        "CO-05",
+        "FLAME-05",
+        "MQ2-05",
+        "MQ4-05"
+      ],
+      "reviewImageUV": [
+        0.4999995231628418,
+        0.5333842039108276,
+        1.7916456460952759
+      ]
+    }
+  ],
+  "allTransformsMeshesMaterialsAndUnrelatedTextUnchanged": true,
+  "stm32PositionsAndIdsUnchanged": true,
+  "individualSensorAssetCodesPhysicalTagsAndControllerIdsUnchanged": true,
+  "externalSensors": 31,
+  "semanticAssets": 69,
+  "glbNodes": 693,
+  "glbSha256": "6a479472959a348731be796fcd03187eea4f2cf4bf5d934a90a7af4b0949bb59",
+  "protectedInputFiles": {
+    "D:\\shixi\\utility-tunnel-digital-twin\\model\\square-five-station-v19-controller-layout\\square-five-station-v19-controller-layout.blend": "ec06af6eeba3f759543a443fee0694618796b880b29fa5414a052fbf16de76b7",
+    "D:\\shixi\\utility-tunnel-digital-twin\\model\\square-five-station-v19-controller-layout\\square-five-station-v19-controller-layout.glb": "a52ef576707bcd48c11ab9dd0540fdb3a1c2a47c0ccd129398c52a5722f93755"
+  },
+  "runtimeFrontendOrDatabaseChanged": false
+}

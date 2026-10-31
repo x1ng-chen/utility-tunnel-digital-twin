@@ -1,0 +1,200 @@
+{
+  "revision": "v24-unified-numbering-20261029.1",
+  "modelSha256": "06653018482f774cf31a9a8579cbd5ae5713a62ecbacb78a0b5f660439bfdfd9",
+  "status": "PASS",
+  "sensorCount": 31,
+  "uniqueTargets": 31,
+  "nodeCount": 755,
+  "fanRotors": 2,
+  "fixedRgbSegments": 48,
+  "oxygenLabel": "O2-03",
+  "checked": [
+    {
+      "code": "SMOKE-01",
+      "target": "SMOKE-01",
+      "station": "P1",
+      "physicalTag": "MQ2-01"
+    },
+    {
+      "code": "GAS-CH4-01",
+      "target": "GAS-CH4-01",
+      "station": "P1",
+      "physicalTag": "MQ4-01"
+    },
+    {
+      "code": "GAS-CO-01",
+      "target": "GAS-CO-01",
+      "station": "P1",
+      "physicalTag": "CO-01"
+    },
+    {
+      "code": "FLAME-01",
+      "target": "FLAME-01",
+      "station": "P1",
+      "physicalTag": "FLAME-01"
+    },
+    {
+      "code": "MQ2-02",
+      "target": "MQ2-02",
+      "station": "P2",
+      "physicalTag": "MQ2-02"
+    },
+    {
+      "code": "MQ4-02",
+      "target": "MQ4-02",
+      "station": "P2",
+      "physicalTag": "MQ4-02"
+    },
+    {
+      "code": "CO-02",
+      "target": "CO-02",
+      "station": "P2",
+      "physicalTag": "CO-02"
+    },
+    {
+      "code": "FLAME-02",
+      "target": "FLAME-02",
+      "station": "P2",
+      "physicalTag": "FLAME-02"
+    },
+    {
+      "code": "MQ2-03",
+      "target": "MQ2-03",
+      "station": "P3",
+      "physicalTag": "MQ2-03"
+    },
+    {
+      "code": "MQ4-03",
+      "target": "MQ4-03",
+      "station": "P3",
+      "physicalTag": "MQ4-03"
+    },
+    {
+      "code": "CO-03",
+      "target": "CO-03",
+      "station": "P3",
+      "physicalTag": "CO-03"
+    },
+    {
+      "code": "FLAME-03",
+      "target": "FLAME-03",
+      "station": "P3",
+      "physicalTag": "FLAME-03"
+    },
+    {
+      "code": "MQ2-04",
+      "target": "MQ2-04",
+      "station": "P4",
+      "physicalTag": "MQ2-04"
+    },
+    {
+      "code": "MQ4-04",
+      "target": "MQ4-04",
+      "station": "P4",
+      "physicalTag": "MQ4-04"
+    },
+    {
+      "code": "CO-04",
+      "target": "CO-04",
+      "station": "P4",
+      "physicalTag": "CO-04"
+    },
+    {
+      "code": "FLAME-04",
+      "target": "FLAME-04",
+      "station": "P4",
+      "physicalTag": "FLAME-04"
+    },
+    {
+      "code": "MQ2-05",
+      "target": "MQ2-05",
+      "station": "P5",
+      "physicalTag": "MQ2-05"
+    },
+    {
+      "code": "MQ4-05",
+      "target": "MQ4-05",
+      "station": "P5",
+      "physicalTag": "MQ4-05"
+    },
+    {
+      "code": "CO-05",
+      "target": "CO-05",
+      "station": "P5",
+      "physicalTag": "CO-05"
+    },
+    {
+      "code": "FLAME-05",
+      "target": "FLAME-05",
+      "station": "P5",
+      "physicalTag": "FLAME-05"
+    },
+    {
+      "code": "LEVEL-L01",
+      "target": "MESH_V12-FSIR02_L01_BOARD",
+      "station": "P4",
+      "physicalTag": "LEVEL-01"
+    },
+    {
+      "code": "ENV-01",
+      "target": "ENV-01",
+      "station": "P4",
+      "physicalTag": "SHT-01"
+    },
+    {
+      "code": "LEVEL-L02",
+      "target": "MESH_V12-FSIR02_L02_BOARD",
+      "station": "P1",
+      "physicalTag": "LEVEL-02"
+    },
+    {
+      "code": "ENV-02",
+      "target": "ENV-02",
+      "station": "P1",
+      "physicalTag": "SHT-02"
+    },
+    {
+      "code": "LEVEL-L03",
+      "target": "MESH_V12-FSIR02_L03_BOARD",
+      "station": "P3",
+      "physicalTag": "LEVEL-03"
+    },
+    {
+      "code": "ENV-03",
+      "target": "ENV-03",
+      "station": "P3",
+      "physicalTag": "SHT-03"
+    },
+    {
+      "code": "LEVEL-L04",
+      "target": "MESH_V12-FSIR02_L04_BOARD",
+      "station": "P2",
+      "physicalTag": "LEVEL-04"
+    },
+    {
+      "code": "ENV-04",
+      "target": "ENV-04",
+      "station": "P2",
+      "physicalTag": "SHT-04"
+    },
+    {
+      "code": "GAS-O2-01",
+      "target": "GAS-O2-01",
+      "station": "P1",
+      "physicalTag": "O2-01"
+    },
+    {
+      "code": "GAS-O2-02",
+      "target": "GAS-O2-02",
+      "station": "P2",
+      "physicalTag": "O2-02"
+    },
+    {
+      "code": "GAS-O2-03",
+      "target": "GAS-O2-03",
+      "station": "P5",
+      "physicalTag": "O2-03"
+    }
+  ],
+  "boundary": "Actual GLB/Three.js validation; browser and physical trigger acceptance are separate."
+}
