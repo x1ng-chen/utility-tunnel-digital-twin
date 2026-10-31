@@ -54,13 +54,15 @@
       "CI fetched V17 after sandbox moved to V24",
       "obsolete browser dashboard label and mobile bottom-rail contract",
       "follow-redirects 1.16.1 production audit finding",
-      "Legacy fullscreen drag coordinate hit the floating auto-location controls"
+      "Legacy fullscreen drag coordinate hit the floating auto-location controls",
+      "Four business browser cases assumed automatic device selection, reusable latest metric data, or synchronous login completion"
     ],
     "fixes": [
       "fetch current runtime GLBs without weakening hash checks",
       "assert current heading and accessible modal navigation",
       "pin patched transitive version with canonical registry integrity",
-      "Choose a visible non-button rail point and assert the real foreground hit target before dragging"
+      "Choose a visible non-button rail point and assert the real foreground hit target before dragging",
+      "Explicit device URLs, auto-location opt-in, awaited login, and independently arranged fresh metric fixture; all four cases passed locally"
     ]
   },
   "paidModelCalls": 0,
@@ -78,6 +80,10 @@
     "fullscreenRailDragAndDeviceSelection": "PASS_AFTER_FOREGROUND_HIT_TEST",
     "profile": "DISPOSABLE_LOCAL_DATABASE",
     "productionDatabaseTouched": false,
-    "manualVisualAcceptance": false
+    "manualVisualAcceptance": false,
+    "modelUploadActivateAndAuthenticatedLoad": "PASS",
+    "urlMetricFilterReload": "PASS_WITH_EXPLICIT_FRESH_FIXTURE",
+    "newAlertModelAutoLocation": "PASS_UNDER_3_SECONDS",
+    "activeModelUnavailableFallback": "PASS"
   }
 }

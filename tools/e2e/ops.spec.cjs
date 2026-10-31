@@ -684,7 +684,8 @@ test('管理员可校验、启用三维模型版本并由孪生页面鉴权加�
   await expect(release.getByText('设备节点映射完整，可以安全启用')).toBeVisible();
   await release.getByRole('button', { name: '启用此版本' }).click();
   await expect(release.getByText('当前使用', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '三维孪生' }).click();
+  // Device details are rendered only after an explicit selection.
+  await page.goto(`${webUrl}/twin-3d?asset=ENV-01`);
   await expect(page.locator('.twin-model-readiness.loaded').getByText('模型已加载', { exact: true })).toBeVisible({ timeout: 60_000 });
   const zoomIn = page.getByRole('button', { name: '放大三维模型' });
   const zoomOut = page.getByRole('button', { name: '缩小三维模型' });
@@ -823,7 +824,18 @@ test('多页事件加载、报警次数口径与页码刷新恢复', async ({ pa
   await expect(page.getByLabel('监测项目')).toHaveValue('humidity');
 });
 
-test('筛选条件写入URL并在刷新后恢复', async ({ page }) => {
+test('筛选条件写入URL并在刷新后恢复', async ({ page, request }) => {
+  // Arrange this test's metric explicitly: previous pagination cases may fill
+  // the latest-observation window with humidity samples only.
+  const base = process.env.E2E_API_URL || 'http://127.0.0.1:8000/api';
+  const login = await request.post(`${base}/auth/login/`, { data: { email: 'admin', password: adminPassword } });
+  expect(login.ok()).toBe(true);
+  const headers = { Authorization: `Bearer ${(await login.json()).accessToken}` };
+  const reading = await request.post(`${base}/telemetry/`, { headers, data: { readings: [{
+    eventId: `url-filter-${Date.now()}`, assetCode: 'ENV-01', metricKey: 'temperature',
+    metric: '环境温度', value: 27, unit: '°C', quality: 'good', recordedAt: new Date().toISOString(),
+  }] } });
+  expect(reading.ok(), await reading.text()).toBe(true);
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码', { exact: true }).fill(adminPassword);
@@ -885,10 +897,14 @@ test('三维页在 3 秒内将实时新告警定位到已绑定设备', async ({
   await page.getByRole('button', { name: /安全登录/ }).click();
   await expect(page).toHaveURL(/dashboard/);
   await expect(page.locator('[title="实时推送已连接"]')).toBeVisible();
-  await page.getByRole('button', { name: '三维孪生' }).click();
+  // Device details are rendered only after an explicit selection.
+  await page.goto(`${webUrl}/twin-3d?asset=ENV-01`);
   await expect(page.locator('.twin-model-readiness.loaded').getByText('模型已加载', { exact: true })).toBeVisible({ timeout: 60_000 });
   const autoLocate = page.getByRole('checkbox', { name: '新告警自动定位' });
+  // Opening a specific device intentionally pauses automatic camera moves.
+  await autoLocate.check();
   await expect(autoLocate).toBeChecked();
+  await expect(page.locator('[title="实时推送已连接"]')).toBeVisible();
 
   const login = await request.post(`${base}/auth/login/`, { data: { email: 'admin', password: adminPassword } });
   expect(login.ok()).toBe(true);
@@ -961,7 +977,9 @@ test('已启用模型文件读取失败时不把预览场景误报为实体模�
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码', { exact: true }).fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await page.getByRole('button', { name: '三维孪生' }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  // Device details are rendered only after an explicit selection.
+  await page.goto(`${webUrl}/twin-3d?asset=ENV-01`);
   const readiness = page.locator('.twin-model-readiness');
   await expect(readiness.getByText('模型文件不可用', { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(readiness.getByText('模型已加载', { exact: true })).toHaveCount(0);
