@@ -426,8 +426,9 @@ class ReadyView(APIView):
         except Exception:
             return error_response('not_ready', 'Database is not ready.', 503)
         latency_ms = round((timezone.now() - started).total_seconds() * 1000, 2)
+        from .agent_context import runtime_profile
         return Response({'status': 'ready', 'service': 'utility-tunnel-django', 'checks': {'database': 'ok'},
-            'profile': 'hardware-live' if getattr(settings, 'HARDWARE_LIVE_MODE', False) else 'default',
+            'profile': runtime_profile(),
             'latencyMs': latency_ms, 'time': timezone.now()})
 
 

@@ -1,0 +1,7 @@
+{
+  "source": "frontend/src/utils/fanMotion.ts in the original model-authoring workspace",
+  "sourceSha256": "63f4356a325856ff0eacb92c3bc3ed0a9475e3012c9c090fe726e0df6a7cec4f",
+  "compiler": "5.9.3",
+  "transformation": "TypeScript type erasure targeting ES2022; Three.js import redirected to repository frontend/node_modules; no behavior change",
+  "validationScope": "111 local frontend tests before publication; separate executable-reference checks in verify-fan-motion.mjs"
+}

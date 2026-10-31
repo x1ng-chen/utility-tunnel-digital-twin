@@ -1,0 +1,267 @@
+{
+  "activeVersion": "hardware-live-v24",
+  "sha256": "b974e683be2aff9b79e6c04dcd0e753849ec4619c961d48004eb5abf84711a9c",
+  "servedBytes": 10159544,
+  "readiness": "ready",
+  "sensorsVerified": 31,
+  "all31MappingsUnique": true,
+  "assetIdsAndCodesPreserved": true,
+  "mqttBindingsPreserved": true,
+  "hardwareCommands": 0,
+  "modelCalls": 0,
+  "frontendHttpFileHashVerified": true,
+  "apiHttpReady": true,
+  "browserVisualQa": "NOT_RUN_LOCAL_BROWSER_DISABLED_IN_WORK_SETTINGS",
+  "mapping": [
+    {
+      "wireAsset": "SMOKE-01",
+      "wireTag": "MQ2-01",
+      "modelTag": "MQ2-04",
+      "mesh": "MQ2-04",
+      "station": "P4",
+      "controller": "CTRL-04"
+    },
+    {
+      "wireAsset": "GAS-CH4-01",
+      "wireTag": "MQ4-01",
+      "modelTag": "MQ4-04",
+      "mesh": "MQ4-04",
+      "station": "P4",
+      "controller": "CTRL-04"
+    },
+    {
+      "wireAsset": "GAS-CO-01",
+      "wireTag": "CO-01",
+      "modelTag": "CO-04",
+      "mesh": "CO-04",
+      "station": "P4",
+      "controller": "CTRL-04"
+    },
+    {
+      "wireAsset": "FLAME-01",
+      "wireTag": "FLAME-01",
+      "modelTag": "FLAME-04",
+      "mesh": "FLAME-04",
+      "station": "P4",
+      "controller": "CTRL-04"
+    },
+    {
+      "wireAsset": "MQ2-02",
+      "wireTag": "MQ2-02",
+      "modelTag": "MQ2-01",
+      "mesh": "SMOKE-01",
+      "station": "P1",
+      "controller": "CTRL-03"
+    },
+    {
+      "wireAsset": "MQ4-02",
+      "wireTag": "MQ4-02",
+      "modelTag": "MQ4-01",
+      "mesh": "GAS-CH4-01",
+      "station": "P1",
+      "controller": "CTRL-03"
+    },
+    {
+      "wireAsset": "CO-02",
+      "wireTag": "CO-02",
+      "modelTag": "CO-01",
+      "mesh": "GAS-CO-01",
+      "station": "P1",
+      "controller": "CTRL-03"
+    },
+    {
+      "wireAsset": "FLAME-02",
+      "wireTag": "FLAME-02",
+      "modelTag": "FLAME-01",
+      "mesh": "FLAME-01",
+      "station": "P1",
+      "controller": "CTRL-03"
+    },
+    {
+      "wireAsset": "MQ2-03",
+      "wireTag": "MQ2-03",
+      "modelTag": "MQ2-03",
+      "mesh": "MQ2-03",
+      "station": "P3",
+      "controller": "CTRL-01"
+    },
+    {
+      "wireAsset": "MQ4-03",
+      "wireTag": "MQ4-03",
+      "modelTag": "MQ4-03",
+      "mesh": "MQ4-03",
+      "station": "P3",
+      "controller": "CTRL-01"
+    },
+    {
+      "wireAsset": "CO-03",
+      "wireTag": "CO-03",
+      "modelTag": "CO-03",
+      "mesh": "CO-03",
+      "station": "P3",
+      "controller": "CTRL-01"
+    },
+    {
+      "wireAsset": "FLAME-03",
+      "wireTag": "FLAME-03",
+      "modelTag": "FLAME-03",
+      "mesh": "FLAME-03",
+      "station": "P3",
+      "controller": "CTRL-01"
+    },
+    {
+      "wireAsset": "MQ2-04",
+      "wireTag": "MQ2-04",
+      "modelTag": "MQ2-02",
+      "mesh": "MQ2-02",
+      "station": "P2",
+      "controller": "CTRL-02"
+    },
+    {
+      "wireAsset": "MQ4-04",
+      "wireTag": "MQ4-04",
+      "modelTag": "MQ4-02",
+      "mesh": "MQ4-02",
+      "station": "P2",
+      "controller": "CTRL-02"
+    },
+    {
+      "wireAsset": "CO-04",
+      "wireTag": "CO-04",
+      "modelTag": "CO-02",
+      "mesh": "CO-02",
+      "station": "P2",
+      "controller": "CTRL-02"
+    },
+    {
+      "wireAsset": "FLAME-04",
+      "wireTag": "FLAME-04",
+      "modelTag": "FLAME-02",
+      "mesh": "FLAME-02",
+      "station": "P2",
+      "controller": "CTRL-02"
+    },
+    {
+      "wireAsset": "MQ2-05",
+      "wireTag": "MQ2-05",
+      "modelTag": "MQ2-05",
+      "mesh": "MQ2-05",
+      "station": "P5",
+      "controller": "CTRL-01"
+    },
+    {
+      "wireAsset": "MQ4-05",
+      "wireTag": "MQ4-05",
+      "modelTag": "MQ4-05",
+      "mesh": "MQ4-05",
+      "station": "P5",
+      "controller": "CTRL-01"
+    },
+    {
+      "wireAsset": "CO-05",
+      "wireTag": "CO-05",
+      "modelTag": "CO-05",
+      "mesh": "CO-05",
+      "station": "P5",
+      "controller": "CTRL-01"
+    },
+    {
+      "wireAsset": "FLAME-05",
+      "wireTag": "FLAME-05",
+      "modelTag": "FLAME-05",
+      "mesh": "FLAME-05",
+      "station": "P5",
+      "controller": "CTRL-01"
+    },
+    {
+      "wireAsset": "LEVEL-L01",
+      "wireTag": "LEVEL-01",
+      "modelTag": "LEVEL-01",
+      "mesh": "MESH_V12-FSIR02_L01_BOARD",
+      "station": "P4",
+      "controller": "CTRL-04"
+    },
+    {
+      "wireAsset": "ENV-01",
+      "wireTag": "SHT-01",
+      "modelTag": "SHT-01",
+      "mesh": "ENV-01",
+      "station": "P4",
+      "controller": "CTRL-04"
+    },
+    {
+      "wireAsset": "LEVEL-L02",
+      "wireTag": "LEVEL-02",
+      "modelTag": "LEVEL-02",
+      "mesh": "MESH_V12-FSIR02_L02_BOARD",
+      "station": "P1",
+      "controller": "CTRL-03"
+    },
+    {
+      "wireAsset": "ENV-02",
+      "wireTag": "SHT-02",
+      "modelTag": "SHT-02",
+      "mesh": "ENV-02",
+      "station": "P1",
+      "controller": "CTRL-03"
+    },
+    {
+      "wireAsset": "LEVEL-L03",
+      "wireTag": "LEVEL-03",
+      "modelTag": "LEVEL-03",
+      "mesh": "MESH_V12-FSIR02_L03_BOARD",
+      "station": "P3",
+      "controller": "CTRL-01"
+    },
+    {
+      "wireAsset": "ENV-03",
+      "wireTag": "SHT-03",
+      "modelTag": "SHT-03",
+      "mesh": "ENV-03",
+      "station": "P3",
+      "controller": "CTRL-01"
+    },
+    {
+      "wireAsset": "LEVEL-L04",
+      "wireTag": "LEVEL-04",
+      "modelTag": "LEVEL-04",
+      "mesh": "MESH_V12-FSIR02_L04_BOARD",
+      "station": "P2",
+      "controller": "CTRL-02"
+    },
+    {
+      "wireAsset": "ENV-04",
+      "wireTag": "SHT-04",
+      "modelTag": "SHT-04",
+      "mesh": "ENV-04",
+      "station": "P2",
+      "controller": "CTRL-02"
+    },
+    {
+      "wireAsset": "GAS-O2-01",
+      "wireTag": "O2-01",
+      "modelTag": "O2-01",
+      "mesh": "GAS-O2-01",
+      "station": "P1",
+      "controller": "CTRL-04"
+    },
+    {
+      "wireAsset": "GAS-O2-02",
+      "wireTag": "O2-02",
+      "modelTag": "O2-05",
+      "mesh": "GAS-O2-05",
+      "station": "P5",
+      "controller": "CTRL-01"
+    },
+    {
+      "wireAsset": "GAS-O2-03",
+      "wireTag": "O2-03",
+      "modelTag": "O2-02",
+      "mesh": "GAS-O2-02",
+      "station": "P2",
+      "controller": "CTRL-02"
+    }
+  ],
+  "authenticatedNetworkApiVerified": true,
+  "modelFileNetworkHashVerified": true
+}

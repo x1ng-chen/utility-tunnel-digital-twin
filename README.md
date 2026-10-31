@@ -1,5 +1,11 @@
 <div align="center">
 
+软件收尾进度：[统一V24演示入口与经验版本修复](docs/software-release-20261029/README.md)。398项后端、179项前端及16项启动器检查通过；实际页面已走查基础操作，DeepSeek小批量复测首请求仍为HTTP402，其余任务未运行。
+
+运行模型更新：[V24前端与活动模型替换](docs/model-v24-runtime-20261029/README.md)。31路版本化定位映射、独立转子与供电RGB已接入；采集编号和硬件归属保持，实际画面／实物联动重新验收待完成。
+
+新增实现：[可续查排障、设备拓扑、本地AnyJev只读路由、独立分支与受审流程](docs/agent-capabilities-20261029/README.md)。真实本地小模型与生成式桩成绩分别记录；小模型仍有较多回退，默认关闭，尚未证明排障收益。K210／视觉和DeepSeek付费复测暂缓。
+
 最新实现：[设备证据护栏、24例联合矩阵与受控复核经验](docs/guardrails-experience-20261027/README.md)。单/三Agent×经验开/关100次离线契约执行通过；真实模型效果、经验收益和真人评分待测，模拟审批不算人工审核。
 
 最新补齐：[Agent可靠性、专业知识与效果证据](docs/agent-evidence-quality-20261027/README.md) · [人工评分操作](docs/agent-evidence-quality-20261027/review-protocol.md)。软件检查与真实模型、独立人工评分分别记录；本轮付费复测暂缓。

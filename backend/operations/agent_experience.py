@@ -47,6 +47,38 @@ def experience_layout_version(snapshot):
     return snapshot['layoutVersion'] + (':'+presentation if presentation else '')
 
 
+def approval_context_matches(item, run):
+    """Approval uses the same presentation scope as capture and retrieval.
+
+    A familiar version string alone does not identify the active GLB. New
+    snapshots bind its exact hash in presentationVersion; legacy snapshots with
+    no model identity remain reviewable only while no model is active.
+    """
+    from .agent_context import data_context
+    from .agent_investigations import presentation_identity
+    from .twin_presentation import runtime_inventory
+    from .sprint_knowledge import version
+    inventory = runtime_inventory()
+    current = {'layoutVersion': inventory['revision'], 'inventory': inventory}
+    current_model = presentation_identity(inventory)
+    recorded_model = run.snapshot.get('presentationVersion')
+    if current_model and not inventory.get('presentationRevision'):
+        # An unknown active GLB cannot inherit the old unversioned scope.
+        model_matches = False
+    elif recorded_model is None:
+        model_matches = not current_model and not run.snapshot.get('inventory', {}).get('presentationRevision')
+    else:
+        model_matches = recorded_model == current_model
+    return (model_matches and item.rule_version == VERSION
+        and run.snapshot.get('guardRuleVersion') == VERSION
+        and run.snapshot.get('layoutVersion') == inventory['revision']
+        and item.layout_version == experience_layout_version(current)
+        and item.layout_version == experience_layout_version(run.snapshot)
+        and item.knowledge_version == version() == run.snapshot.get('knowledgeVersion')
+        and item.source_scope != 'unknown'
+        and item.source_scope == scope(run.snapshot) == scope({'source': data_context()}))
+
+
 def contains_asset(value,code):
     if isinstance(value,dict):
         if any(value.get(k)==code for k in ('asset_code','assetCode','asset__code')): return True
@@ -117,6 +149,10 @@ def matching(snapshot,payload,user,*,allowed_ids=None):
         'boundary':'仅加载管理员审核的匹配经验；不是测量、规程授权或动作批准。'}
     if not result['enabled'] or not user or role(user) not in {'administrator','operator'} or payload.get('kind')=='inspection' or scope(snapshot)=='unknown':
         return result
+    if snapshot.get('presentationVersion') and not snapshot.get('inventory', {}).get('presentationRevision'):
+        # Retain legacy no-model contexts; do not silently reuse them on an
+        # unrecognised model merely because both lack a presentation adapter.
+        return result
     station=payload.get('station_id','P5')
     if station not in STATIONS: return result
     rows=ReviewExperience.objects.filter(status='approved',station_id=station,rule_version=VERSION,
@@ -169,9 +205,7 @@ def transition(user,pk,payload):
     expected={'approve':('candidate','approved'),'reject':('candidate','rejected'),'retire':('approved','retired')}
     if action not in expected or item.status!=expected[action][0] or 'lesson' in payload: raise ValueError('状态操作无效；修改内容需创建新候选。')
     if action=='approve':
-        from .agent_operations import INVENTORY
-        from .sprint_knowledge import version
-        if item.rule_version!=VERSION or item.layout_version!=INVENTORY['revision'] or item.knowledge_version!=version():
+        if not approval_context_matches(item, run):
             raise RuntimeError('来源版本已变化，不能直接批准旧版本经验。')
         safe_lesson(item.lesson)
         content={k:getattr(item,k) for k in ('station_id','asset_code','asset_kind','metric_key','category','lesson','source_scope','layout_version','knowledge_version','rule_version')}

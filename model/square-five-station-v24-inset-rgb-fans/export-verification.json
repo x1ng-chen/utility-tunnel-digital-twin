@@ -1,0 +1,89 @@
+{
+  "status": "PASS",
+  "route": "ACTUAL_GLB_THREEJS_GLTFLOADER",
+  "date": "2026-10-29",
+  "checks": [
+    {
+      "name": "complete_actual_glb_and_preserved_sensor_controller_identities",
+      "status": "PASS",
+      "evidence": {
+        "nodes": 755,
+        "assets": 69,
+        "sensors": 31,
+        "otherAssetRootsPreserved": 67
+      }
+    },
+    {
+      "name": "identical_120mm_inset_fans_with_real_square_apertures",
+      "status": "PASS",
+      "evidence": [
+        {
+          "code": "FAN-01",
+          "measuredFrameWorldMm": [
+            120.00003590206832,
+            120.0000220451924,
+            25.00002509993038
+          ],
+          "openApertureGridRays": 25,
+          "cutoutMm": [
+            120.4,
+            120.4
+          ],
+          "frontFlush": true
+        },
+        {
+          "code": "FAN-02",
+          "measuredFrameWorldMm": [
+            119.99999731779099,
+            120.00001679982486,
+            25.00001985456291
+          ],
+          "openApertureGridRays": 25,
+          "cutoutMm": [
+            120.4,
+            120.4
+          ],
+          "frontFlush": true
+        }
+      ]
+    },
+    {
+      "name": "independent_rotors_axes_and_fixed_power_rgb",
+      "status": "PASS",
+      "evidence": {
+        "rotors": 2,
+        "bladesPerRotor": 7,
+        "fixedRgbMeshes": 48,
+        "verifiedAxisGltfLocal": [
+          0,
+          1,
+          0
+        ],
+        "lightingIndependentOfRpm": true
+      }
+    },
+    {
+      "name": "metadata_references_sensor_centres_and_transparent_panels",
+      "status": "PASS",
+      "evidence": {
+        "validReferences": 249,
+        "transparentPanels": 5,
+        "oxygenCentresPreserved": 3
+      }
+    },
+    {
+      "name": "input_protection_export_hashes_and_hardware_off_boundary",
+      "status": "PASS",
+      "evidence": {
+        "glbSha256": "b974e683be2aff9b79e6c04dcd0e753849ec4619c961d48004eb5abf84711a9c",
+        "sourcePreserved": true,
+        "physicalVerification": "NOT_RUN_USER_CONFIRMED_DEVICES_OFF"
+      }
+    }
+  ],
+  "limitations": [
+    "120x120mm confirmed by user;25mm depth,105mm screw pitch and .2mm per-side clearance are unmeasured modelling assumptions.",
+    "Synthetic animation and voltage feedback tests do not prove live hardware linkage.",
+    "Fixed rainbow approximates the supplied photo; no optical color or addressable RGB feedback is claimed."
+  ]
+}

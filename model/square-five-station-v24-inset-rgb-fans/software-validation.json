@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-29",
+  "status": "PASS",
+  "scope": "SOFTWARE_AND_ACTUAL_GLB_TESTS_NOT_HARDWARE_COMMISSIONING",
+  "frontendTests": {
+    "files": 19,
+    "passed": 111,
+    "failed": 0,
+    "actualModel": "square-five-station-v24-inset-rgb-fans.glb",
+    "fanTests": 28,
+    "evidenceScope": "Source workspace test run before publication; this model package does not deploy the frontend or activate a server model release."
+  },
+  "typeCheck": "PASS",
+  "productionBuild": "PASS",
+  "glbLoaderReview": "PASS_SEE_export-verification.json",
+  "localPreview": {
+    "port": 5174,
+    "url": "http://127.0.0.1:5174/twin-3d?modelPreview=v24",
+    "servedModelSha256": "b974e683be2aff9b79e6c04dcd0e753849ec4619c961d48004eb5abf84711a9c",
+    "servesUpdatedRgbCode": true,
+    "formalServerReleaseChanged": false,
+    "evidenceScope": "Prior local source-workspace check. The loopback URL is not a hosted GitHub service."
+  },
+  "syntheticVisualExample": {
+    "frames": 30,
+    "labelledSynthetic": true,
+    "states": [
+      "power_on_rotating",
+      "power_on_stationary",
+      "power_off_coasting",
+      "power_off_stationary"
+    ]
+  },
+  "hardware": {
+    "userConfirmsTachWired": true,
+    "userConfirmsLightingPoweredIndependentlyOfRpm": true,
+    "userConfirmsDevicesCurrentlyOff": true,
+    "commandsSent": 0,
+    "flashingPerformed": false,
+    "liveDeviceVerification": "NOT_RUN"
+  },
+  "limitations": [
+    "Tests use synthetic feedback inputs, with the actual exported GLB loaded by Three.js.",
+    "Native Blender previews were visually reviewed; the application WebGL interaction was not separately verified in a browser session.",
+    "Lighting is a voltage-based visual proxy, not an optical color measurement or an addressable RGB control channel."
+  ]
+}

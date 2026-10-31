@@ -32,6 +32,13 @@ export type AgentResponse = {
     stations: { stationId: string; expected: number; registered: number; usable: number; scenarioUsable?: number; dataIssueSensorCount?: number; alertCount: number }[] } | null;
 };
 
+export type InvestigationCase = {
+  id: string; title: string; stationId: string; assetCode?: string; status: string; revision: number;
+  hypotheses: Record<string, unknown>[]; checks: Record<string, unknown>[];
+  history: Record<string, unknown>[]; runs: Record<string, unknown>[];
+  source?: Record<string, unknown>; layoutVersion?: string; presentationVersion?: string;
+};
+
 const localStorageRef = typeof window !== 'undefined' ? window.localStorage : null;
 const sessionStorageRef = typeof window !== 'undefined' ? window.sessionStorage : null;
 const fallbackBaseUrl = typeof window !== 'undefined' && window.location.protocol === 'https:'
@@ -108,6 +115,17 @@ client.interceptors.response.use(undefined, async (error) => {
 });
 
 export const api = {
+  investigationCases: () => client.get('/assistant/cases/'),
+  createInvestigationCase: (payload: {station_id:string;asset_code?:string;title?:string}) => client.post<InvestigationCase>('/assistant/cases/', payload),
+  investigationCase: (id: string) => client.get<InvestigationCase>(`/assistant/cases/${id}/`),
+  investigationFeedback: (id: string, payload: {check_id:string;status:'completed'|'unavailable';report:string;revision:number}) => client.post<InvestigationCase>(`/assistant/cases/${id}/feedback/`, payload),
+  agentTopology: (target: string) => client.get('/assistant/topology/', {params:{target}}),
+  compareAgentBranches: (runId: string) => client.post('/assistant/branches/', {run_id:runId}),
+  agentProcedures: () => client.get('/assistant/procedures/'),
+  createAgentProcedure: (payload: Record<string, unknown>) => client.post('/assistant/procedures/', payload),
+  extractAgentProcedure: (runId: string) => client.post('/assistant/procedures/from-run/', {run_id:runId}),
+  reviewAgentProcedure: (id: string, action: 'approve'|'reject'|'retire', revision: number) => client.post(`/assistant/procedures/${id}/review/`, {action,revision}),
+  agentRunAnalysis: (id: string) => client.get(`/assistant/runs/${id}/analysis/`),
   agentRuns: () => client.get('/assistant/runs/'),
   reviewExperiences: () => client.get('/assistant/experiences/'),
   transitionExperience: (id: string, action: string, revision: number, lesson?: string) => client.post(`/assistant/experiences/${id}/`, { action, revision, ...(lesson !== undefined ? { lesson } : {}) }),

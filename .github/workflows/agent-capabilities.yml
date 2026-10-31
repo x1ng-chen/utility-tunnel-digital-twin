@@ -1,0 +1,36 @@
+name: Agent capability contracts
+on:
+  pull_request:
+    paths: ['backend/**', 'deploy/agent-demo/**', 'services/decision-router/**', 'tools/anyjev/**', '.github/workflows/agent-capabilities.yml']
+  push:
+    branches: [main]
+    paths: ['backend/**', 'deploy/agent-demo/**', 'services/decision-router/**', 'tools/anyjev/**', '.github/workflows/agent-capabilities.yml']
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DJANGO_ENV: test
+      DJANGO_SECRET_KEY: ci-only-agent-contracts-no-production-secrets
+      DEEPSEEK_API_KEY: ''
+      ANYJEV_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {lfs: false}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with: {python-version: '3.12'}
+      - run: python -m pip install --require-hashes -r backend/requirements.lock
+      - name: Capability contracts, no GPU or model download
+        working-directory: backend
+        run: python manage.py test operations.test_agent_topology operations.test_agent_branching operations.test_decision_router operations.test_investigation_workflows operations.test_agent_routing_integration operations.test_capability_demo_guard operations.test_agent_model_release operations.test_agent_runtime_profile operations.test_experience_presentation --noinput
+      - name: Software launcher isolation and backup contracts
+        run: python -m unittest discover -s deploy/agent-demo -p 'test_manage_demo.py'
+      - name: Local service HTTP contracts, marked stub engine only
+        run: python -m unittest discover -s services/decision-router -p 'test_*.py'
+      - name: Dedicated mechanics matrix, no paid or local model calls
+        working-directory: backend
+        run: |
+          python manage.py migrate --noinput --settings=config.agent_capability_settings
+          python manage.py evaluate_agent_capabilities --offline --reset --settings=config.agent_capability_settings

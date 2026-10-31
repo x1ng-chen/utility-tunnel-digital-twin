@@ -1,0 +1,505 @@
+{
+  "schemaVersion": 1,
+  "evaluatedAtUtc": "2026-10-29T04:58:40.307Z",
+  "status": "PASS",
+  "route": "ACTUAL_RUNTIME_GLB_THREE_GLTFLOADER",
+  "runtimeFile": "frontend/public/models/utility-tunnel-v24.glb",
+  "descriptorRevision": "v24-presentation-20261029.1",
+  "wireLayoutVersion": "four-controller-20261026.1",
+  "source": "STATIC_GEOMETRY_AND_MAPPING_VERIFICATION",
+  "checks": [
+    {
+      "name": "exact_runtime_binary_hash_and_scene",
+      "status": "PASS",
+      "evidence": {
+        "sha256": "b974e683be2aff9b79e6c04dcd0e753849ec4619c961d48004eb5abf84711a9c",
+        "bytes": 10159544,
+        "uniqueNodes": 755,
+        "semanticAssets": 69,
+        "externalSensors": 31,
+        "autoPlayingAnimations": 0
+      }
+    },
+    {
+      "name": "all_31_wire_identities_have_unique_exact_model_targets",
+      "status": "PASS",
+      "evidence": [
+        {
+          "wireAssetCode": "SMOKE-01",
+          "wireControllerId": "CTRL-04",
+          "targetNode": "MQ2-04",
+          "modelTag": "MQ2-04",
+          "stationId": "P4",
+          "positionGltfM": [
+            0.21700002253055573,
+            0.1510000079870224,
+            -0.5789999961853027
+          ]
+        },
+        {
+          "wireAssetCode": "GAS-CH4-01",
+          "wireControllerId": "CTRL-04",
+          "targetNode": "MQ4-04",
+          "modelTag": "MQ4-04",
+          "stationId": "P4",
+          "positionGltfM": [
+            0.3030000329017639,
+            0.1510000079870224,
+            -0.5789999961853027
+          ]
+        },
+        {
+          "wireAssetCode": "GAS-CO-01",
+          "wireControllerId": "CTRL-04",
+          "targetNode": "CO-04",
+          "modelTag": "CO-04",
+          "stationId": "P4",
+          "positionGltfM": [
+            0.21700002253055573,
+            0.1510000079870224,
+            -0.5010000467300415
+          ]
+        },
+        {
+          "wireAssetCode": "FLAME-01",
+          "wireControllerId": "CTRL-04",
+          "targetNode": "FLAME-04",
+          "modelTag": "FLAME-04",
+          "stationId": "P4",
+          "positionGltfM": [
+            0.3030000329017639,
+            0.1510000079870224,
+            -0.5010000467300415
+          ]
+        },
+        {
+          "wireAssetCode": "MQ2-02",
+          "wireControllerId": "CTRL-03",
+          "targetNode": "SMOKE-01",
+          "modelTag": "MQ2-01",
+          "stationId": "P1",
+          "positionGltfM": [
+            0.3970000147819519,
+            0.1510000079870224,
+            -0.5789999961853027
+          ]
+        },
+        {
+          "wireAssetCode": "MQ4-02",
+          "wireControllerId": "CTRL-03",
+          "targetNode": "GAS-CH4-01",
+          "modelTag": "MQ4-01",
+          "stationId": "P1",
+          "positionGltfM": [
+            0.4830000400543213,
+            0.1510000079870224,
+            -0.5789999961853027
+          ]
+        },
+        {
+          "wireAssetCode": "CO-02",
+          "wireControllerId": "CTRL-03",
+          "targetNode": "GAS-CO-01",
+          "modelTag": "CO-01",
+          "stationId": "P1",
+          "positionGltfM": [
+            0.3970000147819519,
+            0.1510000079870224,
+            -0.5010000467300415
+          ]
+        },
+        {
+          "wireAssetCode": "FLAME-02",
+          "wireControllerId": "CTRL-03",
+          "targetNode": "FLAME-01",
+          "modelTag": "FLAME-01",
+          "stationId": "P1",
+          "positionGltfM": [
+            0.4830000400543213,
+            0.1510000079870224,
+            -0.5010000467300415
+          ]
+        },
+        {
+          "wireAssetCode": "MQ2-03",
+          "wireControllerId": "CTRL-01",
+          "targetNode": "MQ2-03",
+          "modelTag": "MQ2-03",
+          "stationId": "P3",
+          "positionGltfM": [
+            0.21700002253055573,
+            0.1510000079870224,
+            -0.1990000158548355
+          ]
+        },
+        {
+          "wireAssetCode": "MQ4-03",
+          "wireControllerId": "CTRL-01",
+          "targetNode": "MQ4-03",
+          "modelTag": "MQ4-03",
+          "stationId": "P3",
+          "positionGltfM": [
+            0.3030000329017639,
+            0.1510000079870224,
+            -0.1990000158548355
+          ]
+        },
+        {
+          "wireAssetCode": "CO-03",
+          "wireControllerId": "CTRL-01",
+          "targetNode": "CO-03",
+          "modelTag": "CO-03",
+          "stationId": "P3",
+          "positionGltfM": [
+            0.21700002253055573,
+            0.1510000079870224,
+            -0.1210000067949295
+          ]
+        },
+        {
+          "wireAssetCode": "FLAME-03",
+          "wireControllerId": "CTRL-01",
+          "targetNode": "FLAME-03",
+          "modelTag": "FLAME-03",
+          "stationId": "P3",
+          "positionGltfM": [
+            0.3030000329017639,
+            0.1510000079870224,
+            -0.1210000067949295
+          ]
+        },
+        {
+          "wireAssetCode": "MQ2-04",
+          "wireControllerId": "CTRL-02",
+          "targetNode": "MQ2-02",
+          "modelTag": "MQ2-02",
+          "stationId": "P2",
+          "positionGltfM": [
+            0.3970000147819519,
+            0.1510000079870224,
+            -0.1990000158548355
+          ]
+        },
+        {
+          "wireAssetCode": "MQ4-04",
+          "wireControllerId": "CTRL-02",
+          "targetNode": "MQ4-02",
+          "modelTag": "MQ4-02",
+          "stationId": "P2",
+          "positionGltfM": [
+            0.4830000400543213,
+            0.1510000079870224,
+            -0.1990000158548355
+          ]
+        },
+        {
+          "wireAssetCode": "CO-04",
+          "wireControllerId": "CTRL-02",
+          "targetNode": "CO-02",
+          "modelTag": "CO-02",
+          "stationId": "P2",
+          "positionGltfM": [
+            0.3970000147819519,
+            0.1510000079870224,
+            -0.1210000067949295
+          ]
+        },
+        {
+          "wireAssetCode": "FLAME-04",
+          "wireControllerId": "CTRL-02",
+          "targetNode": "FLAME-02",
+          "modelTag": "FLAME-02",
+          "stationId": "P2",
+          "positionGltfM": [
+            0.4830000400543213,
+            0.1510000079870224,
+            -0.1210000067949295
+          ]
+        },
+        {
+          "wireAssetCode": "MQ2-05",
+          "wireControllerId": "CTRL-01",
+          "targetNode": "MQ2-05",
+          "modelTag": "MQ2-05",
+          "stationId": "P5",
+          "positionGltfM": [
+            0.3070000112056732,
+            0.1510000079870224,
+            -0.3890000283718109
+          ]
+        },
+        {
+          "wireAssetCode": "MQ4-05",
+          "wireControllerId": "CTRL-01",
+          "targetNode": "MQ4-05",
+          "modelTag": "MQ4-05",
+          "stationId": "P5",
+          "positionGltfM": [
+            0.3930000364780426,
+            0.1510000079870224,
+            -0.3890000283718109
+          ]
+        },
+        {
+          "wireAssetCode": "CO-05",
+          "wireControllerId": "CTRL-01",
+          "targetNode": "CO-05",
+          "modelTag": "CO-05",
+          "stationId": "P5",
+          "positionGltfM": [
+            0.3070000112056732,
+            0.1510000079870224,
+            -0.3110000193119049
+          ]
+        },
+        {
+          "wireAssetCode": "FLAME-05",
+          "wireControllerId": "CTRL-01",
+          "targetNode": "FLAME-05",
+          "modelTag": "FLAME-05",
+          "stationId": "P5",
+          "positionGltfM": [
+            0.3930000364780426,
+            0.1510000079870224,
+            -0.3110000193119049
+          ]
+        },
+        {
+          "wireAssetCode": "LEVEL-L01",
+          "wireControllerId": "CTRL-04",
+          "targetNode": "MESH_V12-FSIR02_L01_BOARD",
+          "modelTag": "LEVEL-01",
+          "stationId": "P4",
+          "positionGltfM": [
+            0.11500000208616257,
+            0.10500000417232513,
+            -0.5
+          ]
+        },
+        {
+          "wireAssetCode": "ENV-01",
+          "wireControllerId": "CTRL-04",
+          "targetNode": "ENV-01",
+          "modelTag": "SHT-01",
+          "stationId": "P4",
+          "positionGltfM": [
+            0.11000000685453415,
+            0.18000000715255737,
+            -0.5200000405311584
+          ]
+        },
+        {
+          "wireAssetCode": "LEVEL-L02",
+          "wireControllerId": "CTRL-03",
+          "targetNode": "MESH_V12-FSIR02_L02_BOARD",
+          "modelTag": "LEVEL-02",
+          "stationId": "P1",
+          "positionGltfM": [
+            0.5850000381469727,
+            0.10500000417232513,
+            -0.5
+          ]
+        },
+        {
+          "wireAssetCode": "ENV-02",
+          "wireControllerId": "CTRL-03",
+          "targetNode": "ENV-02",
+          "modelTag": "SHT-02",
+          "stationId": "P1",
+          "positionGltfM": [
+            0.5900000333786011,
+            0.18000000715255737,
+            -0.5200000405311584
+          ]
+        },
+        {
+          "wireAssetCode": "LEVEL-L03",
+          "wireControllerId": "CTRL-01",
+          "targetNode": "MESH_V12-FSIR02_L03_BOARD",
+          "modelTag": "LEVEL-03",
+          "stationId": "P3",
+          "positionGltfM": [
+            0.11500000208616257,
+            0.10500000417232513,
+            -0.20000000298023224
+          ]
+        },
+        {
+          "wireAssetCode": "ENV-03",
+          "wireControllerId": "CTRL-01",
+          "targetNode": "ENV-03",
+          "modelTag": "SHT-03",
+          "stationId": "P3",
+          "positionGltfM": [
+            0.11000000685453415,
+            0.18000000715255737,
+            -0.18000000715255737
+          ]
+        },
+        {
+          "wireAssetCode": "LEVEL-L04",
+          "wireControllerId": "CTRL-02",
+          "targetNode": "MESH_V12-FSIR02_L04_BOARD",
+          "modelTag": "LEVEL-04",
+          "stationId": "P2",
+          "positionGltfM": [
+            0.5850000381469727,
+            0.10500000417232513,
+            -0.20000000298023224
+          ]
+        },
+        {
+          "wireAssetCode": "ENV-04",
+          "wireControllerId": "CTRL-02",
+          "targetNode": "ENV-04",
+          "modelTag": "SHT-04",
+          "stationId": "P2",
+          "positionGltfM": [
+            0.5900000333786011,
+            0.18000000715255737,
+            -0.18000000715255737
+          ]
+        },
+        {
+          "wireAssetCode": "GAS-O2-01",
+          "wireControllerId": "CTRL-04",
+          "targetNode": "GAS-O2-01",
+          "modelTag": "O2-01",
+          "stationId": "P1",
+          "positionGltfM": [
+            0.4400000274181366,
+            0.1510000079870224,
+            -0.5400000214576721
+          ]
+        },
+        {
+          "wireAssetCode": "GAS-O2-02",
+          "wireControllerId": "CTRL-01",
+          "targetNode": "GAS-O2-05",
+          "modelTag": "O2-05",
+          "stationId": "P5",
+          "positionGltfM": [
+            0.3500000238418579,
+            0.1510000079870224,
+            -0.3500000238418579
+          ]
+        },
+        {
+          "wireAssetCode": "GAS-O2-03",
+          "wireControllerId": "CTRL-02",
+          "targetNode": "GAS-O2-02",
+          "modelTag": "O2-02",
+          "stationId": "P2",
+          "positionGltfM": [
+            0.4400000274181366,
+            0.1510000079870224,
+            -0.1600000113248825
+          ]
+        }
+      ]
+    },
+    {
+      "name": "five_station_groups_and_sensor_family_constraints",
+      "status": "PASS",
+      "evidence": {
+        "counts": {
+          "P1": 7,
+          "P2": 7,
+          "P3": 6,
+          "P4": 6,
+          "P5": 5
+        },
+        "oxygen": [
+          {
+            "wireAssetCode": "GAS-O2-01",
+            "targetNode": "GAS-O2-01",
+            "stationId": "P1"
+          },
+          {
+            "wireAssetCode": "GAS-O2-02",
+            "targetNode": "GAS-O2-05",
+            "stationId": "P5"
+          },
+          {
+            "wireAssetCode": "GAS-O2-03",
+            "targetNode": "GAS-O2-02",
+            "stationId": "P2"
+          }
+        ],
+        "temperatureHumidityAtP5": false
+      }
+    },
+    {
+      "name": "canonical_controller_positions_and_independent_fan_roots",
+      "status": "PASS",
+      "evidence": {
+        "controllers": [
+          {
+            "wireControllerId": "CTRL-01",
+            "targetNode": "CTRL-01",
+            "positionGltfM": [
+              0.10999999940395355,
+              0.13500000536441803,
+              -0.11000001430511475
+            ]
+          },
+          {
+            "wireControllerId": "CTRL-02",
+            "targetNode": "CTRL-02",
+            "positionGltfM": [
+              0.11000001430511475,
+              0.13500000536441803,
+              -0.5899999737739563
+            ]
+          },
+          {
+            "wireControllerId": "CTRL-03",
+            "targetNode": "CTRL-03",
+            "positionGltfM": [
+              0.5899999737739563,
+              0.13500000536441803,
+              -0.10999999940395355
+            ]
+          },
+          {
+            "wireControllerId": "CTRL-04",
+            "targetNode": "CTRL-04",
+            "positionGltfM": [
+              0.5899999737739563,
+              0.13500000536441803,
+              -0.5899999737739563
+            ]
+          }
+        ],
+        "fans": [
+          {
+            "assetCode": "FAN-01",
+            "rotorNode": "FAN-01_ROTOR",
+            "rgbSegments": 24,
+            "spinAxisGltfLocal": [
+              0,
+              1,
+              0
+            ]
+          },
+          {
+            "assetCode": "FAN-02",
+            "rotorNode": "FAN-02_ROTOR",
+            "rgbSegments": 24,
+            "spinAxisGltfLocal": [
+              0,
+              1,
+              0
+            ]
+          }
+        ],
+        "controllerOwnershipTakenFromModelMetadata": false
+      }
+    }
+  ],
+  "hardwareCommands": 0,
+  "modelCalls": 0,
+  "hardwareAcceptance": "NOT_RUN",
+  "browserVisualQa": "NOT_RUN",
+  "boundary": "Actual GLB loading and exact mapping checks; not proof of live alarm, physical wiring, RPM or RGB feedback."
+}

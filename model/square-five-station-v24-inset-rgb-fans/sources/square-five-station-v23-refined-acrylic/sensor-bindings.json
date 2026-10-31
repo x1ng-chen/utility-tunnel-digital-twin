@@ -1,0 +1,795 @@
+{
+  "revision": "square-five-station-v23-refined-acrylic",
+  "status": "MODEL_BINDINGS_VALIDATED_FRONTEND_INTEGRATION_PENDING",
+  "bindings": [
+    {
+      "assetCode": "MQ2-04",
+      "physicalTag": "MQ2-04",
+      "targetNode": "MQ2-04",
+      "relatedNodes": [
+        "MQ2-04"
+      ],
+      "stationId": "P4",
+      "stationGroupNode": "STATION_P4",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-01",
+      "positionBlender_m": [
+        0.21700002253055573,
+        0.5789999961853027,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.21700002253055573,
+        0.1510000079870224,
+        -0.5789999961853027
+      ],
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "MQ4-04",
+      "physicalTag": "MQ4-04",
+      "targetNode": "MQ4-04",
+      "relatedNodes": [
+        "MQ4-04"
+      ],
+      "stationId": "P4",
+      "stationGroupNode": "STATION_P4",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-01",
+      "positionBlender_m": [
+        0.3030000329017639,
+        0.5789999961853027,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3030000329017639,
+        0.1510000079870224,
+        -0.5789999961853027
+      ],
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "CO-04",
+      "physicalTag": "CO-04",
+      "targetNode": "CO-04",
+      "relatedNodes": [
+        "CO-04"
+      ],
+      "stationId": "P4",
+      "stationGroupNode": "STATION_P4",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-01",
+      "positionBlender_m": [
+        0.21700002253055573,
+        0.5010000467300415,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.21700002253055573,
+        0.1510000079870224,
+        -0.5010000467300415
+      ],
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "FLAME-04",
+      "physicalTag": "FLAME-04",
+      "targetNode": "FLAME-04",
+      "relatedNodes": [
+        "FLAME-04"
+      ],
+      "stationId": "P4",
+      "stationGroupNode": "STATION_P4",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-01",
+      "positionBlender_m": [
+        0.3030000329017639,
+        0.5010000467300415,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3030000329017639,
+        0.1510000079870224,
+        -0.5010000467300415
+      ],
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "SMOKE-01",
+      "physicalTag": "MQ2-01",
+      "targetNode": "SMOKE-01",
+      "relatedNodes": [
+        "SMOKE-01"
+      ],
+      "stationId": "P1",
+      "stationGroupNode": "STATION_P1",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-02",
+      "positionBlender_m": [
+        0.3970000147819519,
+        0.5789999961853027,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3970000147819519,
+        0.1510000079870224,
+        -0.5789999961853027
+      ],
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "GAS-CH4-01",
+      "physicalTag": "MQ4-01",
+      "targetNode": "GAS-CH4-01",
+      "relatedNodes": [
+        "GAS-CH4-01"
+      ],
+      "stationId": "P1",
+      "stationGroupNode": "STATION_P1",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-02",
+      "positionBlender_m": [
+        0.4830000400543213,
+        0.5789999961853027,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4830000400543213,
+        0.1510000079870224,
+        -0.5789999961853027
+      ],
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "GAS-CO-01",
+      "physicalTag": "CO-01",
+      "targetNode": "GAS-CO-01",
+      "relatedNodes": [
+        "GAS-CO-01"
+      ],
+      "stationId": "P1",
+      "stationGroupNode": "STATION_P1",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-02",
+      "positionBlender_m": [
+        0.3970000147819519,
+        0.5010000467300415,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3970000147819519,
+        0.1510000079870224,
+        -0.5010000467300415
+      ],
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "FLAME-01",
+      "physicalTag": "FLAME-01",
+      "targetNode": "FLAME-01",
+      "relatedNodes": [
+        "FLAME-01"
+      ],
+      "stationId": "P1",
+      "stationGroupNode": "STATION_P1",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-02",
+      "positionBlender_m": [
+        0.4830000400543213,
+        0.5010000467300415,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4830000400543213,
+        0.1510000079870224,
+        -0.5010000467300415
+      ],
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "MQ2-03",
+      "physicalTag": "MQ2-03",
+      "targetNode": "MQ2-03",
+      "relatedNodes": [
+        "MQ2-03"
+      ],
+      "stationId": "P3",
+      "stationGroupNode": "STATION_P3",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-03",
+      "positionBlender_m": [
+        0.21700002253055573,
+        0.1990000158548355,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.21700002253055573,
+        0.1510000079870224,
+        -0.1990000158548355
+      ],
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "MQ4-03",
+      "physicalTag": "MQ4-03",
+      "targetNode": "MQ4-03",
+      "relatedNodes": [
+        "MQ4-03"
+      ],
+      "stationId": "P3",
+      "stationGroupNode": "STATION_P3",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-03",
+      "positionBlender_m": [
+        0.3030000329017639,
+        0.1990000158548355,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3030000329017639,
+        0.1510000079870224,
+        -0.1990000158548355
+      ],
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "CO-03",
+      "physicalTag": "CO-03",
+      "targetNode": "CO-03",
+      "relatedNodes": [
+        "CO-03"
+      ],
+      "stationId": "P3",
+      "stationGroupNode": "STATION_P3",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-03",
+      "positionBlender_m": [
+        0.21700002253055573,
+        0.1210000067949295,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.21700002253055573,
+        0.1510000079870224,
+        -0.1210000067949295
+      ],
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "FLAME-03",
+      "physicalTag": "FLAME-03",
+      "targetNode": "FLAME-03",
+      "relatedNodes": [
+        "FLAME-03"
+      ],
+      "stationId": "P3",
+      "stationGroupNode": "STATION_P3",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-03",
+      "positionBlender_m": [
+        0.3030000329017639,
+        0.1210000067949295,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3030000329017639,
+        0.1510000079870224,
+        -0.1210000067949295
+      ],
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "MQ2-02",
+      "physicalTag": "MQ2-02",
+      "targetNode": "MQ2-02",
+      "relatedNodes": [
+        "MQ2-02"
+      ],
+      "stationId": "P2",
+      "stationGroupNode": "STATION_P2",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-04",
+      "positionBlender_m": [
+        0.3970000147819519,
+        0.1990000158548355,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3970000147819519,
+        0.1510000079870224,
+        -0.1990000158548355
+      ],
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "MQ4-02",
+      "physicalTag": "MQ4-02",
+      "targetNode": "MQ4-02",
+      "relatedNodes": [
+        "MQ4-02"
+      ],
+      "stationId": "P2",
+      "stationGroupNode": "STATION_P2",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-04",
+      "positionBlender_m": [
+        0.4830000400543213,
+        0.1990000158548355,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4830000400543213,
+        0.1510000079870224,
+        -0.1990000158548355
+      ],
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "CO-02",
+      "physicalTag": "CO-02",
+      "targetNode": "CO-02",
+      "relatedNodes": [
+        "CO-02"
+      ],
+      "stationId": "P2",
+      "stationGroupNode": "STATION_P2",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-04",
+      "positionBlender_m": [
+        0.3970000147819519,
+        0.1210000067949295,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3970000147819519,
+        0.1510000079870224,
+        -0.1210000067949295
+      ],
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "FLAME-02",
+      "physicalTag": "FLAME-02",
+      "targetNode": "FLAME-02",
+      "relatedNodes": [
+        "FLAME-02"
+      ],
+      "stationId": "P2",
+      "stationGroupNode": "STATION_P2",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-04",
+      "positionBlender_m": [
+        0.4830000400543213,
+        0.1210000067949295,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4830000400543213,
+        0.1510000079870224,
+        -0.1210000067949295
+      ],
+      "identityStatus": "MODEL_RENUMBERED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "User-authorized model renumbering to match station suffix, 2026-10-29. See sensor-numbering-migration.json; actual hardware labels and live registry need deliberate migration.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "MQ2-05",
+      "physicalTag": "MQ2-05",
+      "targetNode": "MQ2-05",
+      "relatedNodes": [
+        "MQ2-05"
+      ],
+      "stationId": "P5",
+      "stationGroupNode": "STATION_P5",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-03",
+      "positionBlender_m": [
+        0.3070000112056732,
+        0.3890000283718109,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3070000112056732,
+        0.1510000079870224,
+        -0.3890000283718109
+      ],
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "MQ4-05",
+      "physicalTag": "MQ4-05",
+      "targetNode": "MQ4-05",
+      "relatedNodes": [
+        "MQ4-05"
+      ],
+      "stationId": "P5",
+      "stationGroupNode": "STATION_P5",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-03",
+      "positionBlender_m": [
+        0.3930000364780426,
+        0.3890000283718109,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3930000364780426,
+        0.1510000079870224,
+        -0.3890000283718109
+      ],
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "CO-05",
+      "physicalTag": "CO-05",
+      "targetNode": "CO-05",
+      "relatedNodes": [
+        "CO-05"
+      ],
+      "stationId": "P5",
+      "stationGroupNode": "STATION_P5",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-03",
+      "positionBlender_m": [
+        0.3070000112056732,
+        0.3110000193119049,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3070000112056732,
+        0.1510000079870224,
+        -0.3110000193119049
+      ],
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "FLAME-05",
+      "physicalTag": "FLAME-05",
+      "targetNode": "FLAME-05",
+      "relatedNodes": [
+        "FLAME-05"
+      ],
+      "stationId": "P5",
+      "stationGroupNode": "STATION_P5",
+      "stationLinkKind": "DIRECT_FOUR_SENSOR_MEMBER",
+      "controllerId": "CTRL-03",
+      "positionBlender_m": [
+        0.3930000364780426,
+        0.3110000193119049,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3930000364780426,
+        0.1510000079870224,
+        -0.3110000193119049
+      ],
+      "identityStatus": "DRAFT_TAG_PRESERVED_PROPOSED_BUSINESS_ID",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "LEVEL-L01",
+      "physicalTag": "LEVEL-01",
+      "targetNode": "MESH_V12-FSIR02_L01_BOARD",
+      "relatedNodes": [
+        "MESH_V12-FSIR02_L01_BOARD",
+        "MESH_V12-FSIR02_L01_PROBE"
+      ],
+      "stationId": "P4",
+      "stationGroupNode": "STATION_P4",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "controllerId": "CTRL-01",
+      "positionBlender_m": [
+        0.115,
+        0.5,
+        0.105
+      ],
+      "positionGltf_m": [
+        0.115,
+        0.105,
+        -0.5
+      ],
+      "identityStatus": "LEGACY_ID_PRESERVED_INSTALLATION_CHANGED",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "ENV-01",
+      "physicalTag": "SHT-01",
+      "targetNode": "ENV-01",
+      "relatedNodes": [
+        "ENV-01"
+      ],
+      "stationId": "P4",
+      "stationGroupNode": "STATION_P4",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "controllerId": "CTRL-01",
+      "positionBlender_m": [
+        0.11000000685453415,
+        0.5200000405311584,
+        0.18000000715255737
+      ],
+      "positionGltf_m": [
+        0.11000000685453415,
+        0.18000000715255737,
+        -0.5200000405311584
+      ],
+      "identityStatus": "LEGACY_ID_HARDWARE_MIGRATION_PENDING",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "LEVEL-L02",
+      "physicalTag": "LEVEL-02",
+      "targetNode": "MESH_V12-FSIR02_L02_BOARD",
+      "relatedNodes": [
+        "MESH_V12-FSIR02_L02_BOARD",
+        "MESH_V12-FSIR02_L02_PROBE"
+      ],
+      "stationId": "P1",
+      "stationGroupNode": "STATION_P1",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "controllerId": "CTRL-02",
+      "positionBlender_m": [
+        0.585,
+        0.5,
+        0.105
+      ],
+      "positionGltf_m": [
+        0.585,
+        0.105,
+        -0.5
+      ],
+      "identityStatus": "LEGACY_ID_PRESERVED_INSTALLATION_CHANGED",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "ENV-02",
+      "physicalTag": "SHT-02",
+      "targetNode": "ENV-02",
+      "relatedNodes": [
+        "ENV-02"
+      ],
+      "stationId": "P1",
+      "stationGroupNode": "STATION_P1",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "controllerId": "CTRL-02",
+      "positionBlender_m": [
+        0.5900000333786011,
+        0.5200000405311584,
+        0.18000000715255737
+      ],
+      "positionGltf_m": [
+        0.5900000333786011,
+        0.18000000715255737,
+        -0.5200000405311584
+      ],
+      "identityStatus": "PROPOSED_NEW_ID",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "LEVEL-L03",
+      "physicalTag": "LEVEL-03",
+      "targetNode": "MESH_V12-FSIR02_L03_BOARD",
+      "relatedNodes": [
+        "MESH_V12-FSIR02_L03_BOARD",
+        "MESH_V12-FSIR02_L03_PROBE"
+      ],
+      "stationId": "P3",
+      "stationGroupNode": "STATION_P3",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "controllerId": "CTRL-03",
+      "positionBlender_m": [
+        0.115,
+        0.2,
+        0.105
+      ],
+      "positionGltf_m": [
+        0.115,
+        0.105,
+        -0.2
+      ],
+      "identityStatus": "LEGACY_ID_PRESERVED_INSTALLATION_CHANGED",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "ENV-03",
+      "physicalTag": "SHT-03",
+      "targetNode": "ENV-03",
+      "relatedNodes": [
+        "ENV-03"
+      ],
+      "stationId": "P3",
+      "stationGroupNode": "STATION_P3",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "controllerId": "CTRL-03",
+      "positionBlender_m": [
+        0.11000000685453415,
+        0.18000000715255737,
+        0.18000000715255737
+      ],
+      "positionGltf_m": [
+        0.11000000685453415,
+        0.18000000715255737,
+        -0.18000000715255737
+      ],
+      "identityStatus": "PROPOSED_NEW_ID",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "LEVEL-L04",
+      "physicalTag": "LEVEL-04",
+      "targetNode": "MESH_V12-FSIR02_L04_BOARD",
+      "relatedNodes": [
+        "MESH_V12-FSIR02_L04_BOARD",
+        "MESH_V12-FSIR02_L04_PROBE"
+      ],
+      "stationId": "P2",
+      "stationGroupNode": "STATION_P2",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "controllerId": "CTRL-04",
+      "positionBlender_m": [
+        0.585,
+        0.2,
+        0.105
+      ],
+      "positionGltf_m": [
+        0.585,
+        0.105,
+        -0.2
+      ],
+      "identityStatus": "LEGACY_ID_PRESERVED_INSTALLATION_CHANGED",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "ENV-04",
+      "physicalTag": "SHT-04",
+      "targetNode": "ENV-04",
+      "relatedNodes": [
+        "ENV-04"
+      ],
+      "stationId": "P2",
+      "stationGroupNode": "STATION_P2",
+      "stationLinkKind": "SPATIAL_CONTEXT_NOT_GAS_STATION_MEMBER",
+      "controllerId": "CTRL-04",
+      "positionBlender_m": [
+        0.5900000333786011,
+        0.18000000715255737,
+        0.18000000715255737
+      ],
+      "positionGltf_m": [
+        0.5900000333786011,
+        0.18000000715255737,
+        -0.18000000715255737
+      ],
+      "identityStatus": "PROPOSED_NEW_ID",
+      "identityEvidence": "V15 identity continuity; live business registry still requires T01 review",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm."
+    },
+    {
+      "assetCode": "GAS-O2-01",
+      "physicalTag": "O2-01",
+      "targetNode": "GAS-O2-01",
+      "relatedNodes": [
+        "GAS-O2-01"
+      ],
+      "stationId": "P1",
+      "stationGroupNode": "STATION_P1",
+      "stationLinkKind": "DIRECT_CENTER_OXYGEN_MEMBER",
+      "controllerId": "CTRL-01",
+      "positionBlender_m": [
+        0.4400000274181366,
+        0.5400000214576721,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4400000274181366,
+        0.1510000079870224,
+        -0.5400000214576721
+      ],
+      "identityStatus": "MODEL_RELOCATED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "Model-only location/number migration per oxygen-placement-migration.json. Original controllerId retained; physical labels, firmware and live registry not modified.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm.",
+      "physicalMember": true
+    },
+    {
+      "assetCode": "GAS-O2-05",
+      "physicalTag": "O2-05",
+      "targetNode": "GAS-O2-05",
+      "relatedNodes": [
+        "GAS-O2-05"
+      ],
+      "stationId": "P5",
+      "stationGroupNode": "STATION_P5",
+      "stationLinkKind": "DIRECT_CENTER_OXYGEN_MEMBER",
+      "controllerId": "CTRL-03",
+      "positionBlender_m": [
+        0.3500000238418579,
+        0.3500000238418579,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.3500000238418579,
+        0.1510000079870224,
+        -0.3500000238418579
+      ],
+      "identityStatus": "MODEL_RELOCATED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "Model-only location/number migration per oxygen-placement-migration.json. Original controllerId retained; physical labels, firmware and live registry not modified.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm.",
+      "physicalMember": true
+    },
+    {
+      "assetCode": "GAS-O2-02",
+      "physicalTag": "O2-02",
+      "targetNode": "GAS-O2-02",
+      "relatedNodes": [
+        "GAS-O2-02"
+      ],
+      "stationId": "P2",
+      "stationGroupNode": "STATION_P2",
+      "stationLinkKind": "DIRECT_CENTER_OXYGEN_MEMBER",
+      "controllerId": "CTRL-04",
+      "positionBlender_m": [
+        0.4400000274181366,
+        0.1600000113248825,
+        0.1510000079870224
+      ],
+      "positionGltf_m": [
+        0.4400000274181366,
+        0.1510000079870224,
+        -0.1600000113248825
+      ],
+      "identityStatus": "MODEL_RELOCATED_LIVE_REGISTRY_MIGRATION_PENDING",
+      "identityEvidence": "Model-only location/number migration per oxygen-placement-migration.json. Original controllerId retained; physical labels, firmware and live registry not modified.",
+      "highlightPolicy": "Highlight targetNode subtree; emphasize station separately; never highlight entire controller as sensor alarm.",
+      "physicalMember": true
+    }
+  ],
+  "provenance": {
+    "sourceRevision": "square-five-station-v22-sensor-numbering",
+    "change": "Refined enclosure/materials/detail geometry, spaced station layout and centred O2-01/P1 O2-02/P2 O2-05/P5; model-only migration."
+  },
+  "date": "2026-10-29",
+  "numberingReference": "User top view with pipe ports at bottom: upper-left P1, upper-right P2, lower-left P4, lower-right P3, centre P5",
+  "coordinates": "Blender metres +Z up. Canonical plan: screen up=+X, right=-Y; four pipe ports at bottom (-X). glTF=(x,z,-y)."
+}

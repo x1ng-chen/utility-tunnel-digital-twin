@@ -9,6 +9,7 @@ vi.mock('vue-router', () => ({ useRoute: () => route, useRouter: () => ({ push }
 import Twin3DView from './Twin3DView.vue';
 import { useOperationsStore } from '../stores/operations';
 import { api } from '../services/api';
+import { twinModelUrl } from '../services/twin3d';
 
 describe('agent to twin asset focus', () => {
   beforeEach(() => {
@@ -37,25 +38,43 @@ describe('agent to twin asset focus', () => {
     } finally { wrapper.unmount(); }
   });
 
-  it('shows V20 numbering and sends the pipe-front camera direction without guessing new sensor IDs', async () => {
+  it('shows V24 numbering and sends the pipe-front camera direction without guessing new sensor IDs', async () => {
     const store = useOperationsStore(); store.source='api'; store.offline=false;
     vi.spyOn(api,'twinModelReadiness').mockResolvedValue({data:{status:'ready',summary:{activeAssetCount:1,mappedAssetCount:1},
-      activeRelease:{id:2},presentation:{revision:'v20-presentation-20261028.1',modelVersion:'hardware-live-v20',
+      activeRelease:{id:2},presentation:{revision:'v24-presentation-20261029.1',modelVersion:'hardware-live-v24',
         frontCameraDirection:[-1,.85,0],stations:[{id:'P1',position:'后左'},{id:'P2',position:'后右'},
-          {id:'P3',position:'前左'},{id:'P4',position:'前右'},{id:'P5',position:'中央'}]}}} as never);
+          {id:'P3',position:'前右'},{id:'P4',position:'前左'},{id:'P5',position:'中央'}]}}} as never);
     vi.spyOn(api,'twinModelFile').mockResolvedValue({data:new Blob(['model'])} as never);
-    vi.stubGlobal('URL', {createObjectURL:()=> 'blob:test-v20',revokeObjectURL:vi.fn()});
+    vi.stubGlobal('URL', {createObjectURL:()=> 'blob:test-v24',revokeObjectURL:vi.fn()});
     const focusStation=vi.fn();
     const scene=defineComponent({props:['overviewDirection'],setup(_props,{expose}){expose({focusStation});return{};},template:'<div />'});
     const wrapper=mount(Twin3DView,{global:{stubs:{AppShell:{template:'<main><slot /></main>'},TwinScene:scene,OpsChart:true}}});
     try {
       await new Promise(resolve=>setTimeout(resolve,0)); await nextTick();
       expect(wrapper.get('[data-testid="model-numbering-notice"]').text()).toContain('P1 后左');
+      expect(wrapper.get('[data-testid="model-numbering-notice"]').text()).toContain('P3 前右');
+      expect(wrapper.get('[data-testid="model-numbering-notice"]').text()).toContain('P4 前左');
       expect(wrapper.get('[data-testid="model-numbering-notice"]').text()).toContain('前左2、前右1');
       expect(wrapper.findComponent(scene).props('overviewDirection')).toEqual([-1,.85,0]);
       const p1=wrapper.findAll('.twin-preset-hud button').find(button=>button.text()==='P1');
       expect(p1).toBeTruthy(); await p1!.trigger('click');
       expect(focusStation).toHaveBeenCalledWith('P1');
+    } finally { wrapper.unmount(); }
+  });
+
+  it('uses V24 preview station labels while retaining the runtime asset identities', async () => {
+    const store = useOperationsStore(); store.source = 'demo';
+    const scene = defineComponent({ props: ['overviewDirection', 'modelUrl'], template: '<div />' });
+    const wrapper = mount(Twin3DView, { global: { stubs: {
+      AppShell: { template: '<main><slot /></main>' }, TwinScene: scene, OpsChart: true,
+    } } });
+    try {
+      await nextTick();
+      expect(twinModelUrl).toBe('/models/utility-tunnel-v24.glb');
+      expect(wrapper.findComponent(scene).props('overviewDirection')).toEqual([-1, .85, 0]);
+      const notice = wrapper.get('[data-testid="model-numbering-notice"]').text();
+      expect(notice).toContain('P3 前右'); expect(notice).toContain('P4 前左');
+      expect(notice).not.toContain('V20');
     } finally { wrapper.unmount(); }
   });
 

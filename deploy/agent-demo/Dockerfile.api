@@ -8,6 +8,7 @@ RUN if [ "$INSTALL_RAG" = "1" ]; then pip install --no-cache-dir torch==2.14.1 -
 COPY backend /app/backend
 COPY docs /app/docs
 COPY model /app/model
+COPY frontend/public/models/utility-tunnel-v24.glb /app/frontend/public/models/utility-tunnel-v24.glb
 COPY firmware/four-controller/FIX-VALIDATION-20261027.md /app/firmware/four-controller/FIX-VALIDATION-20261027.md
 ENV DJANGO_ENV=development DJANGO_SETTINGS_MODULE=config.agent_demo_settings PYTHONUNBUFFERED=1
 CMD ["python","manage.py","runserver","0.0.0.0:18927","--noreload"]

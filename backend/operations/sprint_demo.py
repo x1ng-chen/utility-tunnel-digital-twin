@@ -16,8 +16,10 @@ from .sprint_models import AgentRun, DemoSession, SimulatedAction
 
 def guard():
     root = require_evaluation_database()
-    if not getattr(settings, 'AGENT_DEMO_MODE', False) or root.resolve() != (settings.BASE_DIR.parent / '.agent-demo').resolve():
-        raise CommandError('Only the dedicated .agent-demo database supports demonstration control.')
+    allowed = {(settings.BASE_DIR.parent / name).resolve()
+               for name in ('.agent-demo', '.agent-capabilities')}
+    if not getattr(settings, 'AGENT_DEMO_MODE', False) or root.resolve() not in allowed:
+        raise CommandError('Only dedicated .agent-demo or .agent-capabilities databases support demonstration control.')
     return root
 
 
@@ -32,6 +34,9 @@ def initialize(with_model=True):
     guard()
     if not Asset.objects.exists():
         seed_scenario('INS-01', with_model=with_model)
+    elif with_model:
+        from .agent_model_release import install_v24_demo_model
+        install_v24_demo_model(User.objects.get(username='agent-eval-administrator'))
     Threshold.objects.update_or_create(key='methane.raw', defaults={'label': '模拟原始量变化规则，非浓度阈值',
         'unit': 'adc', 'warning': 400, 'alarm': 700})
     return session_state()
@@ -54,7 +59,12 @@ def control(action, case_id=None):
         SimulatedAction.objects.filter(state='proposed').update(state='expired')
         s.running = False
         # INS-04 can intentionally remove just this test binding.
-        for b in BINDINGS:
+        from .twin_presentation import runtime_inventory
+        # Release all cyclic aliases first, then restore this active version's
+        # targets. The frozen wire catalog is not a V24 presentation map.
+        bindings = runtime_inventory()['bindings']
+        Asset.objects.filter(code__in=[b['assetCode'] for b in bindings]).update(mesh='')
+        for b in bindings:
             Asset.objects.filter(code=b['assetCode']).update(mesh=b['targetNode'])
         if s.case_id == 'INS-04':
             Asset.objects.filter(code='MQ4-05').update(mesh='')

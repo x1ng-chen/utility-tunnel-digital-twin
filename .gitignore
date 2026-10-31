@@ -85,3 +85,4 @@ firmware/**/compile_commands.json
 .agent-eval-sprint/
 .agent-eval-guards/
 .hardware-live/
+.agent-capabilities/

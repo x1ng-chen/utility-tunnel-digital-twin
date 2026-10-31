@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import AppShell from '../components/AppShell.vue';
-import { api } from '../services/api';
+import { api, type InvestigationCase } from '../services/api';
 import { useAuthStore } from '../stores/auth';
 import { useRoute } from 'vue-router';
 import AgentRunTrace from '../components/AgentRunTrace.vue';
+import AgentInvestigationPanel from '../components/AgentInvestigationPanel.vue';
+import AgentDecisionEvidence from '../components/AgentDecisionEvidence.vue';
+import AgentCapabilityTools from '../components/AgentCapabilityTools.vue';
 import { agentTaskPrompt, readAgentTaskEntry, type AgentTaskEntry } from '../utils/agentTaskEntry';
 
 type Json = Record<string, unknown>;
@@ -14,6 +17,7 @@ type Run = { id: string; status: string; stage: string; error: string; input: Js
   result: { reply?: string; taskOutcome?: string; review?: Json; evidence?: Json[]; proposals?: Json[]; controlProposals?: Json[];
     guardrails?: { version: string; findings: Json[]; violations: Json[]; boundary: string };
     experienceContext?: { items: Json[]; hash?: string; enabled?: boolean };
+    caseContext?:Json; topologyContext?:Json; decisionTrace?:Json[]; branchComparison?:Json; procedureContext?:Json; failureAnalysis?:Json;
     locations?: { assetCode: string; stationId: string; mappingStatus: string }[] };
   runtime: { modelCalls?: number; toolCalls?: number; elapsedMs?: number; tokens?: Json | null; tokenUsageComplete?: boolean } };
 const auth = useAuthStore();
@@ -27,6 +31,7 @@ const proposeAction=ref(false),fanTarget=ref('FAN-01'),fanPwm=ref(60);
 const prompt = ref('核查本站异常，比较邻站、风机反馈和控制记录，检索适用手册；列出候选原因、反证和下一项检查。');
 const sourceLabel = ref('数据来源待核实'), modelNotice = ref('');
 const modelCallsDisabled = ref(false);
+const selectedInvestigation=ref<InvestigationCase|null>(null),selectedProcedure=ref<Json|null>(null);
 const session = ref<Json | null>(null), cases = ref<string[]>([]), caseId = ref('INS-01');
 const query = ref('风机有电流但没有转速'), historyKnowledge = ref(false), knowledge = ref<Json | null>(null);
 const cost = ref<Json | null>(null), watts1 = ref(3.6), watts2 = ref(3.6), minutes = ref(10), price = ref(1);
@@ -50,6 +55,20 @@ const experienceStates: Record<string, string> = {candidate:'候选，未批准'
 const guardStates: Record<string, string> = {supported:'本来源下有证据支持',unsupported:'本来源下不支持',unknown:'证据不足'};
 const active = computed(() => !!run.value && ['queued', 'running'].includes(run.value.status));
 const preparedEntry = ref<AgentTaskEntry | null>(null);
+const taskEntries = [
+  {kind:'inspection', label:'巡检五站', hint:'核对31路覆盖与质量'},
+  {kind:'diagnosis', label:'排查异常', hint:'对照证据并提出检查'},
+  {kind:'draft', label:'准备工单', hint:'生成草案，等待确认'},
+  {kind:'review', label:'恢复复核', hint:'核查新观测，不自动结单'},
+] as const;
+function prepareTask(task: typeof taskEntries[number]['kind']) {
+  if (busy.value || active.value || task==='draft' && !canWrite.value) return;
+  kind.value=task; mode.value='multi'; proposeAction.value=false; preparedEntry.value=null;
+  selectedProcedure.value=null;
+  station.value=task==='inspection'?'all':selectedInvestigation.value?.stationId || (station.value==='all'?'P5':station.value);
+  prompt.value=agentTaskPrompt({kind:task,station:station.value,asset:asset.value,order:order.value,alert:''});
+  notice.value=task==='review'&&!order.value.trim()?'已准备恢复复核，请填写需要复核的工单编号。':'任务已准备，请核对目标后点击开始；尚未调用模型。';
+}
 watch(() => readAgentTaskEntry(route.query), entry => {
   if (!entry) { preparedEntry.value = null; return; }
   if (busy.value || active.value) return;
@@ -94,15 +113,32 @@ async function start(previous = false) {
   if (busy.value || active.value || modelCallsDisabled.value) return;
   if (kind.value === 'draft' && !canWrite.value) return;
   if (kind.value === 'review' && !order.value.trim()) { error.value = '请先填写需要复核的工单编号。'; return; }
+  if (kind.value === 'diagnosis' && selectedInvestigation.value && selectedInvestigation.value.stationId !== station.value) { error.value='任务检测站与排障档案不同，请重新选择档案或解除任务关联。'; return; }
+  if (selectedProcedure.value?.stationId && selectedProcedure.value.stationId !== station.value) { error.value='任务检测站与已选检查模板不同，请移除模板或重新选择。'; return; }
   busy.value = true; error.value = ''; notice.value = ''; confirmation.value = null;
   try {
     const { data } = await api.createAgentRun({ kind: kind.value, station_id: station.value, mode: mode.value,
       prompt: prompt.value, ...(kind.value === 'draft' ? { asset_code: asset.value } : {}),
       ...(kind.value === 'review' ? { work_order_code: order.value } : {}),
+      ...(kind.value === 'diagnosis' && selectedInvestigation.value ? {case_id:selectedInvestigation.value.id,...(selectedInvestigation.value.assetCode?{asset_code:selectedInvestigation.value.assetCode}:{})} : {}),
+      ...(kind.value==='diagnosis' && selectedProcedure.value ? {procedure_id:selectedProcedure.value.id} : {}),
       ...(kind.value === 'diagnosis' && mode.value === 'multi' && proposeAction.value ? {control_request:{asset_code:fanTarget.value,intent:'pwm',value:fanPwm.value}} : {}),
       ...(previous && run.value ? { previous_run_id: run.value.id } : {}) }, crypto.randomUUID());
     run.value = data; timer = setTimeout(poll, 500);
   } catch (cause) { fail(cause); } finally { busy.value = false; }
+}
+function selectInvestigation(value:InvestigationCase|null){selectedInvestigation.value=value;if(value){station.value=value.stationId;if(value.assetCode)asset.value=value.assetCode;}}
+async function continueInvestigation(value:InvestigationCase){
+  if(busy.value || active.value || modelCallsDisabled.value)return;
+  selectInvestigation(value);kind.value='diagnosis';mode.value='multi';proposeAction.value=false;preparedEntry.value=null;
+  prompt.value=`继续排查${value.stationId}${value.assetCode?`的${value.assetCode}`:''}：${value.title || '核对本档案的新观测和人工报告'}。比较已有假设的支持与反证，选择下一项允许的只读检查；保持不确定性，不自动结案。`;
+  await start();
+}
+function prepareProcedure(value:Json){
+  if(busy.value || active.value)return;
+  selectedProcedure.value=value;kind.value='diagnosis';proposeAction.value=false;
+  if(typeof value.stationId==='string' && /^P[1-5]$/.test(value.stationId))station.value=value.stationId;
+  notice.value=`已准备检查模板“${value.title || value.id}”，尚未启动；请核对目标与档案关联后开始任务。`;
 }
 async function cancel() { if (!run.value) return; try { run.value = (await api.cancelAgentRun(run.value.id)).data; } catch (cause) { fail(cause); } }
 async function selectRun(id: string) { if (timer) clearTimeout(timer); run.value = (await api.agentRun(id)).data; if (active.value) void poll(); }
@@ -170,12 +206,21 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
       <header class="workbench-heading"><h1>多Agent工作台</h1><p>取证、诊断、复核，以及经过人工确认的仿真处置。</p></header>
       <p v-if="preparedEntry" class="prepared-task" role="status">已预选{{ preparedEntry.kind === 'inspection' ? '五站巡检' : preparedEntry.kind === 'review' ? '恢复复核' : preparedEntry.kind === 'draft' ? '工单草案' : '证据排障' }} · {{ preparedEntry.station === 'all' ? '全部五站' : preparedEntry.station }}<template v-if="preparedEntry.asset"> · {{ preparedEntry.asset }}</template><template v-if="preparedEntry.alert"> · {{ preparedEntry.alert }}</template><template v-if="preparedEntry.order"> · {{ preparedEntry.order }}</template>。请核对当前表单目标后开始；尚未调用模型或执行处置。</p>
       <aside class="source" role="status"><strong>{{ sourceLabel }}</strong><details v-if="modelNotice" class="model-context"><summary>模型与布局说明</summary><p>{{ modelNotice }}</p></details></aside>
+      <nav class="task-entry" aria-label="运维任务入口">
+        <button v-for="task in taskEntries" :key="task.kind" :data-task-kind="task.kind" :aria-current="kind===task.kind?'step':undefined"
+          :disabled="busy || active || task.kind==='draft' && !canWrite" @click="prepareTask(task.kind)">
+          <strong>{{ task.label }}</strong><span>{{ task.hint }}</span>
+        </button>
+      </nav>
       <p v-if="error" role="alert" class="error">{{ error }}</p><p v-if="notice" role="status" class="workbench-notice">{{ notice }}</p>
-      <section v-if="session" class="panel demo-session"><h2>演示场景</h2><p>模拟测试 · 阶段 {{ session.phase }} · {{ session.running ? '持续采样' : '已暂停，观测将正常过期' }} · 已采样 {{ session.tick }} 轮</p>
+      <details v-if="session" class="panel demo-session"><summary>演示场景<span>阶段 {{ session.phase }} · {{ session.running ? '持续采样' : '已暂停，观测将正常过期' }}</span></summary><p>模拟测试 · 已采样 {{ session.tick }} 轮；场景管理不会自动调用模型。</p>
         <div class="controls"><select v-model="caseId" aria-label="演示场景"><option v-for="id in cases" :key="id">{{ id }}</option></select>
           <template v-if="admin"><button @click="demoAction('reset')">重置场景</button><button @click="demoAction('start')">开始采样</button><button @click="demoAction('pause')">暂停采样</button><button @click="demoAction('advance')">推进阶段</button></template>
           <small v-else>场景控制由管理员操作；本账号可以查询。</small></div>
-      </section>
+      </details>
+      <details class="investigation-section" :open="!!selectedInvestigation"><summary>人工检查与排障续查<span>记录检查结果，再对照新的观测</span></summary>
+        <AgentInvestigationPanel :station="station" :running="active" :model-calls-disabled="modelCallsDisabled" :last-run-id="run?.input.case_id === selectedInvestigation?.id ? run?.id : undefined" :last-run-status="run?.input.case_id === selectedInvestigation?.id ? run?.status : undefined" @select-case="selectInvestigation" @continue-case="continueInvestigation" />
+      </details>
       <div class="workbench-primary">
       <section class="panel task-composer" aria-labelledby="agent-task-title"><h2 id="agent-task-title">发起运维任务</h2><div class="controls task-fields">
         <label>检测点<select v-model="station"><option v-for="s in ['all','P1','P2','P3','P4','P5']" :key="s" :value="s">{{ s === 'all' ? '全部五站' : s }}</option></select></label>
@@ -183,6 +228,8 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
         <label>运行方式<select v-model="mode"><option value="multi">三Agent协作</option><option value="single">单Agent对照</option></select></label>
         <label v-if="kind === 'draft'">设备编码<input v-model="asset" /></label><label v-if="kind === 'review'">工单编号<input v-model="order" /></label>
       </div><div v-if="canWrite && kind === 'diagnosis' && mode === 'multi'" class="controls action-options"><label class="check-label"><input v-model="proposeAction" type="checkbox" />同时生成待复核的仿真风机动作草案</label><template v-if="proposeAction"><label>风机<select v-model="fanTarget"><option>FAN-01</option><option>FAN-02</option></select></label><label>PWM %<input v-model.number="fanPwm" type="number" min="0" max="100" /></label></template></div><label>任务说明<textarea v-model="prompt" maxlength="2000" rows="5" /></label>
+        <p v-if="selectedInvestigation && kind==='diagnosis'" class="field-help">本次关联排障档案：{{ selectedInvestigation.title }} · {{ selectedInvestigation.stationId }}。原假设和历史快照将保留。</p>
+        <div v-if="selectedProcedure" class="controls"><p class="field-help">已准备只读模板：{{ selectedProcedure.title }} · {{ selectedProcedure.stationId }} · 版本 {{ selectedProcedure.revision }}</p><button :disabled="busy || active" @click="selectedProcedure=null">移除检查模板</button></div>
         <div class="controls task-actions"><button class="workbench-primary-action" :disabled="busy || active || modelCallsDisabled" @click="start()">开始任务（调用模型）</button><button :disabled="busy || active || modelCallsDisabled || run?.status !== 'completed'" @click="start(true)">重新核查新证据</button><button v-if="active" @click="cancel">取消任务</button></div>
         <p v-if="modelCallsDisabled" class="field-help" role="status">当前环境已暂停模型调用，仍可查看历史记录和使用只读工具。</p>
         <p v-else class="field-help">提交后实际调用已配置的DeepSeek；调用用量与失败会保留。原悬浮助手继续可用。</p>
@@ -196,6 +243,7 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
         <p class="field-help">本任务来源：{{ run.source?.label || '旧任务未记录来源，不能据当前页面推断' }}<template v-if="run.snapshotHash"> · 冻结快照 {{ run.snapshotHash }}</template></p>
         <AgentRunTrace v-if="run.steps.length" :steps="run.steps" :running="active" />
         <p v-else class="result-empty-note">本任务尚无执行阶段记录；阶段将在实际执行后显示。</p>
+        <AgentDecisionEvidence :result="run.result" />
         <h3 v-if="run.result.reply">模型解释</h3><p v-if="run.result.taskOutcome" class="task-outcome">任务结果：{{ outcomes[run.result.taskOutcome] || run.result.taskOutcome }}</p><p class="model-reply">{{ run.result.reply }}</p><p v-if="run.result.review">复核：{{ run.result.review.decision }} · {{ run.result.review.summary }}。复核通过不等于现场验收或全部事实正确。</p>
         <section class="derived-checks"><h3>规则判断与阻断原因</h3>
           <template v-if="run.result.guardrails"><p>规则版本 {{ run.result.guardrails.version }} · 推导不是原始测量</p>
@@ -226,6 +274,7 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
       </div>
       </div>
       <div class="workbench-tools" aria-label="辅助运维工具">
+      <AgentCapabilityTools :station="station" :run-id="run?.id" :run-status="run?.status" :can-write="canWrite" :admin="admin" @select-procedure="prepareProcedure" />
       <details class="panel tool-panel knowledge-panel"><summary class="tool-heading">规程与缺陷检索<span>查询适用依据及历史案例</span></summary><div class="tool-content"><div class="controls knowledge-fields"><label>知识检索问题<input v-model="query" maxlength="500" /></label><label class="check-label"><input v-model="historyKnowledge" type="checkbox" />包含旧双节点历史案例</label><button @click="search">检索依据</button></div>
         <p v-if="knowledge">检索方式：{{ knowledge.mode }} · {{ knowledge.fallbackReason || '' }}</p><ul v-if="knowledge?.missing"><li v-for="gap in (knowledge.missing as string[])" :key="gap">{{ gap }}</li></ul>
         <details v-for="hit in (knowledge?.hits as Json[] || [])" :key="String(hit.id)"><summary>{{ hit.id }} · {{ hit.sourceKind }} · {{ hit.source }} · {{ hit.version }}</summary><pre>{{ hit.text }}</pre><small>适用布局：{{ hit.layout }}；验证状态：{{ hit.verification }}</small></details>
@@ -272,6 +321,16 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
 .workbench-heading h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.25; letter-spacing: -.02em; }
 .prepared-task { margin: 0; padding: 12px 16px; border: 1px solid var(--ops-line); border-radius: 8px; background: var(--ops-bg-deep); font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
 .workbench-heading p { margin: 0; color: var(--ops-muted, #53657b); }
+.task-entry { display: flex; flex-wrap: wrap; gap: 0; border-block: 1px solid var(--ops-line, #d8e2ee); }
+.agent-workbench .task-entry button { flex: 1 1 170px; display: grid; gap: 3px; min-height: 72px; text-align: left; border: 0; border-radius: 0; background: transparent; padding: 14px 16px; }
+.task-entry strong { font-size: 15px; }
+.task-entry span { color: var(--ops-muted, #53657b); font-size: 12px; font-weight: 400; }
+.agent-workbench .task-entry button[aria-current="step"] { color: var(--ops-signal, #1766c3); background: var(--ops-signal-soft, #eaf3ff); }
+.investigation-section { min-width: 0; }
+.investigation-section > summary { padding-block: 12px; cursor: pointer; font-weight: 600; }
+.investigation-section > summary span, .demo-session > summary span { margin-inline-start: 18px; color: var(--ops-muted, #53657b); font-weight: 400; font-size: 12px; }
+.agent-workbench details.demo-session { padding: 0 18px; }
+.demo-session > summary { min-height: 48px; padding-block: 12px; box-sizing: border-box; cursor: pointer; font-weight: 600; }
 .agent-workbench .panel, .source {
   min-width: 0;
   padding: 24px;
