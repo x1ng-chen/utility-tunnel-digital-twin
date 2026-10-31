@@ -136,7 +136,7 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
   expect(await page.getByLabel('设备空间定位图').getByRole('button').count()).toBeGreaterThan(0);
   await page.getByRole('searchbox', { name: '搜索设备', exact: true }).fill('SEEP-W01');
   await expect(page.getByRole('complementary').getByRole('heading', { name: '水位传感器', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '定位 水位传感器' }).click({ force: true });
+  await page.getByRole('button', { name: '选择 SEEP-W01 水位传感器', exact: true }).click();
   await expect(page.getByText('PC0 / ADC1_IN10', { exact: true })).toBeVisible();
   await page.getByRole('searchbox', { name: '搜索设备', exact: true }).fill('NO-SUCH-ASSET');
   await expect(page.getByText('没有匹配的设备节点，请调整搜索条件。')).toBeVisible();
@@ -230,6 +230,8 @@ test('显式历史V07兼容模式下可定位设备并展示告警状态', async
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
+  // Wait for the authenticated route before reloading a deep link.
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
   // Selection is explicit; merely opening the scene no longer guesses an asset.
   await page.goto(`${webUrl}/twin-3d?asset=ENV-01`);
   await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
@@ -312,7 +314,7 @@ test('显式历史V07兼容模式下可定位设备并展示告警状态', async
   await page.getByRole('button', { name: 'NET-01' }).click();
   await expect(page.locator('.twin-focus-status').getByText('ESP8266-01S 通信模块', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '设备台账' }).click({ force: true });
-  await page.getByRole('button', { name: '定位 水位传感器' }).click({ force: true });
+  await page.getByRole('button', { name: '选择 SEEP-W01 水位传感器', exact: true }).click();
   await page.getByRole('button', { name: '在三维中查看 →' }).click();
   await expect(page).toHaveURL(/\/twin-3d\?asset=SEEP-W01/);
   await expect(page.locator('.twin-inspector').getByText('MESH_SEEP_W01', { exact: true })).toBeVisible();
@@ -349,6 +351,8 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
+  // Wait for the authenticated route before reloading a deep link.
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
   // Selection is explicit; merely opening the scene no longer guesses an asset.
   await page.goto(`${webUrl}/twin-3d?asset=ENV-01`);
   await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
@@ -369,12 +373,14 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
   await resetCamera.dispatchEvent('click');
 
   const switcher = page.locator('.twin-quick-switch');
-  const box = await switcher.boundingBox();
+  // Begin a rail drag on its non-button heading. Device buttons intentionally
+  // retain click behavior and must not acquire drag capture.
+  const box = await switcher.locator('.twin-quick-switch-heading').boundingBox();
   expect(box).not.toBeNull();
-  await page.mouse.move(box.x + 36, box.y + 18);
+  await page.mouse.move(box.x + 8, box.y + box.height / 2);
   await expect(page.locator('.twin-fullscreen-fx.active')).toHaveCount(1);
   await page.mouse.down();
-  await page.mouse.move(box.x + 220, box.y + 18, { steps: 5 });
+  await page.mouse.move(box.x + 180, box.y + box.height / 2, { steps: 5 });
   // Headless Chromium does not expose `(hover: hover) and (pointer: fine)`, so
   // it intentionally keeps the visual cursor hidden. The drag-state class is
   // the browser-independent contract that keeps the real desktop cursor alive.

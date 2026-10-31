@@ -68,5 +68,14 @@
   "localDockerExecution": "NOT_RUN",
   "physicalAcceptance": "NOT_RUN",
   "ctrl02Sht": "UNRESOLVED",
-  "humanScoring": "NOT_RUN"
+  "humanScoring": "NOT_RUN",
+  "localFocusedBrowserChecks": {
+    "mobileAndThreeDesktopResolutions": "PASS",
+    "desktopLayoutCurrentPanels": "PASS",
+    "legacyAssetLedgerAndV07CameraJourney": "PASS",
+    "fullscreenRailDragAndDeviceSelection": "PASS",
+    "profile": "DISPOSABLE_LOCAL_DATABASE",
+    "productionDatabaseTouched": false,
+    "manualVisualAcceptance": false
+  }
 }
