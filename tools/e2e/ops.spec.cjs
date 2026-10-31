@@ -134,11 +134,11 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
   await page.getByRole('button', { name: '设备台账' }).click({ force: true });
   await expect(page.getByRole('heading', { name: '设备台账' })).toBeVisible();
   expect(await page.getByLabel('设备空间定位图').getByRole('button').count()).toBeGreaterThan(0);
-  await page.getByRole('textbox', { name: '搜索设备', exact: true }).fill('SEEP-W01');
+  await page.getByRole('searchbox', { name: '搜索设备', exact: true }).fill('SEEP-W01');
   await expect(page.getByRole('complementary').getByRole('heading', { name: '水位传感器', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '定位 水位传感器' }).click({ force: true });
   await expect(page.getByText('PC0 / ADC1_IN10', { exact: true })).toBeVisible();
-  await page.getByRole('textbox', { name: '搜索设备', exact: true }).fill('NO-SUCH-ASSET');
+  await page.getByRole('searchbox', { name: '搜索设备', exact: true }).fill('NO-SUCH-ASSET');
   await expect(page.getByText('没有匹配的设备节点，请调整搜索条件。')).toBeVisible();
 
   await page.getByRole('button', { name: '数据洞察' }).click();
@@ -221,7 +221,7 @@ test('滚轮到达页面边界不会跳页，导航点击仍可正常切换', as
   await expect(page.getByRole('navigation').getByRole('button', { name: '告警中心' })).toHaveAttribute('aria-current', 'page');
 });
 
-test('三维孪生加载正式环形 V07 模型后可完整定位设备并展示告警状态', async ({ page }) => {
+test('显式历史V07兼容模式下可定位设备并展示告警状态', async ({ page }) => {
   // The complete model + camera + GIS + asset-ledger journey is intentionally
   // broader than the other cases. Linux CI uses software WebGL, so reserve a
   // realistic budget without weakening any of the business assertions.
@@ -230,7 +230,8 @@ test('三维孪生加载正式环形 V07 模型后可完整定位设备并展示
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await page.getByRole('button', { name: '三维孪生' }).click();
+  // Selection is explicit; merely opening the scene no longer guesses an asset.
+  await page.goto(`${webUrl}/twin-3d?asset=ENV-01`);
   await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
   await expect(page.getByRole('application', { name: '综合管廊三维数字孪生场景' })).toBeVisible();
   await expect(page.getByText('已加载实体三维模型')).toBeVisible();
@@ -348,7 +349,8 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await page.getByRole('button', { name: '三维孪生' }).click();
+  // Selection is explicit; merely opening the scene no longer guesses an asset.
+  await page.goto(`${webUrl}/twin-3d?asset=ENV-01`);
   await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
 
   const patrolCode = page.locator('.twin-focus-status small');

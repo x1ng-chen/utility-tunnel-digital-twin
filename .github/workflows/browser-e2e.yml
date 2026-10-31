@@ -75,6 +75,10 @@ jobs:
       - name: Fetch current V24 runtime files and the historical sandbox fallback
         run: git lfs pull --include="frontend/public/models/utility-tunnel-v24*.glb,model/square-five-station-v17-fan-ready/*.glb" --exclude=""
       - name: Start isolated test services
+        env:
+          # Legacy business fixtures explicitly exercise their original V07 scene.
+          # Visual and 31-module Agent suites exercise the current V24 files.
+          VITE_TWIN_MODEL_URL: ${{ matrix.id == 'operations' && '/models/utility-tunnel.glb' || '' }}
         shell: bash
         run: |
           cd backend
