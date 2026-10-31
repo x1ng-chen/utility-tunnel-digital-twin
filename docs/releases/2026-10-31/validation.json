@@ -53,12 +53,14 @@
     "initialIssues": [
       "CI fetched V17 after sandbox moved to V24",
       "obsolete browser dashboard label and mobile bottom-rail contract",
-      "follow-redirects 1.16.1 production audit finding"
+      "follow-redirects 1.16.1 production audit finding",
+      "Legacy fullscreen drag coordinate hit the floating auto-location controls"
     ],
     "fixes": [
       "fetch current runtime GLBs without weakening hash checks",
       "assert current heading and accessible modal navigation",
-      "pin patched transitive version with canonical registry integrity"
+      "pin patched transitive version with canonical registry integrity",
+      "Choose a visible non-button rail point and assert the real foreground hit target before dragging"
     ]
   },
   "paidModelCalls": 0,
@@ -73,7 +75,7 @@
     "mobileAndThreeDesktopResolutions": "PASS",
     "desktopLayoutCurrentPanels": "PASS",
     "legacyAssetLedgerAndV07CameraJourney": "PASS",
-    "fullscreenRailDragAndDeviceSelection": "PASS",
+    "fullscreenRailDragAndDeviceSelection": "PASS_AFTER_FOREGROUND_HIT_TEST",
     "profile": "DISPOSABLE_LOCAL_DATABASE",
     "productionDatabaseTouched": false,
     "manualVisualAcceptance": false

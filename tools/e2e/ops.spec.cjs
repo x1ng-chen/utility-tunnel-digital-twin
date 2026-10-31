@@ -377,10 +377,15 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
   // retain click behavior and must not acquire drag capture.
   const box = await switcher.locator('.twin-quick-switch-heading').boundingBox();
   expect(box).not.toBeNull();
-  await page.mouse.move(box.x + 8, box.y + box.height / 2);
+  const dragX = box.x + box.width / 2, dragY = box.y + box.height / 2;
+  expect(await page.evaluate(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y);
+    return Boolean(hit?.closest('.twin-quick-switch')) && !hit.closest('button');
+  }, { x: dragX, y: dragY })).toBe(true);
+  await page.mouse.move(dragX, dragY);
   await expect(page.locator('.twin-fullscreen-fx.active')).toHaveCount(1);
   await page.mouse.down();
-  await page.mouse.move(box.x + 180, box.y + box.height / 2, { steps: 5 });
+  await page.mouse.move(dragX + 160, dragY, { steps: 5 });
   // Headless Chromium does not expose `(hover: hover) and (pointer: fine)`, so
   // it intentionally keeps the visual cursor hidden. The drag-state class is
   // the browser-independent contract that keeps the real desktop cursor alive.
