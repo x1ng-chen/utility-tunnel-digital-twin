@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-29",
+  "scope": "real_authenticated_voice_bridge_after_optimization",
+  "rows": [
+    {
+      "case": "identity",
+      "raw_input": "你叫什么名字",
+      "query_text": "你叫什么名字",
+      "spoken_reply": "我叫小管呀，管廊运维的事叫我就好。",
+      "mode": "explanation_only",
+      "characters": 17,
+      "milliseconds": 1594
+    },
+    {
+      "case": "thanks",
+      "raw_input": "谢谢",
+      "query_text": "谢谢",
+      "spoken_reply": "不客气，有事随时喊我。",
+      "mode": "explanation_only",
+      "characters": 11,
+      "milliseconds": 1390
+    },
+    {
+      "case": "missing_station",
+      "raw_input": "点现在是什么状态",
+      "query_text": "点现在是什么状态",
+      "spoken_reply": "你想查哪个检测点？说P1到P5就好。",
+      "mode": "explanation_only",
+      "characters": 18,
+      "milliseconds": 3032
+    },
+    {
+      "case": "p1",
+      "raw_input": "P一站点现在是什么状态",
+      "query_text": "P1站点现在是什么状态",
+      "spoken_reply": "P1其实没法给状态数据[E1]：快照是08:27的，7个物理标签一个都没登记进台账，CTRL-01节点返回空，模型版本也没激活，所以全部是无观测、待核验，不能当作在线或离线判断，也别拿它推气体安全。\n\n要不要我查告警或排障看是链路问题还是台账未迁移？",
+      "mode": "tool_verified",
+      "characters": 125,
+      "milliseconds": 3421
+    }
+  ],
+  "credentials_printed": false
+}

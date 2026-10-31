@@ -9,3 +9,7 @@ channels[daphne]>=4.3,<5.0
 # Temporary upstream security release; replace with the final 26.10.x release
 # after re-running the same audit, HTTP and WebSocket checks.
 Twisted==26.10.0rc1
+
+# Security floors for the transitive WebSocket and MessagePack packages.
+autobahn>=26.10.1,<27
+msgpack>=1.2.3,<2

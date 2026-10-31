@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-29",
+  "scope": "no_automatic_spoken_intro",
+  "voice_tests_passed": 124,
+  "backend_voice_route_tests_passed": 5,
+  "scene_classifier_removed": true,
+  "answer_content_and_verification_metadata_preserved": true,
+  "explicit_unknown_time_and_safety_limits_not_stripped": true,
+  "runtime_client_sha256": "780055814874a1bc2cf872b1962f8c219ed8c033e3dbd0f9d035edcc121d8ea4",
+  "live_cases": [
+    {
+      "case": "chat",
+      "question": "你是干什么的",
+      "reply": "我是小管，管廊运维助手，帮你看五站传感器状态、查告警、查趋势，也能出工单草案给你确认。要查哪个点就说编号。",
+      "mode": "explanation_only",
+      "milliseconds": 1922,
+      "fixed_intro_present": false
+    },
+    {
+      "case": "knowledge",
+      "question": "温湿度传感器是怎么工作的",
+      "reply": "温湿度模块一般把两类元件封装在一起：测温用热敏电阻或铂电阻，阻值随温度变化；测湿多用高分子电容式湿敏元件，吸放水汽后电容改变，电路再换算成百分比。工业型有的用热电偶或数字集成芯片。\n\n管廊里这类传感器靠RS485等总线把数值传给采集节点，所以“离线”通常指通信或供电问题，不代表环境本身如何。不过你现场具体型号的接线和量程，我这边还没查。",
+      "mode": "explanation_only",
+      "milliseconds": 1813,
+      "fixed_intro_present": false
+    },
+    {
+      "case": "site",
+      "question": "P1站点现在是什么状态",
+      "reply": "P1目前显示不出在线状态。快照时间2026-10-29 09:29，P1计划7个传感器，实际上台账登记0个、可用观测0个，活动模型版本也为空；CTRL-01的节点数据同样缺失，因此各检测项都显示未知或待核验[E1]。这更像身份或注册映射未完成，不是现场已确认停机；气体原始量未标定，不能据此判断安全。",
+      "mode": "tool_verified",
+      "milliseconds": 2609,
+      "fixed_intro_present": false
+    }
+  ],
+  "volume": 80,
+  "firmware_changed": false,
+  "credentials_printed": false,
+  "github_push_performed": false,
+  "health_http": {
+    "api": 200,
+    "voice": 200,
+    "breeze": 200
+  },
+  "deployed_hashes_verified": true
+}

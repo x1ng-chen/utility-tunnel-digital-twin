@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-29",
+  "scope": "stop_commands_in_speaking_and_listening",
+  "built": true,
+  "flashed": true,
+  "volume": 80,
+  "runtime_max_volume": 80,
+  "wake_words": [
+    "你好，小管",
+    "小管"
+  ],
+  "stop_words": [
+    "不用说了",
+    "闭嘴"
+  ],
+  "voice_id": "guanlang_playful_girl",
+  "wake_ack_tail_ms": 150,
+  "warm_input_skips_extra_120ms": true,
+  "artifacts": {
+    "bootloader/bootloader.bin": {
+      "bytes": 16640,
+      "sha256": "bc9c12a89867d4a3a3f4a9bcb1bc4b7c402a6ca50995d9c229fe1fee7def1317"
+    },
+    "partition_table/partition-table.bin": {
+      "bytes": 3072,
+      "sha256": "4811619cacae08ef2e0e71b7220c6033a346ca5da7ca179082408c963ef530b5"
+    },
+    "ota_data_initial.bin": {
+      "bytes": 8192,
+      "sha256": "7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f"
+    },
+    "generated_assets.bin": {
+      "bytes": 2951624,
+      "sha256": "80d109b00f376d695ee0c076336e7feeeb47fa9ea35a11f10665d0c01b337257"
+    },
+    "xiaozhi.bin": {
+      "bytes": 2406320,
+      "sha256": "23ed21f0a80b3b33bdae46db92dccc048724880ad4f68baa908af4af1f944e10"
+    },
+    "flasher_args.json": {
+      "bytes": 1218,
+      "sha256": "c392c12970446292b3b8762455506765c942c9bfecb93a52ed829117a5510ff4"
+    }
+  },
+  "assets_unchanged": true,
+  "wifi_device_credentials_otadata_preserved": true,
+  "write_offsets": [
+    "0x20000"
+  ],
+  "static_flash_images_verified": 4,
+  "source_patch_pristine_replay": {
+    "files": 9,
+    "text_equal_runtime_after_line_ending_normalization": true
+  },
+  "physical_test_pending": false,
+  "user_confirmed_stop_while_audio_playing": true,
+  "user_confirmed_stop_while_waiting_for_question": true,
+  "serial_stop_events": {
+    "不用说了": {
+      "state": "listening",
+      "ack_completed": true,
+      "returned_to_idle": true
+    },
+    "闭嘴": {
+      "state": "listening",
+      "ack_completed": true,
+      "returned_to_idle": true
+    }
+  },
+  "serial_note": "Logical Listening may begin before buffered speaker audio drains; both stop commands now accept that state. User confirmed both requested audible scenarios.",
+  "stop_ack": "好的，需要时请随时叫我",
+  "return_to_state": "idle",
+  "application_query_count_limit": "none",
+  "pending": [
+    "distance/noise testing",
+    "AEC evaluation",
+    "long-running reconnect testing"
+  ]
+}

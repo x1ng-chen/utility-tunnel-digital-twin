@@ -233,7 +233,7 @@ REST_FRAMEWORK = {
         'login_burst': os.getenv('LOGIN_BURST_RATE_LIMIT', '60/min'),
         'controller_command': os.getenv('CONTROLLER_COMMAND_RATE_LIMIT', '20/min'),
         'password_change': os.getenv('PASSWORD_CHANGE_RATE_LIMIT', '5/hour'),
-        'ai_assistant': os.getenv('AI_ASSISTANT_RATE_LIMIT', '20/hour'),
+        'ai_assistant': None if os.getenv('AI_ASSISTANT_RATE_LIMIT', 'none').strip().lower() == 'none' else os.getenv('AI_ASSISTANT_RATE_LIMIT').strip(),
     },
 }
 SECURE_CONTENT_TYPE_NOSNIFF = True

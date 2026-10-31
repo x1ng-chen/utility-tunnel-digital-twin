@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-28",
+  "text": "好的，需要时请随时叫我",
+  "voice_id": "guanlang_playful_girl",
+  "volume": 40,
+  "pcm_gain": 0.658915,
+  "sample_rate_hz": 48000,
+  "opus_frame_ms": 60,
+  "ogg_bytes": 10630,
+  "ogg_sha256": "f4f2ce9fff65e27820fcab2f919b46bda12e7275f2ba03d3df482cd3f5d87010",
+  "independent_asr_text": "好的需要时请随时叫我",
+  "independent_asr_exact_match": true,
+  "physical_playback_not_yet_tested": false,
+  "physical_playback_verified": true,
+  "user_confirmed_complete_reply": true,
+  "physical_report": "spoken-stop-test-report.json"
+}

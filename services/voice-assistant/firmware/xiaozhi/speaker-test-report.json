@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-27",
+  "mode": "offline_wake_and_manual_speaker_test",
+  "trigger": "BOOT_short_click",
+  "sound": "OGG_POPUP",
+  "expected_duration_ms": 540,
+  "automatic_play_on_startup": false,
+  "automatic_play_on_wake": false,
+  "speaker_ratings_measured": false,
+  "seller_pairing_confirmed_by_user": true,
+  "current_requested_volume": 20,
+  "current_runtime_volume_verified": true,
+  "loudness_accepted_by_user": true,
+  "post_playback_wake_verified": true,
+  "tests": [
+    {
+      "volume": 5,
+      "playback_started": 2,
+      "playback_drained": 2,
+      "tx_frames": 18,
+      "tx_samples": 51840,
+      "heard_by_user": true,
+      "human_feedback": "clear_but_too_quiet",
+      "timeout_observed": false,
+      "source_log": "device-speaker-boot-20261027-104235.log"
+    },
+    {
+      "volume": 10,
+      "playback_started": 2,
+      "playback_drained": 2,
+      "tx_frames": 18,
+      "tx_samples": 51840,
+      "heard_by_user": true,
+      "human_feedback": "still_too_quiet",
+      "timeout_observed": false,
+      "source_log": "device-speaker-volume10-20261027-115447.log"
+    },
+    {
+      "volume": 20,
+      "playback_started": 2,
+      "playback_drained": 2,
+      "tx_frames": 18,
+      "tx_samples": 51840,
+      "heard_by_user": true,
+      "human_feedback": "volume_suitable_and_clear",
+      "timeout_observed": false,
+      "source_log": "device-speaker-volume20-20261027-121516.log"
+    }
+  ],
+  "preferred_output_volume": 20,
+  "post_playback_session": {
+    "source_log": "device-speaker-wake-20261027-122431.log",
+    "playback_started_uptime_ms": 588290,
+    "playback_drained_uptime_ms": 589150,
+    "wake_detected_uptime_ms": 591430,
+    "delay_after_drain_ms": 2280,
+    "wake_events_observed": 1,
+    "reboot_between_playback_and_wake": false,
+    "note": "Monitor stopped at first post-playback wake; second utterance not counted."
+  }
+}

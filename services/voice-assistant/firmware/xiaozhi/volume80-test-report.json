@@ -1,0 +1,168 @@
+{
+  "date": "2026-10-29",
+  "scope": "volume80_and_continuous_dialogue",
+  "user_confirmed_continuous_answers": true,
+  "user_confirmed_volume80_clear": true,
+  "volume80_seen_in_codec_and_ack_logs": true,
+  "warm_input_path_observed": true,
+  "echo_tail_ms_observed": 150,
+  "explicit_warm_wait_reduction_ms_by_code": 270,
+  "controlled_p1_microphone_accuracy_measured": false,
+  "first_p1_attempt_excluded_user_said_not_performed": true,
+  "user_feedback": "连续回答正常，音量80清楚",
+  "controlled_math_sequence_seen_in_serial": false,
+  "math_and_followup_separately_verified_by_real_deepseek_api": true,
+  "firmware_app_sha256": "17dfe13db3c9f68e557e1b06948efdd059f2bfff4b09a34c8b64cb86548c8231",
+  "audio_scope": "user listening plus device markers; not an acoustic accuracy benchmark",
+  "device_markers": [
+    {
+      "elapsed_ms": 510,
+      "line": "I (371) StateMachine: State: unknown -> starting"
+    },
+    {
+      "elapsed_ms": 545,
+      "line": "I (411) AudioCodec: Set output volume to 80"
+    },
+    {
+      "elapsed_ms": 3409,
+      "line": "I (3271) StateMachine: State: starting -> activating"
+    },
+    {
+      "elapsed_ms": 3666,
+      "line": "I (3531) StateMachine: State: activating -> idle"
+    },
+    {
+      "elapsed_ms": 4922,
+      "line": "Command 1: ni hao xiao guan"
+    },
+    {
+      "elapsed_ms": 4925,
+      "line": "Command 2: xiao guan"
+    },
+    {
+      "elapsed_ms": 4928,
+      "line": "Command 3: bu yong shuo le"
+    },
+    {
+      "elapsed_ms": 4929,
+      "line": "Command 4: bi zui"
+    },
+    {
+      "elapsed_ms": 5008,
+      "line": "I (4861) Application: Startup wake word hint: 说「你好，小管 / 小管」就能唤醒我。"
+    },
+    {
+      "elapsed_ms": 8455,
+      "line": "I (8311) StateMachine: State: idle -> connecting"
+    },
+    {
+      "elapsed_ms": 8571,
+      "line": "I (8431) AudioCodec: Set output volume to 80"
+    },
+    {
+      "elapsed_ms": 8576,
+      "line": "I (8431) Application: VOICE NETWORK ACK: start, volume=80"
+    },
+    {
+      "elapsed_ms": 11019,
+      "line": "I (10891) Application: VOICE NETWORK ACK: playback drained; echo tail=150ms"
+    },
+    {
+      "elapsed_ms": 11172,
+      "line": "I (11041) Application: VOICE NETWORK ACK: drained; start listening"
+    },
+    {
+      "elapsed_ms": 11177,
+      "line": "I (11041) StateMachine: State: connecting -> listening"
+    },
+    {
+      "elapsed_ms": 11202,
+      "line": "I (11071) AudioService: VOICE INPUT: warm microphone; capture without startup delay"
+    },
+    {
+      "elapsed_ms": 20791,
+      "line": "I (20661) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 39985,
+      "line": "I (39851) StateMachine: State: speaking -> listening"
+    },
+    {
+      "elapsed_ms": 40004,
+      "line": "I (39871) AudioService: VOICE INPUT: warm microphone; capture without startup delay"
+    },
+    {
+      "elapsed_ms": 100325,
+      "line": "I (100181) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 121956,
+      "line": "I (121821) StateMachine: State: speaking -> listening"
+    },
+    {
+      "elapsed_ms": 121994,
+      "line": "I (121861) AudioService: VOICE INPUT: warm microphone; capture without startup delay"
+    },
+    {
+      "elapsed_ms": 140952,
+      "line": "I (140821) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 163359,
+      "line": "I (163221) StateMachine: State: speaking -> listening"
+    },
+    {
+      "elapsed_ms": 163394,
+      "line": "I (163261) AudioService: VOICE INPUT: warm microphone; capture without startup delay"
+    },
+    {
+      "elapsed_ms": 165649,
+      "line": "I (165511) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 184060,
+      "line": "I (183931) StateMachine: State: speaking -> listening"
+    },
+    {
+      "elapsed_ms": 184096,
+      "line": "I (183961) AudioService: VOICE INPUT: warm microphone; capture without startup delay"
+    },
+    {
+      "elapsed_ms": 190971,
+      "line": "I (190841) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 204530,
+      "line": "I (204401) StateMachine: State: speaking -> listening"
+    },
+    {
+      "elapsed_ms": 204556,
+      "line": "I (204421) AudioService: VOICE INPUT: warm microphone; capture without startup delay"
+    },
+    {
+      "elapsed_ms": 215715,
+      "line": "I (215581) StateMachine: State: listening -> speaking"
+    },
+    {
+      "elapsed_ms": 232943,
+      "line": "I (232801) Application: VOICE STOP: detected=闭嘴; cancelling current reply"
+    },
+    {
+      "elapsed_ms": 232993,
+      "line": "I (232861) AudioCodec: Set output volume to 80"
+    },
+    {
+      "elapsed_ms": 233011,
+      "line": "I (232881) Application: VOICE STOP ACK: start, volume=80"
+    },
+    {
+      "elapsed_ms": 235675,
+      "line": "I (235541) StateMachine: State: speaking -> idle"
+    },
+    {
+      "elapsed_ms": 235679,
+      "line": "I (235541) Application: VOICE STOP ACK: complete; return to idle"
+    }
+  ],
+  "raw_microphone_transcripts_not_copied_to_project": true
+}

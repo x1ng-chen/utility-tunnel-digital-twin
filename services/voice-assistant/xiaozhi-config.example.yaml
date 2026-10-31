@@ -1,0 +1,35 @@
+# Merge only this fragment into the upstream data/.config.yaml.
+# ASR/TTS, device authentication and network bindings still need explicit configuration.
+# Do not replace the complete upstream configuration with this file.
+selected_module:
+  LLM: UtilityTunnel
+  TTS: BreezeLocal
+  Intent: nointent
+  Memory: nomem
+LLM:
+  UtilityTunnel:
+    type: utility_tunnel
+    platform_url: http://127.0.0.1:8000/api
+    request_timeout_seconds: 65
+# The Django API already occupies 8000 locally; choose other voice ports.
+server:
+  port: 8941
+  http_port: 8942
+
+# Local saved voice; see server/breeze-local.md for installation and startup.
+TTS:
+  BreezeLocal:
+    type: breeze_local
+    base_url: http://127.0.0.1:7861
+    voice_id: guanlang_playful_girl
+    tts_timeout: 45
+    max_text_chars: 2000
+    max_frames: 750
+    max_audio_bytes: 8388608
+
+# Normalized (punctuation-free) forms match the two local board wake aliases.
+wakeup_words:
+  - 你好小管
+  - 小管
+enable_greeting: false
+enable_wakeup_words_response_cache: false

@@ -1,0 +1,128 @@
+{
+  "schema": "ut.voice.breeze.http_test.v1",
+  "tested_at": "2026-10-27T10:02:59.813344+00:00",
+  "runtime_tag": "v0.1.3",
+  "runtime_archive_sha256": "d31feee5380e0609dc44b537d22cbe4f3cf8e93495756f3a580d8b448db79f7f",
+  "server_executable_sha256": "909ab24b1f8ef15d8f9660ec64834223e773c7a52d9298160313a26835551623",
+  "model_sha256": "483418fbbb438f5f1c08dbe2b017e42db0f1d126765cd3f772d8622a30a4915c",
+  "model_hash_verification": "Verified in full by main thread before this test",
+  "model_bytes": 2538909376,
+  "voice_id": "guanlang_female",
+  "saved_voice_file_sha256": "080e1ffd32c78cc41b84e38c01b7c76bc071d1e9580c0a08b17f87b5782923f8",
+  "host": "127.0.0.1",
+  "http_port": 7861,
+  "websocket_port": 7862,
+  "fixed_test_text": "我在。",
+  "user_recording_used": false,
+  "computer_audio_played": false,
+  "django_called": false,
+  "deepseek_called": false,
+  "external_network_used": false,
+  "private_tts_selection_modified": false,
+  "owned_process_started": true,
+  "checks": {
+    "ports_free_before_start": {
+      "7861": true,
+      "7862": true
+    },
+    "health": {
+      "status": "ok",
+      "sample_rate": 24000,
+      "ws_port": 7862,
+      "startup_seconds": 21.438
+    },
+    "saved_voice": {
+      "id": "guanlang_female",
+      "saved": true,
+      "frames": 78,
+      "seconds": 6.24
+    },
+    "http_client": {
+      "ok": true,
+      "wav_path": "D:\\ut-voice\\breeze-tts2\\samples\\http-client-test.wav",
+      "sha256": "2ff57e05dfaa3721ce0910439f86e8b567a5bb643e8a7506d50af25c4b1c2d4b",
+      "bytes": 73004,
+      "sample_rate": 24000,
+      "channels": 1,
+      "sample_width_bytes": 2,
+      "sample_frames": 36480,
+      "duration_seconds": 1.52,
+      "request_seconds": 1.375
+    },
+    "provider_opus": {
+      "ok": true,
+      "http_requests": 1,
+      "wav_sha256": "ac008c15906526e3fea7930b43bb00048d642bd0f6ad5216ccdd6e2a99ad3891",
+      "wav_sample_frames": 36480,
+      "wav_duration_seconds": 1.52,
+      "connection_sample_rate": 24000,
+      "opus_frame_duration_ms": 60,
+      "samples_per_packet": 1440,
+      "expected_packets": 26,
+      "actual_packets": 26,
+      "all_packets_native_decoded": true,
+      "queued_sentence_id_preserved": true,
+      "FIRST_messages": 1,
+      "LAST_messages": 0,
+      "packet_audio_duration_seconds": 1.56,
+      "request_seconds": 0.812
+    },
+    "auxiliary_asr": {
+      "client_wav_text": "我在",
+      "provider_decoded_opus_text": "我在我在",
+      "expected_text": "我在",
+      "client_matches": true,
+      "provider_matches": false,
+      "semantic_quality_note": "Fixed synthetic test text only; not general quality or end-to-end validation."
+    },
+    "offline_opus_control": {
+      "source_wav": "D:\\ut-voice\\breeze-tts2\\samples\\http-client-test.wav",
+      "decoded_wav": "D:\\ut-voice\\breeze-tts2\\samples\\http-client-opus-roundtrip.wav",
+      "decoded_wav_sha256": "526da0904f618530f8d31e2da0dbb38ce0d3f68ed7bccabce05858a3bb91c3ee",
+      "packet_count": 26,
+      "decoded_duration_seconds": 1.56,
+      "asr_text": "我在",
+      "asr_matches_expected": true,
+      "max_source_signal_correlation_after_delay_alignment": 0.977638,
+      "alignment_delay_samples_at_24k": 156,
+      "note": "Offline Opus round trip of the HTTP client artifact. No Breeze server was started; ASR is auxiliary."
+    }
+  },
+  "deployed_adapters": {
+    "breeze_local.py": "4ceeb51ab34f317a28a971f72712a60daec27d1fea507a818d2e27dfb17ed958",
+    "breeze_client.py": "236ecb25b7cd2aca172394bb554b14fbbe777ac2950242761bb02a011d0064ba"
+  },
+  "server_log_path": "D:\\ut-voice\\breeze-tts2\\http-test-server.log",
+  "owned_process_stopped": true,
+  "owned_process_exit_code": 1,
+  "ports_released_after_stop": {
+    "7861": true,
+    "7862": true
+  },
+  "ports_bindable_after_stop": {
+    "7861": true,
+    "7862": true
+  },
+  "private_config_unchanged": true,
+  "test_success": true,
+  "not_verified": [
+    "physical_ESP32_playback",
+    "user_voice_preference",
+    "Django_DeepSeek_conversation",
+    "device_admission",
+    "long_text_semantic_completeness",
+    "production_license"
+  ],
+  "contract_test_success": true,
+  "test_success_definition": "HTTP/WAV/Opus/cleanup contracts only; auxiliary ASR equality is reported separately.",
+  "semantic_quality_verified": false,
+  "auxiliary_asr_all_matches": false,
+  "ports_rechecked_after_offline_control": {
+    "checked_at": "2026-10-27T11:23:37.151705+00:00",
+    "released": {
+      "7861": true,
+      "7862": true
+    }
+  },
+  "additional_breeze_process_started_for_offline_control": false
+}

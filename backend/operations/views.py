@@ -119,7 +119,7 @@ class StationInspectionView(APIView):
 class AiAssistantView(APIView):
     permission_classes = [AuthenticatedRead]
     throttle_classes = [AiAssistantRateThrottle]
-    page_names = {'运行总览', '告警中心', '工单中心', '设备台账', '三维孪生', 'GIS 总览', '数据洞察', '资产配置', '空间配置', '系统配置', '审计追踪', '页面未找到'}
+    page_names = {'运行总览', '告警中心', '工单中心', '设备台账', '三维孪生', 'GIS 总览', '数据洞察', '资产配置', '空间配置', '系统配置', '审计追踪', '页面未找到', 'voice'}
 
     def post(self, request):
         payload = object_payload(request)
@@ -480,7 +480,7 @@ class LoginView(APIView):
             authenticated.last_login = timezone.now()
             authenticated.save(update_fields=['last_login'])
             audit(authenticated, 'auth.login', 'app_user', authenticated.pk, {'email': authenticated.email}, request_id(request))
-        return Response({'accessToken': token.key, 'tokenType': 'Bearer', 'user': {'id': authenticated.pk, 'email': authenticated.email, 'displayName': profile.display_name or authenticated.email, 'role': Profile.Role.ADMINISTRATOR if authenticated.is_superuser else profile.role}})
+        return Response({'accessToken': token.key, 'tokenType': 'Bearer', 'tokenExpiresAt': (token.created + timedelta(seconds=settings.API_TOKEN_TTL_SECONDS)).isoformat(), 'tokenExpiresIn': max(0, int((token.created + timedelta(seconds=settings.API_TOKEN_TTL_SECONDS) - timezone.now()).total_seconds())), 'user': {'id': authenticated.pk, 'email': authenticated.email, 'displayName': profile.display_name or authenticated.email, 'role': Profile.Role.ADMINISTRATOR if authenticated.is_superuser else profile.role}})
 
 
 class MeView(APIView):

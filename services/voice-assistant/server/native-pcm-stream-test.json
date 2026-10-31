@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-28",
+  "scope": "real_breeze_http_to_native_streaming_opus",
+  "voice_id": "guanlang_playful_girl",
+  "physical_board_tested": false,
+  "model_api_called": false,
+  "text_chars": 103,
+  "first_packet_ms": 1203,
+  "complete_synthesis_ms": 14625,
+  "first_packet_precedes_completion": true,
+  "opus_packets": 400,
+  "all_packets_decoded": true,
+  "sample_rate": 16000,
+  "duration_seconds": 24.0,
+  "output_sha256": "490b3d98d3bed0f1817f0fa1072aa11ff401f2eff9091b5332e664d4125eefa4",
+  "credentials_printed": false
+}

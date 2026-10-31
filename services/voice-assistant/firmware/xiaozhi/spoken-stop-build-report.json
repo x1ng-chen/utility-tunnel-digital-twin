@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-28",
+  "scope": "network_spoken_stop",
+  "build_verified": true,
+  "commands": [
+    "不用说了",
+    "闭嘴"
+  ],
+  "reply": "好的，需要时请随时叫我",
+  "voice_id": "guanlang_playful_girl",
+  "volume": 40,
+  "after_reply": "idle",
+  "artifacts": {
+    "bootloader/bootloader.bin": {
+      "bytes": 16640,
+      "sha256": "bc9c12a89867d4a3a3f4a9bcb1bc4b7c402a6ca50995d9c229fe1fee7def1317"
+    },
+    "partition_table/partition-table.bin": {
+      "bytes": 3072,
+      "sha256": "4811619cacae08ef2e0e71b7220c6033a346ca5da7ca179082408c963ef530b5"
+    },
+    "ota_data_initial.bin": {
+      "bytes": 8192,
+      "sha256": "7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f"
+    },
+    "generated_assets.bin": {
+      "bytes": 2951621,
+      "sha256": "1e610e12bcbee464eabff62432a870270f76df9acf56d0d9e3d2a05dd2ee888b"
+    },
+    "xiaozhi.bin": {
+      "bytes": 2405968,
+      "sha256": "422b073429d85d184e703435ff987f03fa16845895a7e33c09d3a9475a439ee4"
+    },
+    "flasher_args.json": {
+      "bytes": 1218,
+      "sha256": "c392c12970446292b3b8762455506765c942c9bfecb93a52ed829117a5510ff4"
+    }
+  },
+  "four_non_application_build_artifacts_unchanged": true,
+  "no_private_json_credentials_embedded": true,
+  "app_fits_partition": true,
+  "flash_offset": "0x20000",
+  "application_only_flash_planned": true,
+  "device_mac_verified": true,
+  "device_flashed": true,
+  "physical_test_pending": false,
+  "application_only_flash_verified": true,
+  "static_flash_images_verified": 4,
+  "runtime_ota_and_nvs_preserved": true,
+  "two_commands_and_rewake_user_verified": true
+}

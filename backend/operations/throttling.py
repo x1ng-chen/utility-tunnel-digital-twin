@@ -81,7 +81,7 @@ class ControllerCommandRateThrottle(SimpleRateThrottle):
 
 
 class AiAssistantRateThrottle(SimpleRateThrottle):
-    """Keep paid assistant requests within a per-user budget."""
+    """Apply an optional per-user assistant budget when configured."""
 
     scope = 'ai_assistant'
 

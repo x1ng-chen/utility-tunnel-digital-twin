@@ -1,0 +1,108 @@
+{
+  "schema": "ut.voice.server.sources.v1",
+  "server": {
+    "repository": "https://github.com/xinnan-tech/xiaozhi-esp32-server",
+    "commit": "a377d89dcd58e6e18417a57e9357c0dd23657746",
+    "source_archive_url": "https://codeload.github.com/xinnan-tech/xiaozhi-esp32-server/zip/a377d89dcd58e6e18417a57e9357c0dd23657746",
+    "source_archive_sha256": "1e491bde7d72a432af535b458e8341af9b9f28c58818315b85cf2934c2e4fa3d",
+    "server_path": "D:\\ut-voice\\server",
+    "date": "2026-10-27",
+    "started": false,
+    "source_server_path": "D:\\ut-voice\\xiaozhi-server-source\\xiaozhi-esp32-server-a377d89dcd58e6e18417a57e9357c0dd23657746\\main\\xiaozhi-server",
+    "python_version": "3.12.14",
+    "python_note": "Independent venv; selected CPU-only ONNX providers, no changes to Django venv."
+  },
+  "asr": {
+    "name": "sherpa-onnx-paraformer-zh-small-2024-03-09",
+    "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-paraformer-zh-small-2024-03-09.tar.bz2",
+    "archive_bytes": 77920048,
+    "archive_sha256": "da92b3db5218c5be53aad53e57d1b6e63e7fc98a0e054fbdd6dbe18e9c6b1450",
+    "files": {
+      "model.int8.onnx": {
+        "bytes": 81828675,
+        "sha256": "3ef6c19369b912f7caf3cef8e545c5ccd1a33d9d7ec792a46668dc41c4b229ec"
+      },
+      "tokens.txt": {
+        "bytes": 75352,
+        "sha256": "4b2d964e18b9cf139b473003b6698fb2ed9a2a5ec55b93daa677b28f578897aa"
+      }
+    }
+  },
+  "opus": {
+    "package_url": "https://conda.anaconda.org/conda-forge/win-64/libopus-1.6.1-h6a83c73_1.conda",
+    "package_sha256": "0ca8a5f9c6505344d3c57068b50d2cfffe497e3ce1aa697deb46d8ab502d3cfa",
+    "version": "1.6.1",
+    "dll_path": "D:\\ut-voice\\voice-server-venv\\Scripts\\opus.dll",
+    "dll_sha256": "39b603e3d9594748f9d08ebd3f5b5afb2b4976181f9162497487aafa26d54805",
+    "bytes": 474624
+  },
+  "vad": {
+    "source": "Included in the pinned server source archive",
+    "file": "models/snakers4_silero-vad/src/silero_vad/data/silero_vad.onnx",
+    "sha256": "2623a2953f6ff3d2c1e61740c6cdb7168133479b267dfef114a4a3cc5bdd788f"
+  },
+  "ffmpeg": {
+    "distribution": "imageio-ffmpeg==0.6.0",
+    "bundled_filename": "ffmpeg-win-x86_64-v7.1.exe",
+    "sha256": "2ce797a0f88d7f067180338fb227f7b1928ea727bd9a4d7a1d022f7c52af71a3"
+  },
+  "adapters": {
+    "windows_sapi.py": "d9f0386db86099d242b23705eeb6949934698b0fd575a7cb69551757f4f31cf0",
+    "sapi_client.py": "c9485d801d85d01d460467fd5017d28993c4846009047015ba1900b1381b7b6c",
+    "sapi_worker.ps1": "37b4d05235f9ee4e276262e877ace6f988c9f4ed72ec498dae264c91679eba37",
+    "breeze_client.py": "a2e2c107c373d79fb53d36887d093eb0cc41a84ab28004d1a694158ff63d3150",
+    "breeze_local.py": "5d3f75a9a249d3567cc6d4564c8f374a93941a562abe39829b2a088b62f5d90e"
+  },
+  "verified_archives": {
+    "server": true,
+    "asr": true,
+    "opus_dll": true,
+    "vad_original_matches_runtime": true
+  },
+  "requirements_selected_sha256": "d03187c56859eb7f19bc1956809d3eb1f317de4632c762231ca6b47b837a1289",
+  "requirements_lock_sha256": "941c86fce06b384934599a02c10ec8883535056818c72067ff6cf0ac8b77c467",
+  "deployed_adapters": {
+    "core/providers/tts/windows_sapi.py": "d9f0386db86099d242b23705eeb6949934698b0fd575a7cb69551757f4f31cf0",
+    "core/providers/tts/sapi_client.py": "c9485d801d85d01d460467fd5017d28993c4846009047015ba1900b1381b7b6c",
+    "core/providers/tts/sapi_worker.ps1": "37b4d05235f9ee4e276262e877ace6f988c9f4ed72ec498dae264c91679eba37",
+    "core/providers/llm/utility_tunnel/__init__.py": "bed4120b97814e0b1b3c6543c782fa5564a41e0102657ac143a06ffdd507d0f9",
+    "core/providers/llm/utility_tunnel/client.py": "780055814874a1bc2cf872b1962f8c219ed8c033e3dbd0f9d035edcc121d8ea4",
+    "core/providers/llm/utility_tunnel/utility_tunnel.py": "5b95e8cbeeccd5eca8a2d8ea9bcc1de44909ec1ecfa249d619734ee4ea16af8c",
+    "core/providers/tts/breeze_client.py": "a2e2c107c373d79fb53d36887d093eb0cc41a84ab28004d1a694158ff63d3150",
+    "core/providers/tts/breeze_local.py": "5d3f75a9a249d3567cc6d4564c8f374a93941a562abe39829b2a088b62f5d90e",
+    "core/providers/llm/utility_tunnel/viewer_session.py": "c2eeaccf77764eae8bf3b55c3f58c3e5f82047716b80461bc0f01c16dbd89f35",
+    "core/providers/llm/utility_tunnel/renewing.py": "88663844346931d83b2a76f9830cf054c58be7c8083e7a8c847bc819db3db351",
+    "core/providers/llm/utility_tunnel/speech_input.py": "fa307305e3e2946489f3c93bf64d1ddf1543833592f0259a3aac64d8cd4de1a8"
+  },
+  "preferred_voice_manifest_sha256": "7d1e7df1279e978832eca8780ad7cdcfd60ab714054852ea000fe7a125bdc068",
+  "breeze_preferred": {
+    "voice_id": "guanlang_playful_girl",
+    "base_url": "http://127.0.0.1:7861",
+    "runtime_tag": "v0.1.3",
+    "model_sha256": "483418fbbb438f5f1c08dbe2b017e42db0f1d126765cd3f772d8622a30a4915c",
+    "saved_voice_sha256": "e6602a25e7a1ab679b0d5a17688aaed825af35ae2c46cd6c4261b742cfc6aa0b",
+    "ack_sha256": "93219e91a118aa4c0da26cb4a4db7b52bfff8d81166815d7fee8ffbcd61b1554",
+    "preferred_voice_http_tested": false
+  },
+  "startup_scripts": {
+    "start-breeze-local.ps1": "b5c8064c15cc3c1974eab528913aa69a91978d61140bba6abf44e2af45adb043",
+    "run_breeze_local.py": "cf17832a77472bf3cbdb5efc97854e584ae5809095b59721f8e43bbe2c70bd72",
+    "preflight.py": "1adb2f59185ca8b215f5c26a0e60ca45b4150d0bf82a1c95ec69ae701ecc7792",
+    "restricted_voice_server.py": "9d1714d063750f3fd8d5112567f2c4265d1a70853dd165ac16068b97b6d4158d"
+  },
+  "viewer_session_helpers": {
+    "server/viewer_session.py": "c2f65136f7ced465ba9e7d9192861edd5ab6a7403bf75ae2dc3e15d9269c0ba0",
+    "xiaozhi_adapter/utility_tunnel/viewer_session.py": "c2eeaccf77764eae8bf3b55c3f58c3e5f82047716b80461bc0f01c16dbd89f35",
+    "xiaozhi_adapter/utility_tunnel/renewing.py": "88663844346931d83b2a76f9830cf054c58be7c8083e7a8c847bc819db3db351"
+  },
+  "voice_quality": {
+    "date": "2026-10-29",
+    "business_spelling_normalization": true,
+    "missing_station_not_inferred": true,
+    "natural_social_replies": true,
+    "full_voice_tests_passed": 124,
+    "general_knowledge_and_followups": true,
+    "automatic_spoken_intros": false,
+    "reply_and_verification_metadata_pass_through": true
+  }
+}

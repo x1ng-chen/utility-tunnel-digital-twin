@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-28",
+  "clean_git_apply_check": true,
+  "clean_applied_files_match_runtime_ignoring_newline_style": true,
+  "upstream_files": [
+    "main/CMakeLists.txt",
+    "main/Kconfig.projbuild",
+    "main/application.cc",
+    "main/application.h",
+    "main/audio/audio_service.cc",
+    "main/audio/wake_words/custom_wake_word.cc",
+    "main/display/oled_display.cc",
+    "main/ota.cc",
+    "main/protocols/websocket_protocol.cc"
+  ],
+  "overlay_files_match_runtime": [
+    "config.h",
+    "utility_tunnel_s3.cc",
+    "config.json",
+    "wake_ack.h",
+    "provisioning.h",
+    "provisioning.cc",
+    "ut_wake_ack.ogg",
+    "ut_stop_ack.ogg"
+  ],
+  "patch_sha256": "c860b190dd991a8c4e913a1ab46b5347c8f0bb101021adcc31dba511d1601784",
+  "wake_commands": [
+    "ni hao xiao guan",
+    "xiao guan"
+  ],
+  "old_wake_removed_at_registration": true,
+  "spoken_stop_preserved": true
+}

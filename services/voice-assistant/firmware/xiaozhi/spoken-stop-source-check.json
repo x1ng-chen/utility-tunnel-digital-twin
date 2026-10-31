@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-28",
+  "upstream_commit": "c435f99a88066029ec2dbd2d758c8cc9d051565b",
+  "clean_git_apply_check": true,
+  "clean_applied_files_equal_runtime_normalized_newlines": true,
+  "upstream_files": [
+    "main/CMakeLists.txt",
+    "main/Kconfig.projbuild",
+    "main/application.cc",
+    "main/application.h",
+    "main/audio/audio_service.cc",
+    "main/audio/wake_words/custom_wake_word.cc",
+    "main/display/oled_display.cc",
+    "main/ota.cc",
+    "main/protocols/websocket_protocol.cc"
+  ],
+  "overlay_files_equal_runtime": [
+    "config.h",
+    "utility_tunnel_s3.cc",
+    "config.json",
+    "wake_ack.h",
+    "provisioning.h",
+    "provisioning.cc",
+    "ut_wake_ack.ogg",
+    "ut_stop_ack.ogg"
+  ],
+  "patch_sha256": "96f2088148bc665d077aeea566c5c947ddfd0a40e59ba71d2d66aefe06520bed"
+}

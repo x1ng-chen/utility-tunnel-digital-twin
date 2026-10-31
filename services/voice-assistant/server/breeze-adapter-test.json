@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-27",
+  "unit_test_command": "python -B -m unittest discover -s services/voice-assistant/tests -p test_breeze.py -v",
+  "unit_tests_passed": 26,
+  "unit_failures": 0,
+  "preflight_all_local_checks_passed": true,
+  "launcher_check_only_passed": true,
+  "selected_provider": "BreezeLocal",
+  "selected_voice_id": "guanlang_playful_girl",
+  "saved_voice_and_sample_hashes_verified": true,
+  "preferred_voice_http_tested_this_step": false,
+  "service_started": false,
+  "full_voice_assistant_verified": false
+}

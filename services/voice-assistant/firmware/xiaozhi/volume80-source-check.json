@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-29",
+  "clean_patch_verified_report": "listen-onset-source-check.json",
+  "current_patch_sha256": "8176ec80c1c9c32c85cef129c58ba9c853bc1342c4f9e9777b3ba80a1309e43a",
+  "overlay_runtime_equal": true,
+  "overlay_sha256": {
+    "config.h": "e18050af2a0e3a650ac9c94c4c4d9a64b473e9a4187c1e041554d55df9a8685a",
+    "utility_tunnel_s3.cc": "9c5bb535aff9a2cb6b499ac233a9aa9c95187df2348604d4e9960b8694f40196",
+    "config.json": "2d0606228dd69bd8e50251d2f630afb4ff2108e57b2b425bc226b7dd6ad3fa30",
+    "wake_ack.h": "4a77b1406d3c627a99d53314a49a8552ae4b72f55b8c7eff4f6c7aeec416d742",
+    "provisioning.h": "72e5406ff702164aec91a31ba7c69691eada3a7840ad6b99a854ee98b6f50819",
+    "provisioning.cc": "b2f68b78fbee011ba86cca94d734a21cc12ea1aefc088e5e19ac00ff30c64239",
+    "ut_wake_ack.ogg": "cdf81cb01de8563d3b871ac322dc5ae84b65bb7f1a9acad0e16ddeae3b223e91",
+    "ut_stop_ack.ogg": "f4f2ce9fff65e27820fcab2f919b46bda12e7275f2ba03d3df482cd3f5d87010"
+  },
+  "start_and_runtime_max_volume": 80,
+  "assets_unchanged": true
+}

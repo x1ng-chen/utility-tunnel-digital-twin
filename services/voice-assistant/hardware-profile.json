@@ -1,0 +1,283 @@
+{
+  "schema_version": 1,
+  "status": "deepseek_continuous_voice_verified_volume80",
+  "reviewed_on": "2026-10-29",
+  "chip": "ESP32-S3",
+  "flash_mb": 16,
+  "psram_mb": 8,
+  "capacity_evidence": "esptool_chip_features_flash_id_and_runtime_psram_initialization",
+  "role": "dedicated_voice_terminal",
+  "shares_rs485_gateway": false,
+  "board": {
+    "family": "DevKitC-1-style dual-USB core board",
+    "exact_vendor_revision": null,
+    "evidence": "user_photos_1_2"
+  },
+  "microphone": {
+    "interface": "I2S",
+    "candidate_chip": "INMP441",
+    "chip_identity_confirmed": false,
+    "channel": "left",
+    "power_rail": "3V3",
+    "pins": {
+      "ws": 4,
+      "sck": 5,
+      "sd": 6,
+      "lr": "GND"
+    },
+    "interface_compatible_with_current_firmware": true,
+    "exact_chip_identity_verified": false
+  },
+  "amplifier": {
+    "model": "MAX98357A",
+    "evidence": "photo_7_silkscreen",
+    "power_rail": "5V",
+    "pins": {
+      "din": 7,
+      "bclk": 15,
+      "lrc": 16,
+      "sd": "3V3",
+      "gain": "unconnected"
+    },
+    "output_sample_rate_hz": 48000,
+    "playback_tested": true,
+    "wiring_reported_connected_by_user": true
+  },
+  "speaker": {
+    "impedance_ohm": null,
+    "rated_power_w": null,
+    "compatible_load_confirmed": false,
+    "output_wiring": "amplifier_OUT_PLUS_and_OUT_MINUS_only",
+    "pairing_confirmed_by_user": true,
+    "compatibility_basis": "user_confirms_seller_supplied_matching_amplifier_and_speaker",
+    "rated_specifications_still_unknown": true,
+    "playback_test_passed": true,
+    "heard_clear_by_user_at_volume": 80,
+    "user_requested_louder": false,
+    "user_reported_too_quiet_volumes": [
+      5,
+      10
+    ],
+    "preferred_output_volume": "persistent_user_setting",
+    "loudness_accepted_by_user": true,
+    "volume40_requested_by_user": true,
+    "last_user_accepted_volume": 80,
+    "volume80_requested_by_user": true
+  },
+  "display": {
+    "interface": "I2C",
+    "controller": null,
+    "resolution": null,
+    "candidate_controller": "SSD1306",
+    "candidate_resolution": "128x32",
+    "firmware_enabled": true,
+    "reserved_pins": {
+      "sda": 41,
+      "scl": 42
+    },
+    "driver_configuration": {
+      "controller": "SSD1306-compatible",
+      "width": 128,
+      "height": 32,
+      "bus_hz": 100000,
+      "probe_addresses": [
+        "0x3c",
+        "0x3d"
+      ]
+    },
+    "controller_identity_confirmed": false,
+    "resolution_verified": false,
+    "visual_test_passed": true,
+    "wiring_reported_connected_by_user": true,
+    "i2c_address": "0x3c",
+    "i2c_probe_verified": true,
+    "driver_compatibility_verified": true,
+    "configured_layout_verified": true,
+    "automatic_idle_return_verified": true,
+    "idle_return_delay_ms": 2135,
+    "latest_idle_return_delay_range_ms": [
+      2130,
+      2140
+    ],
+    "ui": "full-screen idle eyes; docked eyes while active; text-free mouth animation while speaking"
+  },
+  "wake_word": {
+    "chinese": "你好，小管",
+    "pinyin": "ni hao xiao guan",
+    "engine": "ESP-SR MultiNet",
+    "threshold_percent": 20,
+    "threshold_is_starting_value": true,
+    "first_detection_verified": true,
+    "repeat_without_reboot_verified": true,
+    "successful_detections_observed": 4,
+    "hit_rate_measured": false,
+    "aliases": [
+      {
+        "chinese": "你好，小管",
+        "pinyin": "ni hao xiao guan"
+      },
+      {
+        "chinese": "小管",
+        "pinyin": "xiao guan"
+      }
+    ],
+    "retired": [
+      "你好管廊"
+    ],
+    "new_aliases_physical_test_pending": false,
+    "previous_phrase_tests_preserved_in": "firmware/xiaozhi/spoken-stop-test-report.json",
+    "aliases_physical_test_verified": true,
+    "retired_word_standby_negative_test_passed": true,
+    "new_alias_report": "firmware/xiaozhi/xiaoguan-test-report.json"
+  },
+  "audio_input_sample_rate_hz": 16000,
+  "pin_map_status": "microphone_and_amplifier_playback_verified",
+  "firmware_board": "utility-tunnel-s3",
+  "firmware_build_verified": true,
+  "device_flashed": true,
+  "hardware_tested": true,
+  "pending": [
+    "speaker_impedance_and_power",
+    "microphone_exact_chip",
+    "display_controller_and_resolution",
+    "wake_distance_noise_and_false_trigger_trials",
+    "long_running_network_recovery_trials",
+    "controlled_p1_acoustic_accuracy_trial"
+  ],
+  "first_firmware_mode": "offline_microphone_and_wake_test",
+  "model_assets_verified": true,
+  "device_port": "COM5",
+  "hardware_validation_scope": [
+    "chip_and_flash_capacity",
+    "8mb_psram_initialization",
+    "i2s_microphone_input",
+    "local_custom_wake_detection",
+    "repeat_wake_without_reboot",
+    "manual_speaker_playback",
+    "wake_after_manual_speaker_playback",
+    "oled_i2c_detection",
+    "oled_visible_status_changes",
+    "oled_wake_to_idle_return",
+    "local_wake_acknowledgement_heard_by_user",
+    "repeat_local_wake_reply_heard_by_user",
+    "breeze_playful_local_reply_two_cycles",
+    "authenticated_network_ota_and_websocket",
+    "real_asr_agent_tts_dialogue",
+    "native_pcm_streaming_user_accepted",
+    "both_spoken_stop_commands",
+    "fresh_wake_after_spoken_stop",
+    "two_xiaoguan_wake_aliases",
+    "retired_wake_standby_negative_test"
+  ],
+  "full_voice_assistant_verified": true,
+  "manual_speaker_test": {
+    "enabled": false,
+    "trigger": "BOOT_short_click",
+    "volume": 40,
+    "maximum_configured_volume": 40,
+    "sound": "OGG_POPUP",
+    "expected_sound_duration_ms": 540,
+    "auto_play_on_startup": false,
+    "auto_play_on_wake": false,
+    "playback_verified": false,
+    "last_verified_volume": 20,
+    "loudness_accepted_by_user": false,
+    "post_playback_wake_verified": true
+  },
+  "wake_acknowledgement": {
+    "enabled": true,
+    "text": "我在呀，你说！",
+    "local_ogg_sha256": "cdf81cb01de8563d3b871ac322dc5ae84b65bb7f1a9acad0e16ddeae3b223e91",
+    "volume": 80,
+    "hardware_playback_verified": true,
+    "recognizer_paused_during_playback": true,
+    "acoustic_tail_ms": 300,
+    "play_on_startup": false,
+    "firmware_scope": "online_and_offline_utility_tunnel",
+    "verification_method": "two_serial_cycles_and_user_listening",
+    "user_confirmed_reply_count": 2,
+    "loudness_accepted_by_user": true,
+    "normal_network_integration_pending": false,
+    "voice_engine": "Breeze TTS 2",
+    "voice_id": "guanlang_playful_girl",
+    "voice_style_user_approved": true,
+    "ogg_input_rate_hz": 48000,
+    "device_flash_verified": true,
+    "serial_complete_cycles": 2
+  },
+  "preferred_tts_engine": "BreezeLocal",
+  "preferred_tts_voice_id": "guanlang_playful_girl",
+  "spoken_interrupt": {
+    "implemented": true,
+    "firmware_flashed": true,
+    "commands": [
+      "不用说了",
+      "闭嘴"
+    ],
+    "during": "speaking",
+    "reply": "好的，需要时请随时叫我",
+    "after_reply": "idle",
+    "local_reply": true,
+    "volume": 80,
+    "voice_id": "guanlang_playful_girl",
+    "physical_test_passed": true,
+    "both_commands_user_confirmed": true,
+    "fresh_wake_verified": true,
+    "distance_noise_false_trigger_trials_completed": false,
+    "aec_enabled": false,
+    "report": "firmware/xiaozhi/spoken-stop-test-report.json",
+    "latest_firmware_regression_report": "firmware/xiaozhi/volume80-test-report.json"
+  },
+  "voice_quality_optimization": {
+    "date": "2026-10-29",
+    "status": "deepseek_conversation_and_volume80_user_verified",
+    "voice_tests_passed": 138,
+    "backend_agent_regression_tests_passed": 42,
+    "voice_route_tests_passed_after_general_scope_change": 5,
+    "real_deepseek_identity_and_missing_station_verified": true,
+    "real_deepseek_general_knowledge_and_followups_verified": true,
+    "real_deepseek_math_8_then_10_verified": true,
+    "full_synthetic_audio_roundtrip_passed": true,
+    "synthetic_business_id_cases_passed": 3,
+    "user_confirmed_continuous_answers_and_volume80_clear": true,
+    "controlled_p1_acoustic_accuracy_trial_completed": false,
+    "volume": 80,
+    "voice_id": "guanlang_playful_girl",
+    "wake_ack_tail_ms": 150,
+    "cold_input_delay_unchanged": true,
+    "explicit_warm_wait_reduction_ms": 270,
+    "normalizer_preserves_unknown_ids_and_chemistry_names": true,
+    "raw_asr_preserved": "original connection history; only copied latest user query is normalized",
+    "firmware_app_sha256": "17dfe13db3c9f68e557e1b06948efdd059f2bfff4b09a34c8b64cb86548c8231",
+    "assets_sha256": "80d109b00f376d695ee0c076336e7feeeb47fa9ea35a11f10665d0c01b337257",
+    "services": {
+      "health_http": {
+        "api": 200,
+        "voice": 200,
+        "breeze": 200
+      }
+    },
+    "credentials_printed": false,
+    "github_push_performed": false,
+    "snapshot_scope": "before_automatic_intro_removal"
+  },
+  "spoken_reply_policy": {
+    "automatic_intro": false,
+    "model_content_and_metadata_preserved": true,
+    "specific_data_limits_retained": true,
+    "latest_report": "server/no-prefix-test-report.json",
+    "voice_tests_passed": 129
+  },
+  "current_application": {
+    "bytes": 2411568,
+    "sha256": "a49867faed43a6c976240bbc7d16ad9b31f754110f624cfcc1b3b4e6934b527e",
+    "report": "firmware/xiaozhi/eyes-volume-test-report.json"
+  },
+  "stop_command_states": [
+    "speaking",
+    "listening"
+  ],
+  "stop_command_states_user_confirmed": true,
+  "ai_query_count_limit": "none",
+  "voice_volume_commands": true
+}

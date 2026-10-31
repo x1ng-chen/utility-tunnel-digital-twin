@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-29",
+  "status": "deepseek_conversation_and_volume80_user_verified",
+  "voice_tests_passed": 138,
+  "backend_agent_regression_tests_passed": 42,
+  "voice_route_tests_passed_after_general_scope_change": 5,
+  "real_deepseek_identity_and_missing_station_verified": true,
+  "real_deepseek_general_knowledge_and_followups_verified": true,
+  "real_deepseek_math_8_then_10_verified": true,
+  "full_synthetic_audio_roundtrip_passed": true,
+  "synthetic_business_id_cases_passed": 3,
+  "user_confirmed_continuous_answers_and_volume80_clear": true,
+  "controlled_p1_acoustic_accuracy_trial_completed": false,
+  "volume": 80,
+  "voice_id": "guanlang_playful_girl",
+  "wake_ack_tail_ms": 150,
+  "cold_input_delay_unchanged": true,
+  "explicit_warm_wait_reduction_ms": 270,
+  "normalizer_preserves_unknown_ids_and_chemistry_names": true,
+  "raw_asr_preserved": "original connection history; only copied latest user query is normalized",
+  "firmware_app_sha256": "17dfe13db3c9f68e557e1b06948efdd059f2bfff4b09a34c8b64cb86548c8231",
+  "assets_sha256": "80d109b00f376d695ee0c076336e7feeeb47fa9ea35a11f10665d0c01b337257",
+  "services": {
+    "health_http": {
+      "api": 200,
+      "voice": 200,
+      "breeze": 200
+    }
+  },
+  "credentials_printed": false,
+  "github_push_performed": false,
+  "snapshot_scope": "before_automatic_intro_removal",
+  "superseded_by": "no-prefix-test-report.json"
+}
