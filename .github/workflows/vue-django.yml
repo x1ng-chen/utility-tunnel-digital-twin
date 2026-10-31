@@ -54,8 +54,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {lfs: false}
-      - name: Fetch only the demonstration GLB
-        run: git lfs pull --include="model/square-five-station-v17-fan-ready/*.glb" --exclude=""
+      - name: Fetch the current demonstration GLBs
+        run: git lfs pull --include="model/square-five-station-v17-fan-ready/*.glb,frontend/public/models/utility-tunnel-v24*.glb" --exclude=""
       - name: Prepare empty local model configuration
         run: |
           mkdir -p .agent-demo .agent-knowledge

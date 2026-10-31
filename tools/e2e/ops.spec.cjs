@@ -123,7 +123,7 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
 
   const alarmNode = page.locator('.map-node.alarm').filter({ hasText: 'FAN-01' });
   await expect(alarmNode).toHaveCount(1);
@@ -153,14 +153,14 @@ test('未知页面不会空白且可以恢复到有效页面', async ({ page }) 
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
   for (const viewport of [{ width: 1440, height: 960 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     await page.goto(`${webUrl}/missing-page/nested`);
     await expect(page.getByRole('heading', { name: '页面未找到' })).toBeVisible();
     await expect(page.locator('.page-identity strong')).toHaveText('页面未找到');
     await page.getByRole('link', { name: '返回运行总览', exact: true }).click();
-    await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
   }
 });
 
@@ -203,7 +203,7 @@ test('滚轮到达页面边界不会跳页，导航点击仍可正常切换', as
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   const viewport = page.viewportSize();
   await page.mouse.move(viewport.width / 2, viewport.height / 2);
@@ -391,7 +391,7 @@ test('账号密码登录后可读取运行数据并写入审计', async ({ page 
   await page.getByLabel('账号或邮箱').fill('operator@example.com');
   await page.getByLabel('密码').fill('demo-password-2026');
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
   // The shell intentionally exposes both the data-service and realtime-feed
   // states. Scope this assertion to the data-service indicator rather than
   // relying on their incidental DOM count/order.
@@ -444,7 +444,7 @@ test('设备控制必须经二次确认并按一次性凭据顺序下发', async
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
   await page.getByRole('button', { name: '启动风扇（10秒）' }).click();
   const dialog = page.getByRole('dialog', { name: '确认下发设备命令' });
   await expect(dialog).toContainText('接通风机供电（最长10秒）');
@@ -550,7 +550,7 @@ test('注册申请须经管理员批准后才能登录使用', async ({ page }) 
   await adminPage.getByLabel('账号或邮箱').fill('admin');
   await adminPage.getByLabel('密码').fill(adminPassword);
   await adminPage.getByRole('button', { name: /安全登录/ }).click();
-  await expect(adminPage.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible({ timeout: 15_000 });
+  await expect(adminPage.getByRole('heading', { name: '智能体运维中心' })).toBeVisible({ timeout: 15_000 });
   await expect(adminPage.locator('.governance-nav')).toBeVisible();
   await adminPage.getByRole('button', { name: '系统配置' }).click();
   const applicationRow = adminPage.locator('.registration-request-row').filter({ hasText: account });
@@ -589,7 +589,7 @@ test('注册申请须经管理员批准后才能登录使用', async ({ page }) 
   await page.getByLabel('账号或邮箱').fill(account);
   await page.getByLabel('密码').fill(password);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
 });
 
 test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }) => {

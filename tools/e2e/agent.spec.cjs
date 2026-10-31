@@ -76,12 +76,12 @@ async function login(page, role = 'operator') {
   await page.getByLabel('账号或邮箱').fill(`agent-eval-${role}`);
   await page.getByLabel('密码', { exact: true }).fill(passwords[role]);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
   await page.getByRole('button', { name: '打开 AI 助手' }).click();
   await expect(page.locator('.ai-agent-context')).toContainText('模拟测试');
 }
 
-test('31路来源标记、五站与同站目标定位通过实际V17模型验证', async ({ page }) => {
+test('31路来源标记、五站与同站目标定位通过实际V24模型验证', async ({ page }) => {
   await login(page);
   await page.getByRole('button', { name: '五站31路巡检', exact: true }).click();
   await expect(page.locator('.ai-agent-inspection')).toContainText('模拟场景观测可用 31/31');
@@ -210,7 +210,7 @@ test('合并后的11个业务页面保留浅色布局与导航', async ({ page }
   }));
   await login(page, 'administrator');
   await page.getByRole('button', { name: '关闭 AI 助手', exact: true }).click();
-  for (const [route, heading, navigation] of [['/dashboard', '运行，一眼掌握', '运行总览'], ['/alerts', '告警中心', '告警中心'], ['/work-orders', '工单中心', '工单中心'],
+  for (const [route, heading, navigation] of [['/dashboard', '智能体运维中心', '运行总览'], ['/alerts', '告警中心', '告警中心'], ['/work-orders', '工单中心', '工单中心'],
     ['/assets', '设备台账', '设备台账'], ['/twin-3d', '三维孪生中心', '三维孪生'], ['/gis', 'GIS 空间运维总览', 'GIS 总览'], ['/telemetry', '数据洞察', '数据洞察'],
     ['/asset-admin', '资产主数据', '资产配置'], ['/gis-admin', '空间数据管理', '空间配置'], ['/settings', '系统配置', '系统配置'], ['/audit', '审计追踪', '审计追踪']]) {
     await page.locator('.command-nav').getByRole('button', { name: navigation, exact: true }).click();

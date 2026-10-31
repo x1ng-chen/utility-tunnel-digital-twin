@@ -67,9 +67,8 @@ jobs:
         run: |
           npm ci --prefix frontend
           python -m pip install --require-hashes -r backend/requirements.lock
-      - name: Fetch the real V17 GLB for the Agent sandbox
-        if: matrix.id == 'agent'
-        run: git lfs pull --include="model/square-five-station-v17-fan-ready/*.glb" --exclude=""
+      - name: Fetch current V24 runtime files and the historical sandbox fallback
+        run: git lfs pull --include="frontend/public/models/utility-tunnel-v24*.glb,model/square-five-station-v17-fan-ready/*.glb" --exclude=""
       - name: Start isolated test services
         shell: bash
         run: |
