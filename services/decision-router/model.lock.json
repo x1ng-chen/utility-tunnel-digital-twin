@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "provider": "LOCAL_ANYJEV",
+  "anyjevRepository": "https://github.com/nokia-applied-research/AnyJev",
+  "anyjevCommit": "35311c58955716cb8955ce1368a665988bc63735",
+  "anyjevArchiveSha256": "c88cb5b3bc99bccecf20364716089aa367dd96a90db3c9836a4c7aff1f14df61",
+  "model": "morriszjm/Tacit-1.7B",
+  "modelRevision": "1cb46fff0ffeefc4965455185074be5c62adccf7",
+  "modelWeights": {
+    "name": "model.safetensors",
+    "bytes": 3441185608,
+    "sha256": "9ef5764a3ca0bd42f7decb5a052f549eab56c19dfb8eb65d045715520b1d8860"
+  },
+  "license": "Apache-2.0",
+  "backend": "transformers",
+  "dtype": "bfloat16",
+  "adaptive": false,
+  "maxInputTokens": 2048,
+  "maxOptions": 8,
+  "minLogProbabilityGap": 0.5,
+  "authority": "READ_ONLY_ROUTING",
+  "probabilitiesCalibratedForProject": false
+}

@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { telemetryValue } from '../utils/telemetryValue';
 import { computed, ref, watch } from 'vue';
+import { Cpu } from 'lucide-vue-next';
 import { useRoute, useRouter } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
 import ReportExportButton from '../components/ReportExportButton.vue';
@@ -61,17 +63,18 @@ function formatTime(value?: string | null) {
 <template>
   <AppShell>
     <section class="section-title">
-      <div><span class="eyebrow light">设备全生命周期</span><h1>设备台账</h1><p>设备位置、健康状态与孪生模型统一维护，点击节点查看实时关联数据。</p></div>
-      <input v-model="search" class="search-input" placeholder="搜索设备编码、名称或区域" aria-label="搜索设备" />
+      <div><h1>设备台账</h1><p>设备位置、健康状态与孪生模型统一维护，点击节点查看实时关联数据。</p></div>
+      <input v-model="search" class="search-input" type="search" placeholder="搜索设备编码、名称或区域" aria-label="搜索设备" />
       <ReportExportButton report="assets" label="导出全部设备" />
     </section>
 
     <section class="asset-workspace">
       <div class="asset-twin-panel">
-        <header class="panel-head"><div><span class="eyebrow">设备分布</span><h2>设备关系示意</h2><p>此处为交互示意，不代表实测位置；真实位置请进入地图或三维视图查看。</p></div><span class="config-source"><i />{{ visible.length }} 个设备</span></header>
-        <div class="asset-map" role="list" aria-label="设备空间定位图">
+        <header class="panel-head"><div><h2>设备关系示意</h2><p>此处为交互示意，不代表实测位置；真实位置请进入地图或三维视图查看。</p></div><span class="config-source"><i />{{ visible.length }} 个设备</span></header>
+        <p class="asset-map-compact-note">窄屏下请在下方设备列表中选择设备，查看关联数据和定位入口。</p>
+        <div class="asset-map" role="group" aria-label="设备空间定位图">
           <div class="asset-map-grid" /><div class="asset-map-route route-a" /><div class="asset-map-route route-b" />
-          <button v-for="asset in visible" :key="asset.id" class="asset-map-node" :class="[asset.status, { selected: selectedAsset?.code === asset.code }]" :style="positionStyle(asset)" :aria-label="`定位 ${asset.name}`" @click="selectAsset(asset)"><i /><span>{{ asset.code }}</span></button>
+          <button v-for="asset in visible" :key="asset.id" class="asset-map-node" :class="[asset.status, { selected: selectedAsset?.code === asset.code }]" :style="positionStyle(asset)" :aria-label="`选择 ${asset.code} ${asset.name}`" :aria-pressed="selectedAsset?.code === asset.code" @click="selectAsset(asset)"><i /><span>{{ asset.code }}</span></button>
           <div class="asset-map-legend"><span><i class="normal" />正常</span><span><i class="warning" />关注</span><span><i class="alarm" />异常</span></div>
         </div>
       </div>
@@ -80,18 +83,39 @@ function formatTime(value?: string | null) {
         <div class="detail-heading"><div><span class="eyebrow">当前设备</span><h2>{{ selectedAsset.name }}</h2><b>{{ selectedAsset.code }}</b></div><div class="asset-detail-actions"><span :class="['asset-status', selectedAsset.status]">{{ statusLabel(selectedAsset.status) }}</span><button class="asset-twin-link" @click="openTwin(selectedAsset)">在三维中查看 →</button><button class="asset-gis-link" @click="openGis(selectedAsset)">在地图中查看 →</button></div></div>
         <div class="detail-grid"><div><small>硬件编号</small><strong>{{ selectedAsset.hardwareCode || '未分配' }}</strong></div><div><small>接入状态</small><strong>{{ integrationLabel(selectedAsset.integrationStatus) }}</strong></div><div><small>接口</small><strong>{{ selectedAsset.interface || '未配置' }}</strong></div><div><small>最近上报</small><strong>{{ formatTime(selectedAsset.lastSeenAt) }}</strong></div></div>
         <div class="detail-block"><span class="eyebrow">实体设备</span><p class="detail-list">{{ selectedAsset.installationNote }}</p><div class="capability-tags"><span v-for="capability in selectedAsset.capabilities" :key="capability">{{ capability }}</span></div></div>
-        <div class="detail-block"><span class="eyebrow">实时数据</span><div v-if="selectedTelemetry" class="detail-reading"><strong>{{ selectedTelemetry.value }}</strong><span>{{ selectedTelemetry.unit }}</span><small>{{ selectedTelemetry.metric }} · {{ selectedTelemetry.quality === 'good' ? '质量良好' : selectedTelemetry.quality === 'suspect' ? '需要关注' : selectedTelemetry.quality === 'bad' ? '数据异常' : '数据缺失' }}</small></div><p v-else class="detail-empty">暂无遥测数据</p></div>
+        <div class="detail-block"><span class="eyebrow">实时数据</span><div v-if="selectedTelemetry" class="detail-reading"><strong>{{ telemetryValue(selectedTelemetry) }}</strong><small>{{ selectedTelemetry.metric }} · {{ selectedTelemetry.quality === 'good' ? '质量良好' : selectedTelemetry.quality === 'suspect' ? '需要关注' : selectedTelemetry.quality === 'bad' ? '数据异常' : '数据缺失' }}</small></div><p v-else class="detail-empty">暂无遥测数据</p></div>
         <div class="detail-block"><span class="eyebrow">关联事件</span><p v-if="selectedAlerts.length" class="detail-list">{{ selectedAlerts.length }} 条告警 · {{ selectedAlerts.filter((item) => ['open', 'acknowledged'].includes(item.status)).length }} 条待处置</p><p v-else class="detail-empty">暂无告警</p><p v-if="selectedOrders.length" class="detail-list">{{ selectedOrders.length }} 个关联工单 · {{ selectedOrders.filter((item) => item.status === 'completed').length }} 个已完成</p><p v-else class="detail-empty">暂无关联工单</p><button v-if="selectedOrders.length" type="button" class="asset-history-link" @click="openWorkOrders(selectedAsset)">查看维护与处置记录 →</button></div>
       </aside>
       <div v-else class="asset-detail-panel empty-state">没有匹配的设备节点，请调整搜索条件。</div>
     </section>
 
     <section class="asset-grid">
-      <button v-for="asset in visible" :key="asset.id" class="asset-card asset-card-button" :class="{ selected: selectedAsset?.code === asset.code }" @click="selectAsset(asset)"><div class="asset-icon" :class="asset.status">◈</div><div class="asset-card-copy"><span class="eyebrow">{{ asset.zone }} · {{ asset.hardwareCode || 'NO HW ID' }}</span><h2>{{ asset.name }}</h2><b>{{ asset.code }}</b><p>{{ integrationLabel(asset.integrationStatus) }} · {{ asset.interface || '未配置接口' }}</p></div><span :class="['asset-status', asset.status]">{{ statusLabel(asset.status) }}</span></button>
+      <button v-for="asset in visible" :key="asset.id" class="asset-card asset-card-button" :class="{ selected: selectedAsset?.code === asset.code }" :aria-pressed="selectedAsset?.code === asset.code" @click="selectAsset(asset)"><div class="asset-icon" :class="asset.status" aria-hidden="true"><Cpu /></div><div class="asset-card-copy"><span class="asset-identity">{{ asset.zone }} · {{ asset.hardwareCode || '未分配硬件编号' }}</span><h2>{{ asset.name }}</h2><b>{{ asset.code }}</b><p>{{ integrationLabel(asset.integrationStatus) }} · {{ asset.interface || '未配置接口' }}</p></div><span :class="['asset-status', asset.status]">{{ statusLabel(asset.status) }}</span></button>
     </section>
   </AppShell>
 </template>
 
 <style scoped>
 .asset-history-link{width:100%;margin-top:10px;padding:9px 11px;border:1px solid var(--ops-line);background:var(--ops-panel);color:var(--ops-muted);text-align:left}.asset-history-link:hover,.asset-history-link:focus-visible{border-color:var(--ops-signal);background:var(--ops-raised);color:var(--ops-text);outline:0}
+.asset-workspace > *, .asset-card-copy { min-width: 0; }
+.asset-map-compact-note { display: none; }
+.asset-icon svg { width: 22px; height: 22px; }
+.asset-card-copy > *, .detail-heading h2, .detail-grid strong, .detail-list { overflow-wrap: anywhere; }
+.asset-card-copy .asset-identity { color: var(--ops-muted); font-size: 12px; line-height: 1.6; }
+.asset-card-button:focus-visible, .asset-history-link:focus-visible, .asset-twin-link:focus-visible, .asset-gis-link:focus-visible { outline: 2px solid var(--ops-signal); outline-offset: 2px; }
+.asset-history-link, .asset-twin-link, .asset-gis-link { min-height: 44px; }
+.detail-block > .eyebrow { display: block; color: var(--ops-muted); font-size: 12px; letter-spacing: 0; }
+.detail-grid small, .detail-grid strong, .detail-empty, .detail-list, .detail-reading small { font-size: 12px; line-height: 1.7; }
+@container (max-width: 640px) {
+  .section-title .search-input { width: 100%; max-width: none; align-self: stretch; }
+  .asset-detail-panel .detail-heading { display: block; }
+  .detail-heading h2 { max-width: none; margin: 0 0 8px; font-size: 18px; line-height: 1.5; }
+  .asset-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .asset-detail-actions { margin-top: 16px; }
+  .asset-detail-actions > .asset-status { flex: 0 0 100%; }
+  .asset-detail-actions button { flex: 1 1 140px; }
+  .asset-map { display: none; }
+  .asset-map-compact-note { display: block; margin: 0; padding: 0 20px 20px; color: var(--ops-muted); font-size: 13px; line-height: 1.7; }
+  .asset-grid { grid-template-columns: minmax(0, 1fr); }
+}
 </style>

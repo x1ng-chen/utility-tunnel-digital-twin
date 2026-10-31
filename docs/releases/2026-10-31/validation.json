@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "verifiedAtUtc": "2026-10-31T07:48:53.578976+00:00",
+  "software": {
+    "backend": {
+      "tests": 417,
+      "passed": 417
+    },
+    "frontend": {
+      "passed": 178,
+      "skipped": 1,
+      "typecheck": "PASS",
+      "build": "PASS"
+    },
+    "gateway": {
+      "passed": 34,
+      "skipped": 1,
+      "actualEncoderTest": "PASS_31_MODULES"
+    },
+    "firmware": {
+      "targets": 5,
+      "buildId": "fa7f40f31621109d",
+      "armLogicChecks": 1613,
+      "armLogicFailures": 0,
+      "pythonTests": 12,
+      "scriptedGPIOChecks": 65,
+      "scriptedGPIOFailures": 0,
+      "completeCtrl02BusinessImage": true
+    },
+    "model": {
+      "sensors": 31,
+      "uniqueTargets": 31,
+      "nodes": 755,
+      "fanRotors": 2,
+      "rgbSegments": 48,
+      "result": "PASS"
+    },
+    "staticChecks": {
+      "postgresPolicyRules": 29,
+      "deploymentSafeguards": 37,
+      "navigationLinks": 69,
+      "secretScan": "PASS"
+    },
+    "productionNpmAudit": {
+      "vulnerabilities": 0,
+      "updatedTransitivePackage": "follow-redirects 1.16.2",
+      "source": "https://github.com/advisories/GHSA-mrwp-f3q8-3g9p"
+    }
+  },
+  "remoteCI": {
+    "pullRequest": "https://github.com/x1ng-chen/utility-tunnel-digital-twin/pull/48",
+    "status": "SEE_CURRENT_GITHUB_CHECKS",
+    "initialIssues": [
+      "CI fetched V17 after sandbox moved to V24",
+      "obsolete browser dashboard label and mobile bottom-rail contract",
+      "follow-redirects 1.16.1 production audit finding",
+      "Legacy fullscreen drag coordinate hit the floating auto-location controls",
+      "Four business browser cases assumed automatic device selection, reusable latest metric data, or synchronous login completion"
+    ],
+    "fixes": [
+      "fetch current runtime GLBs without weakening hash checks",
+      "assert current heading and accessible modal navigation",
+      "pin patched transitive version with canonical registry integrity",
+      "Choose a visible non-button rail point and assert the real foreground hit target before dragging",
+      "Explicit device URLs, auto-location opt-in, awaited login, and independently arranged fresh metric fixture; all four cases passed locally"
+    ]
+  },
+  "paidModelCalls": 0,
+  "hardwareCommands": 0,
+  "flashOperations": 0,
+  "localBrowserVisualQA": "NOT_RUN",
+  "localDockerExecution": "NOT_RUN",
+  "physicalAcceptance": "NOT_RUN",
+  "ctrl02Sht": "UNRESOLVED",
+  "humanScoring": "NOT_RUN",
+  "localFocusedBrowserChecks": {
+    "mobileAndThreeDesktopResolutions": "PASS",
+    "desktopLayoutCurrentPanels": "PASS",
+    "legacyAssetLedgerAndV07CameraJourney": "PASS",
+    "fullscreenRailDragAndDeviceSelection": "PASS_AFTER_FOREGROUND_HIT_TEST",
+    "profile": "DISPOSABLE_LOCAL_DATABASE",
+    "productionDatabaseTouched": false,
+    "manualVisualAcceptance": false,
+    "modelUploadActivateAndAuthenticatedLoad": "PASS",
+    "urlMetricFilterReload": "PASS_WITH_EXPLICIT_FRESH_FIXTURE",
+    "newAlertModelAutoLocation": "PASS_UNDER_3_SECONDS",
+    "activeModelUnavailableFallback": "PASS"
+  }
+}

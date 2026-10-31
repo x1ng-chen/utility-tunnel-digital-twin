@@ -121,8 +121,8 @@ async function createOrder() {
 <template>
   <AppShell>
     <section class="section-title">
-      <div><span class="eyebrow light">处置流程</span><h1>工单中心</h1><p>从告警关联到复核关闭，按状态推进每一条处置链路。</p></div>
-      <div class="section-actions"><input v-model="search" class="search-input" placeholder="搜索工单、资产或标题" aria-label="搜索工单" /><button v-if="canWrite" class="primary-button compact-button" @click="formOpen = !formOpen">{{ formOpen ? '收起' : '+ 新建工单' }}</button></div>
+      <div><h1>工单中心</h1><p>从告警关联到复核关闭，按状态推进每一条处置链路。</p></div>
+      <div class="section-actions"><input v-model="search" class="search-input" type="search" placeholder="搜索工单、资产或标题" aria-label="搜索工单" /><button v-if="canWrite" class="primary-button compact-button" type="button" :aria-expanded="formOpen" aria-controls="new-work-order" @click="formOpen = !formOpen">{{ formOpen ? '收起' : '新建工单' }}</button></div>
     </section>
     <p v-if="actionError" class="inline-message error-message" role="alert">{{ actionError }}</p>
     <p v-if="navigationHint" class="inline-message success-message work-order-navigation" role="status">{{ navigationHint }}，已为你定位到对应卡片。</p>
@@ -130,7 +130,7 @@ async function createOrder() {
       <div v-for="(stage, index) in workflowStages" :key="stage.status"><b>{{ index + 1 }}</b><span>{{ stage.label }}<small>{{ stage.description }}</small></span></div>
     </section>
     <p class="workflow-explanation">工单记录谁负责、做了什么、结果是否通过验收。完成当前阶段的实际工作后再推进状态，处置过程会保留在处理记录中。</p>
-    <section v-if="formOpen" class="create-order-panel" aria-label="新建工单">
+    <section v-if="formOpen" id="new-work-order" class="create-order-panel" aria-label="新建工单">
       <div class="settings-head"><span>新建运维工单</span><small>创建后进入“待分派”状态并写入审计日志</small></div>
       <form class="order-form" @submit.prevent="createOrder">
         <label>关联资产<select v-model="form.assetCode" required><option value="" disabled>选择资产</option><option v-for="asset in store.assets" :key="asset.code" :value="asset.code">{{ asset.code }} · {{ asset.name }}</option></select></label>
@@ -164,4 +164,18 @@ async function createOrder() {
 .order-card-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:11px}.order-card-links button{min-width:0;margin:0;padding:7px 4px;border-color:var(--ops-line);background:var(--ops-raised);color:var(--ops-muted);white-space:nowrap}.order-card-links button:hover,.order-card-links button:focus-visible{border-color:var(--ops-signal);background:var(--ops-raised);color:var(--ops-text);outline:0}.order-card .order-transition{margin-top:7px;border-color:var(--ops-line);background:var(--ops-panel);color:var(--ops-text)}
 .order-timeline{margin-top:10px;border-top:1px solid var(--ops-line);padding-top:8px;color:var(--ops-muted)}.order-timeline summary{cursor:pointer;font-size:12px;list-style:none}.order-timeline summary::-webkit-details-marker{display:none}.order-timeline summary::after{content:'＋';float:right;color:var(--ops-muted)}.order-timeline[open] summary::after{content:'－'}.order-timeline ol{display:grid;gap:9px;margin:9px 0 0;padding:0;list-style:none}.order-timeline li{position:relative;padding-left:12px;border-left:2px solid var(--ops-line)}.order-timeline li div{display:flex;justify-content:space-between;gap:8px}.order-timeline li b{font-size:11px;color:var(--ops-text)}.order-timeline time,.order-timeline small{font-size:10px;color:var(--ops-muted)}.order-timeline p{margin:4px 0;font-size:11px;line-height:1.55;color:var(--ops-muted);white-space:pre-wrap}.transition-note{display:grid;gap:7px;margin-top:10px;padding:10px;border:1px solid var(--ops-line);background:var(--ops-raised)}.transition-note label{font-size:12px;color:var(--ops-text)}.transition-note textarea{width:100%;box-sizing:border-box;resize:vertical;border:1px solid var(--ops-line);background:var(--ops-raised);color:var(--ops-text);padding:9px;font:inherit}.transition-note>div{display:flex;justify-content:flex-end;gap:7px}.transition-note button{margin:0;padding:7px 10px}
 .kanban-empty{display:grid;min-height:112px;margin:0;place-items:center;border:1px dashed var(--ops-line);color:var(--ops-muted);font-size:10px;text-align:center}
+.order-card { min-width: 0; }
+.order-card > b, .order-card h3, .order-card > small, .order-timeline p { overflow-wrap: anywhere; }
+.order-card h3 { line-height: 1.6; }
+.order-card-links button { min-height: 40px; font-size: 12px; }
+.order-card-links button:focus-visible, .order-timeline summary:focus-visible { outline: 2px solid var(--ops-signal); outline-offset: 2px; }
+.order-timeline summary { min-height: 36px; align-content: center; }
+.transition-note textarea { width: 100%; min-width: 0; resize: vertical; }
+.transition-note > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.transition-note button { min-height: 44px; }
+@container (max-width: 640px) {
+  .section-actions { display: flex; flex-wrap: wrap; width: 100%; }
+  .section-actions .search-input { width: 100%; flex: 1 1 200px; min-width: 0; }
+  .order-card-links button { min-height: 44px; }
+}
 </style>

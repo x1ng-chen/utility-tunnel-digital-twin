@@ -1,5 +1,6 @@
 from django.urls import path
 from .experience_views import ExperienceList,ExperienceDetail
+from .investigation_views import CaseList, CaseDetail, CaseFeedback, TopologyView, BranchCompareView, ProcedureList, ProcedureReview, ProcedureFromRun, RunAnalysis
 from django.conf import settings
 from .sprint_views import RunList, RunDetail, RunExport, KnowledgeSearch, CostEstimate, DemoSessionView, DemoCommands, DemoCommandDetail
 from .views import AiAssistantView, StationInspectionView, AgentContextView, ControllerCommandCapabilitiesView
@@ -7,6 +8,15 @@ from .views import AdminRegistrationRequestDetailView, AdminRegistrationRequestL
 
 
 urlpatterns = [
+    path('assistant/cases/', CaseList.as_view()),
+    path('assistant/cases/<uuid:pk>/', CaseDetail.as_view()),
+    path('assistant/cases/<uuid:pk>/feedback/', CaseFeedback.as_view()),
+    path('assistant/topology/', TopologyView.as_view()),
+    path('assistant/branches/', BranchCompareView.as_view()),
+    path('assistant/procedures/', ProcedureList.as_view()),
+    path('assistant/procedures/from-run/', ProcedureFromRun.as_view()),
+    path('assistant/procedures/<uuid:pk>/review/', ProcedureReview.as_view()),
+    path('assistant/runs/<uuid:pk>/analysis/', RunAnalysis.as_view()),
     path('assistant/experiences/',ExperienceList.as_view()),
     path('assistant/experiences/<uuid:pk>/',ExperienceDetail.as_view()),
     path('assistant/runs/', RunList.as_view()),

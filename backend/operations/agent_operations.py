@@ -18,6 +18,7 @@ from django.utils.dateparse import parse_datetime
 from .agent_context import data_context, evaluation_enabled, observation_valid
 from .connectivity import binding_is_online
 from .models import Alert, Asset, AuditLog, HardwareBinding, Telemetry, TwinModelRelease, WorkOrder
+from .twin_presentation import runtime_inventory
 
 INVENTORY = json.loads((Path(__file__).parent / 'agent_catalog/station-inventory.json').read_text(encoding='utf-8'))
 BINDINGS = INVENTORY['bindings']
@@ -87,6 +88,7 @@ def snapshots(codes, now=None):
             'id': row.id, 'metric_key': row.metric_key, 'metric': row.metric, 'value': value,
             'unit': row.unit, 'quality': row.quality, 'sampled_at': row.recorded_at.isoformat(),
             'observation_kind': row.observation_kind,
+            'source_metadata': row.provenance,
             'observation_note': '已观察并锁存的短时事件，不表示输入此刻仍持续触发。' if row.observation_kind == 'latched_event' else '采样时刻的观测值。',
             'ingested_at': row.ingested_at.isoformat(), 'sample_age_seconds': round(age, 1),
             'freshness': freshness, 'provenance': 'simulated_test' if evaluation_enabled() and demo else 'demo' if demo else 'database_observation',
@@ -102,7 +104,8 @@ def station_snapshot(station_id='all'):
     if station_id not in (*STATIONS, 'all'):
         raise ValueError('检测点仅允许 P1～P5 或 all。')
     now = timezone.now()
-    bindings = [b for b in BINDINGS if station_id == 'all' or b['stationId'] == station_id]
+    inventory = runtime_inventory()
+    bindings = [b for b in inventory['bindings'] if station_id == 'all' or b['stationId'] == station_id]
     sensor_codes = [b['assetCode'] for b in bindings]
     controller_codes = sorted({b['controllerId'] for b in bindings})
     observed = snapshots([*sensor_codes, *controller_codes], now)
@@ -160,7 +163,8 @@ def station_snapshot(station_id='all'):
     return {'revision': INVENTORY['revision'], 'queried_at': now.isoformat(), 'station_id': station_id,
         'expected_sensor_count': len(bindings), 'registered_sensor_count': sum(code in observed for code in sensor_codes),
         'usable_observation_sensor_count': sum(i['observation_state'] == 'usable_observations' for i in items),
-        'data_context': data_context(), 'model_notice': INVENTORY['modelNotice'],
+        'data_context': data_context(), 'model_notice': inventory['modelNotice'],
+        'presentation_revision': inventory.get('presentationRevision'),
         'scenario_usable_sensor_count': sum(i['scenario_observations_usable'] for i in items),
         'data_issue_sensor_count': sum(bool(i['data_issues']) for i in items),
         'station_facts': {station: {'physical_sensor_count': len(group),
@@ -291,7 +295,7 @@ def review_work_order(code):
 def location_cards(evidence):
     """Cards are server-derived; LLM/user text never supplies a mesh or route."""
     cards = {}
-    by_code = {b['assetCode']: b for b in BINDINGS}
+    by_code = {b['assetCode']: b for b in runtime_inventory()['bindings']}
     for item in evidence:
         if item['status'] != 'ok':
             continue

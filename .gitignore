@@ -46,6 +46,8 @@ cube.blend
 deploy/postgres/backups/
 *.sha256
 data/
+!frontend/src/data/
+!frontend/src/data/twin-v20-presentation.json
 backend/media/
 
 # Document render and temporary artifacts
@@ -82,3 +84,5 @@ firmware/**/compile_commands.json
 .agent-knowledge/
 .agent-eval-sprint/
 .agent-eval-guards/
+.hardware-live/
+.agent-capabilities/

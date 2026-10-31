@@ -1,0 +1,11 @@
+{
+  "revision": "v24-unified-numbering-20261029.1",
+  "modelSha256": "06653018482f774cf31a9a8579cbd5ae5713a62ecbacb78a0b5f660439bfdfd9",
+  "sensors": 31,
+  "uniqueTargets": 31,
+  "gltfNodes": 755,
+  "originalBlendSha256": "1e2d7dd5548d89161c56685ba4ecbba73f5ef47fb312dee3ac54df34b9d83281",
+  "originalModelUnchanged": true,
+  "allObjectTransformsUnchanged": true,
+  "physicalAcceptance": "separate_user_tests"
+}

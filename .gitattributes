@@ -47,10 +47,11 @@ model/square-five-station-v17-fan-ready/**/*.blend filter=lfs diff=lfs merge=lfs
 model/square-five-station-v17-fan-ready/**/*.glb filter=lfs diff=lfs merge=lfs -text
 model/square-five-station-v17-fan-ready/**/*.png filter=lfs diff=lfs merge=lfs -text
 model/square-five-station-v17-fan-ready/**/*.zip filter=lfs diff=lfs merge=lfs -text
-
 # Business source and executable protocol fixtures use stable line endings.
 firmware/four-controller/** text eol=lf
-
+# Preserve V20 model bytes for the presentation manifest hash.
+model/square-five-station-v20-node-numbering/** -text whitespace=cr-at-eol,-blank-at-eof
+model/square-five-station-v20-node-numbering/**/*.glb filter=lfs diff=lfs merge=lfs -text
 # V24 immutable model delivery and frozen rebuild inputs.
 model/square-five-station-v24-inset-rgb-fans/** -text whitespace=cr-at-eol,-blank-at-eof
 model/square-five-station-v24-inset-rgb-fans/**/*.blend filter=lfs diff=lfs merge=lfs -text
@@ -58,7 +59,20 @@ model/square-five-station-v24-inset-rgb-fans/**/*.glb filter=lfs diff=lfs merge=
 model/square-five-station-v24-inset-rgb-fans/**/*.png filter=lfs diff=lfs merge=lfs -text
 model/square-five-station-v24-inset-rgb-fans/**/*.gif filter=lfs diff=lfs merge=lfs -text
 model/square-five-station-v24-inset-rgb-fans/**/*.zip filter=lfs diff=lfs merge=lfs -text
-
+frontend/public/models/utility-tunnel-v24.glb filter=lfs diff=lfs merge=lfs -text
+frontend/public/models/utility-tunnel-v24-unified.glb filter=lfs diff=lfs merge=lfs -text
+model/square-five-station-v24-unified-numbering/*.glb filter=lfs diff=lfs merge=lfs -text
+model/square-five-station-v24-unified-numbering/*.blend filter=lfs diff=lfs merge=lfs -text
+frontend/public/models/utility-tunnel-v20.glb filter=lfs diff=lfs merge=lfs -text
 # Preserve upstream patch context and original third-party license bytes.
 services/voice-assistant/firmware/xiaozhi/register-board.patch -text -whitespace
 services/voice-assistant/licenses/* -text -whitespace
+
+# Current navigation and small distributable firmware images.
+README.md text eol=lf
+CONTRIBUTING.md text eol=lf
+CHANGELOG.md text eol=lf
+docs/PROJECT_STATUS.md text eol=lf
+docs/README.md text eol=lf
+docs/releases/** text eol=lf
+releases/firmware/**/*.bin -text

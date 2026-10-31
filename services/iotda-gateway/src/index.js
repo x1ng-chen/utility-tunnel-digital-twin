@@ -14,6 +14,7 @@ const environment = z.object({
   LOCAL_MQTT_PASSWORD: z.string().optional(),
   LOCAL_DEVICE_ID: z.string().regex(/^[a-z0-9-]{1,64}$/i).default('CTRL-01'),
   LOCAL_DEVICE_IDS: z.string().min(1).optional(),
+  REQUIRE_FOUR_CONTROLLER_TELEMETRY: z.enum(['true', 'false']).default('false'),
   IOTDA_ENABLED: z.enum(['true', 'false']).default('true'),
   IOTDA_HOST: z.string().min(4).optional(),
   IOTDA_PORT: z.coerce.number().int().min(1).max(65535).default(8883),
@@ -139,6 +140,9 @@ local.on('message', (topic, payload) => {
   let telemetry;
   try {
     telemetry = addCalculatedOxygenConcentration(parseTelemetry(payload.toString('utf8'), sourceDeviceId));
+    if (config.REQUIRE_FOUR_CONTROLLER_TELEMETRY === 'true' && telemetry.source !== 'four-controller-rtu-v2') {
+      throw new Error('This hardware integration profile rejects legacy or simulated telemetry.');
+    }
   } catch (error) {
     console.warn('Rejected invalid local telemetry:', error instanceof Error ? error.message : error);
     return;

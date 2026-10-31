@@ -24,6 +24,9 @@ static uint32_t attempted[11];
 static volatile UtDigital digital[11];
 static uint8_t cursor, sht_phase, sht_index, sht_address;
 static uint32_t sht_started;
+static uint32_t sht_good, sht_failed, sht_last_good, sht_raw_read;
+static uint8_t i2c_clock_fault;
+static uint32_t i2c_clock_timeouts;
 
 
 volatile uint8_t BoardIo_I2cScanResult;
@@ -52,11 +55,21 @@ static void I2c_Sda(GPIO_PinState state)
 static void I2c_Scl(GPIO_PinState state)
 {
   HAL_GPIO_WritePin(i2c_bus.port, i2c_bus.scl_pin, state);
+  if(state!=GPIO_PIN_SET || i2c_clock_fault)return;
+  /* Open drain SET only releases SCL. Sample the actual line, with a fixed
+   * upper bound even when the tick/cycle counter or a slave stops working. */
+  for(uint8_t guard=0U;guard<64U;guard++) {
+    if(HAL_GPIO_ReadPin(i2c_bus.port,i2c_bus.scl_pin)==GPIO_PIN_SET)return;
+    I2c_Delay();
+  }
+  i2c_clock_fault=1U;++i2c_clock_timeouts;
 }
 
 static void I2c_Start(void)
 {
+  i2c_clock_fault=0U;
   I2c_Sda(GPIO_PIN_SET); I2c_Scl(GPIO_PIN_SET); I2c_Delay();
+  if(i2c_clock_fault)return;
   I2c_Sda(GPIO_PIN_RESET); I2c_Delay(); I2c_Scl(GPIO_PIN_RESET);
 }
 
@@ -70,13 +83,17 @@ static uint8_t I2c_WriteByte(uint8_t value)
 {
   uint8_t bit;
   uint8_t nack;
+  if(i2c_clock_fault)return 0U;
   for (bit = 0U; bit < 8U; ++bit)
   {
     I2c_Sda((value & 0x80U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    I2c_Delay(); I2c_Scl(GPIO_PIN_SET); I2c_Delay(); I2c_Scl(GPIO_PIN_RESET);
+    I2c_Delay(); I2c_Scl(GPIO_PIN_SET);
+    if(i2c_clock_fault)return 0U;
+    I2c_Delay(); I2c_Scl(GPIO_PIN_RESET);
     value <<= 1U;
   }
   I2c_Sda(GPIO_PIN_SET); I2c_Delay(); I2c_Scl(GPIO_PIN_SET); I2c_Delay();
+  if(i2c_clock_fault)return 0U;
   /* 与旧台架代码一致：SDA 被从机拉低表示 ACK，返回 1；调用处用 ! 判失败。 */
   nack = (HAL_GPIO_ReadPin(i2c_bus.port, i2c_bus.sda_pin) == GPIO_PIN_RESET) ? 1U : 0U;
   I2c_Scl(GPIO_PIN_RESET);
@@ -87,11 +104,13 @@ static uint8_t I2c_ReadByte(uint8_t acknowledge)
 {
   uint8_t bit;
   uint8_t value = 0U;
+  if(i2c_clock_fault)return 0U;
   I2c_Sda(GPIO_PIN_SET);
   for (bit = 0U; bit < 8U; ++bit)
   {
     value <<= 1U;
     I2c_Delay(); I2c_Scl(GPIO_PIN_SET); I2c_Delay();
+    if(i2c_clock_fault)return 0U;
     if (HAL_GPIO_ReadPin(i2c_bus.port, i2c_bus.sda_pin) == GPIO_PIN_SET) value |= 1U;
     I2c_Scl(GPIO_PIN_RESET);
   }
@@ -121,6 +140,7 @@ uint8_t BoardIo_I2cRead16(uint8_t address, uint8_t reg, uint16_t *value)
   high = I2c_ReadByte(1U);
   low = I2c_ReadByte(0U);
   I2c_Stop();
+  if(i2c_clock_fault)return 0U;
   *value = (uint16_t)(((uint16_t)high << 8U) | low);
   return 1U;
 }
@@ -135,7 +155,7 @@ uint8_t BoardIo_I2cWrite16(uint8_t address, uint8_t reg, uint16_t value)
     return 0U;
   }
   I2c_Stop();
-  return 1U;
+  return i2c_clock_fault?0U:1U;
 }
 
 static uint8_t __attribute__((unused)) Sht30_Crc(const uint8_t *data, uint8_t length)
@@ -153,11 +173,18 @@ static uint8_t __attribute__((unused)) Sht30_Crc(const uint8_t *data, uint8_t le
 
 static uint8_t Sht30_Begin(uint8_t address)
 {
+  uint8_t stage=1U;
   I2c_Start();
-  uint8_t ok=I2c_WriteByte((uint8_t)(address<<1U)) && I2c_WriteByte(0x24U) && I2c_WriteByte(0U);
+  if (!I2c_WriteByte((uint8_t)(address<<1U))) goto done;
+  stage=2U;
+  if (!I2c_WriteByte(0x24U)) goto done;
+  stage=3U;
+  if (!I2c_WriteByte(0U)) goto done;
+  stage=0U;
+done:
   I2c_Stop();
-  BoardIo_ShtDebug=ok?0U:1U;
-  return ok;
+  BoardIo_ShtDebug=i2c_clock_fault?7U:stage;
+  return BoardIo_ShtDebug==0U;
 }
 static uint8_t Sht30_Finish(uint8_t address, SensorSample *out)
 {
@@ -168,7 +195,7 @@ static uint8_t Sht30_Finish(uint8_t address, SensorSample *out)
   if (!I2c_WriteByte((uint8_t)((address << 1U) | 1U)))
   {
     I2c_Stop();
-    BoardIo_ShtDebug = 4U;
+    BoardIo_ShtDebug = i2c_clock_fault?7U:4U;
     return 0U;
   }
   for (i = 0U; i < sizeof(response); ++i)
@@ -177,6 +204,8 @@ static uint8_t Sht30_Finish(uint8_t address, SensorSample *out)
     BoardIo_ShtRaw[i] = response[i];
   }
   I2c_Stop();
+  if(i2c_clock_fault) {BoardIo_ShtDebug=7U;return 0U;}
+  sht_raw_read=HAL_GetTick();
   if (Sht30_Crc(response, 2U) != response[2]) { BoardIo_ShtDebug = 5U; return 0U; }
   if (Sht30_Crc(&response[3], 2U) != response[5]) { BoardIo_ShtDebug = 6U; return 0U; }
   BoardIo_ShtDebug = 0U;
@@ -186,6 +215,28 @@ static uint8_t Sht30_Finish(uint8_t address, SensorSample *out)
   out->value = (uint16_t)(int16_t)(((int32_t)17500 * raw_temperature) / 65535 - 4500);
   out->aux = (uint16_t)(((uint32_t)10000 * raw_humidity) / 65535U);
   out->status = SENSOR_STATUS_OK;
+  return 1U;
+}
+
+uint8_t BoardIo_GetI2cDiagnostics(BoardIoI2cDiagnostics *out)
+{
+  static const uint8_t addresses[3]={0x40U,0x44U,0x45U};
+  if(out==NULL || sht_phase)return 0U;
+  memset(out,0,sizeof(*out));
+  out->good=sht_good;out->failed=sht_failed;out->last_good_ms=sht_last_good;
+  out->raw_read_ms=sht_raw_read;out->address=sht_address;out->stage=BoardIo_ShtDebug;
+  out->clock_timeouts=i2c_clock_timeouts;
+  out->idle_sda=HAL_GPIO_ReadPin(i2c_bus.port,i2c_bus.sda_pin)==GPIO_PIN_SET;
+  out->idle_scl=HAL_GPIO_ReadPin(i2c_bus.port,i2c_bus.scl_pin)==GPIO_PIN_SET;
+  for(uint8_t i=0;i<6U;i++)out->raw[i]=BoardIo_ShtRaw[i];
+  /* Do not force clocks or send a general-call reset on a bus held low. */
+  if(!out->idle_sda || !out->idle_scl)return 1U;
+  for(uint8_t i=0;i<3U;i++) {
+    I2c_Start();
+    if(I2c_WriteByte((uint8_t)(addresses[i]<<1U)))out->ack_mask|=(uint8_t)(1U<<i);
+    I2c_Stop();
+  }
+  out->probes_run=1U;
   return 1U;
 }
 
@@ -302,6 +353,8 @@ void BoardIo_Init(void)
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
   DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
   sample_count = 0U;
+  sht_good=0U;sht_failed=0U;sht_last_good=0U;sht_raw_read=0U;
+  i2c_clock_fault=0U;i2c_clock_timeouts=0U;
   memset(samples, 0, sizeof samples);
 
   for (i = 0U; i < board_config.sensor_count; ++i)
@@ -376,8 +429,9 @@ void BoardIo_Poll(uint32_t now)
   if(sht_phase) {
     if((uint32_t)(now-sht_started)<20U)return;
     SensorSample *v=&samples[sht_index];
-    if(Sht30_Finish(sht_address,v))BoardIo_ShtFoundAddr=sht_address;
-    else {v->status=SENSOR_STATUS_MISSING;BoardIo_ShtFoundAddr=0U;}
+    if(Sht30_Finish(sht_address,v)) {
+      BoardIo_ShtFoundAddr=sht_address;++sht_good;sht_last_good=now;
+    } else {v->status=SENSOR_STATUS_MISSING;BoardIo_ShtFoundAddr=0U;++sht_failed;}
     v->sampled_at=now;++sample_sequence;sht_phase=0;return;
   }
   for(uint8_t n=0;n<sample_count;n++) {
@@ -390,8 +444,10 @@ void BoardIo_Poll(uint32_t now)
       sht_address=BoardIo_ShtFoundAddr?BoardIo_ShtFoundAddr:
         ((BoardIo_ShtDebug && sht_address==d->i2c_address)?(d->i2c_address==0x44U?0x45U:0x44U):d->i2c_address);
       sht_index=i;
-      if(Sht30_Begin(sht_address)){sht_phase=1;sht_started=now;}
-      else {BoardIo_ShtFoundAddr=0U;v->status=SENSOR_STATUS_MISSING;v->sampled_at=now;++sample_sequence;}
+      /* now may precede a blocking RTU response or the command transfer. The
+       * conversion wait starts only after the command has actually completed. */
+      if(Sht30_Begin(sht_address)){sht_phase=1;sht_started=HAL_GetTick();}
+      else {BoardIo_ShtFoundAddr=0U;v->status=SENSOR_STATUS_MISSING;v->sampled_at=now;++sample_sequence;++sht_failed;}
     } else {
       uint16_t raw;
       if(Adc_ReadRaw(d->adc_channel,&raw)) {

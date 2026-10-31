@@ -43,5 +43,6 @@ void ST7735_FillRect(int x, int y, int w, int h, uint16_t color);   /* 填充矩
 void ST7735_DrawGlyph16(int x, int y, const uint8_t glyph[32], uint16_t color, uint16_t bg);
 void ST7735_DrawChar(int x, int y, char c, uint16_t color, uint16_t bg);          /* 显示字符 8x16 */
 void ST7735_DrawString(int x, int y, const char *str, uint16_t color, uint16_t bg); /* 显示字符串 */
+void ST7735_DrawUtf8Line(int y,const char *text,uint16_t color,uint16_t bg);
 
 #endif /* __ST7735_H */

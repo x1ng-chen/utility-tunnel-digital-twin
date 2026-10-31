@@ -56,4 +56,6 @@ def validate_facts(output,evidence,assets):
                 if isinstance(value,list): return any(contains(v,parent_code) for v in value)
                 return False
             source=next((e for e in evidence if e['id']==f.get('evidence_id') and e['status']=='ok'),None)
+            if source and source.get('tool') in {'query_topology','compare_scenarios','procedure_templates'}:
+                raise ValueError('配置关系、仿真推演和流程文本不能充当原始测量事实。')
             if not source or not contains(source.get('data')): raise ValueError('所引工具结果未包含该设备的数值与单位。')

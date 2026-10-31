@@ -11,6 +11,9 @@
 !**/.env.example
 deploy/postgres/backups
 .agent-demo
+.agent-capabilities
+.hardware-live
+.agent-eval-guards
 .agent-eval
 .agent-eval-sprint
 .agent-knowledge

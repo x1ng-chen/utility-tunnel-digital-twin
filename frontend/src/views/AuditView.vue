@@ -36,7 +36,7 @@ function reset() { search.value = ''; category.value = ''; actor.value = ''; }
 <template>
   <AppShell>
     <section class="section-title">
-      <div><span class="eyebrow light">操作留痕</span><h1>审计追踪</h1><p>查看谁在何时进行了什么操作，帮助交接班核查与问题追溯。</p></div>
+      <div><h1>审计追踪</h1><p>查看谁在何时进行了什么操作，帮助交接班核查与问题追溯。</p></div>
       <span class="audit-count">已加载 {{ store.audit.length }} 条近期记录</span>
     </section>
     <form class="audit-filters" @submit.prevent>
@@ -83,6 +83,9 @@ function reset() { search.value = ''; category.value = ''; actor.value = ''; }
 .audit-person small { display: block; margin-bottom: 7px; color: var(--ops-muted); font-size: 11px; }
 .audit-pagination { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 20px 24px; }
 .audit-pagination > div { display: flex; gap: 10px; }
+.audit-description summary { min-height: 36px; align-content: center; }
+.audit-description summary:focus-visible { outline: 2px solid var(--ops-signal); outline-offset: 3px; }
+.audit-record > time { overflow-wrap: anywhere; }
 @container (max-width: 850px) {
   .audit-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .audit-record { grid-template-columns: minmax(0, 1fr) 110px; gap: 14px; }
@@ -91,5 +94,8 @@ function reset() { search.value = ''; category.value = ''; actor.value = ''; }
 @container (max-width: 480px) {
   .audit-filters, .audit-record { grid-template-columns: minmax(0, 1fr); }
   .audit-person small { display: inline; margin-right: 8px; }
+  .audit-filters, .audit-record, .audit-results, .audit-pagination { padding: 16px; }
+  .audit-pagination > div { width: 100%; }
+  .audit-pagination button { flex: 1; }
 }
 </style>

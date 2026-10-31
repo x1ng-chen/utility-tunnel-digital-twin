@@ -2,6 +2,7 @@ name: Verify Vue3 and Django stack
 
 on:
   push:
+    branches: [main]
     paths:
       - 'frontend/**'
       - 'backend/**'
@@ -43,6 +44,10 @@ on:
       - 'model/**'
       - '.github/workflows/vue-django.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -54,8 +59,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {lfs: false}
-      - name: Fetch only the demonstration GLB
-        run: git lfs pull --include="model/square-five-station-v17-fan-ready/*.glb" --exclude=""
+      - name: Fetch the current demonstration GLBs
+        run: git lfs pull --include="model/square-five-station-v17-fan-ready/*.glb,frontend/public/models/utility-tunnel-v24*.glb" --exclude=""
       - name: Prepare empty local model configuration
         run: |
           mkdir -p .agent-demo .agent-knowledge
@@ -100,6 +105,7 @@ jobs:
         with:
           node-version: 22
       - run: node tools/quality-scan.mjs
+      - run: python3 tools/check-project-navigation.py
       - run: node tools/check-postgres-policy.mjs
       - run: node tools/check-deployment-artifacts.mjs
       - run: node tools/check-twin-model-artifacts.mjs

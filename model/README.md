@@ -1,3 +1,11 @@
+# 模型导航
+
+当前实物前端使用[V24统一编号](square-five-station-v24-unified-numbering/README.md)，隔离软件演示保留精确SHA的[V24原交付](square-five-station-v24-inset-rgb-fans/README.md)。两者身份清单不同，不混用；当前配置见[项目进度](../docs/PROJECT_STATUS.md)。
+
+历史交付与下列旧部署结论按原日期保留。模型文件、几何验证和网页/实体验收分别记录，不能据旧“未激活”或旧“已通过”推断当前运行状态。
+
+---
+
 # 综合管廊实体样品模型
 
 ## 最新模型包：V24 透明亚克力与嵌入式 RGB 风机（2026-10-29）

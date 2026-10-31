@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "layoutVersion": "four-controller-20261026.1",
+  "common": {
+    "UT_WATCHDOG_ENABLED": 1,
+    "FAN_PWM_INVERTED": 1,
+    "RELAY_ACTIVE_HIGH": 1,
+    "FAN_PULSES_PER_REV": 2,
+    "FAN_TACH_VERIFIED": 0,
+    "INA_SHUNT_MICROOHMS": 10000,
+    "INA_CURRENT_LSB_UA": 100,
+    "INA_CALIBRATION_VERIFIED": 0
+  },
+  "boards": {"1": {}, "2": {}, "3": {}, "4": {}},
+  "verificationReferences": {},
+  "notes": "User confirmed both existing INA226 modules are R010 (0.01 ohm), active-high relays and external transistor PWM, 2026-10-29. Current LSB 100 uA gives signed current range approximately +/-3.2767 A, not a verified module rating. PPR and independent current calibration remain unverified. No Wi-Fi or MQTT credentials belong in this file."
+}

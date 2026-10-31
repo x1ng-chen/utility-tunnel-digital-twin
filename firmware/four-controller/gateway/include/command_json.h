@@ -36,7 +36,7 @@ static inline bool ut_json_string(const char *p,size_t n,size_t &i)
 /* Our command schema is flat and contains strings and integers only. Enforce
  * JSON quoting, separators, full consumption, and exactly seven keys before
  * the library decodes types/escapes. Duplicate keys reduce JsonObject::size. */
-static inline bool ut_json_shape(const char *p,size_t n)
+static inline bool ut_json_shape(const char *p,size_t n,unsigned expected_keys=7U)
 {
   size_t i=0;unsigned keys=0;
   while(i<n&&ut_space(p[i]))++i;
@@ -57,10 +57,10 @@ static inline bool ut_json_shape(const char *p,size_t n)
     ++keys;while(i<n&&ut_space(p[i]))++i;
     if(i==n)return false;
     if(p[i]=='}'){++i;break;}
-    if(p[i++]!=','||keys>=7U)return false;
+    if(p[i++]!=','||keys>=expected_keys)return false;
   }
   while(i<n&&ut_space(p[i]))++i;
-  return keys==7U&&i==n;
+  return keys==expected_keys&&i==n;
 }
 static inline bool ut_json_text(JsonVariantConst v)
 { return v.is<const char *>() && v.as<JsonString>().size()==strlen(v.as<const char *>()); }

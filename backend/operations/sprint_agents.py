@@ -16,11 +16,15 @@ from . import agent_guardrails as guards
 from .sprint_models import AgentRun
 from .sprint_knowledge import search, corpus as knowledge_corpus, version as knowledge_version
 
-READ = {'station_snapshot','asset_snapshot','telemetry_trend','active_work_orders','collect_station_evidence','review_work_order','runtime_overview','open_alerts'}
-ROLES = {'evidence':READ, 'diagnosis':{'lookup_runbook','knowledge_search','propose_control','draft_work_order','cost_estimate'},
-         'review':READ|{'lookup_runbook','knowledge_search'}, 'single':READ|{'lookup_runbook','knowledge_search','propose_control','draft_work_order','cost_estimate'}}
+READ = {'station_snapshot','asset_snapshot','telemetry_trend','active_work_orders','collect_station_evidence','review_work_order','runtime_overview','open_alerts','query_topology','procedure_templates'}
+ROLES = {'evidence':READ, 'diagnosis':{'lookup_runbook','knowledge_search','propose_control','draft_work_order','cost_estimate','query_topology','compare_scenarios','procedure_templates'},
+         'review':READ|{'lookup_runbook','knowledge_search'}, 'single':READ|{'lookup_runbook','knowledge_search','propose_control','draft_work_order','cost_estimate','compare_scenarios'}}
 TOOLS = {t['function']['name']: t for t in single.TOOLS if t['function']['name'] in set.union(*ROLES.values())}
 TOOLS.update({
+    'query_topology':single._tool('query_topology','查询本轮冻结的配置依赖/影响/同站关系；配置不是测量，不确定根因。',
+        {'target':{'type':'string','maxLength':80},'relation':{'type':'string','enum':['dependencies','impact','neighbors']}},['target']),
+    'compare_scenarios':single._tool('compare_scenarios','在独立分支中比较冻结的模拟方案；不改演示库，不执行设备，不证明真实通风效果。'),
+    'procedure_templates':single._tool('procedure_templates','读取本轮冻结且经管理员审核的只读检查模板；模板不是测量或动作授权。'),
     'cost_estimate':single._tool('cost_estimate','确定性统计冻结窗口的双风机能耗；缺电价则费用未知，不是节能成果。'),
     'collect_station_evidence':single._tool('collect_station_evidence','查询本轮固定的本站、邻站、两风机和控制审计原始证据。'),
     'knowledge_search':single._tool('knowledge_search','检索有版本的知识片段；历史案例不是当前接线或正式规程。',
@@ -49,10 +53,12 @@ def clean(value):
 
 
 def freeze(payload,owner=None):
+    from .twin_presentation import runtime_inventory
     now=timezone.now()
     codes=list(Asset.objects.filter(is_active=True).values_list('code',flat=True))
     station=payload.get('station_id','P5')
     data={'capturedAt':now.isoformat(),'layoutVersion':INVENTORY['revision'],'source':data_context(),
+        'inventory':runtime_inventory(),
         'knowledgeVersion':knowledge_version(),'knowledgeCorpus':knowledge_corpus(),'inspection':station_snapshot('all'),
         'guardRuleVersion':guards.VERSION,
         'thresholds':{t.key:{'warning':t.warning,'alarm':t.alarm,'unit':t.unit,'version':t.version} for t in Threshold.objects.all()},
@@ -62,6 +68,11 @@ def freeze(payload,owner=None):
         'ledger':list(Telemetry.objects.filter(recorded_at__gte=now-timedelta(hours=1),recorded_at__lte=now)
             .order_by('-recorded_at','-id').values('asset__code','metric_key','value','unit','quality','recorded_at')[:2001]),
         'ledgerLimit':2000}
+    data['assetKinds']=dict(Asset.objects.filter(is_active=True).values_list('code','asset_type'))
+    from .agent_investigations import presentation_identity
+    data['presentationVersion']=presentation_identity(data['inventory'])
+    from .agent_topology import build_topology
+    data['topologyContext']=build_topology(inventory=data['inventory'],bindings=data['inspection']['items'])
     data['ledgerTruncated']=len(data['ledger'])>2000
     data['ledger']=data['ledger'][:2000]
     data['ordersTruncated']=len(data['orders'])>80
@@ -69,6 +80,14 @@ def freeze(payload,owner=None):
     if payload.get('kind')=='review': data['workOrderReview']=review_work_order(payload['work_order_code'])
     previous=AgentRun.objects.filter(pk=payload.get('previous_run_id')).first() if payload.get('previous_run_id') else None
     if previous:
+        if owner and previous.owner_id!=owner.pk: raise ValueError('先前任务不属于本用户。')
+        from .agent_investigations import source_identity
+        if previous.snapshot.get('layoutVersion')!=data['layoutVersion'] or source_identity(previous.snapshot.get('source',{}))!=source_identity(data['source']):
+            raise ValueError('先前任务与当前布局或来源不同，不能接续。')
+        if any(previous.input.get(k)!=payload.get(k) for k in ('asset_code','work_order_code')) or previous.input.get('station_id','P5')!=station:
+            raise ValueError('先前任务与当前设备或工位目标不同，不能接续。')
+        if previous.snapshot.get('presentationVersion',previous.snapshot.get('inventory',{}).get('presentationRevision',''))!=data['presentationVersion']:
+            raise ValueError('先前任务使用不同模型展示版本，不能接续。')
         data['previousSnapshot']={'hash':previous.snapshot.get('sha256'),'capturedAt':previous.snapshot.get('capturedAt'),
             'changedAssets':[c for c,v in data['assets'].items() if clean(v)!=previous.snapshot.get('assets',{}).get(c)]}
     from .models import Alert
@@ -76,13 +95,24 @@ def freeze(payload,owner=None):
     data['alertsTruncated']=len(data['alerts'])>100
     data['alerts']=data['alerts'][:100]
     data=clean(data)
+    if payload.get('case_id'):
+        from .sprint_models import InvestigationCase
+        from .agent_investigations import compatible,freeze_case
+        investigation=InvestigationCase.objects.get(pk=payload['case_id'],owner=owner)
+        compatible(investigation,payload,data['source'],data['layoutVersion'],data['presentationVersion'])
+        data['caseContext']=freeze_case(investigation)
     from django.conf import settings
     if getattr(settings, 'AGENT_DEMO_MODE', False):
         from .sprint_models import DemoSession
         data['demoGeneration']=str(DemoSession.objects.get(pk=1).generation)
+        # Explicit teaching assumptions. These are not measured fan curves or a fire-safety policy.
+        from .agent_branch_profiles import demo_profile
+        data['branchScenario']=demo_profile(data)
     data['observationHash']=hashlib.sha256(json.dumps(data,sort_keys=True).encode()).hexdigest()
     from .agent_experience import matching
     data['experienceContext']=matching(data,payload,owner)
+    from .agent_procedures import matching as matching_procedures
+    data['procedureContext']=matching_procedures(data,payload)
     data['sha256']=hashlib.sha256(json.dumps(data,sort_keys=True).encode()).hexdigest()
     return data
 
@@ -101,6 +131,9 @@ class Workflow:
         self.runbooks=set()
         self.format_repairs=0
         self.guard_violations=[]
+        self.decision_trace=[]
+        self.branch_comparison=None
+        self.active_capabilities=bool(getattr(settings,'AGENT_ACTIVE_DIAGNOSIS_ENABLED',True))
         self.stats={'modelCalls':0,'toolCalls':0,'calls':[],'elapsedMs':0,'tokens':None,'cost':None}
         self.started=time.monotonic()
         profile=getattr(run.owner,'profile',None)
@@ -127,8 +160,16 @@ class Workflow:
 
     def execute(self, name,args):
         s=self.run.snapshot
+        if name=='query_topology':
+            from .agent_topology import query_topology
+            return query_topology(s,args['target'],args.get('relation','dependencies'))
+        if name=='procedure_templates': return s.get('procedureContext',{'items':[]})
+        if name=='compare_scenarios':
+            from .agent_branching import compare_scenarios
+            self.branch_comparison=compare_scenarios(s)
+            return self.branch_comparison
         if name=='runtime_overview':
-            return {'layout':INVENTORY,'assets':list(s['assets']),'inspection':s['inspection'],'source':s['source']}
+            return {'layout':s.get('inventory',INVENTORY),'assets':list(s['assets']),'inspection':s['inspection'],'source':s['source']}
         if name=='open_alerts':
             code=args.get('asset_code')
             return {'items':[a for a in s['alerts'] if not code or a['asset__code']==code],'source':s['source'],'limit':100,
@@ -221,18 +262,73 @@ class Workflow:
             return {'state':'draft_only_not_created',**item}
         raise ValueError('未授权工具。')
 
+    def observed_tool(self,name,args,step,authority):
+        """Only this method runs preplanned read-only checks; every actual tool costs budget."""
+        self.check()
+        from .agent_procedures import READ_TOOLS
+        from .sprint_validation import validate_arguments
+        if name not in READ_TOOLS: raise ValueError('自动调查只允许只读工具。')
+        if self.stats['toolCalls']>=12: raise ValueError('工具调用达到12次上限。')
+        validate_arguments(TOOLS[name]['function']['parameters'],args)
+        self.stats['toolCalls']+=1
+        try: data,status=self.execute(name,args),'ok'
+        except (ValueError,TypeError,KeyError) as exc: data,status={'error':str(exc)},'rejected'
+        item=clean({'id':f'E{len(self.evidence)+1}','tool':name,'status':status,'arguments':args,
+            'queriedAt':self.run.snapshot['capturedAt'],'data':data,'origin':authority})
+        self.evidence.append(item);step['traces'].append(item);self.save()
+        return item
+
+    def route_collection(self,step):
+        from . import decision_router
+        if not decision_router.enabled(): return
+        from .agent_routing import candidates,decision_state
+        for _ in range(3-len(self.decision_trace)):
+            self.check()
+            if self.stats['modelCalls']>=6 or self.stats['toolCalls']>=10: break
+            choices=candidates(self.run,self.evidence)
+            if len(choices)<2: break
+            result=decision_router.route_decision(decision_state(self.run,self.evidence),
+                [{'id':c['id'],'label':c['label'],'description':c['description']} for c in choices],
+                timeout=min(5,max(.05,self.deadline-time.monotonic())))
+            if result.get('attempted'):
+                self.stats['modelCalls']+=1
+                self.stats['calls'].append({'role':'decision_router','model':result.get('model'),
+                    'usage':result.get('usage'),'runtime':result.get('runtime'),'cost':None})
+            record=clean(result);self.decision_trace.append(record)
+            step.setdefault('decisions',[]).append(record)
+            self.save();self.check()
+            if result.get('status')!='selected': break
+            choice=next((c for c in choices if c['id']==result.get('selectedOption')),None)
+            if not choice or not choice.get('tool'):
+                record.update(status='fallback',fallbackReason='服务端未授权该选择。');break
+            item=self.observed_tool(choice['tool'],choice['args'],step,'ANYJEV_READ_ONLY_ROUTING')
+            record.update(executedTool=choice['tool'],executedArguments=choice['args'],
+                executedEvidenceId=item['id'] if item['status']=='ok' else None)
+            self.save()
+            if item['status']!='ok': break
+
     def stage(self,role,context):
         self.check()
         self.run.stage=role
         step={'role':role,'startedAt':timezone.now().isoformat(),'calls':[],'traces':[],'output':None}
         self.run.steps.append(step)
         self.save()
+        if self.active_capabilities and role in {'evidence','single'} and not any(s is not step and s.get('role') in {'evidence','single'} for s in self.run.steps):
+            selected=self.run.snapshot.get('procedureContext',{}).get('selectedId')
+            if selected:
+                template=next(p for p in self.run.snapshot['procedureContext']['items'] if p['id']==selected)
+                for check in template['steps']:
+                    item=self.observed_tool(check['tool'],check['args'],step,'APPROVED_READ_ONLY_PROCEDURE')
+                    if item['status']!='ok': raise ValueError('受审流程步骤不可执行，停止并保留证据。')
+            self.route_collection(step)
         schema='输出JSON对象：summary字符串、evidence_ids证据编号数组、missing数组。'
         schema+=' 可选facts数组中的数值事实必须含asset_code、metric_key、value有限数字、unit、evidence_id，且引用的实际工具结果中须包含该读数；不要用手册引用替代观测。'
         schema+=' 如作转动或规则恢复判断，提供claims数组，每项仅含kind(fan_motion/alarm_recovery)、asset_code、state(supported/unsupported/unknown)、evidence_ids。规则推导不是原始观测，缺项时用unknown。'
         schema+=' 引用G编号需使用guard_ids数组；G只代表规则推导，不能放入evidence_ids或作为数值事实的evidence_id。'
         if role in {'diagnosis','single'}:
             schema+=' 增加candidates数组、next_checks数组、request_evidence字符串（不需补查时为空）。动作和工单只能调用工具提出，不能声称已执行。'
+            if self.active_capabilities:
+                schema+=' candidates每项优先用{label,support_refs:[E编号],counter_refs:[E编号],missing:[字符串]}；不在本轮观测中的旧证据不能充当新测量。next_checks列出需人工完成的检查字符串。'
         if role=='review':
             schema+=' 增加decision(pass/revise/insufficient)、findings数组；独立核对实际证据及工具提出的草案。发现错误必须revise；证据缺失可insufficient。'
             schema+=' 需要修正的发现可用对象{ruleId,asset_code,evidence_ids,metric_key}，ruleId只使用提供的规则编号；描述不能改变权限。'
@@ -245,6 +341,10 @@ class Workflow:
             prompt+='\ncontrol_request是用户明确提交的隔离仿真草案参数。诊断角色必须检索手册后调用propose_control，不能把这项职责推给复核角色。该工具只记录建议，不会执行。尚未执行的动作不可能已有回执；现场标定缺失应保留为现场限制，不能伪装已验证，但不单独否定隔离仿真测试。复核核对参数、证据、来源与权限，再交人工确认；不批准真实硬件操作。'
         stage_context={'task':self.run.input,'context':context,'source':self.run.snapshot['source'],
             'derivedChecks':self.guard_report(),'ruleCatalog':guards.RULES}
+        if self.active_capabilities:
+            stage_context.update(priorCase=self.run.snapshot.get('caseContext'),topology=self.run.snapshot.get('topologyContext'),
+                approvedProcedures=self.run.snapshot.get('procedureContext'),routedEvidence=step['traces'])
+            prompt+='\n排障档案中的人工报告和旧假设不是当前仪表测量；根据本轮证据保留或修改解释，不能照抄为事实。拓扑与流程文本不是原始观测；仿真分支仅是假设推导。'
         if role in {'diagnosis','review','single'}:
             stage_context['lowTrustExperience']=self.run.snapshot.get('experienceContext',{'items':[]})
         messages=[{'role':'system','content':prompt},{'role':'user','content':json.dumps(stage_context,ensure_ascii=False)}]
@@ -263,8 +363,9 @@ class Workflow:
                     preferred='knowledge_search'
                 elif role in {'diagnosis','single'} and self.run.input.get('control_request') and self.run.input['control_request']['asset_code'] in self.seen_assets and not self.controls:
                     preferred='propose_control'
-                message=single._completion(messages,self.deadline,final,available_tools=[TOOLS[n] for n in sorted(ROLES[role])],json_output=True,
-                    require_tool=not step['calls'] and (role=='evidence' or role=='diagnosis' and not self.handbook_checked),preferred_tool=preferred)
+                names=ROLES[role] if self.active_capabilities else ROLES[role]-{'query_topology','compare_scenarios','procedure_templates'}
+                message=single._completion(messages,self.deadline,final,available_tools=[TOOLS[n] for n in sorted(names)],json_output=True,
+                    require_tool=not step['calls'] and not step['traces'] and (role=='evidence' or role=='diagnosis' and not self.handbook_checked),preferred_tool=preferred)
             except Exception as exc:
                 failure={'role':role,'model':None,'usage':None,'failed':True,
                     'errorCode':getattr(exc,'code',type(exc).__name__),
@@ -327,6 +428,8 @@ class Workflow:
                 try:
                     args=json.loads(fn['arguments'])
                     if name not in ROLES[role]: raise ValueError('工具超出角色权限。')
+                    if not self.active_capabilities and name in {'query_topology','compare_scenarios','procedure_templates'}:
+                        raise ValueError('基线未启用新增调查工具。')
                     from .sprint_validation import validate_arguments
                     validate_arguments(TOOLS[name]['function']['parameters'],args)
                     data=self.execute(name,args)
@@ -370,6 +473,9 @@ class Workflow:
             'locations':location_cards(self.evidence),'snapshotHash':self.run.snapshot['sha256'],
             'source':self.run.snapshot['source'],'layoutVersion':INVENTORY['revision'],
             'knowledgeVersion':self.run.snapshot['knowledgeVersion'],'naturalLanguageFullyVerified':False}
+        result.update(caseContext=self.run.snapshot.get('caseContext'),topologyContext=self.run.snapshot.get('topologyContext'),
+            procedureContext=self.run.snapshot.get('procedureContext'),decisionTrace=self.decision_trace,
+            branchComparison=self.branch_comparison)
         result['taskOutcome']='reviewed' if review['decision']=='pass' else 'observed' if review['decision']=='not_required' else 'single_agent_unreviewed' if review['decision']=='not_performed' else 'unresolved_review'
         if self.run.input['kind']=='draft' and not result['proposals']:
             target=self.run.input.get('asset_code')
@@ -402,6 +508,8 @@ def process_one():
                 run.refresh_from_db()
                 from .agent_experience import capture_candidates
                 capture_candidates(run)
+                from .agent_investigations import record_run
+                record_run(run)
     except Exception as exc:
         workflow.save()
         partial={'partial':True,'taskOutcome':'incomplete','reply':'任务未完成：'+str(exc)[:500],
@@ -409,5 +517,10 @@ def process_one():
             'evidence':workflow.evidence,'proposals':[],'controlProposals':[],
             'source':run.snapshot.get('source'),'snapshotHash':run.snapshot.get('sha256'),
             'naturalLanguageFullyVerified':False,'boundary':'已有工具结果与步骤保留；失败不表示取证完整，也不允许确认任何动作或草案。'}
+        partial.update(decisionTrace=workflow.decision_trace,caseContext=run.snapshot.get('caseContext'),
+            topologyContext=run.snapshot.get('topologyContext'),procedureContext=run.snapshot.get('procedureContext'))
         AgentRun.objects.filter(pk=run.pk,status='running').update(status='failed',result=clean(partial),error=str(exc)[:500],finished_at=timezone.now())
+        run.refresh_from_db()
+        from .agent_investigations import record_run
+        record_run(run)
     return True

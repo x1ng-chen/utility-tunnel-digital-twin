@@ -1,0 +1,338 @@
+/* Operate surfaces: one reading scale, stable navigation and explicit input states.
+   The targeted important declarations below replace legacy mobile bottom-rail
+   geometry; they do not change permissions, data provenance or scene state. */
+:root {
+  --ops-sidebar: 236px;
+  --ops-space-1: 4px;
+  --ops-space-2: 8px;
+  --ops-space-3: 12px;
+  --ops-space-4: 16px;
+  --ops-space-5: 24px;
+  --ops-space-6: 32px;
+  --ops-control-height: 40px;
+}
+
+.app-shell.command-deck {
+  min-height: 100dvh;
+  font-size: 14px;
+  line-height: 1.6;
+  background: var(--ops-bg);
+}
+.app-shell.command-deck.sidebar-collapsed { --ops-sidebar: 76px; }
+.app-shell .command-main { min-width: 0; }
+.app-shell .command-main .page-content {
+  max-width: 1680px;
+  padding: 24px 28px 48px !important;
+}
+.app-shell .command-main .page-content > * { animation: none; }
+.app-shell .command-main .hero,
+.app-shell .command-main .section-title {
+  min-height: 0;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.app-shell .command-main :is(.hero, .section-title) h1 {
+  margin: 0;
+  font-family: inherit;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -.025em;
+  line-height: 1.3;
+}
+.app-shell .command-main :is(.hero, .section-title) p {
+  max-width: 72ch;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.app-shell .command-main :is(.hero, .section-title) .eyebrow { display: none; }
+.app-shell .command-main :is(.panel-head, .table-head, .settings-head) h2 {
+  font-size: 16px;
+  line-height: 1.5;
+}
+.app-shell .command-main :is(.panel-head, .settings-head) p,
+.app-shell .command-main :is(.empty-state, .empty-state p, .workflow-explanation) {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.app-shell .command-main :is(.page-actions, .section-actions, .table-tools, .filter-bar) {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.app-shell .command-main :is(.primary-button, .outline-button, .compact-button, .text-button) {
+  min-height: var(--ops-control-height);
+  height: auto;
+  padding: 9px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.app-shell .command-main :is(input, select, textarea) {
+  max-width: 100%;
+  min-height: var(--ops-control-height);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  caret-color: var(--ops-signal);
+}
+.app-shell .command-main :is(input[type='checkbox'], input[type='radio']) {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  accent-color: var(--ops-signal);
+}
+.app-shell .command-main label { font-size: 13px; }
+.app-shell .command-main .config-source {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  justify-self: start;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.app-shell .command-main :is(.table-row, .table-head, .user-row, .audit-row) {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.app-shell .command-main :is(.table-row, .user-row, .audit-row) small {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.app-shell :is(button, a, input, select, textarea, summary):focus-visible,
+.command-panel :is(button, input):focus-visible {
+  outline: 2px solid var(--ops-signal);
+  outline-offset: 3px;
+}
+.app-shell button:disabled { cursor: not-allowed; }
+.app-shell .command-main :is(code, time, .metric-value) { font-variant-numeric: tabular-nums; }
+
+/* Navigation carries task names rather than decorative section numbers. */
+.app-shell .command-sidebar.sidebar {
+  width: var(--ops-sidebar);
+  grid-template-rows: 76px 40px minmax(0, 1fr) 72px;
+  z-index: 120;
+}
+.app-shell .command-sidebar .command-brand {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+}
+.app-shell .command-sidebar .brand-mark { width: 34px; height: 34px; }
+.app-shell .command-sidebar .brand-copy { min-width: 0; }
+.app-shell .command-sidebar .brand-copy b { font-size: 17px; line-height: 1.4; }
+.app-shell .command-sidebar .brand-copy small { font-size: 11px; line-height: 1.6; letter-spacing: 0; }
+.app-shell .command-sidebar .sidebar-toggle {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  border-radius: 8px;
+}
+.app-shell .command-sidebar .sidebar-system-state {
+  min-height: 40px;
+  padding-inline: 18px;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+.app-shell .command-sidebar > .command-nav {
+  display: block;
+  height: auto;
+  min-height: 0;
+  padding: 12px 12px 16px;
+}
+.app-shell .command-sidebar .nav-group { margin: 0 0 16px; padding: 0; }
+.app-shell .command-sidebar .nav-group h2 {
+  margin: 0;
+  padding: 0 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+.app-shell .command-sidebar .command-nav .nav-item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-left-width: 1px !important;
+  transform: none;
+}
+.app-shell .command-sidebar .command-nav .nav-item::before { content: none; }
+.app-shell .command-sidebar .command-nav .nav-item > svg { width: 19px; height: 19px; }
+.app-shell .command-sidebar .command-nav .nav-item > .nav-copy {
+  display: block;
+  font-family: inherit;
+  text-align: left;
+  transform: none;
+}
+.app-shell .command-sidebar .nav-copy b { display: block; font-size: 14px; font-weight: 600; line-height: 1.5; }
+.app-shell .command-sidebar .nav-copy small { display: none; }
+.app-shell .command-sidebar .command-nav .nav-item em {
+  min-width: 24px;
+  height: 22px;
+  padding: 0 5px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+}
+.app-shell .command-sidebar .sidebar-foot {
+  grid-template-columns: 34px minmax(0, 1fr) 32px;
+  gap: 8px;
+  min-height: 72px;
+  margin: 0 12px !important;
+  padding: 12px 2px !important;
+}
+.app-shell .command-sidebar .sidebar-foot .user-copy b { font-size: 12px; }
+.app-shell .command-sidebar .sidebar-foot .user-copy small { font-size: 11px; }
+.app-shell .command-sidebar .sidebar-foot button { min-width: 32px; min-height: 36px; }
+.app-shell .command-sidebar.collapsed .command-brand { grid-template-columns: 1fr; justify-items: center; padding: 18px 12px; }
+.app-shell .command-sidebar.collapsed :is(.brand-mark, .brand-copy, .sidebar-system-state, .nav-group h2, .nav-copy, .user-copy) { display: none; }
+.app-shell .command-sidebar.collapsed { grid-template-rows: 76px minmax(0, 1fr) 72px; }
+.app-shell .command-sidebar.collapsed .command-nav .nav-item { grid-template-columns: 1fr; justify-items: center; padding: 12px 0; }
+.app-shell .command-sidebar.collapsed .command-nav .nav-item > .nav-copy { display: none; }
+.app-shell .command-sidebar.collapsed .command-nav .nav-item em { position: absolute; top: 0; right: 0; min-width: 18px; height: 18px; padding-inline: 3px; font-size: 10px; }
+.app-shell .command-sidebar.collapsed .sidebar-foot { grid-template-columns: 1fr; justify-items: center; }
+.app-shell .command-sidebar.collapsed .sidebar-foot .avatar { display: none; }
+
+/* The title leads; connection details wrap without squeezing the task. */
+.app-shell .command-topbar.topbar {
+  grid-template-columns: minmax(160px, 1fr) auto auto;
+  gap: 20px;
+  min-height: 76px;
+  height: auto !important;
+  padding: 14px 28px;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.app-shell .command-topbar .page-identity { min-width: 0; gap: 12px; }
+.app-shell .command-topbar .page-identity > div { padding: 0; border: 0; min-width: 0; }
+.app-shell .command-topbar .page-identity strong { font-family: inherit; font-size: 16px; line-height: 1.5; }
+.app-shell .command-topbar .page-identity small { display: block; font-family: inherit; font-size: 11px; line-height: 1.5; letter-spacing: 0; }
+.app-shell .command-topbar .global-search { min-height: 40px; border-radius: 8px; }
+.app-shell .command-topbar .topbar-actions { gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.app-shell .command-topbar .topbar-actions .status-pill { padding: 7px 9px; font-size: 11px; line-height: 1.5; border-radius: 6px; }
+.app-shell .command-topbar .topbar-clock { gap: 0; font-family: inherit; }
+.app-shell .command-topbar .topbar-clock strong { font-size: 12px; line-height: 1.5; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.app-shell .command-topbar .topbar-clock small { font-size: 10px; letter-spacing: 0; }
+.mobile-navigation-toggle, .navigation-backdrop { display: none; }
+.app-shell .command-main > .offline-banner,
+.app-shell .command-main > .critical-ticker {
+  max-width: calc(100% - 56px);
+  margin: 16px 28px 0;
+  padding: 12px 16px;
+  gap: 12px;
+  border: 1px solid var(--ops-warn-line);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.app-shell .command-main > .offline-banner > div { min-width: 0; }
+.app-shell .command-main > .offline-banner strong { font-size: 13px; line-height: 1.6; }
+.app-shell .command-main > .offline-banner span { display: block; font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
+.app-shell .command-main > .offline-banner button { flex: 0 0 auto; min-height: 40px; font-size: 12px; }
+.app-shell .command-main > .critical-ticker { border-color: var(--ops-danger-line); }
+.app-shell .command-main > .critical-ticker > span { min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 1180px) and (min-width: 821px) {
+  .app-shell.command-deck { --ops-sidebar: 220px; }
+  .app-shell.command-deck.sidebar-collapsed { --ops-sidebar: 76px; }
+  .app-shell .command-topbar.topbar { grid-template-columns: minmax(0, 1fr) 40px; gap: 12px; }
+  .app-shell .command-topbar .topbar-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .app-shell .command-topbar .topbar-actions .status-pill:nth-of-type(2) { display: inline-flex; }
+  .app-shell .command-topbar .topbar-clock { display: none; }
+  .app-shell .command-topbar .top-avatar { margin-left: auto; }
+}
+@media (max-width: 820px) {
+  .app-shell.command-deck { --ops-sidebar: 0px; }
+  .app-shell.command-deck .command-main.main-panel { width: 100% !important; margin-left: 0 !important; padding-bottom: 0; }
+  .app-shell .command-main .page-content { padding: 20px 16px 40px !important; }
+  .app-shell .command-main :is(.hero, .section-title) h1 { font-size: 24px; }
+  .app-shell .command-main :is(.hero, .section-title) { min-height: 0; margin-bottom: 20px; }
+  .app-shell .command-topbar.topbar { grid-template-columns: minmax(0, 1fr) 40px; min-height: 68px; gap: 10px; padding: 12px 16px !important; }
+  .app-shell .command-topbar .page-identity { display: flex; }
+  .app-shell .command-topbar .page-identity small { display: none; }
+  .app-shell .command-topbar .topbar-actions { grid-column: 1 / -1; justify-content: flex-start; gap: 8px; }
+  .app-shell .command-topbar .topbar-actions .status-pill { display: inline-flex; font-size: 11px; }
+  .app-shell .command-topbar .topbar-actions .status-pill:nth-of-type(2) { display: inline-flex; }
+  .app-shell .command-topbar .topbar-clock, .app-shell .command-topbar .top-avatar { display: none; }
+  .app-shell .command-topbar .compact-logout { margin-left: auto; }
+  .app-shell .mobile-navigation-toggle { display: grid; flex: 0 0 40px; width: 40px; height: 40px; place-items: center; padding: 0; border: 1px solid var(--ops-line); border-radius: 8px; background: var(--ops-panel); color: var(--ops-text); }
+  .app-shell .mobile-navigation-toggle svg { width: 20px; height: 20px; }
+  .app-shell .command-main > .offline-banner,
+  .app-shell .command-main > .critical-ticker { max-width: calc(100% - 32px); margin: 12px 16px 0; padding: 12px; }
+  .app-shell .command-main > .offline-banner { align-items: flex-start; flex-wrap: wrap; }
+  .app-shell .command-main > .critical-ticker { display: flex; flex-wrap: wrap; }
+  .app-shell .command-main > .critical-ticker > span { flex: 1 1 180px; }
+
+  .app-shell.command-deck .command-sidebar.sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    display: grid;
+    grid-template-rows: 76px 40px minmax(0, 1fr) 72px;
+    width: min(300px, calc(100vw - 40px)) !important;
+    height: 100dvh !important;
+    padding: 0 !important;
+    border-top: 0 !important;
+    border-right: 1px solid var(--ops-line);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform .18s ease-out, visibility .18s;
+  }
+  .app-shell.command-deck .command-sidebar.sidebar.drawer-open { transform: translateX(0); visibility: visible; }
+  .app-shell.command-deck .command-sidebar .command-brand,
+  .app-shell.command-deck .command-sidebar .sidebar-foot { display: grid !important; }
+  .app-shell.command-deck .command-sidebar .brand-copy,
+  .app-shell.command-deck .command-sidebar .brand-mark,
+  .app-shell.command-deck .command-sidebar .sidebar-system-state,
+  .app-shell.command-deck .command-sidebar .nav-group h2,
+  .app-shell.command-deck .command-sidebar .nav-copy,
+  .app-shell.command-deck .command-sidebar .user-copy { display: block !important; }
+  .app-shell.command-deck .command-sidebar .sidebar-system-state { display: grid !important; }
+  .app-shell.command-deck .command-sidebar .command-brand { grid-template-columns: 34px minmax(0, 1fr) 40px; padding: 16px; justify-items: stretch; }
+  .app-shell.command-deck .command-sidebar .sidebar-toggle { width: 40px; height: 40px; }
+  .app-shell.command-deck .command-sidebar > .command-nav { display: block !important; height: auto; padding: 12px !important; overflow-x: hidden !important; overflow-y: auto !important; }
+  .app-shell.command-deck .command-sidebar .nav-group { display: block; margin-bottom: 16px; padding: 0; }
+  .app-shell.command-deck .command-sidebar .command-nav .nav-item { grid-template-columns: 20px minmax(0, 1fr) auto; justify-content: stretch !important; justify-items: stretch; width: 100% !important; height: auto !important; min-height: 46px; padding: 10px 12px !important; border-bottom: 0 !important; }
+  .app-shell.command-deck .command-sidebar .command-nav .nav-item > .nav-copy { display: block !important; }
+  .app-shell.command-deck .command-sidebar .nav-item em { position: static; min-width: 24px; height: 22px; }
+  .app-shell.command-deck .command-sidebar .sidebar-foot { grid-template-columns: 34px minmax(0, 1fr) 36px; justify-items: stretch; }
+  .app-shell.command-deck .command-sidebar .sidebar-foot > button { display: grid; place-items: center; }
+  .app-shell .navigation-backdrop { position: fixed; z-index: 119; inset: 0; display: block; width: 100%; height: 100dvh; padding: 0; border: 0; background: rgb(28 48 73 / 42%); cursor: default; }
+  .app-shell .command-main :is(.primary-button, .outline-button, .compact-button, .text-button) { min-height: 44px; }
+  .app-shell .command-main :is(input, select, textarea) { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.command-deck .command-sidebar.sidebar { transition: none; }
+}
+
+/* The assistant is teleported to body; it must respect the navigation modal. */
+body:has(.app-shell.navigation-open) :is(.ai-assistant-launcher, .ai-assistant-panel) {
+  visibility: hidden;
+  pointer-events: none;
+}
+@media (max-width: 820px) {
+  html .ai-assistant-launcher {
+    right: max(16px, env(safe-area-inset-right, 0px));
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    width: 48px;
+    height: 48px;
+    min-height: 48px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 12px;
+  }
+  html .ai-assistant-launcher > span { display: none; }
+  html .ai-assistant-panel.ai-assistant-panel {
+    right: 12px;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    width: calc(100vw - 24px);
+    height: min(680px, calc(100dvh - 92px - env(safe-area-inset-bottom, 0px)));
+  }
+}

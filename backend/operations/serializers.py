@@ -369,10 +369,11 @@ class TelemetrySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Telemetry
-        fields = ['id', 'eventId', 'assetCode', 'metricKey', 'metric', 'value', 'unit', 'quality', 'recordedAt', 'ingestedAt', 'observationKind']
+        fields = ['id', 'eventId', 'assetCode', 'metricKey', 'metric', 'value', 'unit', 'quality', 'recordedAt', 'ingestedAt', 'observationKind', 'provenance']
 
 
 class TelemetryReadingSerializer(serializers.Serializer):
+    provenance = serializers.JSONField(default=dict)
     observationKind = serializers.ChoiceField(choices=Telemetry.ObservationKind.choices, default='sample')
     eventId = serializers.RegexField(r'^[A-Za-z0-9._:-]{1,80}$', max_length=80)
     assetCode = serializers.RegexField(r'^[A-Z0-9][A-Z0-9_-]{1,39}$', max_length=40)
@@ -384,6 +385,11 @@ class TelemetryReadingSerializer(serializers.Serializer):
     recordedAt = serializers.DateTimeField()
 
     def validate(self, attrs):
+        from .hardware_live import validate_provenance
+        try:
+            validate_provenance(attrs)
+        except (ValueError, TypeError, OverflowError) as exc:
+            raise serializers.ValidationError({'provenance': str(exc)}) from exc
         if attrs['observationKind'] == 'latched_event' and (
                 attrs['metricKey'] not in {'smoke.alarm', 'flame.alarm', 'level.detected'}
                 or attrs['unit'] != 'bool' or attrs['value'] != 1):
