@@ -26,10 +26,21 @@ uint8_t BoardIo_SampleCount(void);
 uint16_t BoardIo_SensorId(uint8_t index);
 uint8_t BoardIo_AlarmActive(void);
 
+/* Main-loop-only diagnostics; never called from an interrupt. Probe bits map
+ * to 0x40 / 0x44 / 0x45. ACKs are not device identity or valid measurements. */
+typedef struct {
+  uint32_t good, failed, last_good_ms, raw_read_ms, clock_timeouts;
+  uint8_t address, stage, idle_sda, idle_scl, ack_mask, probes_run;
+  uint8_t raw[6];
+} BoardIoI2cDiagnostics;
+/* Returns 0 during an outstanding SHT conversion; performs no probes then. */
+uint8_t BoardIo_GetI2cDiagnostics(BoardIoI2cDiagnostics *out);
+
 /* 最近一次本地 I²C 扫描找到的地址；0 表示总线上没有任何应答。 */
 extern volatile uint8_t BoardIo_I2cScanResult;
 
-/* SHT 读取失败点：0=成功，1=写地址 NACK，2/3=命令 NACK，4=读地址 NACK，5/6=CRC 错。 */
+/* SHT: 0=成功, 1=写地址NACK, 2/3=命令NACK, 4=读地址NACK,
+ * 5/6=CRC错, 7=SCL释放后未能在有界等待内变高。 */
 extern volatile uint8_t BoardIo_ShtDebug;
 extern volatile uint8_t BoardIo_ShtRaw[6];
 extern volatile uint8_t BoardIo_I2cIdleSda;

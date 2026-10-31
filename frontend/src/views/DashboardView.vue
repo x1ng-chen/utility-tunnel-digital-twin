@@ -6,6 +6,7 @@ import { Activity, ArrowUpRight, Box, ClipboardCheck, Clock3, Download, Fan, His
 import AppShell from '../components/AppShell.vue';
 import '../assets/dashboard-polish.css';
 import DashboardSignal from '../components/DashboardSignal.vue';
+import AgentMissionHub from '../components/AgentMissionHub.vue';
 import { api, type AgentDataContext, type ControllerAction } from '../services/api';
 import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
@@ -51,6 +52,13 @@ const commandResult = ref('');
 const commandSending = ref(false);
 const pendingCommand = ref<{ action: ControllerAction; dutyPercent?: number; controller: string } | null>(null);
 const canControlEquipment = computed(() => store.source === 'api' && !store.offline && !controlDisabled.value && ['operator', 'administrator'].includes(auth.user?.role || ''));
+const controlAccessReason = computed(() => {
+  if (dataContext.value?.hardwareLive) return '当前为实物只读联调，设备控制已由服务端禁用；可查看实际反馈。';
+  if (store.source !== 'api') return '当前为界面演示，连接数据服务后才能检查设备控制权限。';
+  if (store.offline) return '数据服务暂不可用，请先恢复连接再核对设备控制状态。';
+  if (!['operator', 'administrator'].includes(auth.user?.role || '')) return '当前账号为只读权限，设备操作需要运维员或管理员。';
+  return commandProtocol.value === 'unknown' ? '设备控制配置尚未加载成功，请刷新数据后重试。' : '当前环境已由服务端禁用设备控制。';
+});
 const fanLive = computed(() => {
   const latest = (assetCode: string, metricKey: string) => store.telemetry
     .filter((item) => item.assetCode === assetCode && (item.metricKey === metricKey || item.metric === metricKey))
@@ -129,9 +137,8 @@ async function confirmControllerCommand() {
     <div class="dashboard-workspace">
       <section class="hero dashboard-heading">
         <div>
-          <div class="dashboard-context"><span class="context-line" />综合管廊运维工作台</div>
-          <h1>运行，一眼掌握</h1>
-          <p>从现场感知到处置闭环，让每一项运行状态都有据可查。</p>
+          <h1>智能体运维中心</h1>
+          <p>从五站观测出发，准备巡检、排障与恢复复核任务。</p>
         </div>
         <div class="section-actions">
           <button class="primary-button compact-button refresh-button" :disabled="store.loading" @click="sync"><RefreshCw :class="{ 'is-refreshing': store.loading }" aria-hidden="true" />{{ store.loading ? '同步中…' : '刷新数据' }}</button>
@@ -143,6 +150,8 @@ async function confirmControllerCommand() {
         <span class="dashboard-sync-time"><Clock3 aria-hidden="true" />{{ store.lastSyncedAt ? '最近同步 ' + new Date(store.lastSyncedAt).toLocaleString('zh-CN') : '尚未完成数据同步' }}</span>
       </div>
       <p v-if="reportError" class="inline-message error-message dashboard-error" role="alert">{{ reportError }}</p>
+
+      <AgentMissionHub :assets="store.assets" :alerts="store.alerts" :orders="store.workOrders" :model-paused="dataContext?.modelCallsDisabled === true" />
 
       <section class="metric-grid dashboard-metrics" aria-label="关键运行指标">
         <article class="metric-card">
@@ -233,7 +242,7 @@ async function confirmControllerCommand() {
             </div>
             <div class="lighting-row"><span class="control-group-title"><Lightbulb aria-hidden="true" />灯带联调</span><div class="lighting-actions"><button class="light-blue" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_blue')">蓝色</button><button class="light-green" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_green')">绿色</button><button class="light-red" :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_red')">红色</button><button :disabled="!canControlEquipment || commandSending" @click="requestControllerCommand('led_off')">熄灭</button></div></div>
             <p class="control-note">{{ fourController ? '每台风机独立供电与PWM；手动输出最长10秒，本地报警优先。回执不能代替运行反馈；带*为未核实或待标定读数，缺失或过期显示—。' : '旧 CTRL-01 协议：仅用于旧系统联调。部署四节点固件后，需启用服务端四节点协议配置。' }}</p>
-            <small v-if="!canControlEquipment" class="control-access-note">请使用在线 API 模式并以运维员或管理员身份登录。</small>
+            <small v-if="!canControlEquipment" class="control-access-note">{{ controlAccessReason }}</small>
             <p v-if="commandResult" class="command-ok" role="status">{{ commandResult }}</p><p v-if="commandError" class="command-error" role="alert">{{ commandError }}</p>
           </div>
         </article>

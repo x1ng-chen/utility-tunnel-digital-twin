@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Hand, Home, Orbit, ZoomIn, ZoomOut } from 'lucide-vue-next';
 import { Box3, BoxGeometry, Color, DirectionalLight, Fog, Group, HemisphereLight, MOUSE, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera, PointLight, Raycaster, Scene, Sphere, SphereGeometry, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Alert, Asset } from '../types';
 import { cameraFitDistance } from '../utils/cameraFit';
-import { createFanAnimator, type FanFeedbackContext, type FanMotion } from '../utils/fanMotion';
-import { modelNodeNames, nextTwinCameraDistance, primaryTwinAlert, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
+import { createFanAnimator, type FanFeedbackContext, type FanVisualFeedback } from '../utils/fanMotion';
+import { modelNodeNames, nextTwinCameraDistance, resolveTwinVisualState, summarizeTwinModelBindings, twinModelUrl, type TwinModelBindingReport, type TwinVisualState } from '../services/twin3d';
+import TwinAlarmOverlay from './TwinAlarmOverlay.vue';
+import { collectVisualAlarms, paintTwinMaterial, twinVisualColors, visualIntensity } from '../utils/twinAlarmStyle';
+import { createAlarmEffects, type AlarmTarget } from '../utils/twinAlarmEffects';
+import { layoutAlarmLabels, type AlarmAnchor, type AlarmLabel } from '../utils/alarmLabelLayout';
 
-const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string; modelEnabled?: boolean; fanFeedback?: FanFeedbackContext }>();
+const props = defineProps<{ assets: Asset[]; alerts: Alert[]; selectedCode: string | null; modelUrl?: string; modelEnabled?: boolean; fanFeedback?: FanFeedbackContext; overviewDirection?: number[] }>();
 const emit = defineEmits<{ select: [code: string]; modelReport: [report: TwinModelBindingReport] }>();
 const host = ref<HTMLDivElement>();
 const modelState = ref<'loading' | 'loaded' | 'fallback'>('loading');
@@ -17,6 +21,14 @@ const modelMessage = ref('正在加载三维模型…');
 const modelProgress = ref(0);
 const performanceMode = ref<'full' | 'reduced'>('full');
 const navigationMode = ref<'pan' | 'orbit'>('pan');
+const visualAlarms = computed(() => collectVisualAlarms(props.assets, props.alerts));
+const criticalAlarmCodes = computed(() => new Set(visualAlarms.value.filter(alarm => alarm.severity === 'critical').map(alarm => alarm.assetCode)));
+const alarmLabels = ref<AlarmLabel[]>([]);
+const unplacedAlarmCodes = ref<string[]>(visualAlarms.value.map(alarm=>alarm.assetCode));
+const reducedMotion = ref(false);
+let alarmEffects: ReturnType<typeof createAlarmEffects> | undefined;
+let lastLabelFrame = 0;
+let labelSignature = '';
 let scene: Scene | undefined;
 let camera: PerspectiveCamera | undefined;
 let renderer: WebGLRenderer | undefined;
@@ -38,7 +50,7 @@ const materialBaselines = new WeakMap<MeshStandardMaterial, { color: Color; emis
 let modelRoot: Object3D | undefined;
 let fanAnimator: ReturnType<typeof createFanAnimator> | undefined;
 let lastFanFrame = 0;
-const fanStates = ref<FanMotion[]>([]);
+const fanStates = ref<FanVisualFeedback[]>([]);
 let fanUiSignature = '';
 let fallbackSceneRoot: Group | undefined;
 let fallbackAssetRoot: Group | undefined;
@@ -48,7 +60,7 @@ let sceneRadius = 18;
 let pendingPanGesture: { pointerId: number; startX: number; startY: number; target: Vector3 } | undefined;
 let pendingSelectionGesture: { pointerId: number; startX: number; startY: number; code: string } | undefined;
 
-const colors: Record<TwinVisualState, number> = { normal: 0x4ee7c3, warning: 0xffbb62, alarm: 0xff536f, unknown: 0x6d87aa };
+const colors: Record<TwinVisualState, number> = twinVisualColors;
 
 function isFiniteVector(vector: Vector3) {
   return Number.isFinite(vector.x) && Number.isFinite(vector.y) && Number.isFinite(vector.z);
@@ -176,7 +188,7 @@ function bindModelAssets(root: Object3D) {
     const materials: MeshStandardMaterial[] = [];
     node.traverse((child) => {
       child.userData.assetCode = asset.code;
-      if (!(child instanceof Mesh)) return;
+      if (!(child instanceof Mesh) || child.userData.fanRgb === true) return;
       child.material = Array.isArray(child.material) ? child.material.map((material) => material.clone()) : child.material.clone();
       const childMaterials = Array.isArray(child.material) ? child.material : [child.material];
       childMaterials.forEach((material) => { if (material instanceof MeshStandardMaterial) materials.push(material); });
@@ -198,6 +210,9 @@ function syncSceneAssets() {
 }
 
 function clearLoadedModel() {
+  alarmEffects?.clear();
+  if (host.value) host.value.dataset.alarmMarkedAssets = '';
+  alarmLabels.value = []; unplacedAlarmCodes.value = visualAlarms.value.map(alarm=>alarm.assetCode); labelSignature = ''; lastLabelFrame = 0;
   fanAnimator?.dispose();
   fanAnimator = undefined;
   fanStates.value = [];
@@ -230,24 +245,15 @@ function clearLoadedModel() {
   animatedMaterials.clear();
 }
 
-function visualIntensity(state: TwinVisualState, selected: boolean, critical: boolean, now = 0) {
-  if (state === 'alarm') return (critical ? 2.1 : 1.55) + Math.sin(now * (critical ? 7 : 4.5)) * (critical ? .72 : .38) + (selected ? .55 : 0);
-  if (selected) return 2.25;
-  return state === 'warning' ? 1.08 : .42;
-}
-
 function colorObject(object: Object3D, state: TwinVisualState, selected = false, critical = false) {
-  const color = state === 'alarm' && critical ? 0xff3d66 : colors[state];
   object.traverse((child) => {
-    if (!(child instanceof Mesh)) return;
+    if (!(child instanceof Mesh) || child.userData.fanRgb === true) return;
     const materials = Array.isArray(child.material) ? child.material : [child.material];
     materials.forEach((material) => {
       if (!(material instanceof MeshStandardMaterial)) return;
       const baseline = materialBaselines.get(material) ?? { color: material.color.clone(), emissive: material.emissive.clone() };
       materialBaselines.set(material, baseline);
-      material.color.copy(baseline.color).lerp(new Color(color), selected ? .31 : state === 'alarm' ? .22 : .06);
-      material.emissive.copy(baseline.emissive).lerp(new Color(color), state === 'alarm' ? .88 : state === 'warning' ? .52 : .26);
-      material.emissiveIntensity = visualIntensity(state, selected, critical);
+      paintTwinMaterial(material, baseline, state, selected, critical);
     });
   });
 }
@@ -255,9 +261,42 @@ function colorObject(object: Object3D, state: TwinVisualState, selected = false,
 function applyVisualState() {
   props.assets.forEach((asset) => {
     const object = assetObjects.get(asset.code);
-    const alert = primaryTwinAlert(asset.code, props.alerts);
-    if (object) colorObject(object, resolveTwinVisualState(asset, props.alerts), props.selectedCode === asset.code, alert?.severity === 'critical');
+    if (object) colorObject(object, resolveTwinVisualState(asset, props.alerts), props.selectedCode === asset.code, criticalAlarmCodes.value.has(asset.code));
   });
+  syncAlarmEffects();
+}
+
+function syncAlarmEffects() {
+  if (!scene) return;
+  alarmEffects ??= createAlarmEffects(scene);
+  const targets: AlarmTarget[] = [];
+  const missing: string[] = [];
+  for (const alarm of visualAlarms.value) {
+    const object = modelBoundCodes.has(alarm.assetCode) ? assetObjects.get(alarm.assetCode) : undefined;
+    if (object) targets.push({...alarm, object}); else missing.push(alarm.assetCode);
+  }
+  alarmEffects.sync(targets, sceneRadius);
+  const placed = new Set(alarmEffects.anchors().map(anchor=>anchor.assetCode));
+  missing.push(...targets.filter(target=>!placed.has(target.assetCode)).map(target=>target.assetCode));
+  unplacedAlarmCodes.value = missing;
+  if (!alarmEffects.size) { alarmLabels.value = []; labelSignature = ''; }
+  if (host.value) host.value.dataset.alarmMarkedAssets = [...placed].join(',');
+}
+
+function projectAlarmLabels(timestamp: number) {
+  if (!alarmEffects?.size || !camera || !host.value || timestamp-lastLabelFrame < 70) return;
+  lastLabelFrame = timestamp;
+  const width = host.value.clientWidth, height = host.value.clientHeight;
+  const points: AlarmAnchor[] = [];
+  for (const anchor of alarmEffects.anchors()) {
+    const point = anchor.world.clone().project(camera);
+    if (point.z < -1 || point.z > 1 || Math.abs(point.x)>1 || Math.abs(point.y)>1) continue;
+    points.push({assetCode:anchor.assetCode,zone:anchor.zone,title:anchor.title,severity:anchor.severity,alertId:anchor.alertId,
+      anchorX:Math.round((point.x+1)*width/2),anchorY:Math.round((1-point.y)*height/2)});
+  }
+  const labels = layoutAlarmLabels(points, width, height);
+  const signature = JSON.stringify(labels);
+  if (signature !== labelSignature) { alarmLabels.value = labels; labelSignature = signature; }
 }
 
 function focusAsset(code: string | null) {
@@ -272,14 +311,34 @@ function focusAsset(code: string | null) {
   // owns adjacent meshes.  Do not let that oversized parent bound turn an
   // equipment focus action into another whole-model view.
   const objectRadius = Math.max(Math.min(measuredRadius, sceneRadius * .12), sceneRadius * .006, .002);
-  const distance = Math.max(objectRadius * 3.25, sceneRadius * .018, .05);
+  const alarmAnchor = alarmEffects?.anchors().find(anchor=>anchor.assetCode===code);
+  const alarmDistance = alarmAnchor ? (alarmAnchor.world.distanceTo(target)+objectRadius)*2.8 : 0;
+  const distance = Math.max(objectRadius * 3.25, sceneRadius * .018, .05, alarmDistance);
   controls.target.copy(target);
   controls.minDistance = Math.max(.002, sceneRadius * .0008);
-  camera.position.copy(target.clone().add(new Vector3(1, .72, 1).normalize().multiplyScalar(distance)));
+  camera.position.copy(target.clone().add(overviewOffset(true).multiplyScalar(distance)));
   camera.near = Math.max(.0002, distance / 800);
   camera.updateProjectionMatrix();
   controls.update();
   publishCameraDistance();
+}
+
+function overviewOffset(focus = false) {
+  const v = props.overviewDirection;
+  return v?.length === 3 && v.every(Number.isFinite) && v.some(n => n !== 0)
+    ? new Vector3(v[0], v[1], v[2]).normalize() : new Vector3(1, focus ? .72 : .68, 1).normalize();
+}
+
+function focusStation(stationId: string) {
+  if (!/^P[1-5]$/.test(stationId) || !modelRoot || !camera || !controls) return;
+  const group = modelRoot.getObjectByName(`STATION_${stationId}`);
+  const sphere = group ? boundingSphere(group) : null;
+  if (!sphere) return;
+  const distance = Math.max(.05, cameraFitDistance(sphere.radius, camera.fov, camera.aspect) * 1.2);
+  controls.target.copy(sphere.center);
+  camera.position.copy(sphere.center.clone().add(overviewOffset().multiplyScalar(distance)));
+  camera.near = Math.max(.0002, distance / 800);
+  camera.updateProjectionMatrix(); controls.update(); publishCameraDistance();
 }
 
 function resetView() {
@@ -290,7 +349,7 @@ function resetView() {
     sceneRadius = Math.max(sphere.radius, .2);
     const distance = cameraFitDistance(sceneRadius, camera.fov, camera.aspect);
     controls.target.copy(sphere.center);
-    camera.position.copy(sphere.center.clone().add(new Vector3(1, .68, 1).normalize().multiplyScalar(distance)));
+    camera.position.copy(sphere.center.clone().add(overviewOffset().multiplyScalar(distance)));
     controls.minDistance = Math.max(.002, sceneRadius * .0008);
     controls.maxDistance = Math.max(20, sceneRadius * 12, distance * 2);
     camera.near = Math.max(.005, sceneRadius / 500);
@@ -415,16 +474,18 @@ function animate(timestamp = 0) {
     const signature = JSON.stringify(states);
     if (signature !== fanUiSignature) { fanStates.value = states; fanUiSignature = signature; }
   }
-  const now = performance.now() / 1000;
+  const now = reducedMotion.value ? 0 : performance.now() / 1000;
   props.assets.forEach((asset) => {
     const materials = animatedMaterials.get(asset.code);
     if (!materials?.length) return;
     const state = resolveTwinVisualState(asset, props.alerts);
-    const critical = primaryTwinAlert(asset.code, props.alerts)?.severity === 'critical';
+    const critical = criticalAlarmCodes.value.has(asset.code);
     const intensity = visualIntensity(state, props.selectedCode === asset.code, critical, now);
     materials.forEach((material) => { material.emissiveIntensity = intensity; });
   });
   controls?.update();
+  alarmEffects?.update(now, reducedMotion.value);
+  projectAlarmLabels(timestamp);
   if (renderer && scene && camera) renderer.render(scene, camera);
 }
 
@@ -465,6 +526,7 @@ function loadModel() {
     modelRoot = gltf.scene;
     fanAnimator = createFanAnimator(modelRoot);
     scene.add(modelRoot);
+    sceneRadius = Math.max(boundingSphere(modelRoot)?.radius || .2, .2);
     publishModelReport('loaded', bindModelAssets(modelRoot));
     modelState.value = 'loaded';
     modelProgress.value = 100;
@@ -510,6 +572,7 @@ onMounted(() => {
   camera = new PerspectiveCamera(48, 1, .1, 200);
   const navigatorCapabilities = navigator as Navigator & { deviceMemory?: number };
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  reducedMotion.value = prefersReducedMotion;
   const limitedMemory = (navigatorCapabilities.deviceMemory ?? 8) <= 4;
   const limitedCpu = (navigator.hardwareConcurrency || 8) <= 4;
   performanceMode.value = prefersReducedMotion || limitedMemory || limitedCpu ? 'reduced' : 'full';
@@ -583,6 +646,7 @@ onBeforeUnmount(() => {
   renderer?.domElement.removeEventListener('webglcontextrestored', onContextRestored);
   controls?.dispose();
   clearLoadedModel();
+  alarmEffects?.dispose(); alarmEffects = undefined;
   renderer?.dispose();
   assetObjects.clear();
   animatedMaterials.clear();
@@ -600,16 +664,18 @@ function onContextRestored() {
   reloadModel();
 }
 
-defineExpose({ resetView, focusAsset, zoomBy, setNavigationMode, reloadModel, modelState, modelMessage, modelProgress });
+defineExpose({ resetView, focusAsset, focusStation, zoomBy, setNavigationMode, reloadModel, modelState, modelMessage, modelProgress });
 </script>
 
 <template>
   <div class="twin-scene" :data-model-state="modelState">
     <div ref="host" class="twin-canvas" aria-label="综合管廊三维数字孪生场景" role="application" />
+    <TwinAlarmOverlay :alarms="visualAlarms" :labels="alarmLabels" :unplaced-codes="unplacedAlarmCodes" @select="emit('select',$event)" />
     <div class="twin-model-state"><i :class="modelState" /><span>{{ modelMessage }}</span><em v-if="performanceMode === 'reduced'">流畅模式</em></div>
     <div v-if="fanStates.length" class="twin-fan-feedback" aria-label="独立风机反馈">
       <span v-for="fan in fanStates" :key="fan.assetCode" :title="fan.reason">
         {{ fan.assetCode }} · {{ fan.state === 'unknown' ? '反馈未知' : fan.state === 'stopped' ? '0 rpm · 已停止' : `${fan.measuredRpm} rpm` }}
+        · {{ fan.lighting.state === 'on' ? '供电亮灯' : fan.lighting.state === 'off' ? '断电灭灯' : '灯光供电未知' }}
       </span><small>叶轮转速为示意，数值为反馈值</small>
     </div>
     <div v-if="modelState === 'loading'" class="twin-model-progress" role="progressbar" aria-label="三维模型加载进度" :aria-valuenow="modelProgress" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${Math.max(modelProgress, 6)}%` }" /></div>

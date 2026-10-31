@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import AiAssistant from './AiAssistant.vue';
-import { computed, nextTick, ref, watch, type Component } from 'vue';
+import { computed, nextTick, ref, watch, onMounted, onBeforeUnmount, type Component } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { onKeyStroke, useLocalStorage, useNow } from '@vueuse/core';
+import { onKeyStroke, useLocalStorage, useMediaQuery, useNow } from '@vueuse/core';
 import {
   Activity,
   Box,
@@ -13,6 +13,7 @@ import {
   LogOut,
   Map,
   MapPinned,
+  Menu,
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
@@ -22,15 +23,30 @@ import {
   ShieldAlert,
   Wifi,
   WifiOff,
+  X,
 } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import { useOperationsStore } from '../stores/operations';
 import { serviceStatus } from '../utils/serviceStatus';
+import { api, type AgentDataContext } from '../services/api';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const operations = useOperationsStore();
+const sourceContext = ref<AgentDataContext | null>(null);
+let contextRequest = 0;
+async function loadSourceContext() {
+  const request = ++contextRequest;
+  sourceContext.value = null;
+  if (operations.source !== 'api' || !auth.isAuthenticated) return;
+  try {
+    const { data } = await api.agentContext();
+    if (request === contextRequest) sourceContext.value = data.dataContext;
+  } catch { /* No claim of physical provenance when its server context is unavailable. */ }
+}
+onMounted(loadSourceContext);
+watch(() => [operations.source, auth.isAuthenticated], loadSourceContext);
 const dataService = computed(() => serviceStatus(operations.source, operations.offline, operations.lastSyncedAt));
 const realtimeFeed = computed(() => {
   const state = operations.realtimeState;
@@ -42,6 +58,46 @@ const realtimeFeed = computed(() => {
 });
 const now = useNow({ interval: 1000 });
 const collapsed = useLocalStorage('ops.sidebar.collapsed', false);
+const isNarrow = useMediaQuery('(max-width: 820px)');
+const effectiveCollapsed = computed(() => !isNarrow.value && collapsed.value);
+const drawerOpen = ref(false);
+const navigationPanel = ref<HTMLElement>();
+const navigationTrigger = ref<HTMLButtonElement>();
+let navigationOpener: HTMLElement | null = null;
+let previousBodyOverflow: string | null = null;
+function closeNavigation() { drawerOpen.value = false; }
+function toggleNavigation() {
+  if (isNarrow.value) closeNavigation();
+  else collapsed.value = !collapsed.value;
+}
+function openNavigation() {
+  navigationOpener = document.activeElement instanceof HTMLElement ? document.activeElement : navigationTrigger.value || null;
+  drawerOpen.value = true;
+}
+watch(drawerOpen, async (open) => {
+  if (open) {
+    previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    await nextTick();
+    navigationPanel.value?.querySelector<HTMLButtonElement>('.sidebar-toggle')?.focus();
+  } else {
+    if (previousBodyOverflow !== null) document.body.style.overflow = previousBodyOverflow;
+    previousBodyOverflow = null;
+    await nextTick();
+    navigationOpener?.focus();
+  }
+});
+watch(isNarrow, (narrow) => { if (!narrow) closeNavigation(); });
+watch(() => route.path, closeNavigation);
+onBeforeUnmount(() => { if (previousBodyOverflow !== null) document.body.style.overflow = previousBodyOverflow; });
+function containNavigationFocus(event: KeyboardEvent) {
+  if (!isNarrow.value || !drawerOpen.value || event.key !== 'Tab') return;
+  const controls = navigationPanel.value?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], [tabindex="0"]');
+  if (!controls?.length) return;
+  const first = controls[0], last = controls[controls.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+}
 const searchOpen = ref(false);
 const searchQuery = ref('');
 const searchInput = ref<HTMLInputElement>();
@@ -70,12 +126,12 @@ function containSearchFocus(event: KeyboardEvent) {
 type NavItem = { path: string; icon: Component; label: string; description: string; adminOnly?: boolean };
 
 const primaryNav: NavItem[] = [
+  { path: '/agent-workbench', icon: Box, label: 'Agent工作台', description: '取证、诊断与复核工作流' },
   { path: '/dashboard', icon: Gauge, label: '运行总览', description: '实时态势与关键指标' },
   { path: '/alerts', icon: ShieldAlert, label: '告警中心', description: '异常确认与处置入口' },
   { path: '/work-orders', icon: ClipboardCheck, label: '工单中心', description: '派发、执行与复核' },
   { path: '/assets', icon: Server, label: '设备台账', description: '资产状态与维护记录' },
   { path: '/twin-3d', icon: Box, label: '三维孪生', description: '实体模型与告警定位' },
-  { path: '/agent-workbench', icon: Box, label: '智能运维', description: '取证、诊断与复核工作流' },
   { path: '/gis', icon: Map, label: 'GIS 总览', description: '空间位置与区域态势' },
   { path: '/telemetry', icon: Activity, label: '数据洞察', description: '遥测趋势与数据质量' },
 ];
@@ -96,7 +152,6 @@ const visibleGovernanceNav = computed(() => governanceNav.filter((item) => !item
 const nav = computed(() => [...visiblePrimaryNav.value, ...visibleGovernanceNav.value]);
 const currentNavIndex = computed(() => nav.value.findIndex((item) => item.path === route.path));
 const currentNav = computed(() => nav.value[currentNavIndex.value] || { label: '页面未找到', description: '请选择有效的导航入口' });
-const navProgress = computed(() => nav.value.length > 1 ? Math.max(0, currentNavIndex.value) / (nav.value.length - 1) : 0);
 const criticalAlert = computed(() => operations.alerts.find((item) => item.severity === 'critical' && ['open', 'acknowledged'].includes(item.status)));
 const searchResults = computed(() => {
   const needle = searchQuery.value.trim().toLowerCase();
@@ -122,12 +177,15 @@ const searchResults = computed(() => {
 onKeyStroke('k', (event) => {
   if (event.ctrlKey || event.metaKey) {
     event.preventDefault();
+    // The navigation drawer already owns modal focus on narrow screens.
+    if (drawerOpen.value) return;
     searchOpen.value = true;
   }
 });
-onKeyStroke('Escape', () => { searchOpen.value = false; });
+onKeyStroke('Escape', () => { if (searchOpen.value) searchOpen.value = false; else closeNavigation(); });
 
 function navigateTo(path: string, direction?: 'next' | 'previous') {
+  closeNavigation();
   if (path === route.path) return;
   const destination = nav.value.findIndex((item) => item.path === path);
   document.documentElement.dataset.routeDirection = direction || (destination >= currentNavIndex.value ? 'next' : 'previous');
@@ -158,23 +216,24 @@ function alertCount(path: string) {
 </script>
 
 <template>
-  <div :class="['app-shell command-deck', { 'sidebar-collapsed': collapsed }]">
-    <aside :class="['sidebar command-sidebar', { collapsed }]" aria-label="主导航">
+  <div :class="['app-shell command-deck', { 'sidebar-collapsed': effectiveCollapsed, 'navigation-open': drawerOpen }]">
+    <button v-if="isNarrow && drawerOpen" type="button" class="navigation-backdrop" aria-label="关闭导航" tabindex="-1" @click="closeNavigation" />
+    <aside id="main-navigation" ref="navigationPanel" :class="['sidebar command-sidebar', { collapsed: effectiveCollapsed, 'drawer-open': drawerOpen }]" :role="isNarrow ? 'dialog' : undefined" :aria-modal="isNarrow && drawerOpen ? true : undefined" :inert="isNarrow && !drawerOpen ? true : undefined" aria-label="主导航" @keydown="containNavigationFocus">
       <header class="brand command-brand">
         <span class="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span>
         <span class="brand-copy"><b>综合管廊</b><small>数字孪生运维平台</small></span>
-        <button class="sidebar-toggle" :aria-label="collapsed ? '展开侧边栏' : '收起侧边栏'" @click="collapsed = !collapsed">
-          <PanelLeftOpen v-if="collapsed" /><PanelLeftClose v-else />
+        <button class="sidebar-toggle" type="button" :aria-label="isNarrow ? '关闭导航' : effectiveCollapsed ? '展开侧边栏' : '收起侧边栏'" @click="toggleNavigation">
+          <X v-if="isNarrow" /><PanelLeftOpen v-else-if="effectiveCollapsed" /><PanelLeftClose v-else />
         </button>
       </header>
 
       <div :class="['sidebar-system-state', dataService.tone]"><i /><span>数据服务</span><strong>{{ dataService.label }}</strong></div>
 
-      <nav class="command-nav" :style="{ '--nav-progress': navProgress }">
+      <nav class="command-nav">
         <section class="nav-group" aria-labelledby="operations-nav-title">
           <h2 id="operations-nav-title">运行工作台</h2>
           <button
-            v-for="(item, index) in visiblePrimaryNav"
+            v-for="item in visiblePrimaryNav"
             :key="item.path"
             :title="`${item.label}：${item.description}`"
             :aria-label="item.label"
@@ -182,7 +241,6 @@ function alertCount(path: string) {
             :class="['nav-item', { active: route.path === item.path }]"
             @click="navigateTo(item.path)"
           >
-            <span class="nav-sequence">{{ String(index + 1).padStart(2, '0') }}</span>
             <component :is="item.icon" />
             <span class="nav-copy"><b>{{ item.label }}</b><small>{{ item.description }}</small></span>
             <em v-if="alertCount(item.path)">{{ alertCount(item.path) }}</em>
@@ -192,7 +250,7 @@ function alertCount(path: string) {
         <section class="nav-group governance-nav" aria-labelledby="governance-nav-title">
           <h2 id="governance-nav-title">平台治理</h2>
           <button
-            v-for="(item, index) in visibleGovernanceNav"
+            v-for="item in visibleGovernanceNav"
             :key="item.path"
             :title="`${item.label}：${item.description}`"
             :aria-label="item.label"
@@ -200,7 +258,6 @@ function alertCount(path: string) {
             :class="['nav-item governance-item', { active: route.path === item.path }]"
             @click="navigateTo(item.path)"
           >
-            <span class="nav-sequence">{{ String(visiblePrimaryNav.length + index + 1).padStart(2, '0') }}</span>
             <component :is="item.icon" />
             <span class="nav-copy"><b>{{ item.label }}</b><small>{{ item.description }}</small></span>
           </button>
@@ -214,10 +271,10 @@ function alertCount(path: string) {
       </footer>
     </aside>
 
-    <main class="main-panel command-main">
+    <main class="main-panel command-main" :inert="isNarrow && drawerOpen ? true : undefined">
       <header class="topbar command-topbar">
         <div class="page-identity">
-          <span>{{ currentNavIndex < 0 ? '--' : String(currentNavIndex + 1).padStart(2, '0') }} / {{ String(nav.length).padStart(2, '0') }}</span>
+          <button ref="navigationTrigger" class="mobile-navigation-toggle" type="button" aria-label="打开导航" aria-controls="main-navigation" :aria-expanded="drawerOpen" @click="openNavigation"><Menu /></button>
           <div><strong>{{ currentNav.label }}</strong><small>{{ currentNav.description }}</small></div>
         </div>
         <button class="global-search" type="button" aria-label="搜索设备、告警、工单" @click="searchOpen = true">
@@ -236,8 +293,6 @@ function alertCount(path: string) {
         </div>
       </header>
 
-      <div class="route-progress" aria-hidden="true"><i :style="{ transform: `scaleX(${navProgress})` }" /></div>
-
       <div v-if="criticalAlert" class="critical-ticker" role="alert">
         <ShieldAlert /><b>紧急告警</b><span>{{ criticalAlert.code }} · {{ criticalAlert.title }} · {{ criticalAlert.assetCode || '未绑定设备' }}</span>
         <button @click="router.push('/alerts')">立即处置</button>
@@ -248,6 +303,9 @@ function alertCount(path: string) {
         <button :disabled="operations.loading" @click="retrySync"><RefreshCw />{{ operations.loading ? '重试中' : '重新连接' }}</button>
       </div>
 
+      <div v-if="sourceContext?.hardwareLive || sourceContext?.mode === 'simulated_test'" class="offline-banner" role="status" data-testid="source-context">
+        <div><strong>{{ sourceContext.label }}</strong><span v-if="sourceContext.hardwareLive">当前仅采集与查看；硬件控制和付费模型调用已禁用。数据是否新鲜、有效请查看设备状态和采样时间。</span></div>
+      </div>
       <div class="page-content"><slot /></div>
 
       <Teleport to="body">

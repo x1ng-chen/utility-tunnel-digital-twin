@@ -1,0 +1,37 @@
+{
+  "revision": "v24-presentation-20261029.1",
+  "frontCameraDirection": [
+    -1,
+    0.85,
+    0
+  ],
+  "stations": [
+    {
+      "id": "P1",
+      "position": "后左",
+      "groupNode": "STATION_P1"
+    },
+    {
+      "id": "P2",
+      "position": "后右",
+      "groupNode": "STATION_P2"
+    },
+    {
+      "id": "P3",
+      "position": "前右",
+      "groupNode": "STATION_P3"
+    },
+    {
+      "id": "P4",
+      "position": "前左",
+      "groupNode": "STATION_P4"
+    },
+    {
+      "id": "P5",
+      "position": "中央",
+      "groupNode": "STATION_P5"
+    }
+  ],
+  "modelVersion": "v24-local-preview",
+  "notice": "V24本地预览；主控和传感器身份仍以已接入的业务台账为准。"
+}

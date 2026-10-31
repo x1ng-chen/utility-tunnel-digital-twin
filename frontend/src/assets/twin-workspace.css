@@ -1,0 +1,118 @@
+/* Keep the model as the work surface; ordinary controls belong outside it. */
+.app-shell .twin-title.section-title { align-items: center; gap: 20px; margin: 0 0 20px; padding: 0; min-height: 0; }
+.app-shell .twin-title.section-title h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.3; letter-spacing: 0; }
+.app-shell .twin-title.section-title p { display: block; margin: 0; font-size: 13px; line-height: 1.7; color: var(--ops-muted); }
+.app-shell .twin-title-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.app-shell .twin-title-actions button { min-height: 40px; padding-inline: 14px; font-size: 13px; }
+.app-shell .twin-live { padding: 8px 10px; font-size: 12px; white-space: normal; }
+.app-shell .model-numbering-notice { margin-bottom: 16px; padding: 10px 14px; font-size: 12px; line-height: 1.7; }
+.app-shell .model-numbering-notice summary { cursor: pointer; }
+.app-shell .model-numbering-notice summary span { margin-left: 16px; color: var(--ops-muted); }
+.app-shell .model-numbering-notice p { margin: 12px 0 0; }
+.app-shell .twin-workspace { grid-template-columns: minmax(0, 1fr) 304px; gap: 16px; align-items: start; }
+.app-shell .twin-workspace > * { min-width: 0; }
+.app-shell .twin-auto-locate { padding: 10px 14px; gap: 8px 16px; border-radius: 10px; }
+.app-shell .twin-auto-locate label { min-height: 32px; cursor: pointer; }
+.app-shell .twin-stage-panel { min-width: 0; border-radius: 12px; }
+.app-shell .twin-stage-panel::before { content: none; }
+.app-shell .twin-stage-panel:not(.twin-fullscreen-active) > .twin-preset-hud {
+  position: static; order: 0; transform: none; flex: 0 0 auto; border: 0; border-bottom: 1px solid var(--ops-line);
+  box-shadow: none; min-height: 48px; margin: 0; padding: 4px 12px; justify-content: flex-start; flex-wrap: wrap; gap: 4px;
+}
+.app-shell .twin-preset-hud span { font-family: inherit; font-size: 12px; font-weight: 600; min-width: 0; padding-inline: 8px; }
+.app-shell .twin-preset-hud button { min-width: 48px; height: 36px; border: 0; border-radius: 6px; font: inherit; font-size: 12px; }
+.app-shell .twin-preset-hud button:hover { background: var(--ops-signal-soft); color: var(--ops-signal); }
+.app-shell .twin-stage-panel:not(.twin-fullscreen-active) > .twin-scene { order: 1; flex: 0 0 auto; height: 560px; min-height: 420px; }
+.app-shell .twin-stage-panel .twin-model-state { left: 12px; top: 12px; max-width: calc(100% - 24px); padding: 8px 10px; font-size: 11px; }
+.app-shell .twin-stage-panel .twin-model-state span { overflow-wrap: anywhere; }
+.app-shell .twin-stage-panel .twin-model-state em { font-size: 10px; }
+.app-shell .twin-stage-panel .twin-camera-controls { left: auto; right: 12px; top: 58px; }
+.app-shell .twin-stage-panel .twin-fan-feedback { left: 12px; top: 54px; max-width: 180px; }
+.app-shell .twin-stage-panel .twin-scene-tip { font-size: 10px; max-width: calc(100% - 24px); }
+.app-shell .twin-stage-panel:not(.twin-fullscreen-active) > .twin-focus-status {
+  position: static; order: 2; width: auto; min-width: 0; margin: 0; padding: 12px 16px; border: 0;
+  border-top: 1px solid var(--ops-line); box-shadow: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+}
+.app-shell .twin-focus-status > b { font-size: 13px; max-width: 100%; overflow-wrap: anywhere; }
+.app-shell .twin-focus-status > small, .app-shell .twin-focus-status > span { font-size: 12px; }
+.app-shell .twin-stage-panel:not(.twin-fullscreen-active) .twin-risk-patrol { display: flex; align-items: center; flex-wrap: wrap; margin: 0 0 0 auto; gap: 8px; }
+.app-shell .twin-risk-patrol button { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+.app-shell .twin-risk-patrol em { font-size: 12px; }
+.app-shell .twin-stage-panel:not(.twin-fullscreen-active) > .twin-risk-hud {
+  position: static; order: 3; width: auto; max-height: none; border: 0; border-top: 1px solid var(--ops-line); overflow: visible;
+}
+.app-shell .twin-risk-hud summary { padding: 12px 16px; color: var(--ops-text); font-size: 13px; cursor: pointer; }
+.app-shell .twin-risk-hud summary b { margin-left: 8px; color: var(--ops-danger); font-size: 13px; }
+.app-shell .twin-risk-hud summary > span { float: right; color: var(--ops-muted); font-size: 12px; }
+.app-shell .twin-risk-list { max-height: 240px; overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.app-shell .twin-risk-list button { min-width: 0; min-height: 44px; grid-template-columns: 8px minmax(72px, auto) minmax(0, 1fr); gap: 8px; }
+.app-shell .twin-risk-list span { font-size: 12px; }
+.app-shell .twin-risk-list small { grid-column: auto; font-size: 12px; }
+.app-shell .twin-stage-panel:not(.twin-fullscreen-active) > .twin-quick-switch {
+  position: static; order: 4; transform: none; width: auto; height: auto; min-height: 0; max-width: 100%;
+  margin: 0; padding: 12px 16px; border: 0; border-top: 1px solid var(--ops-line); border-radius: 0; box-shadow: none;
+}
+.app-shell .twin-quick-switch-tools { flex-wrap: wrap; gap: 10px; }
+.app-shell .twin-quick-switch-heading span, .app-shell .twin-quick-switch-heading b { font-size: 12px; }
+.app-shell .twin-switch-filters { display: flex; flex-wrap: wrap; gap: 4px; }
+.app-shell .twin-switch-filters button { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+.app-shell .twin-quick-switch-list { padding-top: 10px; gap: 8px; overscroll-behavior-inline: contain; }
+.app-shell .twin-quick-switch-list button { min-height: 48px; padding: 8px 12px; }
+.app-shell .twin-quick-switch-list b, .app-shell .twin-quick-switch-list small { font-size: 12px; }
+.app-shell .twin-inspector { padding: 18px; min-width: 0; }
+.app-shell .twin-inspector h2 { margin-top: 0; font-size: 18px; max-width: none; }
+.app-shell .twin-inspector .eyebrow { font-size: 12px; letter-spacing: 0; }
+.app-shell .twin-inspector header .eyebrow { display: none; }
+.app-shell .twin-inspector code, .app-shell .twin-state-chip { font-size: 12px; }
+.app-shell .twin-inspector-grid { margin-block: 16px; }
+.app-shell .twin-inspector-grid span { font-size: 12px; }
+.app-shell .twin-inspector-grid b { font-size: 13px; }
+.app-shell .twin-inspector .twin-empty, .app-shell .twin-detail-section p, .app-shell .twin-alert-summary,
+.app-shell .twin-order-summary, .app-shell .twin-install-note, .app-shell .twin-alert-summary strong { font-size: 12px; line-height: 1.7; }
+.app-shell .twin-model-readiness, .app-shell .twin-model-contract { font-size: 12px; }
+.app-shell .twin-model-readiness p, .app-shell .twin-model-contract small { font-size: 12px; line-height: 1.6; }
+.app-shell .twin-model-readiness button, .app-shell .twin-gis-link, .app-shell .twin-alert-action { min-height: 38px; height: auto; padding: 8px 12px; font-size: 12px; }
+.app-shell .twin-model-binding-list summary, .app-shell .twin-model-binding-list p { font-size: 12px; line-height: 1.6; }
+.app-shell .twin-model-binding-list > div span { font-size: 11px; }
+.app-shell .twin-asset-panel { margin-top: 20px; }
+.app-shell .twin-asset-panel h2 { font-size: 18px; margin-top: 0; }
+.app-shell .twin-asset-panel header .eyebrow { display: none; }
+.app-shell .twin-search { min-height: 40px; height: auto; }
+.app-shell .twin-search input, .app-shell .twin-asset-item b, .app-shell .twin-asset-item small, .app-shell .twin-asset-item em { font-size: 12px; }
+.app-shell .twin-asset-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.app-shell .twin-asset-item { min-height: 56px; }
+.app-shell .twin-stage-panel button:focus-visible, .app-shell .twin-risk-hud summary:focus-visible { outline: 2px solid var(--ops-signal); outline-offset: -3px; }
+
+/* Fullscreen keeps tools inside the top layer; the ordinary view uses flow. */
+.app-shell .twin-stage-panel.twin-fullscreen-active { height: 100dvh; width: 100%; display: flex; border: 0; border-radius: 0; }
+.app-shell .twin-stage-panel.twin-fullscreen-active > .twin-scene { flex: 1; height: 100%; min-height: 0; }
+.app-shell .twin-stage-panel.twin-fullscreen-active .twin-risk-hud { top: 112px; left: 16px; width: 240px; max-height: 270px; overflow-y: auto; }
+.app-shell .twin-stage-panel.twin-fullscreen-active .twin-risk-list { display: block; max-height: 210px; }
+.app-shell .twin-stage-panel.twin-fullscreen-active .twin-focus-status { top: 112px; width: 240px; }
+.app-shell .twin-stage-panel.twin-fullscreen-active .twin-preset-hud { top: 12px; }
+@media (max-width: 1450px) {
+  .app-shell .twin-workspace { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .twin-inspector { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
+  .app-shell .twin-inspector > header, .app-shell .twin-inspector .twin-inspector-grid, .app-shell .twin-inspector .twin-install-note { grid-column: 1 / -1; }
+  .app-shell .twin-inspector-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .app-shell .twin-detail-section { margin: 0; padding-top: 12px; }
+  .app-shell .twin-asset-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .app-shell .twin-title.section-title { align-items: flex-start; flex-direction: column; gap: 14px; }
+  .app-shell .twin-title.section-title h1 { font-size: 24px; }
+  .app-shell .twin-title-actions { width: 100%; display: flex; }
+  .app-shell .twin-title-actions .twin-live { width: 100%; }
+  .app-shell .twin-stage-panel:not(.twin-fullscreen-active) > .twin-scene { height: 480px; min-height: 400px; }
+  .app-shell .twin-preset-hud > span { width: 100%; height: 24px; justify-content: flex-start; }
+  .app-shell .twin-stage-panel .twin-camera-controls { top: 130px; right: auto; left: 12px; }
+  .app-shell .twin-focus-status .twin-risk-patrol { margin-left: 0; width: 100%; }
+  .app-shell .twin-risk-list { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .twin-inspector { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+  .app-shell .twin-inspector-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-shell .twin-asset-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-shell .twin-stage-panel.twin-fullscreen-active .twin-preset-hud { top: 52px; left: 12px; right: 12px; }
+  .app-shell .twin-stage-panel.twin-fullscreen-active .twin-risk-hud { top: 226px; left: 12px; width: min(240px, calc(100% - 24px)); }
+  .app-shell .twin-stage-panel.twin-fullscreen-active .twin-focus-status { display: none; }
+  .app-shell .twin-fullscreen-autolocate { left: 12px; right: 12px; bottom: 158px; padding: 6px 10px; }
+}

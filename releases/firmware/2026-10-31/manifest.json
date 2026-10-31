@@ -1,0 +1,72 @@
+{
+  "release": "v2026.10.31-integration",
+  "buildId": "fa7f40f31621109d",
+  "version": "2026.10.27.2",
+  "type": "COMPLETE_BUSINESS_IMAGES",
+  "credentialsEmbedded": false,
+  "hardwareVerified": false,
+  "ctrl02MinimalDiagnosticIncludedAsBusiness": false,
+  "images": [
+    {
+      "target": "CTRL-01",
+      "file": "CTRL-01/four_ctrl01.bin",
+      "address": "0x08000000",
+      "bytes": 28272,
+      "sha256": "8d0b9dcf3d8d9700af2bf594fd090bdcfe7ee0071dac6321ec5dd50aed9f9890"
+    },
+    {
+      "target": "CTRL-02",
+      "file": "CTRL-02/four_ctrl02.bin",
+      "address": "0x08000000",
+      "bytes": 28152,
+      "sha256": "6525e5999f1eb9a8a2e2b08914318c3f0fe8cd3f00abb954f24080ffc175910a"
+    },
+    {
+      "target": "CTRL-03",
+      "file": "CTRL-03/four_ctrl03.bin",
+      "address": "0x08000000",
+      "bytes": 28124,
+      "sha256": "3491868d96afa25e7181189959089e94f046e2ff3d98e7cc3b234635b568b1f1"
+    },
+    {
+      "target": "CTRL-04",
+      "file": "CTRL-04/four_ctrl04.bin",
+      "address": "0x08000000",
+      "bytes": 28152,
+      "sha256": "b895b519f5421a31192a43e1a0db6a689edd9a3d31983e1bfed62605d4a389eb"
+    },
+    {
+      "target": "GW-01",
+      "file": "GW-01/bootloader.bin",
+      "address": "0x0",
+      "bytes": 15104,
+      "sha256": "2a71d69b471e20c2bac7fb469f3c6a807b3ebee780e348e5889db0da849ca363"
+    },
+    {
+      "target": "GW-01",
+      "file": "GW-01/partitions.bin",
+      "address": "0x8000",
+      "bytes": 3072,
+      "sha256": "bd0f7954aca2ef7d925ee21aaa1f3dc8822d1d6ce5cbbd26a135e5886bfff6ce"
+    },
+    {
+      "target": "GW-01",
+      "file": "GW-01/boot_app0.bin",
+      "address": "0xe000",
+      "bytes": 8192,
+      "sha256": "f94c5d786a7a8fab06ac5d10e33bf37711a6697636dc037559ea19cc410a17f0"
+    },
+    {
+      "target": "GW-01",
+      "file": "GW-01/firmware.bin",
+      "address": "0x10000",
+      "bytes": 740240,
+      "sha256": "52bb8a7eb5a7041375ad5686c1f961630db912c7f729db0af3794badd969c085"
+    }
+  ],
+  "softwareTests": {
+    "mode": "ARM machine-code emulation (portable logic only)",
+    "checks": 1613,
+    "failures": 0
+  }
+}

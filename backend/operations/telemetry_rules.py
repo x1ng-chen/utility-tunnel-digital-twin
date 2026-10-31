@@ -23,6 +23,8 @@ def evaluate_threshold(reading: Telemetry, threshold: Threshold, actor, request_
     """Apply one deterministic threshold rule while the caller holds the asset lock."""
     if reading.quality != Telemetry.Quality.GOOD:
         return RuleResult('skipped_quality')
+    if reading.unit != threshold.unit:
+        return RuleResult('skipped_unit')
     now = timezone.now()
     binding = getattr(reading.asset, 'hardware_binding', None)
     # A configured endpoint defines its observation window. Unbound sources

@@ -1,0 +1,37 @@
+{
+  "revision": "v24-unified-numbering-20261029.1",
+  "modelVersion": "hardware-live-v24-unified",
+  "frontCameraDirection": [
+    -1,
+    0.85,
+    0
+  ],
+  "stations": [
+    {
+      "id": "P1",
+      "position": "后左",
+      "groupNode": "STATION_P1"
+    },
+    {
+      "id": "P2",
+      "position": "后右",
+      "groupNode": "STATION_P2"
+    },
+    {
+      "id": "P3",
+      "position": "前右",
+      "groupNode": "STATION_P3"
+    },
+    {
+      "id": "P4",
+      "position": "前左",
+      "groupNode": "STATION_P4"
+    },
+    {
+      "id": "P5",
+      "position": "中央",
+      "groupNode": "STATION_P5"
+    }
+  ],
+  "notice": "全部31路按采集物理编号对应同编号模型模块；烟雾、甲烷、一氧化碳和火焰01～05分别对应P1～P5。温湿度和液位保留现有同编号模块的位置。氧气01在P1、02在P2、03在中央P5，中央旧O2-05已更名O2-03。业务资产别名SMOKE-01/GAS-CH4-01/GAS-CO-01仍代表MQ2-01/MQ4-01/CO-01；固件编号和11/7/6/7主控归属未改。模型映射核验不代替逐路实物验收；风机仍分别依赖有效RPM和电压反馈。"
+}

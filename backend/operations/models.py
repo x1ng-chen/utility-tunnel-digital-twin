@@ -270,6 +270,7 @@ class Telemetry(models.Model):
         LATCHED_EVENT = 'latched_event', '已观察事件锁存'
 
     observation_kind = models.CharField(max_length=20, choices=ObservationKind.choices, default=ObservationKind.SAMPLE)
+    provenance = models.JSONField(default=dict, blank=True)
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='telemetry')
     event_id = models.CharField(max_length=80, unique=True, null=True, blank=True, editable=False)
     metric_key = models.CharField(max_length=40, blank=True)
@@ -437,7 +438,7 @@ class AuditLog(models.Model):
         indexes = [models.Index(fields=['action', '-occurred_at'], name='audit_action_time_idx')]
 
 
-from .sprint_models import AgentRun, DemoSession, SimulatedAction, ReviewExperience  # noqa: E402,F401
+from .sprint_models import AgentRun, DemoSession, SimulatedAction, ReviewExperience, InvestigationCase, ProcedureTemplate, BranchComparison  # noqa: E402,F401
 
 
 class ReportExport(models.Model):

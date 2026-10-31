@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "evaluatedAtUtc": "2026-10-29T00:03:36.228686+00:00",
+  "backend": {
+    "tests": 365,
+    "passed": 365,
+    "settings": "config.settings",
+    "result": "OK"
+  },
+  "frontend": {
+    "testsPassed": 164,
+    "testsSkipped": 1,
+    "typecheck": "passed",
+    "viteBuild": "passed",
+    "browserVisualQa": "NOT_RUN_CONTROL_DISABLED"
+  },
+  "serviceHttpContracts": {
+    "tests": 7,
+    "result": "OK",
+    "engine": "EXPLICIT_STUB_NO_MODEL"
+  },
+  "postgresPolicyRules": 29,
+  "deploymentSafeguards": 37,
+  "schemaDrift": "NONE",
+  "djangoCheck": "no issues",
+  "paidModelCalls": 0,
+  "deepSeekLive": "DEFERRED",
+  "humanScoring": "NOT_RUN",
+  "remoteCi": "NOT_RUN",
+  "containerGpu": "NOT_RUN",
+  "physicalAcceptance": "NOT_IN_SCOPE",
+  "vision": "POSTPONED",
+  "originalWorktree": "PRESERVED",
+  "matrices": {
+    "matrix-local-final": {
+      "arms": {
+        "baseline": {
+          "attempts": 12,
+          "finishedRuns": 11,
+          "contractPassed": 11,
+          "permissionRefusals": 1
+        },
+        "active": {
+          "attempts": 12,
+          "finishedRuns": 11,
+          "contractPassed": 11,
+          "permissionRefusals": 1
+        },
+        "routed": {
+          "attempts": 12,
+          "finishedRuns": 11,
+          "contractPassed": 11,
+          "permissionRefusals": 1
+        }
+      },
+      "generativeModel": "EXPLICIT_GENERATIVE_STUB",
+      "decisionModel": "LOCAL_ANYJEV",
+      "humanScoring": "NOT_RUN",
+      "fieldDiagnosisAccuracyProven": false
+    },
+    "matrix-offline-final": {
+      "arms": {
+        "baseline": {
+          "attempts": 12,
+          "finishedRuns": 11,
+          "contractPassed": 11,
+          "permissionRefusals": 1
+        },
+        "active": {
+          "attempts": 12,
+          "finishedRuns": 11,
+          "contractPassed": 11,
+          "permissionRefusals": 1
+        },
+        "routed": {
+          "attempts": 12,
+          "finishedRuns": 11,
+          "contractPassed": 11,
+          "permissionRefusals": 1
+        }
+      },
+      "generativeModel": "EXPLICIT_GENERATIVE_STUB",
+      "decisionModel": "EXPLICIT_DECISION_STUB",
+      "humanScoring": "NOT_RUN",
+      "fieldDiagnosisAccuracyProven": false
+    }
+  },
+  "localModel": {
+    "integratedRouting": {
+      "requests": 13,
+      "statuses": {
+        "fallback": 11,
+        "selected": 2
+      },
+      "successfulChecksExecuted": 2,
+      "fallbackReasons": {
+        "uncertain": 10,
+        "low_margin": 1
+      },
+      "maxAllocatedMiB": 3482.78,
+      "maxReservedMiB": 3562.0,
+      "medianElapsedMs": 188.0,
+      "diagnosticBenefitProven": false,
+      "defaultEnabled": false
+    },
+    "local-router-evaluation.json": {
+      "schemaVersion": 1,
+      "evaluatedAtUtc": "2026-10-28T23:40:46.552874+00:00",
+      "source": "LOCAL_MODEL_WITH_SIMULATED_INPUTS",
+      "paidCalls": false,
+      "deepSeekCalled": false,
+      "fixtureKind": "DEVELOPER_AUTHORED_SMALL_FIXTURE_NOT_INDEPENDENT_BENCHMARK",
+      "cases": 12,
+      "selected": 5,
+      "fallback": 7,
+      "nextCheckMatches": 10,
+      "routingContractsPassed": 12,
+      "medianElapsedMs": 78.0,
+      "maxElapsedMs": 94.0,
+      "peakAllocatedMiB": 3333.91,
+      "peakReservedMiB": 3362.0,
+      "cost": null,
+      "humanScoring": "NOT_RUN",
+      "threeAgentLiveEvaluation": "DEFERRED",
+      "boundary": "仅是本地小模型及固定样例实测，不能证明真实故障诊断准确率或节能收益。"
+    },
+    "local-router-holdout-v2.json": {
+      "schemaVersion": 1,
+      "suite": "holdout",
+      "evaluatedAtUtc": "2026-10-28T23:49:36.026745+00:00",
+      "source": "LOCAL_MODEL_WITH_SIMULATED_INPUTS",
+      "paidCalls": false,
+      "deepSeekCalled": false,
+      "fixtureKind": "DEVELOPER_AUTHORED_SMALL_FIXTURE_NOT_INDEPENDENT_BENCHMARK",
+      "cases": 16,
+      "selected": 8,
+      "fallback": 8,
+      "nextCheckMatches": 12,
+      "routingContractsPassed": 16,
+      "medianElapsedMs": 86.0,
+      "maxElapsedMs": 547.0,
+      "peakAllocatedMiB": 3342.86,
+      "peakReservedMiB": 3364.0,
+      "cost": null,
+      "humanScoring": "NOT_RUN",
+      "threeAgentLiveEvaluation": "DEFERRED",
+      "boundary": "仅是本地小模型及固定样例实测，不能证明真实故障诊断准确率或节能收益。"
+    }
+  },
+  "sandboxSmoke": {
+    "settings": "config.agent_capability_settings",
+    "source": "simulated_test",
+    "ticked": true,
+    "telemetryRows": 43,
+    "oldTaskCountPreserved": 3,
+    "topologyHttpStatus": 200,
+    "caseCreateHttpStatus": 201,
+    "caseDetailHttpStatus": 200,
+    "pausedAtEnd": true,
+    "modelCalls": 0,
+    "commandsSent": 0
+  }
+}

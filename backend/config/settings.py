@@ -277,3 +277,8 @@ LOGGING = {
         'django.request': {'handlers': ['console_json'], 'level': 'WARNING', 'propagate': False},
     },
 }
+
+# Local decision service; never enables DeepSeek or hardware commands.
+ANYJEV_ENABLED = os.getenv('ANYJEV_ENABLED', 'false').lower() in {'1', 'true', 'yes'}
+ANYJEV_URL = os.getenv('ANYJEV_URL', 'http://127.0.0.1:8110')
+ANYJEV_TOKEN = os.getenv('ANYJEV_TOKEN', '')

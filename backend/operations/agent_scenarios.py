@@ -23,6 +23,10 @@ def seed_scenario(case_id, reset=False, with_model=True):
     root = require_evaluation_database()
     if case_id not in CASES:
         raise CommandError('Unknown acceptance case.')
+    if with_model:
+        # A missing LFS object must fail before an explicit reset flushes data.
+        from .agent_model_release import sandbox_root, v24_model_file
+        sandbox_root(); v24_model_file()
     if Asset.objects.exists() or User.objects.exists():
         if not reset:
             raise CommandError('Sandbox already contains data. Use --reset explicitly.')
@@ -87,12 +91,13 @@ def seed_scenario(case_id, reset=False, with_model=True):
                 status='pending_review', created_by=users['operator'])
             if case_id == 'ORD-04':
                 WorkOrder.objects.filter(code='WO-SIM-001').update(updated_at=now-timedelta(minutes=2))
-    if with_model:
-        install_model(users['administrator'])
+    model = install_model(users['administrator']) if with_model else None
     if case_id == 'INS-04':
         Asset.objects.filter(code='MQ4-05').update(mesh='')
     state = {'caseId': case_id, 'seededAt': now.isoformat(), 'layoutVersion': INVENTORY['revision'],
              'source': 'SIMULATED_TEST', 'modelInstalled': with_model}
+    if model:
+        state.update(presentationRevision=model['presentationRevision'], modelSha256=model['modelSha256'])
     (root / 'scenario.json').write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf-8')
     return state
 
@@ -114,8 +119,13 @@ def offline_controller(code, now):
     Telemetry.objects.filter(asset__code__in=members).update(recorded_at=now-timedelta(hours=1))
 
 
-def install_model(admin):
+def install_model(admin, version='v24'):
     """Exercise the actual administrator upload/activation gates; no forged inventory."""
+    if version == 'v24':
+        from .agent_model_release import install_v24_demo_model
+        return install_v24_demo_model(admin)
+    if version != 'v17':
+        raise CommandError('Only reviewed v24 or explicitly requested historical v17 is supported.')
     path = Path(__file__).resolve().parents[2] / 'model/square-five-station-v17-fan-ready/square-five-station-v17-fan-ready.glb'
     if not path.exists() or path.read_bytes()[:4] != b'glTF':
         raise CommandError('V17 GLB is not available; fetch its LFS object or use --without-model explicitly.')

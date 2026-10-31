@@ -11,6 +11,21 @@ import { addCalculatedOxygenConcentration } from '../src/telemetry.js';
 import { createTelemetryRoutes } from '../src/telemetry-routes.js';
 
 const at = new Date('2026-10-27T00:00:00.000Z');
+test('full provenance survives forwarding; ADC saturation is suspect, missing zero remains missing', () => {
+  const raw = frame(1);
+  const saturated = raw.readings.find(r => r.assetCode === 'MQ4-05');
+  saturated.value = 4095;
+  const absent = raw.readings.find(r => r.metric === 'humidity');
+  absent.value = 0; absent.quality = 'missing';
+  const parsed = parseTelemetry(raw, 'CTRL-01');
+  const batch = toDjangoBatch(parsed, {deviceId:'CTRL-01', receivedAt: at});
+  const row = batch.readings.find(r => r.assetCode === 'MQ4-05');
+  assert.equal(row.quality, 'suspect');
+  assert.deepEqual(row.provenance, {source:'four-controller-rtu-v2', controllerId:'CTRL-01',
+    frameId:raw.frameId, layoutVersion:raw.layoutVersion, rawOnly:true, clockSource:'gateway-ntp',
+    sampleAgeMs:110, frameTimestamp:at.toISOString(), seq:17});
+  assert.equal(batch.readings.find(r => r.metricKey === 'humidity').quality, 'missing');
+});
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const reading = (assetCode, metric, value, unit, age = 110) =>
   ({ assetCode, metric, value, unit, quality: 'good', sampleAgeMs: age });

@@ -81,6 +81,12 @@ export function toDjangoBatch(telemetry, { deviceId = 'CTRL-01', receivedAt = ne
       value,
       unit: DJANGO_UNIT_MAP[reading.unit] || reading.unit,
       quality: reading.quality || 'good',
+      ...(telemetry.source === 'four-controller-rtu-v2' ? { provenance: {
+        source: telemetry.source, controllerId: telemetry.controllerId, frameId: telemetry.frameId,
+        layoutVersion: telemetry.layoutVersion, rawOnly: telemetry.rawOnly,
+        clockSource: telemetry.clockSource, sampleAgeMs: reading.sampleAgeMs, frameTimestamp: recordedAt,
+        ...(telemetry.seq == null ? {} : { seq: telemetry.seq }),
+      } } : {}),
       ...(reading.eventLatched ? { observationKind: 'latched_event' } : {}),
       recordedAt: telemetry.source === 'four-controller-rtu-v2' && Number.isFinite(reading.sampleAgeMs)
         ? new Date(new Date(recordedAt).getTime() - reading.sampleAgeMs).toISOString() : recordedAt,

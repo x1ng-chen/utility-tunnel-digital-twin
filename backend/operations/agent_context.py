@@ -10,6 +10,19 @@ def evaluation_enabled():
     return bool(getattr(settings, 'AGENT_EVALUATION_MODE', False) and not settings.IS_PRODUCTION)
 
 
+def runtime_profile():
+    if getattr(settings, 'HARDWARE_LIVE_MODE', False):
+        return 'hardware-live'
+    if evaluation_enabled():
+        root = Path(getattr(settings, 'AGENT_EVAL_ROOT', '')).resolve()
+        if getattr(settings, 'AGENT_DEMO_MODE', False):
+            for name, profile in (('.agent-capabilities', 'agent-capabilities'), ('.agent-demo', 'agent-demo')):
+                if root == (settings.BASE_DIR.parent / name).resolve():
+                    return profile
+        return 'agent-evaluation'
+    return 'default'
+
+
 def require_evaluation_database():
     root = Path(getattr(settings, 'AGENT_EVAL_ROOT', settings.BASE_DIR / 'invalid')).resolve()
     db = connection.settings_dict
@@ -21,6 +34,10 @@ def require_evaluation_database():
 
 def data_context():
     if not evaluation_enabled():
+        if getattr(settings, 'HARDWARE_LIVE_MODE', False):
+            return {'mode': 'database_observation', 'label': '实物遥测 · 独立联调库；逐路功能与标定仍待验收',
+                'scenarioId': None, 'demoControlsAvailable': False, 'hardwareLive': True,
+                'controlDisabled': True, 'modelCallsDisabled': True}
         return {'mode': 'database_observation', 'label': '数据库观测；现场状态需核验', 'scenarioId': None,'demoControlsAvailable':False}
     scenario = {}
     try:
@@ -38,7 +55,9 @@ def data_context():
             generation=str(session.generation)
     return {'mode': 'simulated_test', 'label': '模拟测试 · 隔离验收库，非现场实时',
             'scenarioId': scenario.get('caseId'), 'seededAt': scenario.get('seededAt'),'generation':generation,
-            'demoControlsAvailable':bool(getattr(settings,'AGENT_DEMO_MODE',False))}
+            'demoControlsAvailable':bool(getattr(settings,'AGENT_DEMO_MODE',False)),
+            'modelCallsDisabled':not bool(getattr(settings, 'DEEPSEEK_API_KEY', '')),
+            'profile':runtime_profile()}
 
 
 def observation_valid(reading):

@@ -46,6 +46,10 @@ def expire_runs():
             'evidence':[e for step in run.steps for e in step.get('traces',[])],
             'proposals':[],'controlProposals':[],'source':run.snapshot.get('source'),
             'snapshotHash':run.snapshot.get('sha256'),'naturalLanguageFullyVerified':False}
+        partial['decisionTrace']=[d for step in run.steps for d in step.get('decisions',[])]
+        partial['caseContext']=run.snapshot.get('caseContext')
+        partial['topologyContext']=run.snapshot.get('topologyContext')
+        partial['procedureContext']=run.snapshot.get('procedureContext')
         from .agent_guardrails import derive,VERSION
         if run.snapshot.get('guardRuleVersion')==VERSION:
             partial['guardrails']=derive(run.snapshot,partial['evidence'])
@@ -66,9 +70,38 @@ class RunList(APIView):
         return Response([serialize(r) for r in AgentRun.objects.filter(owner=request.user).order_by('-created_at')[:20]])
 
     def post(self,request):
+        if getattr(settings, 'HARDWARE_LIVE_MODE', False):
+            return Response({'message':'实物联调阶段付费模型任务暂停；请使用五站直接巡检查看真实证据。'}, status=503)
+        if not settings.DEEPSEEK_API_KEY:
+            return Response({'message':'当前软件环境未启用模型调用；可查看历史和使用只读工具，配置后需显式重新启动。'}, status=503)
         p=request.data
-        if not isinstance(p,dict) or set(p)-{'kind','station_id','asset_code','work_order_code','prompt','mode','previous_run_id','control_request'}:
+        if not isinstance(p,dict) or set(p)-{'kind','station_id','asset_code','work_order_code','prompt','mode','previous_run_id','control_request','case_id','procedure_id'}:
             return Response({'message':'无效任务字段。'},status=400)
+        p=dict(p)
+        investigation=None
+        if 'case_id' in p:
+            from .sprint_models import InvestigationCase
+            from .investigation_views import identifier
+            try: case_id=identifier(p['case_id'],'档案')
+            except ValueError as exc: return Response({'message':str(exc)},status=400)
+            investigation=InvestigationCase.objects.filter(pk=case_id,owner=request.user).first()
+            if not investigation: return Response(status=404)
+            if p.get('kind','diagnosis')!='diagnosis': return Response({'message':'排障档案仅关联diagnosis任务。'},status=400)
+            p.setdefault('station_id',investigation.station_id)
+            if investigation.asset_code: p.setdefault('asset_code',investigation.asset_code)
+            if not p.get('previous_run_id'):
+                previous_case_run=investigation.runs.filter(status='completed').order_by('-created_at').first()
+                if previous_case_run: p['previous_run_id']=str(previous_case_run.pk)
+        if 'procedure_id' in p:
+            from .sprint_models import ProcedureTemplate
+            from .investigation_views import identifier
+            try: procedure_id=identifier(p['procedure_id'],'流程')
+            except ValueError as exc: return Response({'message':str(exc)},status=400)
+            selected_template=ProcedureTemplate.objects.filter(pk=procedure_id,status='approved').first()
+            if not selected_template:
+                return Response({'message':'指定流程未批准或不可用。'},status=400)
+            template_target=next((s.get('args',{}).get('asset_code') for s in selected_template.steps if isinstance(s,dict) and s.get('args',{}).get('asset_code')),None)
+            if template_target: p.setdefault('asset_code',template_target)
         kind=p.get('kind','diagnosis')
         if not isinstance(kind,str) or kind not in {'inspection','diagnosis','draft','review'} or not isinstance(p.get('mode','multi'),str) or p.get('mode','multi') not in {'single','multi'}:
             return Response({'message':'无效任务类型。'},status=400)
@@ -103,11 +136,20 @@ class RunList(APIView):
             return Response({'message':'需要1至80字符Idempotency-Key。'},status=400)
         payload={**p,'kind':kind,'mode':p.get('mode','multi'),'station_id':p.get('station_id','P5')}
         old=AgentRun.objects.filter(owner=request.user,request_key=key).first()
-        if old: return Response(serialize(old),status=200 if old.input==payload else 409)
+        if old:
+            ignored=set() if request.data.get('previous_run_id') else {'previous_run_id'}
+            same={k:v for k,v in old.input.items() if k not in ignored}=={k:v for k,v in payload.items() if k not in ignored}
+            return Response(serialize(old),status=200 if same else 409)
+        if investigation:
+            from .agent_investigations import compatible,current_identity
+            try: compatible(investigation,payload,*current_identity())
+            except ValueError as exc: return Response({'message':str(exc)},status=400)
+            if previous and not investigation.runs.filter(pk=previous).exists():
+                return Response({'message':'先前任务不属于本档案。'},status=400)
         expire_runs()
         try:
             with transaction.atomic():
-                run=AgentRun.objects.create(owner=request.user,request_key=key,input=payload)
+                run=AgentRun.objects.create(owner=request.user,request_key=key,input=payload,case=investigation)
         except IntegrityError:
             return Response({'message':'当前已有运行任务或重复请求，请先等待或取消。'},status=409)
         return Response(serialize(run),status=202)

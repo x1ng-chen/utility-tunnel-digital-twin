@@ -10,12 +10,12 @@ const transparentMapTile = Buffer.from(
   'base64',
 );
 const pages = [
-  ['/dashboard', '运行，一眼掌握', '运行总览'],
+  ['/dashboard', '智能体运维中心', '运行总览'],
   ['/alerts', '告警中心', '告警中心'],
   ['/work-orders', '工单中心', '工单中心'],
   ['/assets', '设备台账', '设备台账'],
   ['/twin-3d', '三维孪生中心', '三维孪生'],
-  ['/agent-workbench', '多Agent工作台', '智能运维'],
+  ['/agent-workbench', '多Agent工作台', 'Agent工作台'],
   ['/gis', 'GIS 空间运维总览', 'GIS 总览'],
   ['/telemetry', '数据洞察', '数据洞察'],
   ['/asset-admin', '资产主数据', '资产配置'],
@@ -98,7 +98,7 @@ async function loginAsAdministrator(page) {
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
 }
 
 async function openAuthenticatedPage(page, route) {
@@ -112,7 +112,7 @@ async function openAuthenticatedPage(page, route) {
   }
 }
 
-test('全部业务页面在窄屏保留全宽内容与底部导航', async ({ page }) => {
+test('全部业务页面在窄屏保留全宽内容与可访问抽屉导航', async ({ page }) => {
   test.setTimeout(180_000);
   await isolateMapTiles(page);
   const output = path.resolve(__dirname, '../../output/playwright/mobile-audit');
@@ -128,32 +128,26 @@ test('全部业务页面在窄屏保留全宽内容与底部导航', async ({ pa
           .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
           .map((animation) => animation.finished.catch(() => {})));
       });
-      // A route rebuild can expose the shell for one frame before the global
-      // command layout finishes applying. Position alone is insufficient:
-      // require the final fixed geometry before measuring this page, otherwise
-      // the audit can inspect a transient sidebar flowing below long content.
-      await expect.poll(() => page.locator('.command-sidebar').evaluate((element) => {
+      // The current mobile shell uses a modal drawer, not the legacy bottom rail.
+      const navigationTrigger = page.getByRole('button', { name: '打开导航', exact: true });
+      await expect(navigationTrigger).toBeVisible();
+      const dimensions = await page.locator('.command-main').evaluate(element => {
         const box = element.getBoundingClientRect();
-        const style = getComputedStyle(element);
-        return style.position === 'fixed'
-          && Math.abs(box.bottom - innerHeight) <= 1
-          && box.height <= 70;
-      }), { timeout: 10_000 }).toBe(true);
-      const dimensions = await page.evaluate(() => {
-        const sidebar = document.querySelector('.command-sidebar').getBoundingClientRect();
-        const main = document.querySelector('.command-main').getBoundingClientRect();
-        return { width: innerWidth, height: innerHeight, documentWidth: document.documentElement.scrollWidth,
-          sidebar: { x: sidebar.x, bottom: sidebar.bottom, height: sidebar.height, width: sidebar.width },
-          main: { x: main.x, right: main.right } };
+        return { width: document.documentElement.scrollWidth, x: box.x, right: box.right };
       });
-      expect(dimensions.documentWidth, `${heading} 不得让整页横向溢出`).toBeLessThanOrEqual(viewport.width + 1);
-      expect(dimensions.main.x, `${heading} 不得保留桌面侧栏占位`).toBeLessThanOrEqual(1);
-      expect(dimensions.main.right).toBeLessThanOrEqual(viewport.width + 1);
-      expect(dimensions.sidebar.x).toBe(0);
-      expect(dimensions.sidebar.width).toBe(viewport.width);
-      expect(dimensions.sidebar.bottom).toBe(viewport.height);
-      expect(dimensions.sidebar.height).toBeLessThanOrEqual(70);
-      await expect(page.locator('.compact-logout')).toBeInViewport();
+      expect(dimensions.width, `${heading} 不得让整页横向溢出`).toBeLessThanOrEqual(viewport.width + 1);
+      expect(dimensions.x, `${heading} 不得保留桌面侧栏占位`).toBeLessThanOrEqual(1);
+      expect(dimensions.right).toBeLessThanOrEqual(viewport.width + 1);
+      await navigationTrigger.click();
+      const drawer = page.getByRole('dialog', { name: '主导航', exact: true });
+      await expect(drawer).toBeVisible();
+      await expect(drawer.locator('.nav-item')).toHaveCount(pages.length);
+      await expect(page.locator('.command-main')).toHaveAttribute('inert', '');
+      await expect(drawer.getByRole('button', { name: '关闭导航', exact: true })).toBeInViewport();
+      await expect(drawer.getByRole('button', { name: '退出登录', exact: true })).toBeInViewport();
+      await page.keyboard.press('Escape');
+      await expect(drawer).not.toBeVisible();
+      await expect(navigationTrigger).toBeFocused();
       if (route === '/dashboard' && viewport.width <= 600) {
         const nodes = await page.locator('.tunnel-map .map-node').evaluateAll((elements) => elements.map((element) => {
           const box = element.getBoundingClientRect();
@@ -284,11 +278,23 @@ test('全部业务页面通过桌面端布局巡检', async ({ page }) => {
       await expect(page.locator('.gis-marker.alarm i').first()).toHaveCSS('background-color', 'rgb(185, 54, 77)');
     }
     if (route === '/twin-3d') {
-      const gap = await page.locator('.twin-stage-panel').evaluate((stage) => {
-        const scene = stage.querySelector('.twin-scene');
-        return stage.getBoundingClientRect().bottom - scene.getBoundingClientRect().bottom;
+      const layout = await page.locator('.twin-stage-panel').evaluate(stage => {
+        const scene = stage.querySelector('.twin-scene').getBoundingClientRect();
+        const panels = [...stage.children].filter(element => {
+          const style = getComputedStyle(element);
+          return style.display !== 'none' && !['absolute', 'fixed'].includes(style.position)
+            && element.getBoundingClientRect().height > 0;
+        });
+        const status = [...stage.querySelectorAll(':scope > .twin-focus-status, :scope > .twin-risk-hud, :scope > .twin-quick-switch')]
+          .filter(element => element.getBoundingClientRect().height > 0);
+        return { sceneHeight: scene.height, statusPanels: status.length,
+          statusBelowCanvas: status.every(element => element.getBoundingClientRect().top >= scene.bottom - 1),
+          bottomGap: stage.getBoundingClientRect().bottom - Math.max(...panels.map(element => element.getBoundingClientRect().bottom)) };
       });
-      expect(gap, '三维画布应填满被详情面板撑高的容器').toBeLessThanOrEqual(2);
+      expect(layout.sceneHeight, '三维画布保留可用高度').toBeGreaterThanOrEqual(420);
+      expect(layout.statusPanels).toBeGreaterThan(0);
+      expect(layout.statusBelowCanvas, '普通状态和设备切换面板不得遮挡三维画布').toBe(true);
+      expect(layout.bottomGap, '状态面板之后不应存在额外空白条').toBeLessThanOrEqual(2);
     }
     if (route === '/alerts') {
       const alertTable = await page.locator('.table-row').first().evaluate((row) => {

@@ -46,6 +46,8 @@ GRANT SELECT, INSERT, DELETE ON authtoken_token TO ut_runtime;
 -- Operational reads and the exact columns written by the Django API routes.
 -- Persistent Agent tasks and sanitized review queue; no deletion of evidence.
 GRANT SELECT, INSERT, UPDATE ON operations_agentrun, operations_reviewexperience TO ut_runtime;
+GRANT SELECT, INSERT, UPDATE ON operations_investigationcase, operations_proceduretemplate TO ut_runtime;
+GRANT SELECT, INSERT ON operations_branchcomparison TO ut_runtime;
 -- Normal task serialization may read historical simulated receipts; production
 -- runtime receives no INSERT/UPDATE permission for simulated hardware actions.
 GRANT SELECT ON operations_simulatedaction TO ut_runtime;
@@ -70,7 +72,7 @@ GRANT UPDATE (severity, status, detail, last_observed_value,
   acknowledged_at, acknowledged_by_id, resolved_at)
   ON operations_alert TO ut_runtime;
 GRANT INSERT (asset_id, event_id, metric_key, metric, value, unit, quality,
-  recorded_at, ingested_at) ON operations_telemetry TO ut_runtime;
+  recorded_at, ingested_at, provenance) ON operations_telemetry TO ut_runtime;
 GRANT INSERT ON operations_workorder TO ut_runtime;
 GRANT INSERT (work_order_id, event_type, from_status, to_status, note, actor_id, created_at)
   ON operations_workorderevent TO ut_runtime;

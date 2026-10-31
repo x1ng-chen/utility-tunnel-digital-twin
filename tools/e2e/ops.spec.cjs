@@ -123,7 +123,7 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
 
   const alarmNode = page.locator('.map-node.alarm').filter({ hasText: 'FAN-01' });
   await expect(alarmNode).toHaveCount(1);
@@ -134,11 +134,11 @@ test('正式账号登录后可浏览孪生资产与数据洞察', async ({ page 
   await page.getByRole('button', { name: '设备台账' }).click({ force: true });
   await expect(page.getByRole('heading', { name: '设备台账' })).toBeVisible();
   expect(await page.getByLabel('设备空间定位图').getByRole('button').count()).toBeGreaterThan(0);
-  await page.getByRole('textbox', { name: '搜索设备', exact: true }).fill('SEEP-W01');
+  await page.getByRole('searchbox', { name: '搜索设备', exact: true }).fill('SEEP-W01');
   await expect(page.getByRole('complementary').getByRole('heading', { name: '水位传感器', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '定位 水位传感器' }).click({ force: true });
+  await page.getByRole('button', { name: '选择 SEEP-W01 水位传感器', exact: true }).click();
   await expect(page.getByText('PC0 / ADC1_IN10', { exact: true })).toBeVisible();
-  await page.getByRole('textbox', { name: '搜索设备', exact: true }).fill('NO-SUCH-ASSET');
+  await page.getByRole('searchbox', { name: '搜索设备', exact: true }).fill('NO-SUCH-ASSET');
   await expect(page.getByText('没有匹配的设备节点，请调整搜索条件。')).toBeVisible();
 
   await page.getByRole('button', { name: '数据洞察' }).click();
@@ -153,14 +153,14 @@ test('未知页面不会空白且可以恢复到有效页面', async ({ page }) 
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
   for (const viewport of [{ width: 1440, height: 960 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     await page.goto(`${webUrl}/missing-page/nested`);
     await expect(page.getByRole('heading', { name: '页面未找到' })).toBeVisible();
     await expect(page.locator('.page-identity strong')).toHaveText('页面未找到');
     await page.getByRole('link', { name: '返回运行总览', exact: true }).click();
-    await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
   }
 });
 
@@ -203,7 +203,7 @@ test('滚轮到达页面边界不会跳页，导航点击仍可正常切换', as
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   const viewport = page.viewportSize();
   await page.mouse.move(viewport.width / 2, viewport.height / 2);
@@ -221,7 +221,7 @@ test('滚轮到达页面边界不会跳页，导航点击仍可正常切换', as
   await expect(page.getByRole('navigation').getByRole('button', { name: '告警中心' })).toHaveAttribute('aria-current', 'page');
 });
 
-test('三维孪生加载正式环形 V07 模型后可完整定位设备并展示告警状态', async ({ page }) => {
+test('显式历史V07兼容模式下可定位设备并展示告警状态', async ({ page }) => {
   // The complete model + camera + GIS + asset-ledger journey is intentionally
   // broader than the other cases. Linux CI uses software WebGL, so reserve a
   // realistic budget without weakening any of the business assertions.
@@ -230,7 +230,10 @@ test('三维孪生加载正式环形 V07 模型后可完整定位设备并展示
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await page.getByRole('button', { name: '三维孪生' }).click();
+  // Wait for the authenticated route before reloading a deep link.
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
+  // Selection is explicit; merely opening the scene no longer guesses an asset.
+  await page.goto(`${webUrl}/twin-3d?asset=ENV-01`);
   await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
   await expect(page.getByRole('application', { name: '综合管廊三维数字孪生场景' })).toBeVisible();
   await expect(page.getByText('已加载实体三维模型')).toBeVisible();
@@ -311,7 +314,7 @@ test('三维孪生加载正式环形 V07 模型后可完整定位设备并展示
   await page.getByRole('button', { name: 'NET-01' }).click();
   await expect(page.locator('.twin-focus-status').getByText('ESP8266-01S 通信模块', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '设备台账' }).click({ force: true });
-  await page.getByRole('button', { name: '定位 水位传感器' }).click({ force: true });
+  await page.getByRole('button', { name: '选择 SEEP-W01 水位传感器', exact: true }).click();
   await page.getByRole('button', { name: '在三维中查看 →' }).click();
   await expect(page).toHaveURL(/\/twin-3d\?asset=SEEP-W01/);
   await expect(page.locator('.twin-inspector').getByText('MESH_SEEP_W01', { exact: true })).toBeVisible();
@@ -348,7 +351,10 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await page.getByRole('button', { name: '三维孪生' }).click();
+  // Wait for the authenticated route before reloading a deep link.
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
+  // Selection is explicit; merely opening the scene no longer guesses an asset.
+  await page.goto(`${webUrl}/twin-3d?asset=ENV-01`);
   await expect(page.getByRole('heading', { name: '三维孪生中心' })).toBeVisible();
 
   const patrolCode = page.locator('.twin-focus-status small');
@@ -367,12 +373,19 @@ test('三维全屏设备栏拖动期间仍保持高级指针反馈并可继续�
   await resetCamera.dispatchEvent('click');
 
   const switcher = page.locator('.twin-quick-switch');
-  const box = await switcher.boundingBox();
+  // Begin a rail drag on its non-button heading. Device buttons intentionally
+  // retain click behavior and must not acquire drag capture.
+  const box = await switcher.locator('.twin-quick-switch-heading').boundingBox();
   expect(box).not.toBeNull();
-  await page.mouse.move(box.x + 36, box.y + 18);
+  const dragX = box.x + box.width / 2, dragY = box.y + box.height / 2;
+  expect(await page.evaluate(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y);
+    return Boolean(hit?.closest('.twin-quick-switch')) && !hit.closest('button');
+  }, { x: dragX, y: dragY })).toBe(true);
+  await page.mouse.move(dragX, dragY);
   await expect(page.locator('.twin-fullscreen-fx.active')).toHaveCount(1);
   await page.mouse.down();
-  await page.mouse.move(box.x + 220, box.y + 18, { steps: 5 });
+  await page.mouse.move(dragX + 160, dragY, { steps: 5 });
   // Headless Chromium does not expose `(hover: hover) and (pointer: fine)`, so
   // it intentionally keeps the visual cursor hidden. The drag-state class is
   // the browser-independent contract that keeps the real desktop cursor alive.
@@ -391,7 +404,7 @@ test('账号密码登录后可读取运行数据并写入审计', async ({ page 
   await page.getByLabel('账号或邮箱').fill('operator@example.com');
   await page.getByLabel('密码').fill('demo-password-2026');
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
   // The shell intentionally exposes both the data-service and realtime-feed
   // states. Scope this assertion to the data-service indicator rather than
   // relying on their incidental DOM count/order.
@@ -444,7 +457,7 @@ test('设备控制必须经二次确认并按一次性凭据顺序下发', async
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码').fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
   await page.getByRole('button', { name: '启动风扇（10秒）' }).click();
   const dialog = page.getByRole('dialog', { name: '确认下发设备命令' });
   await expect(dialog).toContainText('接通风机供电（最长10秒）');
@@ -550,7 +563,7 @@ test('注册申请须经管理员批准后才能登录使用', async ({ page }) 
   await adminPage.getByLabel('账号或邮箱').fill('admin');
   await adminPage.getByLabel('密码').fill(adminPassword);
   await adminPage.getByRole('button', { name: /安全登录/ }).click();
-  await expect(adminPage.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible({ timeout: 15_000 });
+  await expect(adminPage.getByRole('heading', { name: '智能体运维中心' })).toBeVisible({ timeout: 15_000 });
   await expect(adminPage.locator('.governance-nav')).toBeVisible();
   await adminPage.getByRole('button', { name: '系统配置' }).click();
   const applicationRow = adminPage.locator('.registration-request-row').filter({ hasText: account });
@@ -589,7 +602,7 @@ test('注册申请须经管理员批准后才能登录使用', async ({ page }) 
   await page.getByLabel('账号或邮箱').fill(account);
   await page.getByLabel('密码').fill(password);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await expect(page.getByRole('heading', { name: '运行，一眼掌握' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '智能体运维中心' })).toBeVisible();
 });
 
 test('管理员可创建并版本化维护资产与 GIS 坐标', async ({ page }) => {
@@ -671,7 +684,8 @@ test('管理员可校验、启用三维模型版本并由孪生页面鉴权加�
   await expect(release.getByText('设备节点映射完整，可以安全启用')).toBeVisible();
   await release.getByRole('button', { name: '启用此版本' }).click();
   await expect(release.getByText('当前使用', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '三维孪生' }).click();
+  // Device details are rendered only after an explicit selection.
+  await page.goto(`${webUrl}/twin-3d?asset=ENV-01`);
   await expect(page.locator('.twin-model-readiness.loaded').getByText('模型已加载', { exact: true })).toBeVisible({ timeout: 60_000 });
   const zoomIn = page.getByRole('button', { name: '放大三维模型' });
   const zoomOut = page.getByRole('button', { name: '缩小三维模型' });
@@ -810,7 +824,18 @@ test('多页事件加载、报警次数口径与页码刷新恢复', async ({ pa
   await expect(page.getByLabel('监测项目')).toHaveValue('humidity');
 });
 
-test('筛选条件写入URL并在刷新后恢复', async ({ page }) => {
+test('筛选条件写入URL并在刷新后恢复', async ({ page, request }) => {
+  // Arrange this test's metric explicitly: previous pagination cases may fill
+  // the latest-observation window with humidity samples only.
+  const base = process.env.E2E_API_URL || 'http://127.0.0.1:8000/api';
+  const login = await request.post(`${base}/auth/login/`, { data: { email: 'admin', password: adminPassword } });
+  expect(login.ok()).toBe(true);
+  const headers = { Authorization: `Bearer ${(await login.json()).accessToken}` };
+  const reading = await request.post(`${base}/telemetry/`, { headers, data: { readings: [{
+    eventId: `url-filter-${Date.now()}`, assetCode: 'ENV-01', metricKey: 'temperature',
+    metric: '环境温度', value: 27, unit: '°C', quality: 'good', recordedAt: new Date().toISOString(),
+  }] } });
+  expect(reading.ok(), await reading.text()).toBe(true);
   await page.goto(webUrl);
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码', { exact: true }).fill(adminPassword);
@@ -872,10 +897,14 @@ test('三维页在 3 秒内将实时新告警定位到已绑定设备', async ({
   await page.getByRole('button', { name: /安全登录/ }).click();
   await expect(page).toHaveURL(/dashboard/);
   await expect(page.locator('[title="实时推送已连接"]')).toBeVisible();
-  await page.getByRole('button', { name: '三维孪生' }).click();
+  // Device details are rendered only after an explicit selection.
+  await page.goto(`${webUrl}/twin-3d?asset=ENV-01`);
   await expect(page.locator('.twin-model-readiness.loaded').getByText('模型已加载', { exact: true })).toBeVisible({ timeout: 60_000 });
   const autoLocate = page.getByRole('checkbox', { name: '新告警自动定位' });
+  // Opening a specific device intentionally pauses automatic camera moves.
+  await autoLocate.check();
   await expect(autoLocate).toBeChecked();
+  await expect(page.locator('[title="实时推送已连接"]')).toBeVisible();
 
   const login = await request.post(`${base}/auth/login/`, { data: { email: 'admin', password: adminPassword } });
   expect(login.ok()).toBe(true);
@@ -948,7 +977,9 @@ test('已启用模型文件读取失败时不把预览场景误报为实体模�
   await page.getByLabel('账号或邮箱').fill('admin');
   await page.getByLabel('密码', { exact: true }).fill(adminPassword);
   await page.getByRole('button', { name: /安全登录/ }).click();
-  await page.getByRole('button', { name: '三维孪生' }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  // Device details are rendered only after an explicit selection.
+  await page.goto(`${webUrl}/twin-3d?asset=ENV-01`);
   const readiness = page.locator('.twin-model-readiness');
   await expect(readiness.getByText('模型文件不可用', { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(readiness.getByText('模型已加载', { exact: true })).toHaveCount(0);

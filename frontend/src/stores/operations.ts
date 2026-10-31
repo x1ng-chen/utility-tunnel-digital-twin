@@ -61,22 +61,27 @@ export function upsertRealtimeRecord<T extends { id: number | string }>(current:
 
 export const useOperationsStore = defineStore('operations', () => {
   const auth = useAuthStore();
-  const dashboard = ref<Dashboard>({ assets: { total: 19, online: 7 }, health: { value: 100 }, openAlerts: 2, activeWorkOrders: 2, telemetry: { id: 1, assetCode: 'ENV-01', metric: '环境温度', value: 26.4, unit: '°C', quality: 'good', recordedAt: new Date().toISOString() } });
-  const assets = ref<Asset[]>(seedAssets());
+  const restoredApiSession = auth.isAuthenticated && typeof window !== 'undefined'
+    && window.sessionStorage.getItem('ut-session-mode') !== 'demo'
+    && Boolean(window.sessionStorage.getItem('ut-django-token'));
+  // A restored API session must render pending data, never the demo inventory
+  // while its authenticated snapshot is still in flight.
+  const dashboard = ref<Dashboard>(restoredApiSession ? emptyDashboard() : seedDashboard());
+  const assets = ref<Asset[]>(restoredApiSession ? [] : seedAssets());
   const spatialFeatures = ref<SpatialFeature[]>([]);
-  const hardwareBindings = ref<HardwareBinding[]>(seedHardwareBindings());
-  const alerts = ref<Alert[]>(seedAlerts());
-  const workOrders = ref<WorkOrder[]>(seedOrders());
-  const thresholds = ref<Threshold[]>(seedThresholds());
-  const telemetry = ref<Telemetry[]>(seedTelemetry());
+  const hardwareBindings = ref<HardwareBinding[]>(restoredApiSession ? [] : seedHardwareBindings());
+  const alerts = ref<Alert[]>(restoredApiSession ? [] : seedAlerts());
+  const workOrders = ref<WorkOrder[]>(restoredApiSession ? [] : seedOrders());
+  const thresholds = ref<Threshold[]>(restoredApiSession ? [] : seedThresholds());
+  const telemetry = ref<Telemetry[]>(restoredApiSession ? [] : seedTelemetry());
   const telemetryInsights = ref<Telemetry[]>([]);
   const telemetryInsightsTotal = ref(0);
   const telemetrySummary = ref<TelemetrySummary>(summarizeTelemetry([]));
   const telemetryInsightsLoading = ref(false);
   const telemetryInsightsError = ref('');
   const audit = ref<AuditEntry[]>([]);
-  const loading = ref(false);
-  const source = ref<'demo' | 'api'>('demo');
+  const loading = ref(Boolean(restoredApiSession));
+  const source = ref<'demo' | 'api'>(restoredApiSession ? 'api' : 'demo');
   const offline = ref(false);
   const syncError = ref('');
   const lastSyncedAt = ref<string | null>(null);
@@ -115,9 +120,31 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function refresh(mode: 'demo' | 'api' = source.value) {
-    if (mode !== source.value) stopRealtime();
+    const previousMode = source.value;
+    if (mode !== previousMode) {
+      stopRealtime();
+      dashboard.value = mode === 'api' ? emptyDashboard() : seedDashboard();
+      assets.value = mode === 'api' ? [] : seedAssets();
+      hardwareBindings.value = mode === 'api' ? [] : seedHardwareBindings();
+      alerts.value = mode === 'api' ? [] : seedAlerts();
+      workOrders.value = mode === 'api' ? [] : seedOrders();
+      thresholds.value = mode === 'api' ? [] : seedThresholds();
+      telemetry.value = mode === 'api' ? [] : seedTelemetry();
+      spatialFeatures.value = [];
+      audit.value = [];
+      telemetryInsights.value = [];
+      telemetryInsightsTotal.value = 0;
+      telemetrySummary.value = summarizeTelemetry([]);
+      telemetryInsightsError.value = '';
+      telemetryRequestSequence += 1;
+      telemetryInsightsLoading.value = false;
+      lastSyncedAt.value = null;
+      realtimeChanges.splice(0);
+      realtimeRevision = 0;
+    }
     source.value = mode;
     if (mode === 'demo') {
+      loading.value = false;
       offline.value = false;
       syncError.value = '';
       lastSyncedAt.value = new Date().toISOString();
@@ -161,15 +188,23 @@ export const useOperationsStore = defineStore('operations', () => {
     liveRefreshPromise = (async () => {
       try {
         const listParams = { page: 1, pageSize: 100 };
-        const [dashboardResponse, assetsResponse, alertsResponse, ordersResponse, telemetryResponse] = await Promise.all([
+        const [dashboardResponse, assetsResponse, alertsResponse, ordersResponse, telemetryResponse, bindingsResponse, fan1Response, fan2Response] = await Promise.all([
           api.dashboard(), api.assets(listParams), api.alerts(listParams), api.workOrders(listParams), api.telemetry(listParams),
+          api.hardwareBindings(listParams),
+          api.telemetry({ page: 1, pageSize: 30, assetCode: 'FAN-01' }),
+          api.telemetry({ page: 1, pageSize: 30, assetCode: 'FAN-02' }),
         ]);
         if (requestId !== snapshotRequestId || source.value !== 'api' || !auth.isAuthenticated) return;
         dashboard.value = dashboardResponse.data;
         assets.value = reconcileRecords(assets.value, assetsResponse.data.items);
         alerts.value = reconcileRecords(alerts.value, alertsResponse.data.items);
         workOrders.value = reconcileRecords(workOrders.value, ordersResponse.data.items);
-        telemetry.value = reconcileRecords(telemetry.value, telemetryResponse.data.items);
+        // Preserve both fan windows even when 31 sensors fill the global page;
+        // refresh real heartbeat data instead of inventing browser timestamps.
+        const latestTelemetry = new Map<number, Telemetry>();
+        for (const reading of [...telemetryResponse.data.items, ...fan1Response.data.items, ...fan2Response.data.items] as Telemetry[]) latestTelemetry.set(reading.id, reading);
+        telemetry.value = reconcileRecords(telemetry.value, [...latestTelemetry.values()].sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt)));
+        hardwareBindings.value = reconcileRecords(hardwareBindings.value, bindingsResponse.data.items);
         offline.value = false;
         replayRealtimeChanges(snapshotRevision);
         syncError.value = '';
@@ -554,6 +589,15 @@ function apiErrorMessage(cause: unknown): string {
     return response?.data?.message || 'API 请求失败，请稍后重试。';
   }
   return '无法连接数据服务，请检查服务状态。';
+}
+
+function emptyDashboard(): Dashboard {
+  return { assets: { total: 0, online: 0 }, health: { value: 0 }, openAlerts: 0, activeWorkOrders: 0, telemetry: null };
+}
+
+function seedDashboard(): Dashboard {
+  return { assets: { total: 19, online: 7 }, health: { value: 100 }, openAlerts: 2, activeWorkOrders: 2,
+    telemetry: { id: 1, assetCode: 'ENV-01', metric: '环境温度', value: 26.4, unit: '°C', quality: 'good', recordedAt: new Date().toISOString() } };
 }
 
 function seedAssets(): Asset[] {

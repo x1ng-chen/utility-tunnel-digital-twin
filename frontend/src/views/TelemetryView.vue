@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { telemetryValue } from '../utils/telemetryValue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppShell from '../components/AppShell.vue';
@@ -241,7 +242,7 @@ watch(() => store.source, (next, previous) => {
 <template>
   <AppShell>
     <section class="section-title telemetry-title">
-      <div><span class="eyebrow light">运行数据分析</span><h1>数据洞察</h1><p>按采集时间追踪遥测趋势与质量，不承担告警处置或资产维护职责。</p></div>
+      <div><h1>数据洞察</h1><p>按采集时间追踪遥测趋势与质量，不承担告警处置或资产维护职责。</p></div>
       <div class="telemetry-export-actions">
         <ReportExportButton report="telemetry" label="导出全部历史记录" />
         <ReportExportButton report="telemetry" label="导出当前筛选快照" :filters="appliedQuery" />
@@ -293,7 +294,7 @@ watch(() => store.source, (next, previous) => {
       <article class="panel latest-reading-panel">
         <h2>最新采集样本</h2>
         <template v-if="store.telemetrySummary.latest">
-          <strong>{{ store.telemetrySummary.latest.value }}<small>{{ store.telemetrySummary.latest.unit }}</small></strong>
+          <strong>{{ telemetryValue(store.telemetrySummary.latest) }}</strong>
           <h3>{{ store.telemetrySummary.latest.metric }}</h3>
           <p>{{ store.telemetrySummary.latest.assetCode }} · {{ store.telemetrySummary.latest.metricKey || '未定义监测项目' }}</p>
           <time>{{ new Date(store.telemetrySummary.latest.recordedAt).toLocaleString('zh-CN') }}</time>
@@ -312,7 +313,7 @@ watch(() => store.source, (next, previous) => {
       </nav>
       <header class="panel-head"><h2>采集记录</h2><span>本页 {{ store.telemetryInsights.length }} 条 / 共 {{ store.telemetryInsightsTotal }} 条</span></header>
       <div class="table-head"><span>采集时间</span><span>资产 / 指标</span><span>数值</span><span>质量</span><span>事件编号</span></div>
-      <div v-for="item in store.telemetryInsights" :key="item.id" class="table-row"><time>{{ new Date(item.recordedAt).toLocaleString('zh-CN') }}</time><div><strong>{{ item.metric }}</strong><small>{{ item.assetCode }} · {{ item.metricKey || '未定义' }}</small></div><b>{{ item.value }} {{ item.unit }}</b><span :class="['badge', `quality-${item.quality}`]">{{ qualityLabel(item.quality) }}</span><code>{{ item.eventId || '历史记录' }}</code></div>
+      <div v-for="item in store.telemetryInsights" :key="item.id" class="table-row"><time :datetime="item.recordedAt"><span class="record-label">采集时间</span>{{ new Date(item.recordedAt).toLocaleString('zh-CN') }}</time><div><span class="record-label">资产 / 指标</span><strong>{{ item.metric }}</strong><small>{{ item.assetCode }} · {{ item.metricKey || '未定义' }}</small></div><b class="record-value"><span class="record-label">数值</span>{{ telemetryValue(item) }}</b><span :class="['badge', `quality-${item.quality}`]">{{ qualityLabel(item.quality) }}</span><code><span class="record-label">事件编号</span>{{ item.eventId || '历史记录' }}</code></div>
       <div v-if="!store.telemetryInsights.length" class="empty-state">当前筛选条件下没有遥测记录。</div>
     </section>
   </AppShell>
@@ -352,9 +353,13 @@ watch(() => store.source, (next, previous) => {
 .telemetry-chart-panel .panel-head p { color: var(--ops-muted); font-size: 12px; line-height: 1.6; margin: 8px 0 0; }
 .telemetry-table .panel-head { gap: 12px; flex-wrap: wrap; }
 .telemetry-table .panel-head > span { color: var(--ops-muted); font-size: 12px; }
-.telemetry-table .table-head, .telemetry-table .table-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(140px, 1.2fr) minmax(90px, .7fr) 76px minmax(100px, 1fr); gap: 16px; }
+.telemetry-table .table-head, .telemetry-table .table-row { display: grid; min-width: 0; grid-template-columns: minmax(140px, 1fr) minmax(140px, 1.2fr) minmax(90px, .7fr) 76px minmax(100px, 1fr); gap: 16px; }
 .telemetry-table .table-row > * { min-width: 0; overflow-wrap: anywhere; }
 .telemetry-table code { font-size: 11px; color: var(--ops-muted); white-space: normal; }
+.telemetry-table .record-label { display: none; }
+.telemetry-table .record-value { font-variant-numeric: tabular-nums; line-height: 1.6; }
+.history-events button { min-height: 44px; margin: 8px 8px 0 0; padding: 10px 14px; border: 1px solid var(--ops-line); border-radius: 6px; background: var(--ops-panel); color: var(--ops-signal); }
+.history-events button:focus-visible { outline: 2px solid var(--ops-signal); outline-offset: 2px; }
 @container (max-width: 1000px) {
   .telemetry-filters { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   .telemetry-layout { grid-template-columns: minmax(0, 1fr); }
@@ -362,6 +367,9 @@ watch(() => store.source, (next, previous) => {
   .telemetry-table .table-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 80px; }
   .telemetry-table .table-row > time { grid-column: 1 / -1; color: var(--ops-muted); font-size: 12px; }
   .telemetry-table .table-row > code { grid-column: 1 / -1; }
+  .telemetry-table .table-row .record-label { display: block; margin-bottom: 4px; color: var(--ops-muted); font-family: inherit; font-size: 12px; font-weight: 400; }
+  .telemetry-table .table-row { align-items: start; }
+  .telemetry-table .table-row > .badge { align-self: center; }
   .insight-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @container (max-width: 480px) {
