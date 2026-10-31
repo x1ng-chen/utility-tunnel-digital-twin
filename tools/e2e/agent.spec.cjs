@@ -41,6 +41,8 @@ test('护栏分层、旧任务不倒填；受控经验审核携带版本且修�
   await expect(page.getByText(/已加载 1 条管理员审核/)).toBeVisible();
   await page.getByText('查看原始证据',{exact:true}).click();
   await expect(page.getByText('"rpm": 0',{exact:false})).toBeVisible();
+  await page.locator('.experience-panel > summary').click();
+  await page.getByRole('button',{name:'刷新经验',exact:true}).click();
   const candidate=page.locator('.experience-card').filter({hasText:'待审核示例：'});
   await candidate.getByRole('button',{name:'批准共享',exact:true}).click();
   await expect(candidate).toContainText('管理员已批准');
@@ -82,6 +84,13 @@ async function login(page, role = 'operator') {
 }
 
 test('31路来源标记、五站与同站目标定位通过实际V24模型验证', async ({ page }) => {
+  // Explicit CI-only fixture reset creates NEW simulated observations. Do not
+  // rewrite old timestamps or relax production freshness/quality checks.
+  if (process.env.E2E_RESET_AGENT_SCENARIO === '1') {
+    require('node:child_process').execFileSync(process.env.E2E_PYTHON || 'python',
+      ['manage.py', 'seed_agent_eval', '--case', 'INS-01', '--reset', '--settings=config.agent_eval_settings'],
+      { cwd: path.resolve(__dirname, '../../backend'), stdio: 'pipe' });
+  }
   await login(page);
   await page.getByRole('button', { name: '五站31路巡检', exact: true }).click();
   await expect(page.locator('.ai-agent-inspection')).toContainText('模拟场景观测可用 31/31');

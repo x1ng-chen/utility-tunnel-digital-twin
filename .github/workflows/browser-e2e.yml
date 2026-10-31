@@ -2,6 +2,7 @@ name: Browser end-to-end regression
 
 on:
   push:
+    branches: [main]
     paths:
       - 'frontend/**'
       - 'backend/**'
@@ -15,6 +16,10 @@ on:
       - 'tools/e2e/**'
       - 'deploy/containers/**'
       - '.github/workflows/browser-e2e.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -103,6 +108,7 @@ jobs:
           NODE_PATH: ${{ runner.temp }}/ut-playwright/node_modules
           E2E_WEB_URL: http://127.0.0.1:5173
           AGENT_E2E: ${{ matrix.id == 'agent' && '1' || '0' }}
+          E2E_RESET_AGENT_SCENARIO: ${{ matrix.id == 'agent' && '1' || '0' }}
         run: |
           "$RUNNER_TEMP/ut-playwright/node_modules/.bin/playwright" test \
             --config "$GITHUB_WORKSPACE/tools/e2e/playwright.config.cjs" \

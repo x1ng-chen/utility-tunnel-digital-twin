@@ -278,11 +278,23 @@ test('全部业务页面通过桌面端布局巡检', async ({ page }) => {
       await expect(page.locator('.gis-marker.alarm i').first()).toHaveCSS('background-color', 'rgb(185, 54, 77)');
     }
     if (route === '/twin-3d') {
-      const gap = await page.locator('.twin-stage-panel').evaluate((stage) => {
-        const scene = stage.querySelector('.twin-scene');
-        return stage.getBoundingClientRect().bottom - scene.getBoundingClientRect().bottom;
+      const layout = await page.locator('.twin-stage-panel').evaluate(stage => {
+        const scene = stage.querySelector('.twin-scene').getBoundingClientRect();
+        const panels = [...stage.children].filter(element => {
+          const style = getComputedStyle(element);
+          return style.display !== 'none' && !['absolute', 'fixed'].includes(style.position)
+            && element.getBoundingClientRect().height > 0;
+        });
+        const status = [...stage.querySelectorAll(':scope > .twin-focus-status, :scope > .twin-risk-hud, :scope > .twin-quick-switch')]
+          .filter(element => element.getBoundingClientRect().height > 0);
+        return { sceneHeight: scene.height, statusPanels: status.length,
+          statusBelowCanvas: status.every(element => element.getBoundingClientRect().top >= scene.bottom - 1),
+          bottomGap: stage.getBoundingClientRect().bottom - Math.max(...panels.map(element => element.getBoundingClientRect().bottom)) };
       });
-      expect(gap, '三维画布应填满被详情面板撑高的容器').toBeLessThanOrEqual(2);
+      expect(layout.sceneHeight, '三维画布保留可用高度').toBeGreaterThanOrEqual(420);
+      expect(layout.statusPanels).toBeGreaterThan(0);
+      expect(layout.statusBelowCanvas, '普通状态和设备切换面板不得遮挡三维画布').toBe(true);
+      expect(layout.bottomGap, '状态面板之后不应存在额外空白条').toBeLessThanOrEqual(2);
     }
     if (route === '/alerts') {
       const alertTable = await page.locator('.table-row').first().evaluate((row) => {

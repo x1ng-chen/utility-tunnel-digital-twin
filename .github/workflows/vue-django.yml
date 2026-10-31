@@ -2,6 +2,7 @@ name: Verify Vue3 and Django stack
 
 on:
   push:
+    branches: [main]
     paths:
       - 'frontend/**'
       - 'backend/**'
@@ -42,6 +43,10 @@ on:
       - 'tools/**'
       - 'model/**'
       - '.github/workflows/vue-django.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
