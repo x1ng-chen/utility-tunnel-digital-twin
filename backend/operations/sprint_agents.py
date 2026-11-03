@@ -59,13 +59,14 @@ def freeze(payload,owner=None):
     station=payload.get('station_id','P5')
     data={'capturedAt':now.isoformat(),'layoutVersion':INVENTORY['revision'],'source':data_context(),
         'inventory':runtime_inventory(),
-        'knowledgeVersion':knowledge_version(),'knowledgeCorpus':knowledge_corpus(),'inspection':station_snapshot('all', now),
+        'knowledgeVersion':knowledge_version(),'knowledgeCorpus':knowledge_corpus(),'inspection':station_snapshot('all', now, ingested_before=now),
         'guardRuleVersion':guards.VERSION,
         'thresholds':{t.key:{'warning':t.warning,'alarm':t.alarm,'unit':t.unit,'version':t.version} for t in Threshold.objects.all()},
-        'assets':snapshots(codes,now),'stationEvidence':raw(diagnose_station(station if station!='all' else 'P5', now)),
+        'assets':snapshots(codes, now, ingested_before=now),
+        'stationEvidence':raw(diagnose_station(station if station!='all' else 'P5', now, ingested_before=now)),
         'orders':[{'code':w.code,'assetCode':w.asset.code,'status':w.status,'title':w.title} for w in
             WorkOrder.objects.select_related('asset').exclude(status__in=['completed','cancelled'])[:81]],
-        'ledger':list(Telemetry.objects.filter(recorded_at__gte=now-timedelta(hours=1),recorded_at__lte=now)
+        'ledger':list(Telemetry.objects.filter(recorded_at__gte=now-timedelta(hours=1),recorded_at__lte=now, ingested_at__lte=now)
             .order_by('-recorded_at','-id').values('asset__code','metric_key','value','unit','quality','recorded_at')[:2001]),
         'ledgerLimit':2000}
     data['assetKinds']=dict(Asset.objects.filter(is_active=True).values_list('code','asset_type'))

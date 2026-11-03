@@ -58,7 +58,7 @@ def connection(asset, now):
     }
 
 
-def snapshots(codes, now=None):
+def snapshots(codes, now=None, *, ingested_before=None):
     """Batch latest-per-metric queries, bounded to 20 metrics for each asset."""
     now = now or timezone.now()
     assets = list(Asset.objects.filter(code__in=codes, is_active=True).select_related('hardware_binding'))
@@ -68,7 +68,9 @@ def snapshots(codes, now=None):
             'asset_code': asset.code, 'name': asset.name, 'integration_status': asset.integration_status,
             'connection': connection(asset, now), 'metric_count': 0, 'limit': 20, 'readings': [],
         }
-    rows = Telemetry.objects.filter(asset__in=assets, ingested_at__lte=now)
+    rows = Telemetry.objects.filter(asset__in=assets)
+    if ingested_before is not None:
+        rows = rows.filter(ingested_at__lte=ingested_before)
     latest = rows.filter(asset_id=OuterRef('asset_id'), metric_key=OuterRef('metric_key')).filter(
         ~Q(metric_key='') | Q(metric=OuterRef('metric'))).order_by('-recorded_at', '-id')
     rows = rows.filter(id=Subquery(latest.values('id')[:1]))
@@ -100,7 +102,7 @@ def snapshots(codes, now=None):
     return results
 
 
-def station_snapshot(station_id='all', now=None):
+def station_snapshot(station_id='all', now=None, *, ingested_before=None):
     if station_id not in (*STATIONS, 'all'):
         raise ValueError('检测点仅允许 P1～P5 或 all。')
     now = now or timezone.now()
@@ -112,7 +114,7 @@ def station_snapshot(station_id='all', now=None):
     bindings = [b for b in bindings if b['assetCode'] not in disabled_codes]
     sensor_codes = [b['assetCode'] for b in bindings]
     controller_codes = sorted({b['controllerId'] for b in bindings})
-    observed = snapshots([*sensor_codes, *controller_codes], now)
+    observed = snapshots([*sensor_codes, *controller_codes], now, ingested_before=ingested_before)
     release = TwinModelRelease.objects.filter(status='active').first()
     node_counts = Counter(release.node_names) if release and release.node_inventory_available else Counter()
     alerts = list(Alert.objects.filter(asset__code__in=observed, status__in=['open', 'acknowledged'])
@@ -184,13 +186,13 @@ def station_snapshot(station_id='all', now=None):
         'boundary': '点位身份来自已确认布局，停用点不计入覆盖；台账、模型和硬件绑定分别核验。可用观测不代表传感器已标定或环境安全。未标定本身不使良好、时间与单位正常的原始读数失效；原始量趋势与浓度/环境安全判断分别核验。'}
 
 
-def diagnose_station(station_id, now=None):
+def diagnose_station(station_id, now=None, *, ingested_before=None):
     """Collect comparable evidence; candidate causes are deliberately non-exclusive."""
     now = now or timezone.now()
-    inspection = station_snapshot(station_id, now)
+    inspection = station_snapshot(station_id, now, ingested_before=ingested_before)
     all_primary_codes = [b['assetCode'] for b in BINDINGS if b['stationLinkKind'] == 'DIRECT_FOUR_SENSOR_MEMBER']
-    nearby = snapshots(all_primary_codes, now)
-    fans = snapshots(['FAN-01', 'FAN-02'], now)
+    nearby = snapshots(all_primary_codes, now, ingested_before=ingested_before)
+    fans = snapshots(['FAN-01', 'FAN-02'], now, ingested_before=ingested_before)
     candidates = []
     for code in ('FAN-01', 'FAN-02'):
         readings = (fans.get(code) or {}).get('readings', [])

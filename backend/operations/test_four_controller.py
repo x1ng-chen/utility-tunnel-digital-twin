@@ -298,6 +298,8 @@ class LatchedObservationTests(TestCase):
         self.asset.refresh_from_db();self.assertEqual(self.asset.status,'alarm')
         from .agent_operations import snapshots
         result=snapshots(['MQ2-05'],self.now)['MQ2-05']['readings'][0]
+        frozen = snapshots(['MQ2-05'], self.now, ingested_before=self.now)['MQ2-05']
+        self.assertEqual(frozen['readings'], [])
         self.assertEqual(result['observation_kind'],'latched_event')
         self.assertIn('不表示',result['observation_note'])
         # Changing the meaning of the same evidence identifier is a conflict.
