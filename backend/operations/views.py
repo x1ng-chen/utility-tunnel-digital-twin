@@ -1851,6 +1851,13 @@ class TelemetryListView(APIView):
             with transaction.atomic():
                 asset_codes = {item['assetCode'] for item in validated}
                 assets = Asset.objects.select_for_update().filter(code__in=asset_codes).in_bulk(field_name='code')
+                # CTRL-02 retains this register slot in its deployed firmware.
+                # Skip its retired readings without rejecting the rest of the frame.
+                retired = assets.get('ENV-04')
+                if getattr(settings, 'HARDWARE_LIVE_MODE', False) and retired and not retired.is_active:
+                    validated = [item for item in validated if item['assetCode'] != retired.code]
+                    asset_codes.discard(retired.code)
+                    event_ids = [item['eventId'] for item in validated]
                 invalid_assets = sorted(code for code in asset_codes if code not in assets or not assets[code].is_active)
                 if invalid_assets:
                     return error_response('validation_error', 'Telemetry references missing or inactive assets.', 400, {'assetCode': invalid_assets})

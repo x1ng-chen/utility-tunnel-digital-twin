@@ -68,7 +68,7 @@ def snapshots(codes, now=None):
             'asset_code': asset.code, 'name': asset.name, 'integration_status': asset.integration_status,
             'connection': connection(asset, now), 'metric_count': 0, 'limit': 20, 'readings': [],
         }
-    rows = Telemetry.objects.filter(asset__in=assets)
+    rows = Telemetry.objects.filter(asset__in=assets, ingested_at__lte=now)
     latest = rows.filter(asset_id=OuterRef('asset_id'), metric_key=OuterRef('metric_key')).filter(
         ~Q(metric_key='') | Q(metric=OuterRef('metric'))).order_by('-recorded_at', '-id')
     rows = rows.filter(id=Subquery(latest.values('id')[:1]))
@@ -100,16 +100,19 @@ def snapshots(codes, now=None):
     return results
 
 
-def station_snapshot(station_id='all'):
+def station_snapshot(station_id='all', now=None):
     if station_id not in (*STATIONS, 'all'):
         raise ValueError('检测点仅允许 P1～P5 或 all。')
-    now = timezone.now()
+    now = now or timezone.now()
     inventory = runtime_inventory()
     bindings = [b for b in inventory['bindings'] if station_id == 'all' or b['stationId'] == station_id]
+    assets = Asset.objects.filter(code__in=[b['assetCode'] for b in bindings]).in_bulk(field_name='code')
+    disabled = [b for b in bindings if b['assetCode'] in assets and not assets[b['assetCode']].is_active]
+    disabled_codes = {b['assetCode'] for b in disabled}
+    bindings = [b for b in bindings if b['assetCode'] not in disabled_codes]
     sensor_codes = [b['assetCode'] for b in bindings]
     controller_codes = sorted({b['controllerId'] for b in bindings})
     observed = snapshots([*sensor_codes, *controller_codes], now)
-    assets = {a.code: a for a in Asset.objects.filter(code__in=observed)}
     release = TwinModelRelease.objects.filter(status='active').first()
     node_counts = Counter(release.node_names) if release and release.node_inventory_available else Counter()
     alerts = list(Alert.objects.filter(asset__code__in=observed, status__in=['open', 'acknowledged'])
@@ -161,7 +164,7 @@ def station_snapshot(station_id='all'):
                 for a in alerts if a['asset__code'] == code],
         })
     return {'revision': INVENTORY['revision'], 'queried_at': now.isoformat(), 'station_id': station_id,
-        'expected_sensor_count': len(bindings), 'registered_sensor_count': sum(code in observed for code in sensor_codes),
+        'disabled_sensors': disabled, 'expected_sensor_count': len(bindings), 'registered_sensor_count': sum(code in observed for code in sensor_codes),
         'usable_observation_sensor_count': sum(i['observation_state'] == 'usable_observations' for i in items),
         'data_context': data_context(), 'model_notice': inventory['modelNotice'],
         'presentation_revision': inventory.get('presentationRevision'),
@@ -178,14 +181,14 @@ def station_snapshot(station_id='all'):
         'stations': {s: [b['physicalTag'] for b in bindings if b['stationId'] == s] for s in STATIONS
             if any(b['stationId'] == s for b in bindings)},
         'active_model_version': release.version if release else None, 'items': items,
-        'boundary': '31路身份来自已确认布局；台账、模型和硬件绑定分别核验。可用观测不代表传感器已标定或环境安全。未标定本身不使良好、时间与单位正常的原始读数失效；原始量趋势与浓度/环境安全判断分别核验。'}
+        'boundary': '点位身份来自已确认布局，停用点不计入覆盖；台账、模型和硬件绑定分别核验。可用观测不代表传感器已标定或环境安全。未标定本身不使良好、时间与单位正常的原始读数失效；原始量趋势与浓度/环境安全判断分别核验。'}
 
 
-def diagnose_station(station_id):
+def diagnose_station(station_id, now=None):
     """Collect comparable evidence; candidate causes are deliberately non-exclusive."""
-    inspection = station_snapshot(station_id)
+    now = now or timezone.now()
+    inspection = station_snapshot(station_id, now)
     all_primary_codes = [b['assetCode'] for b in BINDINGS if b['stationLinkKind'] == 'DIRECT_FOUR_SENSOR_MEMBER']
-    now = timezone.now()
     nearby = snapshots(all_primary_codes, now)
     fans = snapshots(['FAN-01', 'FAN-02'], now)
     candidates = []

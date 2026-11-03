@@ -304,7 +304,7 @@ function alertCount(path: string) {
       </div>
 
       <div v-if="sourceContext?.hardwareLive || sourceContext?.mode === 'simulated_test'" class="offline-banner" role="status" data-testid="source-context">
-        <div><strong>{{ sourceContext.label }}</strong><span v-if="sourceContext.hardwareLive">当前仅采集与查看；硬件控制和付费模型调用已禁用。数据是否新鲜、有效请查看设备状态和采样时间。</span></div>
+        <div><strong>{{ sourceContext.label }}</strong><span v-if="sourceContext.hardwareLive">{{ sourceContext.modelCallsDisabled ? "模型调用暂停，可使用只读巡检。" : "已启用真实模型诊断，工单须人工确认。" }} 硬件控制已禁用。数据状态以采样时间和质量为准。</span></div>
       </div>
       <div class="page-content"><slot /></div>
 

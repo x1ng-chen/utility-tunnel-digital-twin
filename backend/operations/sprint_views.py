@@ -21,6 +21,7 @@ from .sprint_costs import calculate, example
 from . import sprint_demo as demo
 from .command_policy import build_command
 from .agent_operations import INVENTORY
+from .agent_context import data_context
 
 
 def role(user):
@@ -70,7 +71,7 @@ class RunList(APIView):
         return Response([serialize(r) for r in AgentRun.objects.filter(owner=request.user).order_by('-created_at')[:20]])
 
     def post(self,request):
-        if getattr(settings, 'HARDWARE_LIVE_MODE', False):
+        if getattr(settings, 'HARDWARE_LIVE_MODE', False) and data_context()['modelCallsDisabled']:
             return Response({'message':'实物联调阶段付费模型任务暂停；请使用五站直接巡检查看真实证据。'}, status=503)
         if not settings.DEEPSEEK_API_KEY:
             return Response({'message':'当前软件环境未启用模型调用；可查看历史和使用只读工具，配置后需显式重新启动。'}, status=503)
@@ -109,6 +110,8 @@ class RunList(APIView):
             return Response({'message':'检测点不存在。'},status=400)
         if kind=='draft' and not write(request.user): return Response({'message':'只读角色不能生成草案。'},status=403)
         if 'control_request' in p:
+            if getattr(settings, 'HARDWARE_LIVE_MODE', False):
+                return Response({'message':'实物联调禁止风机控制草案。'}, status=403)
             c=p['control_request']
             if not write(request.user): return Response(status=403)
             if p.get('mode','multi')!='multi': return Response({'message':'仿真动作需要三Agent独立复核。'},status=400)

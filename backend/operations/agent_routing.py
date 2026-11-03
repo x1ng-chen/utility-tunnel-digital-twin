@@ -6,7 +6,7 @@ def candidates(run, evidence):
     target=payload.get('asset_code') or (station if station!='all' else 'CTRL-01')
     rows=[{'id':'collect_station','label':'取得本站、邻站及双风机证据','description':'缺少实际观测时优先补取，不认定根因。','tool':'collect_station_evidence','args':{}},
         {'id':'dependencies','label':'查询设备依赖','description':'调查共用主控与通信路径；配置关系不是接线实测。','tool':'query_topology','args':{'target':target,'relation':'dependencies'}},
-        {'id':'inspect_all','label':'核对五站覆盖与质量','description':'查31路清单、缺测、时间和质量，不按指标条数计模块。','tool':'station_snapshot','args':{'station_id':'all'}}]
+        {'id':'inspect_all','label':'核对五站覆盖与质量','description':'查启用点位清单、缺测、时间和质量，不按指标条数计模块。','tool':'station_snapshot','args':{'station_id':'all'}}]
     if payload.get('asset_code'):
         rows.append({'id':'target_snapshot','label':'检查目标设备观测','description':'读取明确目标，区分在线与读数有效。','tool':'asset_snapshot','args':{'asset_code':target}})
     rows=[r for r in rows if (r['tool'],str(sorted(r['args'].items()))) not in good]
