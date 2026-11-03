@@ -31,6 +31,7 @@ const proposeAction=ref(false),fanTarget=ref('FAN-01'),fanPwm=ref(60);
 const prompt = ref('核查本站异常，比较邻站、风机反馈和控制记录，检索适用手册；列出候选原因、反证和下一项检查。');
 const sourceLabel = ref('数据来源待核实'), modelNotice = ref('');
 const modelCallsDisabled = ref(false);
+const hardwareLive = ref(false);
 const selectedInvestigation=ref<InvestigationCase|null>(null),selectedProcedure=ref<Json|null>(null);
 const session = ref<Json | null>(null), cases = ref<string[]>([]), caseId = ref('INS-01');
 const query = ref('风机有电流但没有转速'), historyKnowledge = ref(false), knowledge = ref<Json | null>(null);
@@ -56,7 +57,7 @@ const guardStates: Record<string, string> = {supported:'本来源下有证据支
 const active = computed(() => !!run.value && ['queued', 'running'].includes(run.value.status));
 const preparedEntry = ref<AgentTaskEntry | null>(null);
 const taskEntries = [
-  {kind:'inspection', label:'巡检五站', hint:'核对31路覆盖与质量'},
+  {kind:'inspection', label:'巡检五站', hint:'核对启用点位覆盖与质量'},
   {kind:'diagnosis', label:'排查异常', hint:'对照证据并提出检查'},
   {kind:'draft', label:'准备工单', hint:'生成草案，等待确认'},
   {kind:'review', label:'恢复复核', hint:'核查新观测，不自动结单'},
@@ -122,7 +123,7 @@ async function start(previous = false) {
       ...(kind.value === 'review' ? { work_order_code: order.value } : {}),
       ...(kind.value === 'diagnosis' && selectedInvestigation.value ? {case_id:selectedInvestigation.value.id,...(selectedInvestigation.value.assetCode?{asset_code:selectedInvestigation.value.assetCode}:{})} : {}),
       ...(kind.value==='diagnosis' && selectedProcedure.value ? {procedure_id:selectedProcedure.value.id} : {}),
-      ...(kind.value === 'diagnosis' && mode.value === 'multi' && proposeAction.value ? {control_request:{asset_code:fanTarget.value,intent:'pwm',value:fanPwm.value}} : {}),
+      ...(!hardwareLive.value && kind.value === 'diagnosis' && mode.value === 'multi' && proposeAction.value ? {control_request:{asset_code:fanTarget.value,intent:'pwm',value:fanPwm.value}} : {}),
       ...(previous && run.value ? { previous_run_id: run.value.id } : {}) }, crypto.randomUUID());
     run.value = data; timer = setTimeout(poll, 500);
   } catch (cause) { fail(cause); } finally { busy.value = false; }
@@ -192,6 +193,7 @@ onMounted(async () => {
   try {
     const { data } = await api.agentContext(); sourceLabel.value = data.dataContext.label; modelNotice.value = data.modelNotice;
     modelCallsDisabled.value = data.dataContext.modelCallsDisabled === true;
+    hardwareLive.value = data.dataContext.hardwareLive === true;
     if (data.dataContext.demoControlsAvailable) { const demo=await api.demoSession(); session.value=demo.data.session; cases.value=demo.data.cases; }
   } catch { /* unknown provenance stays visible */ }
   try { history.value = (await api.agentRuns()).data; if (history.value[0]) { run.value = history.value[0]; if (active.value) void poll(); } } catch (cause) { fail(cause); }
@@ -227,7 +229,7 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
         <label>任务<select v-model="kind"><option value="inspection">五站巡检</option><option value="diagnosis">证据排障</option><option value="draft" :disabled="!canWrite">工单草案</option><option value="review">恢复复核</option></select></label>
         <label>运行方式<select v-model="mode"><option value="multi">三Agent协作</option><option value="single">单Agent对照</option></select></label>
         <label v-if="kind === 'draft'">设备编码<input v-model="asset" /></label><label v-if="kind === 'review'">工单编号<input v-model="order" /></label>
-      </div><div v-if="canWrite && kind === 'diagnosis' && mode === 'multi'" class="controls action-options"><label class="check-label"><input v-model="proposeAction" type="checkbox" />同时生成待复核的仿真风机动作草案</label><template v-if="proposeAction"><label>风机<select v-model="fanTarget"><option>FAN-01</option><option>FAN-02</option></select></label><label>PWM %<input v-model.number="fanPwm" type="number" min="0" max="100" /></label></template></div><label>任务说明<textarea v-model="prompt" maxlength="2000" rows="5" /></label>
+      </div><div v-if="!hardwareLive && canWrite && kind === 'diagnosis' && mode === 'multi'" class="controls action-options"><label class="check-label"><input v-model="proposeAction" type="checkbox" />同时生成待复核的仿真风机动作草案</label><template v-if="proposeAction"><label>风机<select v-model="fanTarget"><option>FAN-01</option><option>FAN-02</option></select></label><label>PWM %<input v-model.number="fanPwm" type="number" min="0" max="100" /></label></template></div><label>任务说明<textarea v-model="prompt" maxlength="2000" rows="5" /></label>
         <p v-if="selectedInvestigation && kind==='diagnosis'" class="field-help">本次关联排障档案：{{ selectedInvestigation.title }} · {{ selectedInvestigation.stationId }}。原假设和历史快照将保留。</p>
         <div v-if="selectedProcedure" class="controls"><p class="field-help">已准备只读模板：{{ selectedProcedure.title }} · {{ selectedProcedure.stationId }} · 版本 {{ selectedProcedure.revision }}</p><button :disabled="busy || active" @click="selectedProcedure=null">移除检查模板</button></div>
         <div class="controls task-actions"><button class="workbench-primary-action" :disabled="busy || active || modelCallsDisabled" @click="start()">开始任务（调用模型）</button><button :disabled="busy || active || modelCallsDisabled || run?.status !== 'completed'" @click="start(true)">重新核查新证据</button><button v-if="active" @click="cancel">取消任务</button></div>
@@ -264,7 +266,7 @@ onUnmounted(() => { alive = false; if (timer) clearTimeout(timer); });
           <p v-else>旧版本任务未记录经验上下文。</p>
         </section>
         <details v-if="run.result.evidence?.length"><summary>查看原始证据</summary><pre>{{ JSON.stringify(run.result.evidence, null, 2) }}</pre></details>
-        <section v-if="inspected"><h3>本轮取证覆盖</h3><p>预期 {{ inspected.expected_sensor_count }} 个物理模块 · 已登记 {{ inspected.registered_sensor_count }} · 场景观测可用 {{ inspected.scenario_usable_sensor_count }} · 数据异常 {{ inspected.data_issue_sensor_count }}。场景可用不代表现场实测。</p><div class="sensor-table"><table><thead><tr><th>检测站</th><th>设备</th><th>主控</th><th>观测状态／缺项</th><th>三维绑定</th></tr></thead><tbody><tr v-for="sensor in (inspected.items as Json[] || [])" :key="String(sensor.assetCode)"><td>{{ sensor.stationId }}</td><td>{{ sensor.assetCode }}</td><td>{{ sensor.controllerId }}</td><td>{{ sensor.observation_state }} {{ sensor.data_issues }}</td><td>{{ sensor.mapping_status }}</td></tr></tbody></table></div></section>
+        <section v-if="inspected"><h3>本轮取证覆盖</h3><p>启用 {{ inspected.expected_sensor_count }} 个点位 · 停用 {{ (inspected.disabled_sensors as Json[] || []).map(sensor => sensor.assetCode).join("、") || "无" }} · 已登记 {{ inspected.registered_sensor_count }} · 场景观测可用 {{ inspected.scenario_usable_sensor_count }} · 数据异常 {{ inspected.data_issue_sensor_count }}。场景可用不代表现场实测。</p><div class="sensor-table"><table><thead><tr><th>检测站</th><th>设备</th><th>主控</th><th>观测状态／缺项</th><th>三维绑定</th></tr></thead><tbody><tr v-for="sensor in (inspected.items as Json[] || [])" :key="String(sensor.assetCode)"><td>{{ sensor.stationId }}</td><td>{{ sensor.assetCode }}</td><td>{{ sensor.controllerId }}</td><td>{{ sensor.observation_state }} {{ sensor.data_issues }}</td><td>{{ sensor.mapping_status }}</td></tr></tbody></table></div></section>
         <div class="controls location-links"><RouterLink v-for="location in run.result.locations || []" :key="location.assetCode" :to="{path:'/twin-3d',query:{asset:location.assetCode,source:'agent'}}">{{ location.stationId }} · {{ location.assetCode }} · {{ location.mappingStatus }}</RouterLink></div>
         <div v-if="canWrite"><article v-for="(proposal, index) in run.result.proposals || []" :key="index"><h3>待确认工单：{{ proposal.title }}</h3><p>{{ proposal.description }}</p><button @click="confirmation = {type:'order',data:proposal,index}">审阅工单草案</button></article>
           <article v-for="(proposal, index) in run.result.controlProposals || []" :key="index"><p>仿真动作：{{ proposal.asset_code }} · {{ proposal.intent }} → {{ proposal.value }}</p><button :disabled="!session" @click="previewCommand(index)">审阅仿真动作</button></article></div>

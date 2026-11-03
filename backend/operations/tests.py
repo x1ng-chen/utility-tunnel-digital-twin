@@ -964,6 +964,33 @@ class OperationsApiTests(TestCase):
         self.assertEqual(conflicted_batch.status_code, 409)
         self.assertFalse(Telemetry.objects.filter(event_id='evt-must-rollback').exists())
 
+    @override_settings(INGEST_API_KEY="retirement-regression-key", INGEST_PRINCIPAL_USERNAME="service-iotda-retirement-test")
+    def test_hardware_batch_skips_retired_env04_only(self):
+        from .hardware_live import INVENTORY, OWNERS
+        active, _ = Asset.objects.get_or_create(code='ENV-03', defaults={'name': 'Live', 'zone': 'P3', 'asset_type': 'sensor'})
+        retired, _ = Asset.objects.update_or_create(code='ENV-04', defaults={
+            'name': 'Retired', 'zone': 'P2', 'asset_type': 'sensor', 'is_active': False,
+        })
+        call_command('configure_ingest_principal', verbosity=0)
+        self.client.credentials(HTTP_X_INGEST_KEY=settings.INGEST_API_KEY)
+        reading = {'eventId': 'live-retire-active', 'assetCode': active.code, 'metricKey': 'temperature',
+                   'metric': 'Temperature', 'value': 20, 'unit': '°C', 'quality': 'good',
+                   'recordedAt': timezone.now().isoformat()}
+        provenance = {'source': 'four-controller-rtu-v2', 'layoutVersion': INVENTORY['revision'],
+                      'frameId': 'retirement-test', 'rawOnly': True, 'clockSource': 'gateway-ntp',
+                      'sampleAgeMs': 0, 'frameTimestamp': reading['recordedAt']}
+        batch = {'readings': [
+            {**reading, 'provenance': {**provenance, 'controllerId': OWNERS[active.code]}},
+            {**reading, 'eventId': 'live-retire-skipped', 'assetCode': retired.code,
+             'provenance': {**provenance, 'controllerId': OWNERS[retired.code]}},
+        ]}
+        with self.settings(HARDWARE_LIVE_MODE=False):
+            self.assertEqual(self.client.post('/api/telemetry/', batch, format='json').status_code, 400)
+        with self.settings(HARDWARE_LIVE_MODE=True):
+            self.assertEqual(self.client.post('/api/telemetry/', batch, format='json').status_code, 201)
+        self.assertTrue(Telemetry.objects.filter(event_id=reading['eventId']).exists())
+        self.assertFalse(Telemetry.objects.filter(event_id='live-retire-skipped').exists())
+
     def test_viewer_cannot_ingest_telemetry(self):
         viewer = User.objects.create_user(username='telemetry-viewer@example.com', email='telemetry-viewer@example.com', password='demo-password')
         Profile.objects.create(user=viewer, display_name='查看者', role=Profile.Role.VIEWER)

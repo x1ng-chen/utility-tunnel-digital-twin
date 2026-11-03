@@ -2,6 +2,8 @@ param(
     [string]$PythonPath = 'python',
     [string]$NodePath = 'node',
     [string]$MqttUrl = 'mqtt://127.0.0.1:1884',
+    [switch]$AllowPaidModel,
+    [string]$KeyEnvFile,
     [switch]$PrepareOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -34,12 +36,17 @@ if (!(Test-Path (Join-Path $frontendRoot 'node_modules\vite\bin\vite.js')) -or !
     throw 'Install locked frontend/gateway dependencies before starting.'
 }
 Invoke-Python @((Join-Path $PSScriptRoot 'prepare_runtime.py'), '--mqtt-url', $MqttUrl)
+if ($AllowPaidModel -and (!$KeyEnvFile -or !(Test-Path -LiteralPath $KeyEnvFile -PathType Leaf))) {
+    throw 'Supply the private key file via -KeyEnvFile.'
+}
 $savedEnv = @{}
 $privateConfig = @{}
 foreach ($line in (Get-Content -LiteralPath (Join-Path $runtimeRoot '.env'))) {
     $pair = $line.Split('=', 2)
     if ($pair.Count -eq 2) { $privateConfig[$pair[0]] = $pair[1] }
 }
+$privateConfig['UT_HARDWARE_LIVE_ALLOW_MODEL'] = if ($AllowPaidModel) { '1' } else { '0' }
+$privateConfig['UT_HARDWARE_LIVE_MODEL_KEY_FILE'] = if ($AllowPaidModel) { (Resolve-Path -LiteralPath $KeyEnvFile).Path } else { '' }
 foreach ($name in (@('DJANGO_SETTINGS_MODULE','DOTENV_CONFIG_PATH','VITE_API_BASE_URL') + @($privateConfig.Keys))) {
     $savedEnv[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
@@ -63,6 +70,9 @@ try {
         @{name='bridge'; file=$NodePath; arguments='src\index.js'; cwd=$bridgeRoot},
         @{name='connectivity'; file=$PythonPath; arguments='manage.py run_connectivity_monitor'; cwd=$backendRoot}
     )
+    if ($AllowPaidModel) {
+        $specs += @{name='agent-worker'; file=$PythonPath; arguments='manage.py run_agent_worker'; cwd=$backendRoot}
+    }
     foreach ($spec in $specs) {
         $process = Start-Process -FilePath $spec.file -ArgumentList $spec.arguments -WorkingDirectory $spec.cwd -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $runtimeRoot "$stamp-$($spec.name).out.log") -RedirectStandardError (Join-Path $runtimeRoot "$stamp-$($spec.name).err.log")
         $started += @{name=$spec.name; pid=$process.Id; startedAtUtc=$process.StartTime.ToUniversalTime().ToString('o')}

@@ -26,6 +26,24 @@ class AgentRuntimeProfileTests(TestCase):
         self.assertEqual(runtime_profile(), 'hardware-live')
         self.assertTrue(data_context()['modelCallsDisabled'])
 
+    @override_settings(HARDWARE_LIVE_MODE=True, HARDWARE_LIVE_MODEL_ENABLED=True,
+                       AGENT_EVALUATION_MODE=False, DEEPSEEK_API_KEY='not-a-real-key')
+    def test_opted_in_hardware_models_keep_controls_disabled(self):
+        from .models import Profile
+        from .sprint_models import AgentRun
+        user = User.objects.create_user('live-agent-operator')
+        Profile.objects.update_or_create(user=user, defaults={'role': 'operator'})
+        client = APIClient()
+        client.force_authenticate(user)
+        self.assertFalse(data_context()['modelCallsDisabled'])
+        self.assertTrue(data_context()['controlDisabled'])
+        response = client.post('/api/assistant/runs/', {
+            'kind': 'diagnosis', 'station_id': 'P5',
+            'control_request': {'asset_code': 'FAN-01', 'intent': 'power', 'value': 1},
+        }, format='json')
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(AgentRun.objects.exists())
+
     @override_settings(AGENT_EVALUATION_MODE=True, AGENT_DEMO_MODE=False, IS_PRODUCTION=False, DEEPSEEK_API_KEY='EXPLICIT_TEST_STUB')
     def test_explicit_test_or_live_model_transport_is_reported_as_configured(self):
         self.assertFalse(data_context()['modelCallsDisabled'])

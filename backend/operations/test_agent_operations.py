@@ -59,6 +59,16 @@ class StationAgentTests(TestCase):
         self.assertEqual(WorkOrder.objects.count(), 0)
         self.assertEqual(sum(len(i['snapshot']['readings']) for i in result['items']), 35)
 
+    def test_retired_sensor_does_not_reduce_active_coverage(self):
+        asset = self.assets['ENV-04']
+        asset.is_active = False
+        asset.save(update_fields=['is_active'])
+        result = station_snapshot()
+        self.assertEqual(result['expected_sensor_count'], 30)
+        self.assertEqual(result['usable_observation_sensor_count'], 30)
+        self.assertEqual([b['assetCode'] for b in result['disabled_sensors']], ['ENV-04'])
+        self.assertTrue(Telemetry.objects.filter(asset=asset).exists())
+
     def test_sensor_registry_missing_is_not_auto_created_or_replaced_by_legacy_asset(self):
         self.assets['MQ4-05'].delete()
         Asset.objects.create(code='GAS-01', name='旧组合节点', zone='旧区', asset_type='sensor')

@@ -12,6 +12,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--seconds', type=int, default=12)
 parser.add_argument('--expect-offline', choices=['CTRL-01','CTRL-02','CTRL-03','CTRL-04'])
 parser.add_argument('--expect-presentation', help='Require a specific presentation revision and verify the actual served GLB.')
+parser.add_argument('--expect-model-enabled', action='store_true')
 options = parser.parse_args()
 if not 2 <= options.seconds <= 60: raise SystemExit('Choose a window from 2 to 60 seconds.')
 root = Path(__file__).resolve().parents[2]
@@ -28,7 +29,7 @@ assert request('/ready/')['profile'] == 'hardware-live'
 token = request('/auth/login/', {'email':access['account'], 'password':access['password']})['accessToken']
 context = request('/assistant/context/', token=token)
 assert context['dataContext']['hardwareLive'] and context['dataContext']['controlDisabled']
-assert context['dataContext']['modelCallsDisabled']
+assert context['dataContext']['modelCallsDisabled'] is (not options.expect_model_enabled)
 capabilities = request('/controllers/command-capabilities/', token=token)
 assert capabilities['protocol'] == 'four-controller-v2' and capabilities['controlDisabled']
 model_check = None
@@ -51,8 +52,11 @@ time.sleep(options.seconds)
 second = request('/assistant/inspection/', token=token)
 before = first['evidence'][0]['data']; after = second['evidence'][0]['data']
 counts = Counter(i['controllerId'] for i in after['items'])
-assert counts == {'CTRL-01':11, 'CTRL-02':7, 'CTRL-03':6, 'CTRL-04':7}, counts
-assert after['registered_sensor_count'] == 31
+disabled = [item['assetCode'] for item in after.get('disabled_sensors', [])]
+assert disabled in ([], ['ENV-04']), disabled
+expected = 31 - len(disabled)
+assert counts == {'CTRL-01':11, 'CTRL-02':7-len(disabled), 'CTRL-03':6, 'CTRL-04':7}, counts
+assert after['registered_sensor_count'] == after['expected_sensor_count'] == expected
 assert all(i['mapping_status'] == 'active_model_node_verified' for i in after['items'])
 progress = {}
 for code in counts:
@@ -71,9 +75,9 @@ if options.expect_presentation:
     assert after['presentation_revision'] == options.expect_presentation
     assert all(i['stationId'] == presentation['sensorStations'][i['assetCode']] for i in after['items'])
 summary = {'verifiedAt':datetime.now(timezone.utc).isoformat(), 'windowSeconds':options.seconds,
-    'mode':'real_hardware_http_observations', 'registeredSensors':31, 'ownership':dict(counts),
+    'mode':'real_hardware_http_observations', 'registeredSensors':expected, 'disabledSensors':disabled, 'ownership':dict(counts),
     'expectedTransportOffline':options.expect_offline,
-    'mappedSensors':31, 'usableObservationSensors':after['usable_observation_sensor_count'],
+    'mappedSensors':expected, 'usableObservationSensors':after['usable_observation_sensor_count'],
     'modelPresentation':model_check,
     'issues':{i['assetCode']:i['data_issues'] for i in after['items'] if i['data_issues']},
     'controllers':progress, 'modelCalls':0, 'hardwareCommands':0,
