@@ -12,7 +12,7 @@ COPY backend/requirements.lock ./requirements.lock
 RUN python -m pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY backend/ ./
-RUN chown -R utilitytunnel:utilitytunnel /app
+RUN mkdir -p /app/media && chown -R utilitytunnel:utilitytunnel /app
 
 USER utilitytunnel
 EXPOSE 8000

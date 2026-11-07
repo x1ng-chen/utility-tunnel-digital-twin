@@ -1,0 +1,29 @@
+# Replace REVIEW_IPV4 with the instance's fixed public IPv4 address.
+server {
+    listen 80 default_server;
+    server_name REVIEW_IPV4;
+    location /.well-known/acme-challenge/ { root /var/www/review-acme; }
+    location / { return 308 https://REVIEW_IPV4$request_uri; }
+}
+
+server {
+    listen 443 ssl default_server;
+    server_name REVIEW_IPV4;
+    ssl_certificate /etc/letsencrypt/live/REVIEW_IPV4/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/REVIEW_IPV4/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:18080;
+        proxy_http_version 1.1;
+        proxy_set_header Host REVIEW_IPV4;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $review_connection;
+        proxy_read_timeout 80s;
+    }
+}
+
+map $http_upgrade $review_connection {
+    default upgrade;
+    '' close;
+}

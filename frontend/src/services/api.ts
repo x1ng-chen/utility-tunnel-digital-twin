@@ -129,6 +129,7 @@ export const api = {
   agentRuns: () => client.get('/assistant/runs/'),
   reviewExperiences: () => client.get('/assistant/experiences/'),
   transitionExperience: (id: string, action: string, revision: number, lesson?: string) => client.post(`/assistant/experiences/${id}/`, { action, revision, ...(lesson !== undefined ? { lesson } : {}) }),
+  retryAlertRun: (id: string, key: string) => client.post('/assistant/runs/' + id + '/', {action: 'retry'}, {headers: {'Idempotency-Key': key}}),
   createAgentRun: (payload: Record<string, unknown>, key: string) => client.post('/assistant/runs/', payload, { headers: { 'Idempotency-Key': key } }),
   agentRun: (id: string) => client.get(`/assistant/runs/${id}/`),
   cancelAgentRun: (id: string) => client.post(`/assistant/runs/${id}/`, { action: 'cancel' }),

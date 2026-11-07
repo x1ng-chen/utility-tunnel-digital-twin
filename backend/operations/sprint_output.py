@@ -56,7 +56,13 @@ def task_contract(payload,evidence,proposals,orders,handbook_checked):
     if kind=='inspection' and not any(e['tool']=='station_snapshot' and e['data'].get('station_id')=='all' for e in good):
         gaps.append('缺少五站巡检的实际工具结果')
     if kind=='diagnosis':
-        if not any(e['tool']=='collect_station_evidence' for e in good): gaps.append('缺少本站、邻站及双风机的取证结果')
+        if payload.get('alert_code'):
+            if not any(e['tool'] == 'alert_event' and e['data'].get('alertCode') == payload['alert_code'] for e in good):
+                gaps.append('缺少指定告警的冻结观测')
+            if not any(e['tool'] == 'asset_snapshot' and e['data'].get('asset_code') == payload.get('asset_code') for e in good):
+                gaps.append('缺少独立的当前设备观测')
+        elif not any(e['tool']=='collect_station_evidence' for e in good):
+            gaps.append('缺少本站、邻站及双风机的取证结果')
         if not handbook_checked: gaps.append('未取得有效手册或当前适用知识依据')
     if kind=='draft':
         code=payload.get('asset_code')

@@ -1,12 +1,13 @@
 # 文档导航
 
-当前入口：[项目主页](../README.md) · [当前进度](PROJECT_STATUS.md) · [2026-10-31发布验证](releases/2026-10-31/README.md)。
+当前入口：[项目主页](../README.md) · [当前进度](PROJECT_STATUS.md) · [参赛版总览](competition-final/01-项目总览.md) · [Agent 技术详解](competition-final/05-Agent技术亮点与实现.md) · [2026-10-31发布验证](releases/2026-10-31/README.md)。
 
 ## 按任务阅读
 
 | 任务 | 文档 |
 | --- | --- |
 | 启动软件演示 | [Windows/Docker](../deploy/agent-demo/README.md) |
+| 评审版部署和操作 | [部署](../deploy/competition-review/README.md) · [演示任务](competition-final/04-比赛提交与评审演示.md) |
 | 实物数据接入 | [只读联调](../deploy/hardware-live/README.md) |
 | 三Agent、RAG与仿真闭环 | [软件冲刺](software-sprint-20261027/README.md) |
 | 设备证据护栏与经验审核 | [护栏、联合评测、受控经验](guardrails-experience-20261027/README.md) |
