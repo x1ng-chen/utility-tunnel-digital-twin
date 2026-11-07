@@ -25,6 +25,8 @@ unset COMPETITION_REVIEW_PASSWORD
 review up -d
 ```
 
+如果沿用旧镜像创建的评审媒体卷且初始化提示权限不足，使用同一评审 Compose 项目运行 `review run --rm --user root api chown utilitytunnel:utilitytunnel /app/media`，再重新执行样例导入。
+
 ## 固定 IPv4 的 HTTPS
 
 只对公网开放 80/443，SSH 按实际管理来源限制。Web 容器绑定主机回环 18080。用 Nginx 对外反代，先启用示例的 80 端口部分并创建 `/var/www/review-acme`。用 Certbot 5.4 或更新版签发 IP 证书，取证书后启用示例的 443 部分和 WebSocket 映射。续签成功后执行 `nginx -t && systemctl reload nginx`，设置自动续签并做试运行。证书以 IP 校验，浏览器必须通过正常信任链验证。
