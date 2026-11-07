@@ -141,6 +141,48 @@ class RunTests(TestCase):
     def create(self,key=None,**payload):
         return self.client.post('/api/assistant/runs/',{'kind':'diagnosis','station_id':'P5',**payload},format='json',HTTP_IDEMPOTENCY_KEY=key or str(uuid.uuid4()))
 
+    def test_recovered_alert_freezes_target_history_and_retries_same_snapshot(self):
+        from datetime import timedelta
+        from .models import Alert
+        from .sprint_validation import validate_facts
+
+        now = timezone.now()
+        asset = Asset.objects.get(code='FLAME-05')
+        alert = Alert.objects.create(code='ALM-REPLAY', asset=asset, rule_key='flame.alarm',
+            severity='critical', category='sensor', title='触发', detail='台架记录',
+            status='resolved', opened_at=now - timedelta(minutes=10),
+            resolved_at=now - timedelta(minutes=10) + timedelta(seconds=5))
+        for offset, value in ((-1, 0), (0, 1), (6, 0)):
+            Telemetry.objects.create(asset=asset, metric='Flame', metric_key='flame.alarm',
+                value=value, unit='bool', recorded_at=alert.opened_at + timedelta(seconds=offset))
+        other = Asset.objects.get(code='FLAME-03')
+        Telemetry.objects.bulk_create([
+            Telemetry(asset=other, metric='Flame', metric_key='flame.alarm', value=0,
+                      unit='bool', recorded_at=now - timedelta(minutes=1))
+            for _ in range(2001)
+        ])
+        response = self.create(alert_code=alert.code)
+        self.assertEqual(response.status_code, 202, response.data)
+        run = AgentRun.objects.get(pk=response.data['id'])
+        event = run.snapshot['alertEvent']
+        self.assertTrue(run.snapshot['ledgerTruncated'])
+        self.assertEqual([item['value'] for item in event['items']], [0, 1, 0])
+        self.assertEqual(event['alertId'], alert.pk)
+        fact = {'asset_code': asset.code, 'metric_key': 'flame.alarm', 'value': 1,
+                'unit': 'bool', 'evidence_id': 'E1'}
+        validate_facts({'facts': [fact]}, [{'id': 'E1', 'status': 'ok', 'tool': 'alert_event', 'data': event}],
+                       run.snapshot['assets'])
+        run.status = 'failed'
+        run.runtime = {'calls': [{'providerHttpStatus': 503}]}
+        run.save(update_fields=['status', 'runtime'])
+        path = f'/api/assistant/runs/{run.pk}/'
+        retry = self.client.post(path, {'action': 'retry'}, format='json', HTTP_IDEMPOTENCY_KEY='retry-503')
+        self.assertEqual(retry.status_code, 202, retry.data)
+        self.assertEqual(AgentRun.objects.get(pk=retry.data['id']).snapshot, run.snapshot)
+        again = self.client.post(path, {'action': 'retry'}, format='json', HTTP_IDEMPOTENCY_KEY='retry-503')
+        self.assertEqual(again.status_code, 200)
+        self.assertEqual(again.data['id'], retry.data['id'])
+
     def test_persistent_three_independent_roles(self):
         response=self.create(); self.assertEqual(response.status_code,202)
         with patch('operations.ai_assistant._completion',side_effect=completion): self.assertTrue(process_one())

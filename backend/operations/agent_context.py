@@ -11,6 +11,8 @@ def evaluation_enabled():
 
 
 def runtime_profile():
+    if getattr(settings, 'COMPETITION_REVIEW_MODE', False):
+        return 'competition-review'
     if getattr(settings, 'HARDWARE_LIVE_MODE', False):
         return 'hardware-live'
     if evaluation_enabled():
@@ -33,6 +35,10 @@ def require_evaluation_database():
 
 
 def data_context():
+    if getattr(settings, 'COMPETITION_REVIEW_MODE', False):
+        return {'mode': 'historical_replay', 'label': '历史实测回放 · P5 现场状态需另行核验',
+                'profile': 'competition-review', 'scenarioId': None, 'demoControlsAvailable': False,
+                'controlDisabled': True, 'modelCallsDisabled': not bool(settings.DEEPSEEK_API_KEY)}
     if not evaluation_enabled():
         if getattr(settings, 'HARDWARE_LIVE_MODE', False):
             return {'mode': 'database_observation', 'label': '实物遥测 · 独立联调库；逐路功能与标定仍待验收',

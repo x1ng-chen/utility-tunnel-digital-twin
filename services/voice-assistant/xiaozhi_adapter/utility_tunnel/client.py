@@ -6,6 +6,8 @@ import os
 import re
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
+from datetime import datetime, timezone
+from .speech_input import normalize_business_text
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 MAX_RESPONSE_BYTES = 512 * 1024
@@ -96,7 +98,8 @@ class TunnelVoiceClient:
         self.opener = opener if opener is not None else build_opener(ProxyHandler({}), NoRedirect())
 
     def _request(self, route, payload=None):
-        if route not in {'auth/me/', 'assistant/chat/'}:
+        inspection = re.fullmatch(r'assistant/inspection/\?station=(?:P[1-5]|all)', route)
+        if route not in {'auth/me/', 'assistant/chat/'} and not (inspection and payload is None):
             raise VoiceBridgeError('route_rejected', '语音适配器未开放此操作。')
         body = None if payload is None else json.dumps(payload, ensure_ascii=False, allow_nan=False).encode('utf-8')
         request = Request(self.config.base_url + '/' + route, data=body,
@@ -127,11 +130,59 @@ class TunnelVoiceClient:
         except (ValueError, UnicodeError, TypeError):
             raise VoiceBridgeError('invalid_response', '管廊返回内容无效，请稍后重试。') from None
 
+    def inspect(self, station, *, alarm_only=False):
+        station_id = 'all' if station == '五站' else station
+        data = self._request(f'assistant/inspection/?station={station_id}')
+        try:
+            source = data['runtime']['dataContext']
+            snapshot = data['evidence'][0]['data']
+            queried_at = snapshot['queried_at']
+            if snapshot['station_id'] != station_id:
+                raise ValueError('station mismatch')
+            when = datetime.fromisoformat(queried_at).astimezone(timezone.utc).strftime('%H点%M分%S秒')
+            observed = [datetime.fromisoformat(row['sampled_at'])
+                        for item in snapshot.get('items', [])
+                        for row in (item.get('snapshot') or {}).get('readings', [])
+                        if row.get('usable') or row.get('scenario_usable')]
+            latest = max(observed).astimezone(timezone.utc).strftime('%H点%M分%S秒') if observed else None
+            expected = snapshot['expected_sensor_count']
+            usable = snapshot['usable_observation_sensor_count']
+            if not (type(expected) is int and type(usable) is int and 0 <= usable <= expected):
+                raise ValueError('invalid counts')
+            issues = [code for fact in snapshot['station_facts'].values()
+                      for code in fact['data_issue_asset_codes']]
+            alerts = [code for fact in snapshot['station_facts'].values()
+                      for code in fact['alert_asset_codes']]
+        except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+            raise VoiceBridgeError('invalid_reply', '巡检结果格式无效，请到网页查看。') from None
+        label = '模拟巡检' if source.get('mode') == 'simulated_test' else (
+            '实物平台巡检' if source.get('hardwareLive') is True else '数据库巡检')
+        alert_text = ('平台记录的活动告警涉及' + '、'.join(alerts[:5]) if alerts
+                      else '平台当前未列出活动告警')
+        if alarm_only:
+            text = f'{station}，{label}于世界时{when}查询，{alert_text}。'
+        else:
+            text = f'{station}，{label}于世界时{when}查询。{expected}路中有{usable}路观测新鲜且质量良好。'
+            if latest:
+                text += f'最新可用采样为世界时{latest}。'
+            if issues:
+                text += '待核查点位包括' + '、'.join(issues[:5]) + '。'
+            text += alert_text + '。'
+        if usable < expected:
+            text += '有点位观测缺失或不可用。'
+        return VoiceReply(text, 'tool_verified', queried_at)
+
     def ask(self, dialogue):
         messages = prepare_history(dialogue)
         identity = self._request('auth/me/')
         if identity.get('role') != 'viewer':
             raise VoiceBridgeError('viewer_required', '语音查询需要独立的查看者账号，请勿配置管理员或运维员凭据。')
+        command = normalize_business_text(messages[-1]['content'])
+        match = re.fullmatch(r'(?:你好[，, ]*小管[，, ]*|小管[，, ]*)?(?:请)?'
+                             r'(?:(?:巡检|零检)\s*(P[1-5]|五站)(?:站|检测点)?|(P[1-5])\s*(?:站)?(?:的)?(?:当前)?告警(?:状态)?)'
+                             r'[。！？?!\s]*', command)
+        if match:
+            return self.inspect(match[1] or match[2], alarm_only=bool(match[2]))
         data = self._request('assistant/chat/', {'messages': messages, 'page': 'voice'})
         reply, mode, queried_at = data.get('reply'), data.get('mode'), data.get('queriedAt')
         if (not isinstance(reply, str) or not reply.strip() or len(reply) > 2000

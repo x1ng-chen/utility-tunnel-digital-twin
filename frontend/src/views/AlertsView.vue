@@ -165,7 +165,7 @@ function getUserFacingError(cause: unknown) {
           <button v-if="alert.assetCode" class="alert-locate-button" type="button" @click="openGis(alert)">地图定位</button>
           <template v-if="canWrite">
             <button v-if="alert.status === 'open'" :disabled="busyId === alert.id" @click="acknowledge(alert)">{{ busyId === alert.id ? '处理中…' : '确认' }}</button>
-            <button v-if="!linkedOrder(alert)" :disabled="busyId === alert.id" @click="createWorkOrder(alert)">转工单</button>
+            <button v-if="alert.assetCode && alert.status !== 'closed' && !linkedOrder(alert)" :disabled="busyId === alert.id" @click="createWorkOrder(alert)">{{ alert.status === 'resolved' ? '创建复核工单' : '转工单' }}</button>
             <button v-else type="button" @click="openWorkOrder(alert)">查看工单</button>
           </template>
           <small v-else class="permission-hint">{{ store.offline ? '离线只读' : '只读角色' }}</small>

@@ -1,0 +1,82 @@
+name: utility-tunnel-review
+
+x-backend: &backend
+  image: utility-tunnel-competition-api
+  build:
+    context: ../..
+    dockerfile: deploy/containers/Dockerfile.api
+  restart: unless-stopped
+  init: true
+  environment:
+    DJANGO_SETTINGS_MODULE: config.competition_review_settings
+    DJANGO_ENV: production
+    DJANGO_SECRET_KEY: ${REVIEW_DJANGO_SECRET:?set review Django secret}
+    DJANGO_ALLOWED_HOSTS: ${REVIEW_HOST:?set a single review host}
+    DJANGO_CSRF_TRUSTED_ORIGINS: https://${REVIEW_HOST}
+    CORS_ALLOWED_ORIGINS: https://${REVIEW_HOST}
+    WEBSOCKET_ALLOWED_ORIGINS: https://${REVIEW_HOST}
+    DJANGO_SECURE_SSL_REDIRECT: "true"
+    DJANGO_ENABLE_HSTS: "true"
+    DJANGO_TRUST_PROXY_SSL: "true"
+    DJANGO_TRUST_PROXY_HEADERS: "false"
+    CONNECTIVITY_MONITOR_TOKEN: ${REVIEW_INTERNAL_TOKEN:?set review internal token}
+    DATABASE_URL: postgresql://review:${REVIEW_DB_PASSWORD:?set URL-safe database password}@db:5432/competition_review?sslmode=require
+    DJANGO_CACHE_BACKEND: django.core.cache.backends.db.DatabaseCache
+    DJANGO_CACHE_LOCATION: competition_review_cache
+    AI_ASSISTANT_RATE_LIMIT: 15/hour
+    DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+    DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-flash}
+    APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
+  volumes:
+    - review_media:/app/media
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: review
+      POSTGRES_DB: competition_review
+      POSTGRES_PASSWORD: ${REVIEW_DB_PASSWORD}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        mkdir -p /var/lib/postgresql/tls
+        cp /tls/server.crt /tls/server.key /var/lib/postgresql/tls/
+        chown postgres:postgres /var/lib/postgresql/tls/server.*
+        chmod 600 /var/lib/postgresql/tls/server.key
+        exec docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=/var/lib/postgresql/tls/server.crt -c ssl_key_file=/var/lib/postgresql/tls/server.key
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U review -d competition_review"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - review_db:/var/lib/postgresql/data
+      - ${REVIEW_TLS_DIR:?set database TLS directory}:/tls:ro
+  api:
+    <<: *backend
+  worker:
+    <<: *backend
+    command: ["python", "manage.py", "run_agent_worker", "--warm-knowledge"]
+    healthcheck:
+      disable: true
+  web:
+    image: utility-tunnel-competition-web
+    build:
+      context: ../..
+      dockerfile: deploy/containers/Dockerfile.web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${REVIEW_PORT:-18080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  review_db:
+  review_media:

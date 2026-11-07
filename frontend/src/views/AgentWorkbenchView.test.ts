@@ -37,6 +37,31 @@ describe('persistent Agent workbench',()=>{
   useAuthStore().user!.role='viewer';wrapper=show();await flushPromises();
   expect(wrapper.get('option[value=draft]').attributes('disabled')).toBeDefined();
   expect(wrapper.get('[data-task-kind=draft]').attributes('disabled')).toBeDefined();
+  expect(wrapper.find('a[href="#agent-experience"]').exists()).toBe(false);
+ });
+ it('opens existing Agent tools from the overview without starting a task',async()=>{
+  const start=vi.spyOn(api,'createAgentRun');
+  wrapper=mount(View,{attachTo:document.body,global:{stubs:{RouterLink:true}}});await flushPromises();
+  const shortcuts=wrapper.get('[aria-label="Agent 能力直达"]').findAll('a');
+  expect(shortcuts).toHaveLength(6);
+  for(const link of shortcuts){
+   const panel=wrapper.get((link.element as HTMLAnchorElement).hash);
+   expect(panel.attributes('open')).toBeUndefined();
+   await link.trigger('click');
+   expect(panel.attributes('open')).toBeDefined();
+  }
+  expect(start).not.toHaveBeenCalled();
+ });
+ it('only shows stage output when the selected run recorded it',async()=>{
+  vi.mocked(api.agentRuns).mockResolvedValue({data:[{
+   id:'p5-failed-run',status:'failed',input:{kind:'diagnosis',station_id:'P5'},runtime:{},result:{},
+   steps:[
+    {role:'evidence',startedAt:'2026-11-03T09:00:00Z',output:{summary:'已取证'},traces:[],calls:[]},
+    {role:'diagnosis',startedAt:'2026-11-03T09:00:01Z',output:null,traces:[],calls:[]},
+   ],
+  }]} as never);
+  wrapper=show();await flushPromises();
+  expect(wrapper.findAll('.flow-state').map(state=>state.text())).toEqual(['已有输出','输出未完成','无阶段记录']);
  });
  it('task entry prepares the full inspection without a model call or actuator request',async()=>{
   const create=vi.spyOn(api,'createAgentRun');const command=vi.spyOn(api,'proposeDemoCommand');

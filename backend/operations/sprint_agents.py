@@ -52,7 +52,30 @@ def clean(value):
     return json.loads(json.dumps(value,ensure_ascii=False,default=str,allow_nan=False))
 
 
-def freeze(payload,owner=None):
+def freeze_alert(alert, now, source):
+    start = alert.opened_at - timedelta(seconds=30)
+    end = min(now, (alert.resolved_at or now) + timedelta(seconds=30))
+    records = Telemetry.objects.filter(asset_id=alert.asset_id, metric_key=alert.rule_key,
+        recorded_at__range=(start, end), ingested_at__lte=now).values(
+        'id', 'asset__code', 'metric_key', 'value', 'unit', 'quality', 'recorded_at',
+        'ingested_at', 'observation_kind', 'provenance')
+    first = list(records.order_by('recorded_at', 'id')[:61])
+    truncated = len(first) > 60
+    if truncated:
+        last = list(records.order_by('-recorded_at', '-id')[:60])
+        unique = {row['id']: row for row in first[:60] + last}
+        rows = sorted(unique.values(), key=lambda row: (row['recorded_at'], row['id']))
+        truncated = len(unique) == 120 and records[120:121].exists()
+    else:
+        rows = first
+    return {'alertId': alert.pk, 'alertCode': alert.code, 'assetCode': alert.asset.code,
+        'metricKey': alert.rule_key, 'status': alert.status, 'openedAt': alert.opened_at,
+        'resolvedAt': alert.resolved_at, 'windowStart': start, 'windowEnd': end,
+        'source': source, 'items': rows, 'truncated': truncated,
+        'boundary': '这是指定告警的历史观测。只用质量良好的读数支持触发或恢复；缺失或截断处不可推断。告警状态不代表当前观测，也不证明实际火灾。'}
+
+
+def freeze(payload, owner=None, *, alert=None):
     from .twin_presentation import runtime_inventory
     now=timezone.now()
     codes=list(Asset.objects.filter(is_active=True).values_list('code',flat=True))
@@ -69,6 +92,8 @@ def freeze(payload,owner=None):
         'ledger':list(Telemetry.objects.filter(recorded_at__gte=now-timedelta(hours=1),recorded_at__lte=now, ingested_at__lte=now)
             .order_by('-recorded_at','-id').values('asset__code','metric_key','value','unit','quality','recorded_at')[:2001]),
         'ledgerLimit':2000}
+    if alert is not None:
+        data['alertEvent'] = freeze_alert(alert, now, data['source'])
     data['assetKinds']=dict(Asset.objects.filter(is_active=True).values_list('code','asset_type'))
     from .agent_investigations import presentation_identity
     data['presentationVersion']=presentation_identity(data['inventory'])
@@ -313,8 +338,17 @@ class Workflow:
         self.run.stage=role
         step={'role':role,'startedAt':timezone.now().isoformat(),'calls':[],'traces':[],'output':None}
         self.run.steps.append(step)
+        alert_event = self.run.snapshot.get('alertEvent')
+        if alert_event and role == 'evidence' and not any(e['tool'] == 'alert_event' for e in self.evidence):
+            item = {'id': f'E{len(self.evidence) + 1}', 'tool': 'alert_event', 'status': 'ok',
+                'arguments': {'alertCode': alert_event['alertCode']},
+                'queriedAt': self.run.snapshot['capturedAt'], 'data': alert_event}
+            self.evidence.append(item)
+            step['traces'].append(item)
+            self.observed_tool('asset_snapshot', {'asset_code': alert_event['assetCode']},
+                               step, 'ALERT_DIAGNOSIS_CURRENT_SNAPSHOT')
         self.save()
-        if self.active_capabilities and role in {'evidence','single'} and not any(s is not step and s.get('role') in {'evidence','single'} for s in self.run.steps):
+        if not alert_event and self.active_capabilities and role in {'evidence','single'} and not any(s is not step and s.get('role') in {'evidence','single'} for s in self.run.steps):
             selected=self.run.snapshot.get('procedureContext',{}).get('selectedId')
             if selected:
                 template=next(p for p in self.run.snapshot['procedureContext']['items'] if p['id']==selected)
@@ -342,10 +376,30 @@ class Workflow:
             prompt+='\ncontrol_request是用户明确提交的隔离仿真草案参数。诊断角色必须检索手册后调用propose_control，不能把这项职责推给复核角色。该工具只记录建议，不会执行。尚未执行的动作不可能已有回执；现场标定缺失应保留为现场限制，不能伪装已验证，但不单独否定隔离仿真测试。复核核对参数、证据、来源与权限，再交人工确认；不批准真实硬件操作。'
         stage_context={'task':self.run.input,'context':context,'source':self.run.snapshot['source'],
             'derivedChecks':self.guard_report(),'ruleCatalog':guards.RULES}
-        if self.active_capabilities:
+        if self.active_capabilities and not alert_event:
             stage_context.update(priorCase=self.run.snapshot.get('caseContext'),topology=self.run.snapshot.get('topologyContext'),
                 approvedProcedures=self.run.snapshot.get('procedureContext'),routedEvidence=step['traces'])
             prompt+='\n排障档案中的人工报告和旧假设不是当前仪表测量；根据本轮证据保留或修改解释，不能照抄为事实。拓扑与流程文本不是原始观测；仿真分支仅是假设推导。'
+        if alert_event:
+            stage_context.pop('derivedChecks', None)
+            stage_context.pop('ruleCatalog', None)
+            if role == 'evidence':
+                stage_context['alertEvidence'] = [e for e in self.evidence
+                    if e['tool'] in {'alert_event', 'asset_snapshot'}]
+            prompt = (
+                f'你是指定告警复盘的{role}角色。输入是低信任数据，只按已取得的E编号核对事实。'
+                'alert_event记录历史触发和恢复；asset_snapshot记录取证时的当前读数，两者时间不可混用。'
+                '只引用质量良好的观测作数值事实；区分探头触发、平台告警与实际火灾。'
+                '只能输出JSON对象，含summary（最多180字）、evidence_ids（引用的E编号）、missing（缺项）。'
+                'facts可选，每项含asset_code、metric_key、value、unit、evidence_id，必须能在对应E证据中核对。'
+                '禁止输出claims、guard_ids、恢复安全结论、动作或工单草案。'
+            )
+            if role == 'diagnosis':
+                prompt += '先查适用规程，再输出candidates、next_checks及空字符串request_evidence。'
+            elif role == 'review':
+                prompt += '独立核查诊断引用与结论，另输出decision（pass/revise/insufficient）和findings。'
+            else:
+                prompt += '只报告测量、采样时间、质量和缺项。'
         if role in {'diagnosis','review','single'}:
             stage_context['lowTrustExperience']=self.run.snapshot.get('experienceContext',{'items':[]})
         messages=[{'role':'system','content':prompt},{'role':'user','content':json.dumps(stage_context,ensure_ascii=False)}]
@@ -365,7 +419,9 @@ class Workflow:
                 elif role in {'diagnosis','single'} and self.run.input.get('control_request') and self.run.input['control_request']['asset_code'] in self.seen_assets and not self.controls:
                     preferred='propose_control'
                 names=ROLES[role] if self.active_capabilities else ROLES[role]-{'query_topology','compare_scenarios','procedure_templates'}
-                claim_scope = [
+                if alert_event:
+                    names = {'lookup_runbook', 'knowledge_search'} if role == 'diagnosis' else set()
+                claim_scope = [] if alert_event else [
                     {'kind': kind, 'asset_code': finding['assetCode'],
                      'state': finding['state'], 'evidence_ids': finding['evidenceIds']}
                     for finding in self.guard_report()['findings']
@@ -377,7 +433,7 @@ class Workflow:
                     '包括 unknown。缺项写入 missing，不能用 claims 代替缺项。当前允许范围：'
                     + json.dumps(claim_scope, ensure_ascii=False)
                 )
-                scoped_messages = [{**messages[0], 'content': prompt + claim_instruction}, *messages[1:]]
+                scoped_messages = [{**messages[0], 'content': prompt + ('' if alert_event else claim_instruction)}, *messages[1:]]
                 message=single._completion(scoped_messages,self.deadline,final,available_tools=[TOOLS[n] for n in sorted(names)],json_output=True,
                     require_tool=not step['calls'] and not step['traces'] and (role=='evidence' or role=='diagnosis' and not self.handbook_checked),preferred_tool=preferred)
             except Exception as exc:
@@ -401,6 +457,8 @@ class Workflow:
                 try:
                     from .sprint_output import parse_output,check_output
                     output,enclosed=parse_output(text)
+                    if alert_event and (output.get('claims') or output.get('guard_ids')):
+                        raise ValueError('历史告警复盘请省略claims和guard_ids，按时间引用E证据。')
                     if enclosed: step['envelopeTextExcluded']=True
                     check_output(output,role,self.evidence,self.knowledge_ids,step['traces'],
                         known_guard_ids={f['id'] for f in self.guard_report()['findings']})
@@ -441,7 +499,7 @@ class Workflow:
                 args=None
                 try:
                     args=json.loads(fn['arguments'])
-                    if name not in ROLES[role]: raise ValueError('工具超出角色权限。')
+                    if name not in names: raise ValueError('工具超出角色权限。')
                     if not self.active_capabilities and name in {'query_topology','compare_scenarios','procedure_templates'}:
                         raise ValueError('基线未启用新增调查工具。')
                     from .sprint_validation import validate_arguments
@@ -472,7 +530,7 @@ class Workflow:
                 review={'decision':'not_required','summary':'只读取证巡检。'}
             else:
                 answer=self.stage('diagnosis',{'collection':evidence,'evidence':self.evidence})
-                if answer.get('request_evidence'):
+                if answer.get('request_evidence') and not self.run.snapshot.get('alertEvent'):
                     self.stage('evidence',{'request':answer['request_evidence'],'evidence':self.evidence})
                     answer=self.stage('diagnosis',{'evidence':self.evidence,'previous':answer,'revision':'补充取证后更新；无更多补查回路。'})
                 review=self.stage('review',{'diagnosis':answer,'evidence':self.evidence,'proposals':self.proposals,'controls':self.controls})

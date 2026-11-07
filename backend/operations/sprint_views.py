@@ -15,7 +15,8 @@ from rest_framework.views import APIView
 from .permissions import AuthenticatedRead
 from .throttling import AiAssistantRateThrottle
 from .sprint_models import AgentRun, SimulatedAction, DemoSession
-from .sprint_agents import clean
+from .sprint_agents import clean, freeze
+from .models import Alert
 from .sprint_knowledge import search
 from .sprint_costs import calculate, example
 from . import sprint_demo as demo
@@ -76,9 +77,25 @@ class RunList(APIView):
         if not settings.DEEPSEEK_API_KEY:
             return Response({'message':'当前软件环境未启用模型调用；可查看历史和使用只读工具，配置后需显式重新启动。'}, status=503)
         p=request.data
-        if not isinstance(p,dict) or set(p)-{'kind','station_id','asset_code','work_order_code','prompt','mode','previous_run_id','control_request','case_id','procedure_id'}:
+        if not isinstance(p,dict) or set(p)-{'kind','station_id','asset_code','work_order_code','prompt','mode','previous_run_id','control_request','case_id','procedure_id','alert_code'}:
             return Response({'message':'无效任务字段。'},status=400)
         p=dict(p)
+        alert = None
+        if 'alert_code' in p:
+            code = p['alert_code']
+            if (not isinstance(code, str) or not re.fullmatch(r'[A-Z0-9][A-Z0-9_-]{1,49}', code)
+                    or p.get('kind', 'diagnosis') != 'diagnosis' or p.get('mode', 'multi') != 'multi'
+                    or {'control_request', 'work_order_code', 'case_id', 'procedure_id', 'previous_run_id'} & p.keys()):
+                return Response({'message': '指定告警仅用于独立的三 Agent 只读排障。'}, status=400)
+            alert = Alert.objects.select_related('asset').filter(code=code, asset__isnull=False).first()
+            if not alert or not alert.rule_key:
+                return Response({'message': '告警没有可定位的来源指标。'}, status=404)
+            if alert.asset.zone not in {'P1', 'P2', 'P3', 'P4', 'P5'}:
+                return Response({'message': '告警资产缺少有效的检测点。'}, status=400)
+            if (p.get('asset_code', alert.asset.code) != alert.asset.code
+                    or p.get('station_id', alert.asset.zone) not in (alert.asset.zone, 'all')):
+                return Response({'message': '任务目标与来源告警不一致。'}, status=400)
+            p.update(asset_code=alert.asset.code, station_id=alert.asset.zone)
         investigation=None
         if 'case_id' in p:
             from .sprint_models import InvestigationCase
@@ -152,7 +169,9 @@ class RunList(APIView):
         expire_runs()
         try:
             with transaction.atomic():
-                run=AgentRun.objects.create(owner=request.user,request_key=key,input=payload,case=investigation)
+                snapshot = freeze(payload, request.user, alert=alert) if alert is not None else {}
+                run=AgentRun.objects.create(owner=request.user,request_key=key,input=payload,
+                    case=investigation,snapshot=snapshot)
         except IntegrityError:
             return Response({'message':'当前已有运行任务或重复请求，请先等待或取消。'},status=409)
         return Response(serialize(run),status=202)
@@ -167,10 +186,42 @@ class RunDetail(APIView):
         return Response(serialize(run)) if run else Response(status=404)
 
     def post(self,request,pk):
-        if request.data!={'action':'cancel'}: return Response({'message':'仅支持取消。'},status=400)
+        if request.data == {'action': 'retry'}:
+            return self.retry(request, pk)
+        if request.data!={'action':'cancel'}: return Response({'message':'无效任务操作。'},status=400)
         AgentRun.objects.filter(pk=pk,owner=request.user,status__in=['queued','running']).update(
             status='cancelled',stage='cancelled',finished_at=timezone.now())
         return self.get(request,pk)
+
+
+    def retry(self, request, pk):
+        if (not settings.DEEPSEEK_API_KEY or
+                (getattr(settings, 'HARDWARE_LIVE_MODE', False) and data_context()['modelCallsDisabled'])):
+            return Response({'message': '模型任务未启用。'}, status=503)
+        previous = AgentRun.objects.filter(pk=pk, owner=request.user).first()
+        if not previous:
+            return Response(status=404)
+        if (previous.status != 'failed' or not previous.snapshot.get('alertEvent')
+                or not any(call.get('providerHttpStatus') == 503 or call.get('errorCode') == 'assistant_timeout'
+                           for call in previous.runtime.get('calls', []))):
+            return Response({'message': '仅支持重试因模型 503 或超时失败的告警排障。'}, status=409)
+        key = request.headers.get('Idempotency-Key', '')
+        if not re.fullmatch(r'[A-Za-z0-9._:-]{1,80}', key):
+            return Response({'message': '需要1至80字符Idempotency-Key。'}, status=400)
+        payload = {**previous.input, 'retry_of': str(previous.pk)}
+        existing = AgentRun.objects.filter(owner=request.user, request_key=key).first()
+        if existing:
+            return Response(serialize(existing), status=200 if existing.input == payload else 409)
+        try:
+            with transaction.atomic():
+                run = AgentRun.objects.create(owner=request.user, request_key=key,
+                    input=payload, snapshot=previous.snapshot)
+        except IntegrityError:
+            existing = AgentRun.objects.filter(owner=request.user, request_key=key, input=payload).first()
+            if existing:
+                return Response(serialize(existing))
+            return Response({'message': '当前已有运行任务或重复请求。'}, status=409)
+        return Response(serialize(run), status=202)
 
 
 class RunExport(APIView):

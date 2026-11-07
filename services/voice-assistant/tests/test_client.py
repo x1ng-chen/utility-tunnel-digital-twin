@@ -12,7 +12,7 @@ from utility_tunnel.client import (BridgeConfig, MAX_RESPONSE_BYTES, NoRedirect,
     TunnelVoiceClient, VoiceBridgeError, prepare_history)
 
 TOKEN = 'a' * 40
-USER = [{'role': 'user', 'content': '巡检 P1'}]
+USER = [{'role': 'user', 'content': '帮我解释 P1 的观测质量'}]
 REPLY = {'reply': 'P1 当前缺少新鲜测量，请核对现场接线。', 'mode': 'tool_verified',
          'queriedAt': '2026-10-26T10:00:00+00:00', 'proposals': []}
 
@@ -110,6 +110,23 @@ class HistoryTests(unittest.TestCase):
 
 
 class BridgeTests(unittest.TestCase):
+    def test_inspection_and_alert_status_use_readonly_station_api(self):
+        snapshot = {'station_id': 'P5', 'queried_at': '2026-11-03T18:01:09+09:00',
+                    'expected_sensor_count': 4, 'usable_observation_sensor_count': 3,
+                    'station_facts': {'P5': {'data_issue_asset_codes': ['MQ4-05'],
+                                             'alert_asset_codes': ['FLAME-05']}}}
+        response = {'runtime': {'dataContext': {'hardwareLive': True}},
+                    'evidence': [{'data': snapshot}]}
+        for command in ('小管，巡检 P五。', '零检五号检测点', 'P5当前告警'):
+            c, opener = client({'role': 'viewer'}, response)
+            reply = c.ask([{'role': 'user', 'content': command}])
+            self.assertIn('实物平台巡检', reply.text)
+            self.assertIn('09点01分09秒', reply.text)
+            self.assertIn('FLAME-05', reply.text)
+            self.assertIn('有点位观测缺失或不可用', reply.text)
+            self.assertEqual(opener.calls[-1][0].get_method(), 'GET')
+            self.assertTrue(opener.calls[-1][0].full_url.endswith('/assistant/inspection/?station=P5'))
+
     def test_queries_identity_then_only_the_existing_agent(self):
         c, opener = client({'role': 'viewer'}, REPLY)
         result = c.ask(USER)

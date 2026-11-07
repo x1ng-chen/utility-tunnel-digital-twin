@@ -1600,11 +1600,12 @@ class AlertWorkOrderView(APIView):
                 existing = WorkOrder.objects.select_related('asset', 'source_alert', 'assignee').filter(source_alert=alert).first()
                 if existing:
                     return Response(WorkOrderSerializer(existing).data)
-                if alert.status not in {Alert.Status.OPEN, Alert.Status.ACKNOWLEDGED}:
+                if alert.status not in {Alert.Status.OPEN, Alert.Status.ACKNOWLEDGED, Alert.Status.RESOLVED}:
                     return error_response('invalid_state', 'Alert is not eligible for a work order.', 409)
+                purpose = '复核' if alert.status == Alert.Status.RESOLVED else '处置'
                 priority = WorkOrder.Priority.URGENT if alert.severity == Alert.Severity.CRITICAL else WorkOrder.Priority.HIGH
-                order = WorkOrder.objects.create(code=work_order_code(), source_alert=alert, asset=alert.asset, title=f'处置 {alert.code}：{alert.title}', priority=priority, created_by=request.user, due_at=work_order_due_at(priority))
-                WorkOrderEvent.objects.create(work_order=order, event_type=WorkOrderEvent.EventType.CREATED, to_status=order.status, note='由告警自动转为处置工单', actor=request.user)
+                order = WorkOrder.objects.create(code=work_order_code(), source_alert=alert, asset=alert.asset, title=f'{purpose} {alert.code}：{alert.title}', priority=priority, created_by=request.user, due_at=work_order_due_at(priority))
+                WorkOrderEvent.objects.create(work_order=order, event_type=WorkOrderEvent.EventType.CREATED, to_status=order.status, note=f'由人工从来源告警创建{purpose}工单', actor=request.user)
                 audit(request.user, 'work_order.created_from_alert', 'work_order', order.pk, {'alertCode': alert.code, 'priority': priority, 'dueAt': order.due_at.isoformat()}, request_id(request))
         except IntegrityError:
             # A concurrent request may create the same linked order first.

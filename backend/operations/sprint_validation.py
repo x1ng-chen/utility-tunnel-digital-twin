@@ -44,7 +44,11 @@ def validate_facts(output,evidence,assets):
         if code and 'metric_key' in f and 'value' in f:
             if isinstance(f['value'],bool) or not isinstance(f['value'],(int,float)) or not math.isfinite(f['value']):
                 raise ValueError('结构化测量值必须是有限数字。')
+            source=next((e for e in evidence if e['id']==f.get('evidence_id') and e['status']=='ok'),None)
             rows=assets[code].get('readings',[])
+            if source and source.get('tool') == 'alert_event':
+                rows = [row for row in source['data']['items']
+                        if row['asset__code'] == code and row['quality'] == 'good']
             if not any(r['metric_key']==f['metric_key'] and r['value']==f['value'] and
                 ('unit' not in f or r['unit']==f['unit']) for r in rows): raise ValueError('结构化事实与冻结观测冲突。')
             def contains(value,parent_code=None):
@@ -55,7 +59,6 @@ def validate_facts(output,evidence,assets):
                     return any(contains(v,current) for v in value.values())
                 if isinstance(value,list): return any(contains(v,parent_code) for v in value)
                 return False
-            source=next((e for e in evidence if e['id']==f.get('evidence_id') and e['status']=='ok'),None)
             if source and source.get('tool') in {'query_topology','compare_scenarios','procedure_templates'}:
                 raise ValueError('配置关系、仿真推演和流程文本不能充当原始测量事实。')
             if not source or not contains(source.get('data')): raise ValueError('所引工具结果未包含该设备的数值与单位。')
